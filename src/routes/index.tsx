@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   ArrowUpRight,
@@ -54,7 +55,6 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   activityFeed,
   freightSeries,
-  kpis,
   logs,
   planMix,
   radarData,
@@ -62,6 +62,7 @@ import {
   stateHeat,
   systemHealth,
 } from "@/lib/mock";
+import { getMasterDashboardSnapshot, type MasterDashboardSnapshot } from "@/lib/masterControl";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -115,7 +116,132 @@ const kpiIcons = [
   ArrowUpRight,
 ];
 
+const emptySnapshot: MasterDashboardSnapshot = {
+  tenantCount: 0,
+  activeTenants: 0,
+  suspendedTenants: 0,
+  cancelledTenants: 0,
+  totalUsers: 0,
+  totalDrivers: 0,
+  totalTrailers: 0,
+  totalVehicles: 0,
+  totalTruckLimit: 0,
+  totalSenders: 0,
+  totalRecipients: 0,
+  totalProducts: 0,
+  inRouteVehicles: 0,
+  maintenanceVehicles: 0,
+  brokenVehicles: 0,
+};
+
 function Dashboard() {
+  const [snapshot, setSnapshot] = useState<MasterDashboardSnapshot>(emptySnapshot);
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      const data = await getMasterDashboardSnapshot();
+      if (active) setSnapshot(data);
+    }
+
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const liveKpis = useMemo(
+    () => [
+      {
+        label: "Tenants",
+        value: String(snapshot.tenantCount),
+        delta: `${snapshot.activeTenants} ativos`,
+        trend: "up" as const,
+        hint: "base central",
+      },
+      {
+        label: "Caminhões cadastrados",
+        value: String(snapshot.totalVehicles),
+        delta: `${snapshot.totalTruckLimit} contratados`,
+        trend: "up" as const,
+        hint: "todos os tenants",
+      },
+      {
+        label: "Motoristas",
+        value: String(snapshot.totalDrivers),
+        delta: "base real",
+        trend: "up" as const,
+        hint: "todos os tenants",
+      },
+      {
+        label: "Usuários",
+        value: String(snapshot.totalUsers),
+        delta: "acessos ativos",
+        trend: "up" as const,
+        hint: "todos os tenants",
+      },
+      {
+        label: "Caminhões em rota",
+        value: String(snapshot.inRouteVehicles),
+        delta: "situação atual",
+        trend: "flat" as const,
+        hint: "frota global",
+      },
+      {
+        label: "Caçambas",
+        value: String(snapshot.totalTrailers),
+        delta: "base real",
+        trend: "flat" as const,
+        hint: "todos os tenants",
+      },
+      {
+        label: "Remetentes",
+        value: String(snapshot.totalSenders),
+        delta: "cadastro central",
+        trend: "flat" as const,
+        hint: "todos os tenants",
+      },
+      {
+        label: "Destinatários",
+        value: String(snapshot.totalRecipients),
+        delta: "cadastro central",
+        trend: "flat" as const,
+        hint: "todos os tenants",
+      },
+      {
+        label: "Produtos",
+        value: String(snapshot.totalProducts),
+        delta: "catálogo total",
+        trend: "flat" as const,
+        hint: "todos os tenants",
+      },
+      {
+        label: "Em manutenção",
+        value: String(snapshot.maintenanceVehicles),
+        delta: "situação atual",
+        trend: "flat" as const,
+        hint: "frota global",
+      },
+      {
+        label: "Quebrados",
+        value: String(snapshot.brokenVehicles),
+        delta: "situação atual",
+        trend: "down" as const,
+        hint: "frota global",
+      },
+      {
+        label: "Suspensos",
+        value: String(snapshot.suspendedTenants + snapshot.cancelledTenants),
+        delta: "tenants com restrição",
+        trend: "flat" as const,
+        hint: "controle master",
+      },
+    ],
+    [snapshot],
+  );
+
   return (
     <AppShell>
       <PageHeader
@@ -139,7 +265,7 @@ function Dashboard() {
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {kpis.map((k, i) => (
+        {liveKpis.map((k, i) => (
           <KpiCard key={k.label} {...k} icon={kpiIcons[i]} index={i} />
         ))}
       </div>

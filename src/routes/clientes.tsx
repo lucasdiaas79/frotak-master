@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Building2,
   Eye,
@@ -10,6 +10,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Sparkles,
   Truck,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
@@ -39,13 +40,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -53,8 +47,15 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { createClientAccess, createClientImpersonationUrl } from "@/lib/auth";
-import { clients as mockClients, permissionModules, type Client } from "@/lib/mock";
-import { provisionTenant } from "@/lib/tenantProvisioning";
+import {
+  listManagedTenants,
+  tenantFeatureCatalog,
+  type ManagedTenant,
+  type TenantFeatureKey,
+  type TenantPermissionMap,
+  upsertManagedTenant,
+} from "@/lib/masterControl";
+import { permissionModules } from "@/lib/mock";
 
 export const Route = createFileRoute("/clientes")({
   head: () => ({
@@ -62,20 +63,12 @@ export const Route = createFileRoute("/clientes")({
       { title: "Clientes - FrotaK Master" },
       {
         name: "description",
-        content: "Cadastro e gestao dos clientes FrotaK.",
+        content: "Cadastro e gestão dos clientes FrotaK.",
       },
     ],
   }),
   component: Clientes,
 });
-
-type MasterClient = Client & {
-  tenantId: string;
-  subscriptionPeriod: string;
-  loginEmail: string;
-  loginPassword: string;
-  truckLimit: number;
-};
 
 type ClientFormState = {
   companyName: string;
@@ -84,15 +77,8 @@ type ClientFormState = {
   loginEmail: string;
   loginPassword: string;
   truckLimit: string;
-};
-
-const emptyForm: ClientFormState = {
-  companyName: "",
-  cnpj: "",
-  subscriptionPeriod: "Mensal",
-  loginEmail: "",
-  loginPassword: "123456",
-  truckLimit: "10",
+  permissions: TenantPermissionMap;
+  features: TenantFeatureKey[];
 };
 
 function slugify(value: string) {
@@ -104,84 +90,106 @@ function slugify(value: string) {
     .replace(/(^-|-$)/g, "");
 }
 
-function toMasterClient(client: Client): MasterClient {
-  const slug = slugify(client.name).replace(/^transportadora-/, "");
-
-  return {
-    ...client,
-    tenantId: slug === "central-transportes" ? "00000000-0000-0000-0000-000000000001" : client.id,
-    subscriptionPeriod: "Mensal",
-    loginEmail: `admin@${slug}.com.br`,
-    loginPassword: "123456",
-    truckLimit: client.vehicles,
-  };
+function defaultPermissions() {
+  return Object.fromEntries(
+    permissionModules.map((module) => [module.module, module.actions.slice(0, 3)]),
+  ) as TenantPermissionMap;
 }
 
-function clientToForm(client: MasterClient): ClientFormState {
-  return {
-    companyName: client.name,
-    cnpj: client.cnpj,
-    subscriptionPeriod: client.subscriptionPeriod,
-    loginEmail: client.loginEmail,
-    loginPassword: client.loginPassword,
-    truckLimit: String(client.truckLimit),
-  };
+function defaultFeatures() {
+  return tenantFeatureCatalog.map((item) => item.key);
 }
 
-function formToClient(form: ClientFormState, existing?: MasterClient): MasterClient {
-  const name = form.companyName.trim();
-  const slug = slugify(name) || "cliente";
-  const truckLimit = Math.max(0, Number(form.truckLimit) || 0);
-  const id = existing?.id || crypto.randomUUID();
+const emptyForm = (): ClientFormState => ({
+  companyName: "",
+  cnpj: "",
+  subscriptionPeriod: "Mensal",
+  loginEmail: "",
+  loginPassword: "123456",
+  truckLimit: "10",
+  permissions: defaultPermissions(),
+  features: defaultFeatures(),
+});
 
+function tenantToForm(tenant: ManagedTenant): ClientFormState {
   return {
-    id,
-    tenantId: existing?.tenantId || id,
-    name,
-    cnpj: form.cnpj.trim(),
-    plan: existing?.plan || "Business",
-    status: existing?.status || "Ativo",
-    uf: existing?.uf || "BR",
-    city: existing?.city || "Nao informado",
-    mrr: existing?.mrr || "R$ 0,0k",
-    users: existing?.users || 1,
-    drivers: existing?.drivers || 0,
-    vehicles: truckLimit,
-    freights: existing?.freights || 0,
-    storage: existing?.storage || 0,
-    api: existing?.api || 0,
-    since: existing?.since || new Date().getFullYear().toString(),
-    owner: existing?.owner || "FrotaK Master",
-    domain: existing?.domain || `${slug}.frotak.app`,
-    subscriptionPeriod: form.subscriptionPeriod,
-    loginEmail: form.loginEmail.trim(),
-    loginPassword: form.loginPassword,
-    truckLimit,
+    companyName: tenant.name,
+    cnpj: tenant.cnpj,
+    subscriptionPeriod: tenant.subscriptionPeriod,
+    loginEmail: tenant.loginEmail,
+    loginPassword: tenant.loginPassword,
+    truckLimit: String(tenant.truckLimit),
+    permissions: tenant.permissions,
+    features: tenant.features.length ? tenant.features : defaultFeatures(),
   };
 }
 
 function Clientes() {
   const [view, setView] = useState<"tabela" | "cards">("tabela");
-  const [clients, setClients] = useState<MasterClient[]>(() => mockClients.map(toMasterClient));
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [clients, setClients] = useState<ManagedTenant[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
-  const [details, setDetails] = useState<MasterClient | null>(null);
-  const [editing, setEditing] = useState<MasterClient | null>(null);
+  const [details, setDetails] = useState<ManagedTenant | null>(null);
+  const [editing, setEditing] = useState<ManagedTenant | null>(null);
   const [createForm, setCreateForm] = useState<ClientFormState>(emptyForm);
   const [editForm, setEditForm] = useState<ClientFormState>(emptyForm);
 
-  const totals = useMemo(() => {
-    const active = clients.filter((client) => client.status === "Ativo").length;
-    const trucks = clients.reduce((sum, client) => sum + client.truckLimit, 0);
+  async function refreshClients() {
+    const data = await listManagedTenants();
+    setClients(data);
+  }
 
-    return { active, trucks };
-  }, [clients]);
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      try {
+        const data = await listManagedTenants();
+        if (active) setClients(data);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void load();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const filteredClients = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return clients;
+
+    return clients.filter((client) =>
+      [client.name, client.cnpj, client.loginEmail, client.slug].some((value) =>
+        value.toLowerCase().includes(query),
+      ),
+    );
+  }, [clients, search]);
+
+  const totals = useMemo(() => {
+    return filteredClients.reduce(
+      (acc, client) => {
+        if (client.status === "Ativo") acc.active += 1;
+        acc.trucks += client.vehicles;
+        acc.truckLimit += client.truckLimit;
+        acc.drivers += client.drivers;
+        return acc;
+      },
+      { active: 0, trucks: 0, truckLimit: 0, drivers: 0 },
+    );
+  }, [filteredClients]);
 
   function updateCreateForm(field: keyof ClientFormState, value: string) {
     setCreateForm((current) => ({
       ...current,
       [field]: value,
       ...(field === "companyName" && !current.loginEmail
-        ? { loginEmail: `admin@${slugify(value)}.com.br` }
+        ? { loginEmail: `admin@${slugify(value) || "cliente"}.com.br` }
         : {}),
     }));
   }
@@ -193,23 +201,103 @@ function Clientes() {
     }));
   }
 
+  function togglePermission(
+    scope: "create" | "edit",
+    moduleName: string,
+    action: string,
+    checked: boolean,
+  ) {
+    const setter = scope === "create" ? setCreateForm : setEditForm;
+
+    setter((current) => {
+      const currentActions = new Set(current.permissions[moduleName] ?? []);
+      if (checked) currentActions.add(action);
+      else currentActions.delete(action);
+
+      return {
+        ...current,
+        permissions: {
+          ...current.permissions,
+          [moduleName]: Array.from(currentActions),
+        },
+      };
+    });
+  }
+
+  function toggleFeature(scope: "create" | "edit", feature: TenantFeatureKey, checked: boolean) {
+    const setter = scope === "create" ? setCreateForm : setEditForm;
+
+    setter((current) => {
+      const featureSet = new Set(current.features);
+      if (checked) featureSet.add(feature);
+      else featureSet.delete(feature);
+
+      return {
+        ...current,
+        features: Array.from(featureSet) as TenantFeatureKey[],
+      };
+    });
+  }
+
   async function createClient(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const client = formToClient(createForm);
+    setSaving(true);
+    try {
+      await upsertManagedTenant({
+        data: {
+          companyName: createForm.companyName,
+          cnpj: createForm.cnpj,
+          subscriptionPeriod: createForm.subscriptionPeriod,
+          loginEmail: createForm.loginEmail,
+          loginPassword: createForm.loginPassword,
+          truckLimit: Number(createForm.truckLimit || 0),
+          permissions: createForm.permissions,
+          features: createForm.features,
+        },
+      });
 
-    await provisionTenant({
-      data: {
-        tenantId: client.tenantId,
-        companyName: client.name,
-        cnpj: client.cnpj,
-        subscriptionPeriod: client.subscriptionPeriod,
-        truckLimit: client.truckLimit,
-        email: client.loginEmail,
-        password: client.loginPassword,
-      },
-    });
+      await refreshClients();
+      setCreateForm(emptyForm());
+      setCreateOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  }
 
-    setClients((current) => [client, ...current]);
+  function openEdit(client: ManagedTenant) {
+    setEditing(client);
+    setEditForm(tenantToForm(client));
+  }
+
+  async function saveEdit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editing) return;
+
+    setSaving(true);
+    try {
+      await upsertManagedTenant({
+        data: {
+          tenantId: editing.tenantId,
+          companyName: editForm.companyName,
+          cnpj: editForm.cnpj,
+          subscriptionPeriod: editForm.subscriptionPeriod,
+          loginEmail: editForm.loginEmail,
+          loginPassword: editForm.loginPassword,
+          truckLimit: Number(editForm.truckLimit || 0),
+          permissions: editForm.permissions,
+          features: editForm.features,
+          status: editing.status,
+        },
+      });
+
+      await refreshClients();
+      setEditing(null);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function accessClient(client: ManagedTenant) {
     createClientAccess({
       clientId: client.id,
       tenantId: client.tenantId,
@@ -217,54 +305,15 @@ function Clientes() {
       email: client.loginEmail,
       password: client.loginPassword,
     });
-    setCreateForm(emptyForm);
-    setCreateOpen(false);
-  }
-
-  function openEdit(client: MasterClient) {
-    setEditing(client);
-    setEditForm(clientToForm(client));
-  }
-
-  async function saveEdit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!editing) return;
-
-    const updated = formToClient(editForm, editing);
-    await provisionTenant({
-      data: {
-        tenantId: updated.tenantId,
-        companyName: updated.name,
-        cnpj: updated.cnpj,
-        subscriptionPeriod: updated.subscriptionPeriod,
-        truckLimit: updated.truckLimit,
-        email: updated.loginEmail,
-        password: updated.loginPassword,
-      },
-    });
-
-    setClients((current) => current.map((client) => (client.id === editing.id ? updated : client)));
-    createClientAccess({
-      clientId: updated.id,
-      tenantId: updated.tenantId,
-      clientName: updated.name,
-      email: updated.loginEmail,
-      password: updated.loginPassword,
-    });
-    setDetails((current) => (current?.id === editing.id ? updated : current));
-    setEditing(null);
-  }
-
-  function accessClient(client: MasterClient) {
     window.open(createClientImpersonationUrl(client), "_blank", "noopener,noreferrer");
   }
 
   return (
     <AppShell>
       <PageHeader
-        eyebrow={`${clients.length} clientes cadastrados`}
+        eyebrow={`${clients.length} tenants sincronizados`}
         title="Clientes"
-        description="Cadastro central dos clientes, acessos, permissoes e limite de caminhoes no sistema master."
+        description="Cadastro central real dos tenants, acessos, permissões, features e limite de caminhões."
         crumbs={[{ label: "Clientes" }]}
         actions={
           <>
@@ -291,15 +340,21 @@ function Clientes() {
                   Novo cliente
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-h-[88vh] max-w-3xl overflow-y-auto">
+              <DialogContent className="max-h-[88vh] max-w-4xl overflow-y-auto">
                 <ClientForm
                   title="Novo cliente"
-                  description="Crie o cliente e defina acesso, permissao e limite de caminhoes."
+                  description="Crie o tenant, o login dele, as permissões e as features que ele poderá usar."
                   form={createForm}
                   onChange={updateCreateForm}
+                  onTogglePermission={(moduleName, action, checked) =>
+                    togglePermission("create", moduleName, action, checked)
+                  }
+                  onToggleFeature={(feature, checked) =>
+                    toggleFeature("create", feature, checked)
+                  }
                   onCancel={() => setCreateOpen(false)}
                   onSubmit={createClient}
-                  submitLabel="Criar workspace"
+                  submitLabel={saving ? "Salvando..." : "Criar cliente"}
                 />
               </DialogContent>
             </Dialog>
@@ -311,65 +366,86 @@ function Clientes() {
         <KpiCard
           label="Clientes ativos"
           value={String(totals.active)}
-          delta="master"
+          delta="tenants ativos"
           trend="up"
           icon={Building2}
         />
         <KpiCard
-          label="Caminhoes contratados"
+          label="Caminhões cadastrados"
           value={String(totals.trucks)}
-          delta="limite total"
+          delta={`limite total ${totals.truckLimit}`}
           trend="flat"
           icon={Truck}
         />
         <KpiCard
-          label="Novos acessos"
-          value={String(clients.length)}
-          delta="login criado"
+          label="Motoristas"
+          value={String(totals.drivers)}
+          delta="base real"
           trend="flat"
           icon={KeyRound}
         />
-        <KpiCard label="Permissoes" value="Ativas" delta="por cliente" trend="flat" />
+        <KpiCard
+          label="Features liberadas"
+          value={String(
+            filteredClients.reduce((sum, client) => sum + client.features.length, 0),
+          )}
+          delta="somadas por tenant"
+          trend="flat"
+          icon={Sparkles}
+        />
       </div>
 
-      <Panel className="mt-3" eyebrow="Base de clientes" title="Clientes do master">
+      <Panel className="mt-3" eyebrow="Base de clientes" title="Tenants do master">
         <div className="mb-4 max-w-md">
           <div className="relative">
             <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Buscar cliente" className="rounded-xl pl-9" />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar cliente, CNPJ, login ou slug"
+              className="rounded-xl pl-9"
+            />
           </div>
         </div>
 
-        {view === "tabela" ? (
+        {loading ? (
+          <div className="rounded-2xl border border-border bg-elevated/30 px-4 py-8 text-sm text-muted-foreground">
+            Carregando tenants reais...
+          </div>
+        ) : view === "tabela" ? (
           <TableWrap>
-            <table className="w-full min-w-[980px] border-collapse">
+            <table className="w-full min-w-[1100px] border-collapse">
               <thead>
                 <tr>
                   <Th>Empresa</Th>
                   <Th>CNPJ</Th>
                   <Th>Assinatura</Th>
                   <Th>Login</Th>
-                  <Th>Caminhoes</Th>
+                  <Th>Caminhões</Th>
+                  <Th>Motoristas</Th>
                   <Th>Status</Th>
-                  <Th className="text-right">Acoes</Th>
+                  <Th className="text-right">Ações</Th>
                 </tr>
               </thead>
               <tbody>
-                {clients.map((client) => (
-                  <Tr key={client.id}>
+                {filteredClients.map((client) => (
+                  <Tr key={client.tenantId}>
                     <Td>
                       <div className="flex min-w-0 items-center gap-3">
                         <Avatar name={client.name} />
                         <div className="min-w-0">
                           <p className="truncate font-bold">{client.name}</p>
-                          <p className="text-[11px] text-muted-foreground">{client.domain}</p>
+                          <p className="text-[11px] text-muted-foreground">{client.slug}</p>
                         </div>
                       </div>
                     </Td>
-                    <Td>{client.cnpj}</Td>
+                    <Td>{client.cnpj || "-"}</Td>
                     <Td>{client.subscriptionPeriod}</Td>
                     <Td>{client.loginEmail}</Td>
-                    <Td className="font-semibold">{client.truckLimit}</Td>
+                    <Td className="font-semibold">
+                      {client.vehicles} / {client.truckLimit}
+                    </Td>
+                    <Td>{client.drivers}</Td>
                     <Td>
                       <StatusPill tone={toneFor(client.status)}>{client.status}</StatusPill>
                     </Td>
@@ -405,8 +481,8 @@ function Clientes() {
           </TableWrap>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {clients.map((client) => (
-              <article key={client.id} className="panel p-5">
+            {filteredClients.map((client) => (
+              <article key={client.tenantId} className="panel p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
                     <Avatar name={client.name} className="size-11 rounded-xl text-sm" />
@@ -423,9 +499,21 @@ function Clientes() {
                     <p className="mt-1 font-bold">{client.subscriptionPeriod}</p>
                   </div>
                   <div className="rounded-xl border border-border bg-elevated/50 p-3">
-                    <p className="eyebrow">Caminhoes</p>
-                    <p className="mt-1 font-bold">{client.truckLimit}</p>
+                    <p className="eyebrow">Caminhões</p>
+                    <p className="mt-1 font-bold">
+                      {client.vehicles} / {client.truckLimit}
+                    </p>
                   </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {client.features.slice(0, 4).map((feature) => (
+                    <span
+                      key={`${client.tenantId}-${feature}`}
+                      className="rounded-full border border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground"
+                    >
+                      {tenantFeatureCatalog.find((item) => item.key === feature)?.label ?? feature}
+                    </span>
+                  ))}
                 </div>
                 <div className="mt-4 flex gap-2">
                   <Button
@@ -456,14 +544,20 @@ function Clientes() {
             <>
               <SheetHeader>
                 <SheetTitle>{details.name}</SheetTitle>
-                <SheetDescription>{details.cnpj}</SheetDescription>
+                <SheetDescription>{details.cnpj || details.slug}</SheetDescription>
               </SheetHeader>
               <div className="grid gap-3 px-4 pb-8 sm:grid-cols-2">
                 <DataItem label="Assinatura" value={details.subscriptionPeriod} />
-                <DataItem label="Caminhoes" value={String(details.truckLimit)} />
+                <DataItem label="Status" value={details.status} />
                 <DataItem label="Tenant" value={details.tenantId} />
                 <DataItem label="Login" value={details.loginEmail} />
                 <DataItem label="Senha" value={details.loginPassword} />
+                <DataItem
+                  label="Caminhões"
+                  value={`${details.vehicles} cadastrados / ${details.truckLimit} limite`}
+                />
+                <DataItem label="Motoristas" value={String(details.drivers)} />
+                <DataItem label="Caçambas" value={String(details.trailers)} />
               </div>
             </>
           ) : null}
@@ -471,17 +565,21 @@ function Clientes() {
       </Sheet>
 
       <Sheet open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
-        <SheetContent className="w-full overflow-y-auto scroll-slim sm:max-w-3xl">
+        <SheetContent className="w-full overflow-y-auto scroll-slim sm:max-w-4xl">
           {editing ? (
             <div className="px-4 pb-8">
               <ClientForm
                 title="Editar cliente"
-                description="Atualize o cadastro, acesso, permissao e limite de caminhoes."
+                description="Atualize o tenant, o login, as permissões e as features liberadas para este cliente."
                 form={editForm}
                 onChange={updateEditForm}
+                onTogglePermission={(moduleName, action, checked) =>
+                  togglePermission("edit", moduleName, action, checked)
+                }
+                onToggleFeature={(feature, checked) => toggleFeature("edit", feature, checked)}
                 onCancel={() => setEditing(null)}
                 onSubmit={saveEdit}
-                submitLabel="Salvar alteracoes"
+                submitLabel={saving ? "Salvando..." : "Salvar alterações"}
               />
             </div>
           ) : null}
@@ -496,6 +594,8 @@ function ClientForm({
   description,
   form,
   onChange,
+  onTogglePermission,
+  onToggleFeature,
   onCancel,
   onSubmit,
   submitLabel,
@@ -504,6 +604,8 @@ function ClientForm({
   description: string;
   form: ClientFormState;
   onChange: (field: keyof ClientFormState, value: string) => void;
+  onTogglePermission: (moduleName: string, action: string, checked: boolean) => void;
+  onToggleFeature: (feature: TenantFeatureKey, checked: boolean) => void;
   onCancel: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
   submitLabel: string;
@@ -522,7 +624,7 @@ function ClientForm({
             required
             value={form.companyName}
             onChange={(event) => onChange("companyName", event.target.value)}
-            placeholder="Transportadora Vale Verde LTDA"
+            placeholder="Central Transportes"
             className="mt-1.5 rounded-xl"
           />
         </div>
@@ -537,21 +639,14 @@ function ClientForm({
           />
         </div>
         <div>
-          <Label className="text-xs">Periodo de Assinatura</Label>
-          <Select
+          <Label className="text-xs">Período de Assinatura</Label>
+          <Input
+            required
             value={form.subscriptionPeriod}
-            onValueChange={(value) => onChange("subscriptionPeriod", value)}
-          >
-            <SelectTrigger className="mt-1.5 rounded-xl">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Mensal">Mensal</SelectItem>
-              <SelectItem value="Trimestral">Trimestral</SelectItem>
-              <SelectItem value="Semestral">Semestral</SelectItem>
-              <SelectItem value="Anual">Anual</SelectItem>
-            </SelectContent>
-          </Select>
+            onChange={(event) => onChange("subscriptionPeriod", event.target.value)}
+            placeholder="Mensal"
+            className="mt-1.5 rounded-xl"
+          />
         </div>
         <div>
           <Label className="text-xs">Login dele</Label>
@@ -574,7 +669,7 @@ function ClientForm({
           />
         </div>
         <div className="sm:col-span-2">
-          <Label className="text-xs">Quantos caminhoes ele vai registrar</Label>
+          <Label className="text-xs">Quantos caminhões ele vai registrar</Label>
           <Input
             required
             min={0}
@@ -585,7 +680,13 @@ function ClientForm({
           />
         </div>
         <div className="sm:col-span-2">
-          <ClientPermissions />
+          <ClientPermissions
+            permissions={form.permissions}
+            onTogglePermission={onTogglePermission}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <ClientFeatures features={form.features} onToggleFeature={onToggleFeature} />
         </div>
       </div>
 
@@ -601,30 +702,80 @@ function ClientForm({
   );
 }
 
-function ClientPermissions() {
+function ClientPermissions({
+  permissions,
+  onTogglePermission,
+}: {
+  permissions: TenantPermissionMap;
+  onTogglePermission: (moduleName: string, action: string, checked: boolean) => void;
+}) {
   return (
     <div className="rounded-2xl border border-border bg-elevated/30 p-4">
       <div className="flex items-center gap-2">
         <KeyRound className="size-4 text-primary" />
-        <p className="text-sm font-bold">Permissoes</p>
+        <p className="text-sm font-bold">Permissões</p>
       </div>
       <div className="mt-3 space-y-3">
         {permissionModules.slice(0, 4).map((module) => (
           <div key={module.module}>
             <p className="text-xs font-bold text-muted-foreground">{module.module}</p>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              {module.actions.slice(0, 4).map((action, index) => (
-                <label
-                  key={`${module.module}-${action}`}
-                  className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background/45 px-3 py-2 text-xs font-semibold"
-                >
-                  <Checkbox defaultChecked={index < 3} />
-                  {action}
-                </label>
-              ))}
+              {module.actions.slice(0, 5).map((action) => {
+                const checked = (permissions[module.module] ?? []).includes(action);
+
+                return (
+                  <label
+                    key={`${module.module}-${action}`}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background/45 px-3 py-2 text-xs font-semibold"
+                  >
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(value) =>
+                        onTogglePermission(module.module, action, value === true)
+                      }
+                    />
+                    {action}
+                  </label>
+                );
+              })}
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function ClientFeatures({
+  features,
+  onToggleFeature,
+}: {
+  features: TenantFeatureKey[];
+  onToggleFeature: (feature: TenantFeatureKey, checked: boolean) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-elevated/30 p-4">
+      <div className="flex items-center gap-2">
+        <Sparkles className="size-4 text-primary" />
+        <p className="text-sm font-bold">Features liberadas</p>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {tenantFeatureCatalog.map((feature) => {
+          const checked = features.includes(feature.key);
+
+          return (
+            <label
+              key={feature.key}
+              className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background/45 px-3 py-2 text-xs font-semibold"
+            >
+              <Checkbox
+                checked={checked}
+                onCheckedChange={(value) => onToggleFeature(feature.key, value === true)}
+              />
+              {feature.label}
+            </label>
+          );
+        })}
       </div>
     </div>
   );

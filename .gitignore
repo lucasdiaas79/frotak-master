@@ -39,3 +39,5 @@ central-dias-main/
 .push-target-path
 workspace-check.png
 !.env.example
+
+.env*
