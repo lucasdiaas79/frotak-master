@@ -1,0 +1,95 @@
+RESUMO DAS ALTERACOES - 06/08/2026
+
+Projeto: FrotaK
+Workspace principal: D:\dev\frota-master
+
+1. LOGIN DO SISTEMA MASTER
+- A tela de login do master foi refeita visualmente.
+- Foi aplicada a identidade visual da Frotak.
+- A tela passou a usar imagem de fundo em tela cheia.
+- O layout foi reduzido e reorganizado para evitar rolagem desnecessaria.
+- O box de login ficou com foco apenas em login e senha.
+- A logo foi reposicionada e integrada ao fundo conforme solicitado.
+
+2. ACESSO MASTER
+- Foi definida uma unica credencial principal para o sistema master:
+  Login: master@frotak.log.br
+  Senha: casadamoeda2026
+
+3. CADASTRO DE CLIENTES NO MASTER
+- A logica de "Governanca" foi removida do sidebar.
+- As permissoes, funcoes e configuracoes de acesso passaram a aparecer dentro do fluxo de criar/editar cliente.
+- O modal de cliente foi simplificado para conter apenas os campos necessarios:
+  Nome da empresa
+  CNPJ
+  Periodo de assinatura
+  Permissoes
+  Login
+  Senha
+  Quantidade de caminhoes permitidos
+- A quantidade de caminhoes passou a fazer parte dos dados do cliente no master.
+- Correcoes foram feitas no fluxo do botao de criacao/edicao do cliente.
+
+4. INTEGRACAO ENTRE MASTER E SISTEMA DO CLIENTE
+- A pasta "central-dias-main" foi integrada como sistema cliente.
+- Foi implementado o fluxo para que o cliente, ao fazer login, seja redirecionado ao sistema cliente correspondente.
+- Foi ajustado o fluxo de SSO/redirecionamento entre o master e o sistema cliente.
+- Foi corrigido o erro que antes mostrava tela branca/erro HTTP 500 apos o login do cliente.
+
+5. ESTRUTURA MULTI-TENANT
+- Foi iniciada e conectada a estrutura multi-tenant.
+- Cada cliente passa a ser tratado como um tenant separado.
+- Foi preparada a base para provisao de novos tenants.
+- A arquitetura foi ajustada para permitir novos clientes com base isolada.
+- Foi deixada a possibilidade de integracao futura com Firebase conforme solicitado.
+
+6. SISTEMA CLIENTE - CENTRAL TRANSPORTES
+- O tenant da Central Transportes foi configurado como tenant inicial de referencia.
+- O sistema cliente passou a aceitar acesso vindo do master.
+- Foi removida a dependencia obrigatoria de configuracao externa para o fluxo local de acesso em desenvolvimento.
+
+7. BASE DE DADOS LOCAL DO CLIENTE
+- A seed ficticia anterior foi removida do fallback local.
+- Foram eliminados os dados artificiais de veiculos, motoristas e cacambas que estavam sendo gerados automaticamente.
+- O sistema passou a montar a base local da Central Transportes a partir das migrations reais ja existentes no projeto.
+
+8. DADOS REAIS DA CENTRAL TRANSPORTES
+- Foram conectadas as migrations reais para montar os dados locais da Central:
+  Veiculos reais
+  Motoristas reais
+  Carretas/cacambas reais
+  Vinculos reais entre cavalo, motorista e implemento
+- A carga local passou a utilizar os dados extraidos das migrations do Supabase.
+- Foi adicionada logica para substituir automaticamente seeds antigas/ficticias no navegador.
+- Quantidades carregadas a partir das migrations reais:
+  95 veiculos
+  86 motoristas
+  109 carretas/cacambas
+  86 vinculacoes oficiais
+
+9. VALIDACOES EXECUTADAS
+- O build do sistema cliente foi validado com sucesso.
+- O lint do arquivo de seed local do sistema cliente foi validado com sucesso.
+- O build do sistema master foi validado com sucesso.
+
+10. PUBLICACAO E DOMINIO
+- Foi definida a recomendacao de manter o site institucional no dominio principal:
+  frotak.log.br
+- Foi definida a recomendacao de publicar o login do sistema em subdominio:
+  login.frotak.log.br
+  ou
+  app.frotak.log.br
+- Como o site principal esta no Framer, a recomendacao foi nao substituir o dominio raiz do site institucional pelo sistema.
+
+ARQUIVOS/AREAS MAIS IMPACTADAS NO DIA
+- Sistema master (src do projeto principal)
+- Integracao de autenticacao e tenants no master
+- central-dias-main/src/lib/auth.ts
+- central-dias-main/src/lib/store.ts
+- central-dias-main/src/lib/localFleetData.ts
+- central-dias-main/src/components/AppLayout.tsx
+- central-dias-main/supabase/migrations/*
+- central-dias-main/supabase/functions/provision-tenant/index.ts
+
+OBSERVACAO
+- Este resumo registra o que foi alterado na sessao de hoje dentro do projeto e nas integracoes relacionadas.
