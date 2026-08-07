@@ -778,7 +778,7 @@ export function AppLayout() {
 
   async function handleLogout() {
     await signOut();
-    navigate({ to: "/login" });
+    window.location.href = "https://login.frotak.log.br";
   }
 
   return (
