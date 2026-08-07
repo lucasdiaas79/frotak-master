@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, LogIn } from "lucide-react";
-import { signIn } from "@/lib/auth";
+import { acceptMasterSsoFromUrl, signIn } from "@/lib/auth";
 import logoCentral from "@/assets/logo-central.png";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,31 @@ function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function acceptSso() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("sso_token");
+      const source = params.get("source");
+
+      if (!token || source !== "frotak-master") return;
+
+      setLoading(true);
+      setError(null);
+
+      try {
+        await acceptMasterSsoFromUrl(window.location.search);
+        if (!cancelled) {
+          navigate({ to: "/" });
+        }
+      } catch {
+        if (!cancelled) {
+          setError("Acesso recebido do Master invalido ou expirado.");
+          setLoading(false);
+        }
+      }
+    }
+
     const params = new URLSearchParams(window.location.search);
     const loginHint = params.get("login_hint");
     const tenantId = params.get("tenant_id");
@@ -34,7 +59,13 @@ function LoginPage() {
     if (loginHint) setEmail(loginHint);
     if (tenantId) window.localStorage.setItem("frotak-active-tenant-id", tenantId);
     if (clientName) window.localStorage.setItem("frotak-active-tenant-name", clientName);
-  }, []);
+
+    void acceptSso();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
