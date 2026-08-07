@@ -33,7 +33,6 @@ import {
 } from "@/components/ui/select";
 import {
   createManagedUser,
-  demoPassword,
   getManagedUsers,
   masterEmail,
   type CreateUserInput,
@@ -57,7 +56,7 @@ export const Route = createFileRoute("/usuarios")({
 const emptyForm: CreateUserInput = {
   name: "",
   email: "",
-  password: demoPassword,
+  password: "",
   role: "Cliente administrador",
   team: "",
   scope: "client",
@@ -250,8 +249,8 @@ function Usuarios() {
         />
         <KpiCard
           label="Provider"
-          value={import.meta.env.VITE_FROTAK_AUTH_PROVIDER === "firebase" ? "Firebase" : "Local"}
-          delta="env"
+          value="Supabase"
+          delta="Auth real"
           trend="flat"
         />
       </div>

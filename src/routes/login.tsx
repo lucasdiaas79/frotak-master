@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
-import { authenticate, loginAccounts } from "@/lib/auth";
+import { authenticate } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import frotakLogoDark from "@/assets/frotak-logo-dark.png";
@@ -10,6 +10,7 @@ import loginBackground from "@/assets/login-background.png";
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>) => ({
     redirect: typeof search.redirect === "string" ? search.redirect : "/",
+    reason: typeof search.reason === "string" ? search.reason : "",
   }),
   head: () => ({
     meta: [
@@ -26,11 +27,17 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const navigate = useNavigate();
   const search = Route.useSearch();
-  const [email, setEmail] = useState(loginAccounts[0]?.email ?? "");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (search.reason === "unauthorized") {
+      setError("Usuario sem acesso ao Master.");
+    }
+  }, [search.reason]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -45,14 +52,14 @@ function LoginPage() {
         return;
       }
 
-      if (result.external) {
-        window.location.assign(result.redirectTo);
-        return;
-      }
-
       navigate({ to: result.redirectTo, replace: true });
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Nao foi possivel fazer login.");
+      const message = error instanceof Error ? error.message : "Erro temporario de autenticacao.";
+      if (message.includes("sem acesso")) {
+        setError("Usuario sem acesso ao Master.");
+      } else {
+        setError("Erro temporario de autenticacao.");
+      }
     } finally {
       setSubmitting(false);
     }

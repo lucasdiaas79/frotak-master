@@ -4,7 +4,7 @@ import { Bell, LogOut, Search, Sparkles } from "lucide-react";
 import { navGroups } from "@/lib/nav";
 import { getWorkspaceNavGroups } from "@/lib/workspaces";
 import { cn } from "@/lib/utils";
-import { clearSession, getSession } from "@/lib/auth";
+import { getSession, logout } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 
 type AppShellProps = {
@@ -87,7 +87,7 @@ export function AppShell({ children }: AppShellProps) {
               variant="outline"
               className="w-full justify-center rounded-xl border-sidebar-border bg-transparent text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               onClick={() => {
-                clearSession();
+                void logout();
                 navigate({ to: "/login", replace: true });
               }}
             >

@@ -280,6 +280,10 @@ export const getMasterDashboardSnapshot = createServerFn({ method: "GET" }).hand
 export const upsertManagedTenant = createServerFn({ method: "POST" })
   .validator((input: UpsertManagedTenantInput) => input)
   .handler(async ({ data }) => {
+    if (!data) {
+      throw new Error("Dados do cliente nao foram enviados para o servidor.");
+    }
+
     if (!hasSupabaseAdminConfig()) {
       return {
         status: "skipped" as const,
@@ -287,98 +291,110 @@ export const upsertManagedTenant = createServerFn({ method: "POST" })
       };
     }
 
-    const supabase = getSupabaseAdmin();
-    const tenantId = data.tenantId || crypto.randomUUID();
-    const email = data.loginEmail.trim().toLowerCase();
-    const password = data.loginPassword.trim();
-    const companyName = data.companyName.trim();
+    try {
+      const supabase = getSupabaseAdmin();
+      const tenantId = data.tenantId || crypto.randomUUID();
+      const email = data.loginEmail.trim().toLowerCase();
+      const password = data.loginPassword.trim();
+      const companyName = data.companyName.trim();
 
-    const existingUsers = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    if (existingUsers.error) throw existingUsers.error;
+      const existingUsers = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      if (existingUsers.error) throw existingUsers.error;
 
-    const existingUser = existingUsers.data.users.find((user) => user.email?.toLowerCase() === email);
+      const existingUser = existingUsers.data.users.find(
+        (user) => user.email?.toLowerCase() === email,
+      );
 
-    const authUser = existingUser
-      ? await supabase.auth.admin.updateUserById(existingUser.id, {
-          email,
-          password,
-          email_confirm: true,
-          user_metadata: {
-            ...(existingUser.user_metadata ?? {}),
-            tenant_id: tenantId,
-            tenant_name: companyName,
-            role: "admin",
-          },
+      const authUser = existingUser
+        ? await supabase.auth.admin.updateUserById(existingUser.id, {
+            email,
+            password,
+            email_confirm: true,
+            user_metadata: {
+              ...(existingUser.user_metadata ?? {}),
+              tenant_id: tenantId,
+              tenant_name: companyName,
+              role: "admin",
+            },
+          })
+        : await supabase.auth.admin.createUser({
+            email,
+            password,
+            email_confirm: true,
+            user_metadata: {
+              tenant_id: tenantId,
+              tenant_name: companyName,
+              role: "admin",
+            },
+          });
+
+      if (authUser.error) throw authUser.error;
+
+      const { error: provisionError } = await supabase.rpc("provision_client_profile", {
+        p_tenant_id: tenantId,
+        p_company_name: companyName,
+        p_cnpj: data.cnpj.trim() || null,
+        p_subscription_period: data.subscriptionPeriod.trim() || null,
+        p_truck_limit: Math.max(0, Number(data.truckLimit || 0)),
+        p_user_id: authUser.data.user.id,
+        p_user_email: email,
+        p_user_name: `Admin ${companyName}`,
+      });
+
+      if (provisionError) throw provisionError;
+
+      const { data: currentTenant, error: tenantReadError } = await supabase
+        .from("tenants")
+        .select("metadata")
+        .eq("id", tenantId)
+        .maybeSingle();
+
+      if (tenantReadError) throw tenantReadError;
+
+      const currentMetadata =
+        currentTenant?.metadata && typeof currentTenant.metadata === "object"
+          ? (currentTenant.metadata as Record<string, unknown>)
+          : {};
+
+      const nextMetadata = {
+        ...currentMetadata,
+        loginEmail: email,
+        loginPassword: password,
+        permissions: data.permissions,
+        features: data.features,
+        masterManagedAt: new Date().toISOString(),
+      };
+
+      const { error: tenantUpdateError } = await supabase
+        .from("tenants")
+        .update({
+          name: companyName,
+          cnpj: data.cnpj.trim() || null,
+          subscription_period: data.subscriptionPeriod.trim() || null,
+          truck_limit: Math.max(0, Number(data.truckLimit || 0)),
+          status: toTenantDbStatus(data.status),
+          metadata: nextMetadata,
         })
-      : await supabase.auth.admin.createUser({
-          email,
-          password,
-          email_confirm: true,
-          user_metadata: {
-            tenant_id: tenantId,
-            tenant_name: companyName,
-            role: "admin",
-          },
-        });
+        .eq("id", tenantId);
 
-    if (authUser.error) throw authUser.error;
+      if (tenantUpdateError) throw tenantUpdateError;
 
-    const { error: provisionError } = await supabase.rpc("provision_client_profile", {
-      p_tenant_id: tenantId,
-      p_company_name: companyName,
-      p_cnpj: data.cnpj.trim() || null,
-      p_subscription_period: data.subscriptionPeriod.trim() || null,
-      p_truck_limit: Math.max(0, Number(data.truckLimit || 0)),
-      p_user_id: authUser.data.user.id,
-      p_user_email: email,
-      p_user_name: `Admin ${companyName}`,
-    });
+      const tenants = await fetchOverviewRows();
+      const tenant = tenants.find((item) => item.tenantId === tenantId);
 
-    if (provisionError) throw provisionError;
-
-    const { data: currentTenant, error: tenantReadError } = await supabase
-      .from("tenants")
-      .select("metadata")
-      .eq("id", tenantId)
-      .maybeSingle();
-
-    if (tenantReadError) throw tenantReadError;
-
-    const currentMetadata =
-      currentTenant?.metadata && typeof currentTenant.metadata === "object"
-        ? (currentTenant.metadata as Record<string, unknown>)
-        : {};
-
-    const nextMetadata = {
-      ...currentMetadata,
-      loginEmail: email,
-      loginPassword: password,
-      permissions: data.permissions,
-      features: data.features,
-      masterManagedAt: new Date().toISOString(),
-    };
-
-    const { error: tenantUpdateError } = await supabase
-      .from("tenants")
-      .update({
-        name: companyName,
-        cnpj: data.cnpj.trim() || null,
-        subscription_period: data.subscriptionPeriod.trim() || null,
-        truck_limit: Math.max(0, Number(data.truckLimit || 0)),
-        status: toTenantDbStatus(data.status),
-        metadata: nextMetadata,
-      })
-      .eq("id", tenantId);
-
-    if (tenantUpdateError) throw tenantUpdateError;
-
-    const tenants = await fetchOverviewRows();
-    const tenant = tenants.find((item) => item.tenantId === tenantId);
-
-    return {
-      status: "ok" as const,
-      tenant: tenant ?? null,
-      tenantId,
-      userId: authUser.data.user.id,
-    };
+      return {
+        status: "ok" as const,
+        tenant: tenant ?? null,
+        tenantId,
+        userId: authUser.data.user.id,
+      };
+    } catch (error) {
+      console.error("upsertManagedTenant failed", {
+        companyName: data.companyName,
+        loginEmail: data.loginEmail,
+        tenantId: data.tenantId ?? null,
+        error,
+      });
+      throw error;
+    }
   });

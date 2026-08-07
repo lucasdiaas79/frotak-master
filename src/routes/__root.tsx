@@ -16,7 +16,11 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { ThemeProvider } from "@/lib/theme";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import { buildClientAccessUrl, getSession, subscribeToAuth, type AuthSession } from "@/lib/auth";
+import {
+  getPlatformAuthState,
+  subscribeToAuth,
+  type AuthGateState,
+} from "@/lib/auth";
 
 function NotFoundComponent() {
   return (
@@ -147,9 +151,10 @@ function RootComponent() {
 function AuthGate({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const [ready, setReady] = useState(false);
-  const [session, setSession] = useState<AuthSession | null>(null);
-  const authenticated = Boolean(session);
+  const [authState, setAuthState] = useState<AuthGateState>({
+    status: "LOADING",
+    session: null,
+  });
 
   const isLoginRoute = location.pathname === "/login";
   const redirectTarget = (() => {
@@ -159,37 +164,49 @@ function AuthGate({ children }: { children: ReactNode }) {
   })();
 
   useEffect(() => {
-    const sync = () => {
-      setSession(getSession());
-      setReady(true);
+    let active = true;
+
+    const sync = async () => {
+      setAuthState({ status: "LOADING", session: null });
+      const nextState = await getPlatformAuthState();
+      if (active) setAuthState(nextState);
     };
 
-    sync();
-    return subscribeToAuth(sync);
+    void sync();
+    const unsubscribe = subscribeToAuth(() => {
+      void sync();
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
+    if (authState.status === "LOADING") return;
 
-    if (!authenticated && !isLoginRoute) {
+    if (
+      (authState.status === "UNAUTHENTICATED" || authState.status === "UNAUTHORIZED") &&
+      !isLoginRoute
+    ) {
       const next = `${location.pathname}${typeof window !== "undefined" ? window.location.search : ""}`;
       navigate({
         to: "/login",
-        search: { redirect: next },
+        search: {
+          redirect: next,
+          reason: authState.status === "UNAUTHORIZED" ? "unauthorized" : "",
+        },
         replace: true,
       });
     }
 
-    if (authenticated && isLoginRoute) {
+    if (authState.status === "AUTHENTICATED_PLATFORM_USER" && isLoginRoute) {
       navigate({ to: redirectTarget, replace: true });
     }
+  }, [authState.status, isLoginRoute, location.pathname, navigate, redirectTarget]);
 
-    if (session?.scope === "client" && !isLoginRoute) {
-      window.location.assign(buildClientAccessUrl(session));
-    }
-  }, [authenticated, isLoginRoute, location.pathname, navigate, ready, redirectTarget, session]);
-
-  if (!ready) {
+  if (authState.status === "LOADING") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <div className="rounded-2xl border border-border bg-card px-6 py-5 text-sm text-muted-foreground">
@@ -199,7 +216,11 @@ function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
-  if ((!authenticated && !isLoginRoute) || (authenticated && isLoginRoute)) {
+  if (
+    ((authState.status === "UNAUTHENTICATED" || authState.status === "UNAUTHORIZED") &&
+      !isLoginRoute) ||
+    (authState.status === "AUTHENTICATED_PLATFORM_USER" && isLoginRoute)
+  ) {
     return null;
   }
 

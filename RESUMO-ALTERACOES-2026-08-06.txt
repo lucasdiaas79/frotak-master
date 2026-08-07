@@ -13,8 +13,8 @@ Workspace principal: D:\dev\frota-master
 
 2. ACESSO MASTER
 - Foi definida uma unica credencial principal para o sistema master:
-  Login: master@frotak.log.br
-  Senha: casadamoeda2026
+  Login: removido do codigo; definido manualmente no Supabase Auth
+  Senha: nunca armazenar em codigo, SQL, log ou repositorio
 
 3. CADASTRO DE CLIENTES NO MASTER
 - A logica de "Governanca" foi removida do sidebar.
