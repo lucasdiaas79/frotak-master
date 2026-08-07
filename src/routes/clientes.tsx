@@ -82,12 +82,19 @@ type ClientFormState = {
 };
 
 const moduleCatalog = [
-  { code: "fleet_core", label: "Frotak Core", required: true },
+  {
+    code: "fleet_core",
+    label: "Frotak Core",
+    description: "Gestao de frota, Smart Flow e operacao atual.",
+    required: true,
+  },
   { code: "cte_issuance", label: "Emissao de CT-e" },
   { code: "financial", label: "Financeiro" },
   { code: "frotak_ai", label: "Frotak IA" },
   { code: "frotak_tracking", label: "Rastreadores Frotak" },
 ];
+
+const subscriptionOptions = ["Mensal", "12 meses"];
 
 function slugify(value: string) {
   return value
@@ -97,6 +104,10 @@ function slugify(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/-{2,}/g, "-")
     .replace(/(^-|-$)/g, "");
+}
+
+function onlyDigits(value: string) {
+  return value.replace(/\D/g, "");
 }
 
 const emptyForm = (): ClientFormState => ({
@@ -112,21 +123,6 @@ const emptyForm = (): ClientFormState => ({
   temporaryPassword: "",
 });
 
-function tenantToForm(tenant: ManagedTenant): ClientFormState {
-  return {
-    legalName: tenant.name,
-    tradeName: tenant.name,
-    cnpj: tenant.cnpj,
-    subscriptionPeriod: tenant.subscriptionPeriod,
-    maxVehicles: String(tenant.truckLimit),
-    planCode: "BASIC",
-    enabledModuleCodes: ["fleet_core"],
-    ownerName: `Admin ${tenant.name}`,
-    ownerEmail: tenant.loginEmail,
-    temporaryPassword: "",
-  };
-}
-
 function Clientes() {
   const [view, setView] = useState<"tabela" | "cards">("tabela");
   const [loading, setLoading] = useState(true);
@@ -137,7 +133,6 @@ function Clientes() {
   const [details, setDetails] = useState<ManagedTenant | null>(null);
   const [editing, setEditing] = useState<ManagedTenant | null>(null);
   const [createForm, setCreateForm] = useState<ClientFormState>(emptyForm);
-  const [editForm, setEditForm] = useState<ClientFormState>(emptyForm);
 
   async function refreshClients() {
     const data = await listManagedTenants();
@@ -200,14 +195,8 @@ function Clientes() {
     }));
   }
 
-  function updateEditForm(field: keyof ClientFormState, value: string) {
-    setEditForm((current) => ({ ...current, [field]: value }));
-  }
-
-  function toggleModule(scope: "create" | "edit", moduleCode: string, checked: boolean) {
-    const setter = scope === "create" ? setCreateForm : setEditForm;
-
-    setter((current) => {
+  function toggleCreateModule(moduleCode: string, checked: boolean) {
+    setCreateForm((current) => {
       const modules = new Set(current.enabledModuleCodes);
       modules.add("fleet_core");
       if (checked) modules.add(moduleCode);
@@ -247,14 +236,16 @@ function Clientes() {
           masterAccessToken: accessToken,
           legalName: createForm.legalName,
           tradeName: createForm.tradeName,
-          cnpj: createForm.cnpj,
+          cnpj: onlyDigits(createForm.cnpj),
           ownerName: createForm.ownerName,
-          ownerEmail: createForm.ownerEmail,
+          ownerEmail: createForm.ownerEmail.trim().toLowerCase(),
           temporaryPassword: createForm.temporaryPassword,
           planCode: createForm.planCode,
           subscriptionPeriod: createForm.subscriptionPeriod,
           maxVehicles: Number(createForm.maxVehicles || 0),
-          enabledModuleCodes: createForm.enabledModuleCodes,
+          enabledModuleCodes: createForm.enabledModuleCodes.filter(
+            (moduleCode) => moduleCode !== "fleet_core",
+          ),
         },
       });
 
@@ -277,12 +268,6 @@ function Clientes() {
 
   function openEdit(client: ManagedTenant) {
     setEditing(client);
-    setEditForm(tenantToForm(client));
-  }
-
-  async function saveEdit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    toast.error("Edicao de cliente ainda nao foi liberada no novo fluxo administrativo.");
   }
 
   function accessClient(client: ManagedTenant) {
@@ -329,17 +314,13 @@ function Clientes() {
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-h-[88vh] max-w-4xl overflow-y-auto">
-                <ClientForm
-                  title="Novo cliente"
-                  description="Provisiona tenant, workspace, assinatura, modulos e administrador inicial."
+                <CreateClientForm
                   form={createForm}
                   onChange={updateCreateForm}
-                  onToggleModule={(moduleCode, checked) =>
-                    toggleModule("create", moduleCode, checked)
-                  }
+                  onToggleModule={toggleCreateModule}
                   onCancel={() => setCreateOpen(false)}
                   onSubmit={createClient}
-                  submitLabel={saving ? "Salvando..." : "Criar cliente"}
+                  saving={saving}
                 />
               </DialogContent>
             </Dialog>
@@ -352,7 +333,7 @@ function Clientes() {
         <KpiCard label="Caminhoes cadastrados" value={String(totals.trucks)} delta={`limite total ${totals.truckLimit}`} trend="flat" icon={Truck} />
         <KpiCard label="Motoristas" value={String(totals.drivers)} delta="base real" trend="flat" icon={KeyRound} />
         <KpiCard
-          label="Features liberadas"
+          label="Modulos ativos"
           value={String(filteredClients.reduce((sum, client) => sum + client.features.length, 0))}
           delta="somadas por tenant"
           trend="flat"
@@ -412,17 +393,28 @@ function Clientes() {
       <Sheet open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
         <SheetContent className="w-full overflow-y-auto scroll-slim sm:max-w-4xl">
           {editing ? (
-            <div className="px-4 pb-8">
-              <ClientForm
-                title="Editar cliente"
-                description="Edicao administrativa sera conectada ao novo fluxo em etapa propria."
-                form={editForm}
-                onChange={updateEditForm}
-                onToggleModule={(moduleCode, checked) => toggleModule("edit", moduleCode, checked)}
-                onCancel={() => setEditing(null)}
-                onSubmit={saveEdit}
-                submitLabel="Salvar alteracoes"
-              />
+            <div className="px-4 pb-8 pt-4">
+              <SheetHeader>
+                <SheetTitle>Editar cliente</SheetTitle>
+                <SheetDescription>
+                  A edicao administrativa sera liberada em um fluxo separado da criacao.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="mt-4 rounded-2xl border border-border bg-elevated/40 p-4 text-sm text-muted-foreground">
+                O provisionamento legado esta bloqueado. Por enquanto, este painel serve apenas
+                para consulta segura dos dados do tenant.
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <DataItem label="Empresa" value={editing.name} />
+                <DataItem label="CNPJ" value={editing.cnpj || "-"} />
+                <DataItem label="Assinatura" value={editing.subscriptionPeriod} />
+                <DataItem label="Limite de caminhoes" value={String(editing.truckLimit)} />
+              </div>
+              <div className="mt-5 flex justify-end">
+                <Button variant="outline" className="rounded-xl" onClick={() => setEditing(null)}>
+                  Fechar
+                </Button>
+              </div>
             </div>
           ) : null}
         </SheetContent>
@@ -545,39 +537,41 @@ function ClientCards({
   );
 }
 
-function ClientForm({
-  title,
-  description,
+function CreateClientForm({
   form,
   onChange,
   onToggleModule,
   onCancel,
   onSubmit,
-  submitLabel,
+  saving,
 }: {
-  title: string;
-  description: string;
   form: ClientFormState;
   onChange: (field: keyof ClientFormState, value: string) => void;
   onToggleModule: (moduleCode: string, checked: boolean) => void;
   onCancel: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
-  submitLabel: string;
+  saving: boolean;
 }) {
   return (
     <form onSubmit={onSubmit}>
       <DialogHeader>
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
+        <DialogTitle>Novo cliente</DialogTitle>
+        <DialogDescription>
+          Crie a empresa, configure sua assinatura e defina o administrador inicial.
+        </DialogDescription>
       </DialogHeader>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid gap-5">
+        <section className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <p className="text-sm font-bold">Empresa</p>
+          </div>
         <div className="sm:col-span-2">
           <Label className="text-xs">Nome da empresa</Label>
           <Input required value={form.legalName} onChange={(event) => onChange("legalName", event.target.value)} placeholder="Central Transportes" className="mt-1.5 rounded-xl" />
         </div>
         <div className="sm:col-span-2">
-          <Label className="text-xs">Nome fantasia</Label>
+          <Label className="text-xs">Nome fantasia (opcional)</Label>
           <Input value={form.tradeName} onChange={(event) => onChange("tradeName", event.target.value)} placeholder="Central" className="mt-1.5 rounded-xl" />
         </div>
         <div>
@@ -585,23 +579,48 @@ function ClientForm({
           <Input required value={form.cnpj} onChange={(event) => onChange("cnpj", event.target.value)} placeholder="00.000.000/0001-00" className="mt-1.5 rounded-xl" />
         </div>
         <div>
-          <Label className="text-xs">Periodo de assinatura</Label>
-          <Input required value={form.subscriptionPeriod} onChange={(event) => onChange("subscriptionPeriod", event.target.value)} placeholder="Mensal" className="mt-1.5 rounded-xl" />
+          <Label className="text-xs">Periodo da assinatura</Label>
+          <div className="mt-1.5 grid grid-cols-2 gap-2">
+            {subscriptionOptions.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => onChange("subscriptionPeriod", option)}
+                className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+                  form.subscriptionPeriod === option
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border bg-background/45 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
         </div>
         <div>
-          <Label className="text-xs">Limite de veiculos</Label>
+          <Label className="text-xs">Quantidade maxima de veiculos</Label>
           <Input required min={1} type="number" value={form.maxVehicles} onChange={(event) => onChange("maxVehicles", event.target.value)} className="mt-1.5 rounded-xl" />
         </div>
-        <div>
-          <Label className="text-xs">Plano</Label>
-          <Input required value={form.planCode} disabled onChange={(event) => onChange("planCode", event.target.value)} className="mt-1.5 rounded-xl" />
-        </div>
-        <div className="sm:col-span-2">
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <p className="text-sm font-bold">Plano</p>
+          </div>
+          <div>
+            <Label className="text-xs">Plano</Label>
+            <Input required value="Plano Basico" disabled className="mt-1.5 rounded-xl" />
+          </div>
+        </section>
+
+        <section>
           <ClientModules modules={form.enabledModuleCodes} onToggleModule={onToggleModule} />
-        </div>
-        <div className="sm:col-span-2">
-          <p className="text-sm font-bold">Administrador inicial</p>
-        </div>
+        </section>
+
+        <section className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <p className="text-sm font-bold">Administrador inicial</p>
+          </div>
         <div>
           <Label className="text-xs">Nome completo</Label>
           <Input required value={form.ownerName} onChange={(event) => onChange("ownerName", event.target.value)} placeholder="Marina Silva" className="mt-1.5 rounded-xl" />
@@ -614,14 +633,15 @@ function ClientForm({
           <Label className="text-xs">Senha temporaria</Label>
           <Input required type="password" value={form.temporaryPassword} onChange={(event) => onChange("temporaryPassword", event.target.value)} className="mt-1.5 rounded-xl" />
         </div>
+        </section>
       </div>
 
       <DialogFooter className="mt-5">
         <Button type="button" variant="outline" className="rounded-xl" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button type="submit" className="rounded-xl font-bold" disabled={submitLabel.includes("...")}>
-          {submitLabel}
+        <Button type="submit" className="rounded-xl font-bold" disabled={saving}>
+          {saving ? "Salvando..." : "Criar cliente"}
         </Button>
       </DialogFooter>
     </form>
@@ -639,22 +659,30 @@ function ClientModules({
     <div className="rounded-2xl border border-border bg-elevated/30 p-4">
       <div className="flex items-center gap-2">
         <Sparkles className="size-4 text-primary" />
-        <p className="text-sm font-bold">Modulos</p>
+        <p className="text-sm font-bold">Modulos contratados</p>
       </div>
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      <div className="mt-3 grid gap-2">
         {moduleCatalog.map((module) => {
           const checked = module.required || modules.includes(module.code);
           return (
             <label
               key={module.code}
-              className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-background/45 px-3 py-2 text-xs font-semibold"
+              className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-background/45 px-3 py-3 text-sm"
             >
               <Checkbox
                 checked={checked}
                 disabled={module.required}
                 onCheckedChange={(value) => onToggleModule(module.code, value === true)}
+                className="mt-0.5"
               />
-              {module.label}
+              <span>
+                <span className="block font-bold">{module.label}</span>
+                {module.description ? (
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {module.description} Obrigatorio e nao pode ser desmarcado.
+                  </span>
+                ) : null}
+              </span>
             </label>
           );
         })}

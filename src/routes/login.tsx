@@ -52,6 +52,11 @@ function LoginPage() {
         return;
       }
 
+      if (result.external) {
+        window.location.href = result.redirectTo;
+        return;
+      }
+
       navigate({ to: result.redirectTo, replace: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro temporario de autenticacao.";

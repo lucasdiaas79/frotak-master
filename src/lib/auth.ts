@@ -40,9 +40,9 @@ export type AuthSession = {
 };
 
 export type AuthResult = {
-  session: AuthSession;
+  session: AuthSession | null;
   redirectTo: string;
-  external: false;
+  external: boolean;
 };
 
 export type AuthGateState =
@@ -78,6 +78,57 @@ export const loginAccounts: Array<{ email: string; name: string; role: string; p
 type PlatformUserRow = {
   platform_role: PlatformRole;
   active: boolean;
+};
+
+type ClientMembershipRow = {
+  workspace_id: string;
+  status: string;
+  workspaces:
+    | {
+        id: string;
+        tenant_id: string;
+        name: string;
+        slug: string;
+        tenants:
+          | {
+              id: string;
+              slug: string;
+              legal_name: string;
+              trade_name: string | null;
+              settings: Record<string, unknown> | null;
+            }
+          | Array<{
+              id: string;
+              slug: string;
+              legal_name: string;
+              trade_name: string | null;
+              settings: Record<string, unknown> | null;
+            }>
+          | null;
+      }
+    | Array<{
+        id: string;
+        tenant_id: string;
+        name: string;
+        slug: string;
+        tenants:
+          | {
+              id: string;
+              slug: string;
+              legal_name: string;
+              trade_name: string | null;
+              settings: Record<string, unknown> | null;
+            }
+          | Array<{
+              id: string;
+              slug: string;
+              legal_name: string;
+              trade_name: string | null;
+              settings: Record<string, unknown> | null;
+            }>
+          | null;
+      }>
+    | null;
 };
 
 let browserSupabase: SupabaseClient | null = null;
@@ -148,7 +199,15 @@ function createToken(payload: Record<string, unknown>) {
 }
 
 function getClientAppUrl() {
-  return import.meta.env.VITE_FROTAK_CLIENT_APP_URL || "http://localhost:5174";
+  const configuredUrl = import.meta.env.VITE_FROTAK_CLIENT_APP_URL;
+  if (typeof configuredUrl === "string" && configuredUrl.trim()) return configuredUrl.trim();
+
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1") return "http://localhost:5174";
+  }
+
+  return "https://cliente.frotak.log.br";
 }
 
 function buildClientUrl(client: Client) {
@@ -157,6 +216,11 @@ function buildClientUrl(client: Client) {
   }
 
   return getClientAppUrl();
+}
+
+function firstRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
 }
 
 function getStoredUsers(): ManagedUser[] {
@@ -298,7 +362,7 @@ export async function getCurrentAccessToken() {
 
 export async function authenticate(email: string, password: string, fallbackRedirect = "/") {
   const supabase = getSupabaseBrowser();
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data: signInData, error } = await supabase.auth.signInWithPassword({
     email: normalizeEmail(email),
     password,
   });
@@ -311,8 +375,23 @@ export async function authenticate(email: string, password: string, fallbackRedi
     throw new Error("Erro temporario de autenticacao.");
   }
 
-  const state = await getPlatformAuthState();
-  if (state.status === "AUTHENTICATED_PLATFORM_USER") {
+  const session = signInData.session;
+  if (!session?.user) {
+    throw new Error("Erro temporario de autenticacao.");
+  }
+
+  const { data: platformUser, error: platformError } = await supabase
+    .from("platform_users")
+    .select("platform_role, active")
+    .eq("user_id", session.user.id)
+    .maybeSingle<PlatformUserRow>();
+
+  if (!platformError && platformUser?.active) {
+    const state = await validatePlatformSession(session);
+    if (state.status !== "AUTHENTICATED_PLATFORM_USER") {
+      throw new Error(state.message || "Usuario sem acesso ao Frotak Master.");
+    }
+
     return {
       session: state.session,
       redirectTo: fallbackRedirect || "/",
@@ -320,7 +399,47 @@ export async function authenticate(email: string, password: string, fallbackRedi
     } satisfies AuthResult;
   }
 
-  throw new Error(state.message || "Usuario sem acesso ao Frotak Master.");
+  const { data: membership, error: membershipError } = await supabase
+    .from("workspace_memberships")
+    .select(
+      "workspace_id, status, workspaces(id, tenant_id, name, slug, tenants(id, slug, legal_name, trade_name, settings))",
+    )
+    .eq("user_id", session.user.id)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle<ClientMembershipRow>();
+
+  if (membershipError) {
+    await supabase.auth.signOut();
+    throw new Error("Erro temporario de autenticacao.");
+  }
+
+  const workspace = firstRelation(membership?.workspaces);
+  const tenant = firstRelation(workspace?.tenants);
+
+  if (!workspace || !tenant) {
+    await supabase.auth.signOut();
+    throw new Error("Usuario sem acesso ao Master.");
+  }
+
+  const settings = tenant.settings ?? {};
+  const clientUrl =
+    typeof settings.clientUrl === "string" && settings.clientUrl.trim()
+      ? settings.clientUrl.trim()
+      : undefined;
+
+  return {
+    session: null,
+    redirectTo: buildClientAccessUrl({
+      clientUrl,
+      accessToken: session.access_token,
+      clientId: tenant.id,
+      tenantId: tenant.id,
+      clientName: tenant.trade_name || tenant.legal_name || workspace.name,
+      email: session.user.email ?? normalizeEmail(email),
+    }),
+    external: true,
+  } satisfies AuthResult;
 }
 
 export async function logout() {

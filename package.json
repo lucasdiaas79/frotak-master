@@ -5,7 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "dev:client": "npm --prefix central-dias-main run dev",
+    "dev:all": "powershell -ExecutionPolicy Bypass -File .\\scripts\\dev-all.ps1",
     "build": "vite build",
+    "build:client": "npm --prefix central-dias-main run build",
+    "build:all": "npm run build && npm run build:client",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",

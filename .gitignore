@@ -35,9 +35,21 @@ dist-ssr
 .env*
 !.env.example
 .chrome-theme-check/
-central-dias-main/
 .push-target-path
 workspace-check.png
 !.env.example
 
 .env*
+
+# Nested client app artifacts
+central-dias-main/node_modules/
+central-dias-main/.output/
+central-dias-main/.tanstack/
+central-dias-main/.nitro/
+central-dias-main/.vercel/
+central-dias-main/.wrangler/
+central-dias-main/dist/
+central-dias-main/build/
+central-dias-main/.env*
+!central-dias-main/.env.example
+central-dias-main/supabase/

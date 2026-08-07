@@ -96,6 +96,47 @@ type OverviewRow = {
   broken_vehicles_count: number | null;
 };
 
+type TenantRow = {
+  id: string;
+  slug: string;
+  legal_name: string;
+  trade_name: string | null;
+  cnpj: string | null;
+  status: string | null;
+  settings: Record<string, unknown> | null;
+};
+
+type WorkspaceRow = {
+  id: string;
+  tenant_id: string;
+  is_default: boolean;
+  settings: Record<string, unknown> | null;
+};
+
+type TenantSubscriptionRow = {
+  tenant_id: string;
+  billing_metadata: Record<string, unknown> | null;
+};
+
+type WorkspaceMembershipRow = {
+  workspace_id: string;
+  user_id: string;
+  status: string;
+  is_owner: boolean;
+};
+
+type ProfileRow = {
+  id: string;
+  email: string | null;
+};
+
+type WorkspaceModuleRow = {
+  workspace_id: string;
+  enabled: boolean;
+  limits: Record<string, unknown> | null;
+  modules: { code: string } | null;
+};
+
 export type UpsertManagedTenantInput = {
   tenantId?: string;
   companyName: string;
@@ -216,6 +257,87 @@ function rowToManagedTenant(row: OverviewRow): ManagedTenant {
   };
 }
 
+function modulesToFeatures(modules: WorkspaceModuleRow[]): TenantFeatureKey[] {
+  const moduleCodes = new Set(
+    modules
+      .filter((module) => module.enabled)
+      .map((module) => module.modules?.code)
+      .filter((code): code is string => Boolean(code)),
+  );
+
+  const features = new Set<TenantFeatureKey>();
+  if (moduleCodes.has("fleet_core")) {
+    [
+      "dashboard",
+      "gestao-frota",
+      "historicos",
+      "abastecimentos",
+      "mapa",
+      "veiculos",
+      "motoristas",
+      "cacambas",
+      "clientes",
+      "produtos",
+    ].forEach((feature) => features.add(feature as TenantFeatureKey));
+  }
+  if (moduleCodes.has("frotak_tracking")) features.add("sascar");
+
+  return Array.from(features);
+}
+
+function rowToManagedTenantFromTables(input: {
+  tenant: TenantRow;
+  workspace?: WorkspaceRow;
+  subscription?: TenantSubscriptionRow;
+  ownerEmail?: string;
+  usersCount: number;
+  modules: WorkspaceModuleRow[];
+}): ManagedTenant {
+  const { tenant, workspace, subscription, ownerEmail, usersCount, modules } = input;
+  const tenantSettings = tenant.settings ?? {};
+  const workspaceSettings = workspace?.settings ?? {};
+  const subscriptionMetadata = subscription?.billing_metadata ?? {};
+  const fleetModule = modules.find((module) => module.modules?.code === "fleet_core");
+  const moduleLimits = fleetModule?.limits ?? {};
+  const maxVehicles =
+    Number(moduleLimits.max_vehicles ?? workspaceSettings.maxVehicles ?? tenantSettings.maxVehicles ?? 0) || 0;
+  const subscriptionPeriod =
+    typeof subscriptionMetadata.period === "string"
+      ? subscriptionMetadata.period
+      : typeof tenantSettings.subscriptionPeriod === "string"
+        ? tenantSettings.subscriptionPeriod
+        : "Mensal";
+
+  return {
+    id: tenant.id,
+    tenantId: tenant.id,
+    slug: tenant.slug,
+    domain:
+      typeof tenantSettings.domain === "string" && tenantSettings.domain
+        ? tenantSettings.domain
+        : `${tenant.slug}.frotak.app`,
+    name: tenant.trade_name || tenant.legal_name,
+    cnpj: tenant.cnpj ?? "",
+    subscriptionPeriod,
+    status: normalizeTenantStatus(tenant.status),
+    loginEmail: ownerEmail ?? `admin@${tenant.slug}.com.br`,
+    loginPassword: "",
+    truckLimit: maxVehicles,
+    users: usersCount,
+    drivers: 0,
+    trailers: 0,
+    vehicles: 0,
+    senders: 0,
+    recipients: 0,
+    products: 0,
+    inRouteVehicles: 0,
+    maintenanceVehicles: 0,
+    brokenVehicles: 0,
+    permissions: {},
+    features: modulesToFeatures(modules),
+  };
+}
+
 function toDashboardSnapshot(tenants: ManagedTenant[]): MasterDashboardSnapshot {
   return tenants.reduce<MasterDashboardSnapshot>(
     (acc, tenant) => {
@@ -262,10 +384,90 @@ async function fetchOverviewRows() {
   }
 
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.rpc("get_master_tenant_overview");
-  if (error) throw error;
+  const { data: tenants, error: tenantsError } = await supabase
+    .from("tenants")
+    .select("id, slug, legal_name, trade_name, cnpj, status, settings")
+    .order("created_at", { ascending: false });
 
-  return ((data ?? []) as OverviewRow[]).map(rowToManagedTenant);
+  if (tenantsError) throw tenantsError;
+  const tenantRows = (tenants ?? []) as TenantRow[];
+  if (!tenantRows.length) return [];
+
+  const tenantIds = tenantRows.map((tenant) => tenant.id);
+  const { data: workspaces, error: workspacesError } = await supabase
+    .from("workspaces")
+    .select("id, tenant_id, is_default, settings")
+    .in("tenant_id", tenantIds);
+
+  if (workspacesError) throw workspacesError;
+  const workspaceRows = (workspaces ?? []) as WorkspaceRow[];
+  const workspaceIds = workspaceRows.map((workspace) => workspace.id);
+
+  const [
+    subscriptionsResult,
+    membershipsResult,
+    modulesResult,
+  ] = await Promise.all([
+    supabase
+      .from("tenant_subscriptions")
+      .select("tenant_id, billing_metadata")
+      .in("tenant_id", tenantIds)
+      .in("status", ["trial", "active", "past_due", "suspended"]),
+    workspaceIds.length
+      ? supabase
+          .from("workspace_memberships")
+          .select("workspace_id, user_id, status, is_owner")
+          .in("workspace_id", workspaceIds)
+      : Promise.resolve({ data: [], error: null }),
+    workspaceIds.length
+      ? supabase
+          .from("workspace_modules")
+          .select("workspace_id, enabled, limits, modules(code)")
+          .in("workspace_id", workspaceIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (subscriptionsResult.error) throw subscriptionsResult.error;
+  if (membershipsResult.error) throw membershipsResult.error;
+  if (modulesResult.error) throw modulesResult.error;
+
+  const memberships = (membershipsResult.data ?? []) as WorkspaceMembershipRow[];
+  const ownerUserIds = memberships
+    .filter((membership) => membership.is_owner)
+    .map((membership) => membership.user_id);
+  const { data: profiles, error: profilesError } = ownerUserIds.length
+    ? await supabase.from("profiles").select("id, email").in("id", ownerUserIds)
+    : { data: [], error: null };
+
+  if (profilesError) throw profilesError;
+
+  const subscriptions = (subscriptionsResult.data ?? []) as TenantSubscriptionRow[];
+  const modules = (modulesResult.data ?? []) as WorkspaceModuleRow[];
+  const profileById = new Map((profiles ?? []).map((profile) => [(profile as ProfileRow).id, profile as ProfileRow]));
+  const workspaceByTenantId = new Map<string, WorkspaceRow>();
+
+  workspaceRows.forEach((workspace) => {
+    const current = workspaceByTenantId.get(workspace.tenant_id);
+    if (!current || workspace.is_default) workspaceByTenantId.set(workspace.tenant_id, workspace);
+  });
+
+  return tenantRows.map((tenant) => {
+    const workspace = workspaceByTenantId.get(tenant.id);
+    const workspaceMemberships = workspace
+      ? memberships.filter((membership) => membership.workspace_id === workspace.id)
+      : [];
+    const ownerMembership = workspaceMemberships.find((membership) => membership.is_owner);
+    const ownerEmail = ownerMembership ? profileById.get(ownerMembership.user_id)?.email ?? undefined : undefined;
+
+    return rowToManagedTenantFromTables({
+      tenant,
+      workspace,
+      subscription: subscriptions.find((subscription) => subscription.tenant_id === tenant.id),
+      ownerEmail,
+      usersCount: workspaceMemberships.filter((membership) => membership.status === "active").length,
+      modules: workspace ? modules.filter((module) => module.workspace_id === workspace.id) : [],
+    });
+  });
 }
 
 export const listManagedTenants = createServerFn({ method: "GET" }).handler(async () => {
@@ -284,117 +486,5 @@ export const upsertManagedTenant = createServerFn({ method: "POST" })
       throw new Error("Dados do cliente nao foram enviados para o servidor.");
     }
 
-    if (!hasSupabaseAdminConfig()) {
-      return {
-        status: "skipped" as const,
-        reason: "Supabase admin env vars are not configured.",
-      };
-    }
-
-    try {
-      const supabase = getSupabaseAdmin();
-      const tenantId = data.tenantId || crypto.randomUUID();
-      const email = data.loginEmail.trim().toLowerCase();
-      const password = data.loginPassword.trim();
-      const companyName = data.companyName.trim();
-
-      const existingUsers = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (existingUsers.error) throw existingUsers.error;
-
-      const existingUser = existingUsers.data.users.find(
-        (user) => user.email?.toLowerCase() === email,
-      );
-
-      const authUser = existingUser
-        ? await supabase.auth.admin.updateUserById(existingUser.id, {
-            email,
-            password,
-            email_confirm: true,
-            user_metadata: {
-              ...(existingUser.user_metadata ?? {}),
-              tenant_id: tenantId,
-              tenant_name: companyName,
-              role: "admin",
-            },
-          })
-        : await supabase.auth.admin.createUser({
-            email,
-            password,
-            email_confirm: true,
-            user_metadata: {
-              tenant_id: tenantId,
-              tenant_name: companyName,
-              role: "admin",
-            },
-          });
-
-      if (authUser.error) throw authUser.error;
-
-      const { error: provisionError } = await supabase.rpc("provision_client_profile", {
-        p_tenant_id: tenantId,
-        p_company_name: companyName,
-        p_cnpj: data.cnpj.trim() || null,
-        p_subscription_period: data.subscriptionPeriod.trim() || null,
-        p_truck_limit: Math.max(0, Number(data.truckLimit || 0)),
-        p_user_id: authUser.data.user.id,
-        p_user_email: email,
-        p_user_name: `Admin ${companyName}`,
-      });
-
-      if (provisionError) throw provisionError;
-
-      const { data: currentTenant, error: tenantReadError } = await supabase
-        .from("tenants")
-        .select("metadata")
-        .eq("id", tenantId)
-        .maybeSingle();
-
-      if (tenantReadError) throw tenantReadError;
-
-      const currentMetadata =
-        currentTenant?.metadata && typeof currentTenant.metadata === "object"
-          ? (currentTenant.metadata as Record<string, unknown>)
-          : {};
-
-      const nextMetadata = {
-        ...currentMetadata,
-        loginEmail: email,
-        loginPassword: password,
-        permissions: data.permissions,
-        features: data.features,
-        masterManagedAt: new Date().toISOString(),
-      };
-
-      const { error: tenantUpdateError } = await supabase
-        .from("tenants")
-        .update({
-          name: companyName,
-          cnpj: data.cnpj.trim() || null,
-          subscription_period: data.subscriptionPeriod.trim() || null,
-          truck_limit: Math.max(0, Number(data.truckLimit || 0)),
-          status: toTenantDbStatus(data.status),
-          metadata: nextMetadata,
-        })
-        .eq("id", tenantId);
-
-      if (tenantUpdateError) throw tenantUpdateError;
-
-      const tenants = await fetchOverviewRows();
-      const tenant = tenants.find((item) => item.tenantId === tenantId);
-
-      return {
-        status: "ok" as const,
-        tenant: tenant ?? null,
-        tenantId,
-        userId: authUser.data.user.id,
-      };
-    } catch (error) {
-      console.error("upsertManagedTenant failed", {
-        companyName: data.companyName,
-        loginEmail: data.loginEmail,
-        tenantId: data.tenantId ?? null,
-        error,
-      });
-      throw error;
-    }
+    throw new Error("Fluxo legado de clientes desativado. Use provisionTenant.");
   });
