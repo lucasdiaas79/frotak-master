@@ -133,11 +133,6 @@ export async function acceptMasterSsoFromUrl(search: string) {
   const clientName = params.get("client_name") || "Central Transportes";
   const email = params.get("login_hint") || CENTRAL_DEMO_EMAIL;
 
-  if (hasSupabaseConfig()) {
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data.user) throw error ?? new Error("SSO invalido.");
-  }
-
   const session = createLocalSession({ email, name: clientName, tenantId });
 
   saveLocalSession(session);
