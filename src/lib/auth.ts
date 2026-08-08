@@ -166,6 +166,30 @@ function getSupabaseBrowser() {
   return browserSupabase;
 }
 
+function getSupabaseBrowserWithAccessToken(accessToken: string) {
+  const url = getPublicEnv("VITE_SUPABASE_URL");
+  const key =
+    getPublicEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ||
+    getPublicEnv("VITE_SUPABASE_ANON_KEY");
+
+  if (!url || !key) {
+    throw new Error("Supabase Auth publico nao configurado.");
+  }
+
+  return createClient(url, key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  });
+}
+
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
@@ -382,7 +406,9 @@ export async function authenticate(email: string, password: string, fallbackRedi
     throw new Error("Erro temporario de autenticacao.");
   }
 
-  const { data: platformUser, error: platformError } = await supabase
+  const authenticatedSupabase = getSupabaseBrowserWithAccessToken(session.access_token);
+
+  const { data: platformUser, error: platformError } = await authenticatedSupabase
     .from("platform_users")
     .select("platform_role, active")
     .eq("user_id", session.user.id)
@@ -401,7 +427,7 @@ export async function authenticate(email: string, password: string, fallbackRedi
     } satisfies AuthResult;
   }
 
-  const { data: membership, error: membershipError } = await supabase
+  const { data: membership, error: membershipError } = await authenticatedSupabase
     .from("workspace_memberships")
     .select(
       "workspace_id, status, workspaces(id, tenant_id, name, slug, tenants(id, slug, legal_name, trade_name, settings))",
