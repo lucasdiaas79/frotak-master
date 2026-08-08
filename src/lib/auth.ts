@@ -550,6 +550,9 @@ export function buildClientAccessUrl(session: {
 }) {
   const baseUrl = session.clientUrl || getClientAppUrl();
   const url = new URL(baseUrl);
+  url.pathname = "/";
+  url.hash = "";
+  url.search = "";
 
   url.searchParams.set("sso_token", session.accessToken);
   if (session.refreshToken) url.searchParams.set("refresh_token", session.refreshToken);

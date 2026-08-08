@@ -166,10 +166,11 @@ export async function acceptMasterSsoFromUrl(search: string) {
   let userId: string | undefined;
 
   if (hasSupabaseConfig() && refreshToken) {
-    const { data } = await supabase.auth.setSession({
+    const { data, error } = await supabase.auth.setSession({
       access_token: token,
       refresh_token: refreshToken,
     });
+    if (error) throw error;
     userId = data.session?.user.id;
   }
 
@@ -182,23 +183,17 @@ export async function acceptMasterSsoFromUrl(search: string) {
 }
 
 export async function getSession(): Promise<Session | null> {
+  const local = readLocalSession();
+
   if (!hasSupabaseConfig()) {
-    const local = readLocalSession();
     if (!local) return null;
 
-    return {
-      access_token: "local-dev-token",
-      token_type: "bearer",
-      expires_in: 28800,
-      expires_at: Math.floor(Date.now() / 1000) + 28800,
-      refresh_token: "local-dev-refresh",
-      user: local.user,
-    } as Session;
+    return localSessionToSupabaseSession(local);
   }
 
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
-  return data.session;
+  return data.session ?? (local ? localSessionToSupabaseSession(local) : null);
 }
 
 export async function isAuthed(): Promise<boolean> {
@@ -243,9 +238,11 @@ export async function signOut() {
 }
 
 export async function getProfile(userId: string): Promise<Profile | null> {
+  const local = readLocalSession();
+  if (local && local.user.id === userId) return local.profile;
+
   if (!hasSupabaseConfig()) {
-    const local = readLocalSession();
-    return local && local.user.id === userId ? local.profile : null;
+    return null;
   }
 
   const { data: profile, error } = await supabase
@@ -278,12 +275,24 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 }
 
 export async function getCurrentUser(): Promise<User | null> {
+  const local = readLocalSession();
+
   if (!hasSupabaseConfig()) {
-    const local = readLocalSession();
     return local?.user ?? null;
   }
 
   const { data, error } = await supabase.auth.getUser();
   if (error) throw error;
-  return data.user;
+  return data.user ?? local?.user ?? null;
+}
+
+function localSessionToSupabaseSession(local: LocalSession): Session {
+  return {
+    access_token: "frotak-master-sso-token",
+    token_type: "bearer",
+    expires_in: 28800,
+    expires_at: Math.floor(Date.now() / 1000) + 28800,
+    refresh_token: "frotak-master-sso-refresh",
+    user: local.user,
+  } as Session;
 }
