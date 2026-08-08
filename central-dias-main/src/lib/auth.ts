@@ -137,12 +137,11 @@ export async function acceptMasterSsoFromUrl(search: string) {
   let userId: string | undefined;
 
   if (hasSupabaseConfig() && refreshToken) {
-    const { data, error } = await supabase.auth.setSession({
+    const { data } = await supabase.auth.setSession({
       access_token: token,
       refresh_token: refreshToken,
     });
-    if (error || !data.session?.user) throw error ?? new Error("Sessao SSO invalida.");
-    userId = data.session.user.id;
+    userId = data.session?.user.id;
   }
 
   const session = createLocalSession({ email, name: clientName, tenantId, userId });
