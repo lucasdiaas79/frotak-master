@@ -11,25 +11,65 @@ const MASTER_SSO_SOURCE = "frotak-master";
 interface ProfileRow {
   id: string;
   tenant_id?: string | null;
-  name: string | null;
+  name?: string | null;
+  full_name?: string | null;
   email: string | null;
-  role: Profile["role"] | null;
+  role?: Profile["role"] | null;
   active: boolean | null;
   created_at?: string;
   updated_at?: string;
+}
+
+interface MembershipProfileRow {
+  status: string;
+  workspaces:
+    | {
+        tenant_id: string;
+        name: string | null;
+        tenants:
+          | {
+              legal_name: string | null;
+              trade_name: string | null;
+            }
+          | Array<{
+              legal_name: string | null;
+              trade_name: string | null;
+            }>
+          | null;
+      }
+    | Array<{
+        tenant_id: string;
+        name: string | null;
+        tenants:
+          | {
+              legal_name: string | null;
+              trade_name: string | null;
+            }
+          | Array<{
+              legal_name: string | null;
+              trade_name: string | null;
+            }>
+          | null;
+      }>
+    | null;
 }
 
 function profileFromRow(row: ProfileRow): Profile {
   return {
     id: row.id,
     tenantId: row.tenant_id ?? "00000000-0000-0000-0000-000000000001",
-    name: row.name ?? "",
+    name: row.name ?? row.full_name ?? "",
     email: row.email ?? "",
     role: row.role ?? "operador",
     active: row.active ?? true,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+function firstRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
 }
 
 type LocalSession = {
@@ -208,13 +248,33 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     return local && local.user.id === userId ? local.profile : null;
   }
 
-  const { data, error } = await supabase
+  const { data: profile, error } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", userId)
     .maybeSingle();
   if (error) throw error;
-  return data ? profileFromRow(data) : null;
+  if (!profile) return null;
+
+  const { data: membership, error: membershipError } = await supabase
+    .from("workspace_memberships")
+    .select("status, workspaces(tenant_id, name, tenants(legal_name, trade_name))")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle<MembershipProfileRow>();
+  if (membershipError) throw membershipError;
+
+  const workspace = firstRelation(membership?.workspaces);
+  const tenant = firstRelation(workspace?.tenants);
+  const tenantId = workspace?.tenant_id;
+  const tenantName = tenant?.trade_name || tenant?.legal_name || workspace?.name || profile.full_name;
+
+  return profileFromRow({
+    ...profile,
+    tenant_id: tenantId,
+    name: tenantName,
+  });
 }
 
 export async function getCurrentUser(): Promise<User | null> {
