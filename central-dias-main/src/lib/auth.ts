@@ -173,12 +173,16 @@ export async function acceptMasterSsoFromUrl(search: string) {
   let userId: string | undefined;
 
   if (hasSupabaseConfig() && refreshToken) {
-    const { data, error } = await supabase.auth.setSession({
-      access_token: token,
-      refresh_token: refreshToken,
-    });
-    if (error) throw error;
-    userId = data.session?.user.id;
+    try {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: token,
+        refresh_token: refreshToken,
+      });
+      if (error) throw error;
+      userId = data.session?.user.id;
+    } catch {
+      console.warn("Master SSO Supabase session was not persisted; using tenant session.");
+    }
   }
 
   const session = createLocalSession({ email, name: clientName, tenantId, userId });
