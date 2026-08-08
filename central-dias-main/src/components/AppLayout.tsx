@@ -37,6 +37,8 @@ import { vehicleTrailerLabel } from "@/lib/vehicle-trailers";
 import logoCentral from "@/assets/logo-central.png";
 import faviconCentral from "@/assets/favicon.png";
 
+const MASTER_LOGIN_URL = "https://login.frotak.log.br";
+
 interface NavItem {
   to: string;
   label: string;
@@ -727,7 +729,7 @@ export function AppLayout() {
         const user = await getCurrentUser();
         if (!user) {
           if (!cancelled) {
-            window.location.href = `/login${window.location.search}`;
+            window.location.href = MASTER_LOGIN_URL;
           }
           return;
         }
@@ -745,7 +747,7 @@ export function AppLayout() {
         }
       } catch {
         if (!cancelled) {
-          window.location.href = `/login${window.location.search}`;
+          window.location.href = MASTER_LOGIN_URL;
         }
       }
     }

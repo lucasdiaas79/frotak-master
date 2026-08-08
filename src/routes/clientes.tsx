@@ -48,9 +48,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  createClientAccess,
-  createClientImpersonationUrl,
+  buildClientAccessUrl,
   getCurrentAccessToken,
+  getSession,
 } from "@/lib/auth";
 import { listManagedTenants, tenantFeatureCatalog, type ManagedTenant } from "@/lib/masterControl";
 import { provisionTenant } from "@/lib/tenantProvisioning";
@@ -271,14 +271,24 @@ function Clientes() {
   }
 
   function accessClient(client: ManagedTenant) {
-    createClientAccess({
-      clientId: client.id,
-      tenantId: client.tenantId,
-      clientName: client.name,
-      email: client.loginEmail,
-      password: client.loginPassword,
-    });
-    window.open(createClientImpersonationUrl(client), "_blank", "noopener,noreferrer");
+    const session = getSession();
+    if (!session?.accessToken) {
+      toast.error("Sessao do Master expirada. Entre novamente.");
+      return;
+    }
+
+    window.open(
+      buildClientAccessUrl({
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        clientId: client.id,
+        tenantId: client.tenantId,
+        clientName: client.name,
+        email: client.loginEmail || session.email,
+      }),
+      "_blank",
+      "noopener,noreferrer",
+    );
   }
 
   return (
