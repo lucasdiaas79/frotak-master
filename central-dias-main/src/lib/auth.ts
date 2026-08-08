@@ -154,6 +154,13 @@ function createLocalSession(input: {
 export async function acceptMasterSsoFromUrl(search: string) {
   if (!canUseStorage()) return null;
   const params = new URLSearchParams(search);
+  const hash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  const hashParams = new URLSearchParams(hash);
+  for (const [key, value] of hashParams.entries()) {
+    if (!params.has(key)) params.set(key, value);
+  }
   const token = params.get("sso_token");
   const refreshToken = params.get("refresh_token");
   const source = params.get("source");

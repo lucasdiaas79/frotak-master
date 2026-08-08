@@ -554,13 +554,15 @@ export function buildClientAccessUrl(session: {
   url.hash = "";
   url.search = "";
 
-  url.searchParams.set("sso_token", session.accessToken);
-  if (session.refreshToken) url.searchParams.set("refresh_token", session.refreshToken);
-  url.searchParams.set("client_id", session.clientId || "");
-  url.searchParams.set("tenant_id", session.tenantId || session.clientId || "");
-  url.searchParams.set("client_name", session.clientName || "");
-  url.searchParams.set("login_hint", session.email);
-  url.searchParams.set("source", "frotak-master");
+  const handoffParams = new URLSearchParams();
+  handoffParams.set("sso_token", session.accessToken);
+  if (session.refreshToken) handoffParams.set("refresh_token", session.refreshToken);
+  handoffParams.set("client_id", session.clientId || "");
+  handoffParams.set("tenant_id", session.tenantId || session.clientId || "");
+  handoffParams.set("client_name", session.clientName || "");
+  handoffParams.set("login_hint", session.email);
+  handoffParams.set("source", "frotak-master");
+  url.hash = handoffParams.toString();
 
   return url.toString();
 }
