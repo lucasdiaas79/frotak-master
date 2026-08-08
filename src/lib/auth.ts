@@ -235,6 +235,11 @@ function getClientAppUrl() {
   return "https://cliente.frotak.log.br";
 }
 
+function isLocalMasterHost() {
+  if (typeof window === "undefined") return false;
+  return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+}
+
 function buildClientUrl(client: Client) {
   if (import.meta.env.VITE_FROTAK_USE_CLIENT_DOMAIN === "true") {
     return `https://${client.domain}`;
@@ -453,7 +458,7 @@ export async function authenticate(email: string, password: string, fallbackRedi
 
   const settings = tenant.settings ?? {};
   const clientUrl =
-    typeof settings.clientUrl === "string" && settings.clientUrl.trim()
+    !isLocalMasterHost() && typeof settings.clientUrl === "string" && settings.clientUrl.trim()
       ? settings.clientUrl.trim()
       : undefined;
 
