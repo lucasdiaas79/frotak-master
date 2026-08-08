@@ -62,23 +62,12 @@ function saveLocalSession(session: LocalSession) {
 }
 
 export function shouldUseLocalTenantData() {
-  if (!canUseStorage()) return !hasSupabaseConfig();
-
-  const session = readLocalSession();
-  if (!session) return !hasSupabaseConfig();
-
-  const tenantId = session.profile.tenantId || DEFAULT_TENANT_ID;
-  const tenantName = session.profile.name.toLowerCase();
-
-  return tenantId !== DEFAULT_TENANT_ID && !tenantName.includes("central");
+  return !hasSupabaseConfig();
 }
 
 export function getActiveTenantId() {
   if (!canUseStorage()) return DEFAULT_TENANT_ID;
   const localSession = readLocalSession();
-  if (localSession?.profile.name.toLowerCase().includes("central")) {
-    return DEFAULT_TENANT_ID;
-  }
 
   return (
     localSession?.profile.tenantId ||
@@ -153,8 +142,10 @@ export async function acceptMasterSsoFromUrl(search: string) {
 }
 
 export async function getSession(): Promise<Session | null> {
-  const local = readLocalSession();
-  if (local) {
+  if (!hasSupabaseConfig()) {
+    const local = readLocalSession();
+    if (!local) return null;
+
     return {
       access_token: "local-dev-token",
       token_type: "bearer",
@@ -164,8 +155,6 @@ export async function getSession(): Promise<Session | null> {
       user: local.user,
     } as Session;
   }
-
-  if (!hasSupabaseConfig()) return null;
 
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
@@ -214,9 +203,10 @@ export async function signOut() {
 }
 
 export async function getProfile(userId: string): Promise<Profile | null> {
-  const local = readLocalSession();
-  if (local && local.user.id === userId) return local.profile;
-  if (!hasSupabaseConfig()) return null;
+  if (!hasSupabaseConfig()) {
+    const local = readLocalSession();
+    return local && local.user.id === userId ? local.profile : null;
+  }
 
   const { data, error } = await supabase
     .from("profiles")
@@ -228,9 +218,10 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 }
 
 export async function getCurrentUser(): Promise<User | null> {
-  const local = readLocalSession();
-  if (local) return local.user;
-  if (!hasSupabaseConfig()) return null;
+  if (!hasSupabaseConfig()) {
+    const local = readLocalSession();
+    return local?.user ?? null;
+  }
 
   const { data, error } = await supabase.auth.getUser();
   if (error) throw error;
