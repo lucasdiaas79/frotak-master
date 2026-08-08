@@ -36,6 +36,7 @@ export type AuthSession = {
   scope: "master";
   provider: AuthProvider;
   accessToken: string;
+  refreshToken?: string;
   expiresAt: string;
 };
 
@@ -269,6 +270,7 @@ function sessionFromPlatformUser(session: Session, row: PlatformUserRow): AuthSe
     scope: "master",
     provider: "supabase",
     accessToken: session.access_token,
+    refreshToken: session.refresh_token,
     expiresAt: new Date((session.expires_at ?? 0) * 1000).toISOString(),
   };
 }
@@ -406,6 +408,7 @@ export async function authenticate(email: string, password: string, fallbackRedi
     )
     .eq("user_id", session.user.id)
     .eq("status", "active")
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle<ClientMembershipRow>();
 
@@ -433,6 +436,7 @@ export async function authenticate(email: string, password: string, fallbackRedi
     redirectTo: buildClientAccessUrl({
       clientUrl,
       accessToken: session.access_token,
+      refreshToken: session.refresh_token,
       clientId: tenant.id,
       tenantId: tenant.id,
       clientName: tenant.trade_name || tenant.legal_name || workspace.name,
@@ -538,6 +542,7 @@ export function createClientAccess(input: CreateClientAccessInput) {
 export function buildClientAccessUrl(session: {
   clientUrl?: string;
   accessToken: string;
+  refreshToken?: string;
   clientId?: string;
   tenantId?: string;
   clientName?: string;
@@ -547,6 +552,7 @@ export function buildClientAccessUrl(session: {
   const url = new URL(baseUrl);
 
   url.searchParams.set("sso_token", session.accessToken);
+  if (session.refreshToken) url.searchParams.set("refresh_token", session.refreshToken);
   url.searchParams.set("client_id", session.clientId || "");
   url.searchParams.set("tenant_id", session.tenantId || session.clientId || "");
   url.searchParams.set("client_name", session.clientName || "");

@@ -91,8 +91,9 @@ function createLocalSession(input: {
   email: string;
   name: string;
   tenantId: string;
+  userId?: string;
 }): LocalSession {
-  const id = input.tenantId || DEFAULT_TENANT_ID;
+  const id = input.userId || input.tenantId || DEFAULT_TENANT_ID;
   const user = {
     id,
     aud: "authenticated",
@@ -125,6 +126,7 @@ export async function acceptMasterSsoFromUrl(search: string) {
   if (!canUseStorage()) return null;
   const params = new URLSearchParams(search);
   const token = params.get("sso_token");
+  const refreshToken = params.get("refresh_token");
   const source = params.get("source");
 
   if (!token || source !== "frotak-master") return readLocalSession();
@@ -132,11 +134,22 @@ export async function acceptMasterSsoFromUrl(search: string) {
   const tenantId = params.get("tenant_id") || DEFAULT_TENANT_ID;
   const clientName = params.get("client_name") || "Central Transportes";
   const email = params.get("login_hint") || CENTRAL_DEMO_EMAIL;
+  let userId: string | undefined;
 
-  const session = createLocalSession({ email, name: clientName, tenantId });
+  if (hasSupabaseConfig() && refreshToken) {
+    const { data, error } = await supabase.auth.setSession({
+      access_token: token,
+      refresh_token: refreshToken,
+    });
+    if (error || !data.session?.user) throw error ?? new Error("Sessao SSO invalida.");
+    userId = data.session.user.id;
+  }
+
+  const session = createLocalSession({ email, name: clientName, tenantId, userId });
 
   saveLocalSession(session);
   window.localStorage.setItem("frotak-sso-source", MASTER_SSO_SOURCE);
+  window.history.replaceState(null, "", window.location.pathname);
   return session;
 }
 
