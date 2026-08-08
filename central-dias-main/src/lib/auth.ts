@@ -192,15 +192,15 @@ export async function acceptMasterSsoFromUrl(search: string) {
 export async function getSession(): Promise<Session | null> {
   const local = readLocalSession();
 
-  if (!hasSupabaseConfig()) {
-    if (!local) return null;
-
+  if (local) {
     return localSessionToSupabaseSession(local);
   }
 
+  if (!hasSupabaseConfig()) return null;
+
   const { data, error } = await supabase.auth.getSession();
   if (error) throw error;
-  return data.session ?? (local ? localSessionToSupabaseSession(local) : null);
+  return data.session ?? null;
 }
 
 export async function isAuthed(): Promise<boolean> {
@@ -284,13 +284,12 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 export async function getCurrentUser(): Promise<User | null> {
   const local = readLocalSession();
 
-  if (!hasSupabaseConfig()) {
-    return local?.user ?? null;
-  }
+  if (local) return local.user;
+  if (!hasSupabaseConfig()) return null;
 
   const { data, error } = await supabase.auth.getUser();
   if (error) throw error;
-  return data.user ?? local?.user ?? null;
+  return data.user ?? null;
 }
 
 function localSessionToSupabaseSession(local: LocalSession): Session {
