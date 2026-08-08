@@ -167,6 +167,11 @@ function AuthGate({ children }: { children: ReactNode }) {
     let active = true;
 
     const sync = async () => {
+      if (isLoginRoute) {
+        setAuthState({ status: "UNAUTHENTICATED", session: null });
+        return;
+      }
+
       setAuthState({ status: "LOADING", session: null });
       const nextState = await getPlatformAuthState();
       if (active) setAuthState(nextState);
@@ -181,7 +186,7 @@ function AuthGate({ children }: { children: ReactNode }) {
       active = false;
       unsubscribe();
     };
-  }, []);
+  }, [isLoginRoute]);
 
   useEffect(() => {
     if (authState.status === "LOADING") return;
