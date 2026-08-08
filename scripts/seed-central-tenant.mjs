@@ -6,6 +6,7 @@ const ROOT = process.cwd();
 const CENTRAL_SLUG = "central-transportes";
 const DEFAULT_OWNER_EMAIL = "samuel@casadamoeda.com.br";
 const CLIENT_URL = "https://central-dias.vercel.app";
+const CENTRAL_MAX_VEHICLES = 100;
 
 function loadEnvFile(path) {
   try {
@@ -192,7 +193,7 @@ async function ensureCentralTenant(supabase) {
           ...(existingTenant.settings ?? {}),
           clientUrl: CLIENT_URL,
           subscriptionPeriod: "Mensal",
-          maxVehicles: 95,
+          maxVehicles: CENTRAL_MAX_VEHICLES,
         },
       })
       .eq("id", existingTenant.id);
@@ -241,7 +242,7 @@ async function ensureCentralTenant(supabase) {
     p_starts_at: now.toISOString(),
     p_ends_at: endsAt.toISOString(),
     p_subscription_period: "Mensal",
-    p_max_vehicles: 95,
+    p_max_vehicles: CENTRAL_MAX_VEHICLES,
     p_enabled_module_codes: ["fleet_core", "frotak_tracking"],
     p_actor_user_id: actor.user_id,
   });
@@ -256,7 +257,7 @@ async function ensureCentralTenant(supabase) {
       settings: {
         clientUrl: CLIENT_URL,
         subscriptionPeriod: "Mensal",
-        maxVehicles: 95,
+        maxVehicles: CENTRAL_MAX_VEHICLES,
       },
     })
     .eq("id", row.tenant_id);
@@ -478,6 +479,7 @@ async function importCentralData(supabase, tenantId) {
   const trailerUpdates = [];
   const vehicleTrailerRows = [];
   const fleetEventRows = [];
+  const vehiclePositionRows = [];
 
   for (const item of chosenVehicles) {
     const vehicle = vehiclesByPlate.get(item.normalizedPlate);
@@ -529,6 +531,23 @@ async function importCentralData(supabase, tenantId) {
         trailerText: item.trailerText,
       },
     });
+
+    vehiclePositionRows.push({
+      tenant_id: tenantId,
+      vehicle_id: vehicle.id,
+      lat: vehicle.lat,
+      lng: vehicle.lng,
+      city: vehicle.city,
+      state: vehicle.state,
+      speed: 0,
+      direction: 0,
+      source: "migration",
+      raw_payload: {
+        source: "central-dias-main/supabase/migrations",
+        plate: vehicle.plate,
+      },
+      recorded_at: new Date().toISOString(),
+    });
   }
 
   for (const update of vehicleUpdates) {
@@ -568,6 +587,30 @@ async function importCentralData(supabase, tenantId) {
     if (error) throw error;
   }
 
+  if (vehiclePositionRows.length) {
+    const { error } = await supabase.from("vehicle_positions").insert(vehiclePositionRows);
+    if (error) throw error;
+  }
+
+  const { error: syncStateError } = await supabase.from("integration_sync_state").upsert(
+    {
+      tenant_id: tenantId,
+      integration: "sascar",
+      scope: "positions",
+      synced_at: null,
+      metadata: {
+        source: "migration",
+        status: "ready",
+        lastPacketId: null,
+        packetsFetched: 0,
+        packetsApplied: 0,
+        syncedVehicles: 0,
+      },
+    },
+    { onConflict: "tenant_id,integration,scope" },
+  );
+  if (syncStateError) throw syncStateError;
+
   return {
     drivers: driverRows.length,
     vehicles: vehicleRows.length,
@@ -577,6 +620,8 @@ async function importCentralData(supabase, tenantId) {
     products: productRows.length,
     vehicleLinks: vehicleTrailerRows.length,
     events: fleetEventRows.length,
+    positions: vehiclePositionRows.length,
+    sascarSyncState: 1,
   };
 }
 

@@ -70,7 +70,8 @@ export async function getSascarSyncState(): Promise<SascarSyncState> {
   const { data, error } = await supabase
     .from("integration_sync_state")
     .select("synced_at, metadata")
-    .eq("key", "sascar_positions")
+    .eq("integration", "sascar")
+    .eq("scope", "positions")
     .maybeSingle();
 
   if (error) throw error;

@@ -117,7 +117,7 @@ function MapaPage() {
           event: "*",
           schema: "public",
           table: "integration_sync_state",
-          filter: "key=eq.sascar_positions",
+          filter: "integration=eq.sascar",
         },
         (payload) => {
           const state = mapSascarSyncStateRow(
