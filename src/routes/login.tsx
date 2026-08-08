@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { authenticate } from "@/lib/auth";
@@ -25,7 +25,6 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const navigate = useNavigate();
   const search = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -57,7 +56,7 @@ function LoginPage() {
         return;
       }
 
-      navigate({ to: result.redirectTo, replace: true });
+      window.location.replace(result.redirectTo || "/");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Erro temporario de autenticacao.";
       if (message.includes("sem acesso")) {
