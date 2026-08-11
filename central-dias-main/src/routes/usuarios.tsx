@@ -64,21 +64,6 @@ type UsuariosState =
   | { status: "sessionExpired"; message?: string }
   | { status: "error"; message: string };
 
-type UsuariosDiagnostics = {
-  authInitialized: boolean;
-  accessToken: boolean;
-  userId: boolean;
-  getWorkspaceUserAccess: "PENDING" | "SUCCESS" | "ERROR";
-  isOwner: boolean;
-  workspaceId: boolean;
-  tenantId: boolean;
-  listWorkspaceUsers: "PENDING" | "SUCCESS" | "ERROR";
-  userCount: number;
-  failedStage: string;
-  errorName: string;
-  errorMessage: string;
-};
-
 const emptyForm = (): FormState => ({
   name: "",
   email: "",
@@ -94,33 +79,6 @@ const statusLabel: Record<WorkspaceUser["status"], string> = {
   suspended: "Suspenso",
   revoked: "Revogado",
 };
-
-const initialDiagnostics = (): UsuariosDiagnostics => ({
-  authInitialized: false,
-  accessToken: false,
-  userId: false,
-  getWorkspaceUserAccess: "PENDING",
-  isOwner: false,
-  workspaceId: false,
-  tenantId: false,
-  listWorkspaceUsers: "PENDING",
-  userCount: 0,
-  failedStage: "",
-  errorName: "",
-  errorMessage: "",
-});
-
-function getErrorName(error: unknown) {
-  return error instanceof Error ? error.name || "Error" : typeof error;
-}
-
-function sanitizeErrorMessage(error: unknown) {
-  const raw = error instanceof Error ? error.message : String(error);
-  return raw
-    .replace(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/g, "[token]")
-    .replace(/service[_-]?role[^,\s]*/gi, "service_role=[hidden]")
-    .slice(0, 240);
-}
 
 function asWorkspaceUsers(value: unknown): WorkspaceUser[] {
   return Array.isArray(value) ? value : [];
@@ -148,7 +106,6 @@ function UsuariosPage() {
     status: "loading",
     message: "Carregando usuarios...",
   });
-  const [diagnostics, setDiagnostics] = useState<UsuariosDiagnostics>(initialDiagnostics);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -156,16 +113,6 @@ function UsuariosPage() {
 
   async function reloadUsers(token: string) {
     let accessData: WorkspaceUserAccess;
-
-    setDiagnostics((current) => ({
-      ...current,
-      accessToken: Boolean(token),
-      getWorkspaceUserAccess: "PENDING",
-      listWorkspaceUsers: "PENDING",
-      failedStage: "",
-      errorName: "",
-      errorMessage: "",
-    }));
 
     try {
       console.info("[USUARIOS] getWorkspaceUserAccess started");
@@ -176,24 +123,9 @@ function UsuariosPage() {
         workspaceId: Boolean(accessData?.workspaceId),
         tenantId: Boolean(accessData?.tenantId),
       });
-      setDiagnostics((current) => ({
-        ...current,
-        userId: Boolean(accessData?.userId),
-        getWorkspaceUserAccess: "SUCCESS",
-        isOwner: accessData?.isOwner === true,
-        workspaceId: Boolean(accessData?.workspaceId),
-        tenantId: Boolean(accessData?.tenantId),
-      }));
     } catch (error) {
       console.error("[USUARIOS] getWorkspaceUserAccess error", error);
-      setDiagnostics((current) => ({
-        ...current,
-        getWorkspaceUserAccess: "ERROR",
-        failedStage: "getWorkspaceUserAccess",
-        errorName: getErrorName(error),
-        errorMessage: sanitizeErrorMessage(error),
-      }));
-      setRouteState({ status: "error", message: sanitizeErrorMessage(error) });
+      setRouteState({ status: "error", message: "Nao foi possivel carregar os usuarios." });
       return;
     }
 
@@ -219,21 +151,9 @@ function UsuariosPage() {
         isArray: Array.isArray(rawUsers),
         count: userRows.length,
       });
-      setDiagnostics((current) => ({
-        ...current,
-        listWorkspaceUsers: "SUCCESS",
-        userCount: userRows.length,
-      }));
     } catch (error) {
       console.error("[USUARIOS] listWorkspaceUsers error", error);
-      setDiagnostics((current) => ({
-        ...current,
-        listWorkspaceUsers: "ERROR",
-        failedStage: "listWorkspaceUsers",
-        errorName: getErrorName(error),
-        errorMessage: sanitizeErrorMessage(error),
-      }));
-      setRouteState({ status: "error", message: sanitizeErrorMessage(error) });
+      setRouteState({ status: "error", message: "Nao foi possivel carregar os usuarios." });
       return;
     }
 
@@ -264,13 +184,6 @@ function UsuariosPage() {
       try {
         const token = await getCurrentAccessToken();
         console.info("[USUARIOS] auth ready", { token: token ? "YES" : "NO" });
-        if (active) {
-          setDiagnostics((current) => ({
-            ...current,
-            authInitialized: true,
-            accessToken: Boolean(token),
-          }));
-        }
         if (!token) {
           if (active) {
             setAccess(null);
@@ -380,66 +293,51 @@ function UsuariosPage() {
 
   if (routeState.status === "loading") {
     return (
-      <>
-        <div className="mx-3 mt-3 md:mx-0 md:mt-0">
-          <div className="premium-card flex min-h-[260px] items-center justify-center px-6 py-12 text-[13px] font-semibold text-muted-foreground">
-            {routeState.message || "Carregando usuarios..."}
-          </div>
+      <div className="mx-3 mt-3 md:mx-0 md:mt-0">
+        <div className="premium-card flex min-h-[260px] items-center justify-center px-6 py-12 text-[13px] font-semibold text-muted-foreground">
+          {routeState.message || "Carregando usuarios..."}
         </div>
-        <UsuariosDiagnosticPanel diagnostics={diagnostics} />
-      </>
+      </div>
     );
   }
 
   if (routeState.status === "sessionExpired") {
     return (
-      <>
-        <UsuariosStatusCard
-          icon="alert"
-          title="Sessao expirada"
-          message={routeState.message || "Entre novamente pelo login central."}
-        />
-        <UsuariosDiagnosticPanel diagnostics={diagnostics} />
-      </>
+      <UsuariosStatusCard
+        icon="alert"
+        title="Sessao expirada"
+        message={routeState.message || "Entre novamente pelo login central."}
+      />
     );
   }
 
   if (routeState.status === "accessDenied") {
     return (
-      <>
-        <UsuariosStatusCard
-          icon="lock"
-          title="Acesso restrito"
-          message={routeState.message || "Apenas o owner do workspace pode gerenciar usuarios."}
-        />
-        <UsuariosDiagnosticPanel diagnostics={diagnostics} />
-      </>
+      <UsuariosStatusCard
+        icon="lock"
+        title="Acesso restrito"
+        message={routeState.message || "Apenas o owner do workspace pode gerenciar usuarios."}
+      />
     );
   }
 
   if (routeState.status === "error") {
     return (
-      <>
-        <UsuariosStatusCard
-          icon="alert"
-          title="Nao foi possivel carregar usuarios"
-          message={routeState.message}
-        />
-        <UsuariosDiagnosticPanel diagnostics={diagnostics} />
-      </>
+      <UsuariosStatusCard
+        icon="alert"
+        title="Nao foi possivel carregar usuarios"
+        message={routeState.message}
+      />
     );
   }
 
   if (!access || access.isOwner !== true) {
     return (
-      <>
-        <UsuariosStatusCard
-          icon="lock"
-          title="Acesso restrito"
-          message="Apenas o owner do workspace pode gerenciar usuarios."
-        />
-        <UsuariosDiagnosticPanel diagnostics={diagnostics} />
-      </>
+      <UsuariosStatusCard
+        icon="lock"
+        title="Acesso restrito"
+        message="Apenas o owner do workspace pode gerenciar usuarios."
+      />
     );
   }
 
@@ -551,11 +449,6 @@ function UsuariosPage() {
           </Dialog>
         }
       />
-      <p className="mx-3 mt-2 font-mono text-[10px] font-semibold text-muted-foreground md:mx-0">
-        CLIENT BUILD CHECK: 06da97f-A
-      </p>
-      <UsuariosDiagnosticPanel diagnostics={diagnostics} />
-
       <section className="premium-card mx-3 mt-4 px-4 py-4 md:mx-0 md:px-5">
         <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_auto] md:items-end">
           <div>
@@ -709,31 +602,6 @@ function UsuariosStatusCard({
   );
 }
 
-function UsuariosDiagnosticPanel({ diagnostics }: { diagnostics: UsuariosDiagnostics }) {
-  return (
-    <section className="premium-card mx-3 mt-3 px-4 py-3 md:mx-0">
-      <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-muted-foreground">
-        {[
-          `Auth inicializado: ${diagnostics.authInitialized ? "YES" : "NO"}`,
-          `Access token: ${diagnostics.accessToken ? "YES" : "NO"}`,
-          `User ID: ${diagnostics.userId ? "presente" : "ausente"}`,
-          `getWorkspaceUserAccess: ${diagnostics.getWorkspaceUserAccess}`,
-          `isOwner: ${diagnostics.isOwner ? "true" : "false"}`,
-          `workspaceId: ${diagnostics.workspaceId ? "presente" : "ausente"}`,
-          `tenantId: ${diagnostics.tenantId ? "presente" : "ausente"}`,
-          `listWorkspaceUsers: ${diagnostics.listWorkspaceUsers}`,
-          `Quantidade de usuarios: ${diagnostics.userCount}`,
-          diagnostics.failedStage ? `ETAPA QUE FALHOU: ${diagnostics.failedStage}` : "",
-          diagnostics.errorName ? `NOME DO ERRO: ${diagnostics.errorName}` : "",
-          diagnostics.errorMessage ? `MENSAGEM: ${diagnostics.errorMessage}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n")}
-      </pre>
-    </section>
-  );
-}
-
 function UsuariosErrorFallback({ error }: { error: Error }) {
   console.error("[USUARIOS ROUTE ERROR]", error);
 
@@ -749,17 +617,6 @@ function UsuariosErrorFallback({ error }: { error: Error }) {
         <p className="mt-2 max-w-md text-[13px] leading-relaxed text-muted-foreground">
           Atualize a pagina ou entre novamente pelo login central.
         </p>
-        <p className="mt-3 font-mono text-[10px] font-semibold text-muted-foreground">
-          CLIENT BUILD CHECK: 06da97f-A
-        </p>
-        <pre className="mt-4 max-h-64 max-w-xl overflow-auto rounded-2xl border border-border bg-surface/70 px-4 py-3 text-left font-mono text-[11px] text-muted-foreground">
-          {[
-            "ERRO REAL DA ROTA",
-            `Name: ${error.name || "Error"}`,
-            `Message: ${sanitizeErrorMessage(error) || "-"}`,
-            `Stack: ${(error.stack || "-").split("\n").slice(0, 5).join("\n")}`,
-          ].join("\n")}
-        </pre>
         <Button asChild className="mt-6 h-9 rounded-2xl text-[12px]">
           <Link to="/">Voltar ao dashboard</Link>
         </Button>
