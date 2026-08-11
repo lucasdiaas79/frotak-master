@@ -296,7 +296,7 @@ export function getWorkspaceUsersServerDiagnosticsSnapshot() {
 }
 
 export const getWorkspaceUserAccess = createServerFn({ method: "POST" })
-  .validator((input: { accessToken: string }) => input)
+  .inputValidator((input: { accessToken: string }) => input)
   .handler(async ({ data }) => {
     try {
       const supabase = getSupabaseAdmin();
@@ -316,7 +316,7 @@ export const getWorkspaceUserAccess = createServerFn({ method: "POST" })
   });
 
 export const listWorkspaceUsers = createServerFn({ method: "POST" })
-  .validator((input: { accessToken: string }) => input)
+  .inputValidator((input: { accessToken: string }) => input)
   .handler(async ({ data }) => {
     try {
       const supabase = getSupabaseAdmin();
@@ -451,7 +451,7 @@ export const listWorkspaceUsers = createServerFn({ method: "POST" })
   });
 
 export const listWorkspaceRoles = createServerFn({ method: "POST" })
-  .validator((input: { accessToken: string }) => input)
+  .inputValidator((input: { accessToken: string }) => input)
   .handler(async ({ data }) => {
     try {
       const supabase = getSupabaseAdmin();
@@ -480,7 +480,7 @@ export const listWorkspaceRoles = createServerFn({ method: "POST" })
   });
 
 export const createWorkspaceUser = createServerFn({ method: "POST" })
-  .validator((input: CreateWorkspaceUserInput) => input)
+  .inputValidator((input: CreateWorkspaceUserInput) => input)
   .handler(async ({ data }) => {
     const supabase = getSupabaseAdmin();
     let createdUserId: string | undefined;
