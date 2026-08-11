@@ -163,8 +163,15 @@ function normalizeText(value: unknown) {
 
 function publicError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
+  const sanitizedMessage = message
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[token]")
+    .replace(/service[_-]?role/gi, "server key")
+    .slice(0, 280);
   const stage = message.match(/^([a-zA-Z0-9_.]+):/)?.[1];
   const prefix = stage ? `Falha em ${stage}. ` : "";
+  if (/^WORKSPACE_USERS_/i.test(message)) {
+    return sanitizedMessage || "Nao foi possivel concluir a operacao.";
+  }
   if (/unauthorized|owner|forbidden|not allowed/i.test(message)) {
     return `${prefix}Voce nao tem permissao para gerenciar usuarios.`;
   }

@@ -97,6 +97,16 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+function formatLoadFailure(stage: string, error: unknown) {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  const message = rawMessage
+    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[token]")
+    .replace(/service[_-]?role/gi, "server key")
+    .slice(0, 280);
+
+  return `Falha em: ${stage}\nErro: ${message || "erro desconhecido"}`;
+}
+
 function UsuariosPage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [access, setAccess] = useState<WorkspaceUserAccess | null>(null);
@@ -125,7 +135,10 @@ function UsuariosPage() {
       });
     } catch (error) {
       console.error("[USUARIOS] getWorkspaceUserAccess error", error);
-      setRouteState({ status: "error", message: "Nao foi possivel carregar os usuarios." });
+      setRouteState({
+        status: "error",
+        message: formatLoadFailure("getWorkspaceUserAccess", error),
+      });
       return;
     }
 
@@ -153,7 +166,10 @@ function UsuariosPage() {
       });
     } catch (error) {
       console.error("[USUARIOS] listWorkspaceUsers error", error);
-      setRouteState({ status: "error", message: "Nao foi possivel carregar os usuarios." });
+      setRouteState({
+        status: "error",
+        message: formatLoadFailure("listWorkspaceUsers", error),
+      });
       return;
     }
 
@@ -593,7 +609,9 @@ function UsuariosStatusCard({
           <Icon className="size-5" />
         </div>
         <h1 className="text-[20px] font-extrabold text-foreground">{title}</h1>
-        <p className="mt-2 max-w-md text-[13px] leading-relaxed text-muted-foreground">{message}</p>
+        <p className="mt-2 max-w-md whitespace-pre-line text-[13px] leading-relaxed text-muted-foreground">
+          {message}
+        </p>
         <Button asChild className="mt-6 h-9 rounded-2xl text-[12px]">
           <Link to="/">Voltar ao dashboard</Link>
         </Button>
