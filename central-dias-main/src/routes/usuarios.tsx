@@ -438,7 +438,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function UsuariosErrorFallback() {
+function UsuariosErrorFallback({ error }: { error: Error }) {
+  useEffect(() => {
+    const message = error.message || "";
+    const isStaleChunkError =
+      /failed to fetch dynamically imported module/i.test(message) ||
+      /importing a module script failed/i.test(message) ||
+      /loading chunk/i.test(message);
+
+    if (!isStaleChunkError || typeof window === "undefined") return;
+
+    const reloadKey = "frotak-usuarios-route-reloaded";
+    if (window.sessionStorage.getItem(reloadKey) === "1") return;
+
+    window.sessionStorage.setItem(reloadKey, "1");
+    window.location.reload();
+  }, [error.message]);
+
   return (
     <div className="mx-3 mt-3 md:mx-0 md:mt-0">
       <div className="premium-card flex min-h-[360px] flex-col items-center justify-center px-6 py-12 text-center">
@@ -451,6 +467,11 @@ function UsuariosErrorFallback() {
         <p className="mt-2 max-w-md text-[13px] leading-relaxed text-muted-foreground">
           Atualize a pagina ou entre novamente pelo login central.
         </p>
+        {import.meta.env.DEV && error.message ? (
+          <pre className="mt-4 max-w-xl overflow-auto rounded-2xl border border-border bg-surface/70 px-4 py-3 text-left font-mono text-[11px] text-muted-foreground">
+            {error.message}
+          </pre>
+        ) : null}
         <Button asChild className="mt-6 h-9 rounded-2xl text-[12px]">
           <Link to="/">Voltar ao dashboard</Link>
         </Button>
