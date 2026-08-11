@@ -47,6 +47,13 @@ type FormState = {
   temporaryPassword: string;
 };
 
+type UsuariosState =
+  | { status: "loading"; message?: string }
+  | { status: "success" }
+  | { status: "accessDenied"; message?: string }
+  | { status: "sessionExpired"; message?: string }
+  | { status: "error"; message: string };
+
 const emptyForm = (): FormState => ({
   name: "",
   email: "",
@@ -75,54 +82,76 @@ function UsuariosPage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [access, setAccess] = useState<WorkspaceUserAccess | null>(null);
   const [users, setUsers] = useState<WorkspaceUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [routeState, setRouteState] = useState<UsuariosState>({
+    status: "loading",
+    message: "Carregando usuarios...",
+  });
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
 
-  async function loadUsers(token: string) {
+  async function reloadUsers(token: string) {
+    console.info("[USUARIOS] getWorkspaceUserAccess started");
     const accessData = await getWorkspaceUserAccess({ data: { accessToken: token } });
+    console.info("[USUARIOS] getWorkspaceUserAccess success", {
+      isOwner: accessData.isOwner,
+      workspaceName: accessData.workspaceName,
+      tenantName: accessData.tenantName,
+    });
+
     setAccess(accessData);
 
     if (accessData.isOwner !== true) {
       setUsers([]);
+      setRouteState({
+        status: "accessDenied",
+        message: "Apenas o owner do workspace pode gerenciar usuarios.",
+      });
       return;
     }
 
+    console.info("[USUARIOS] listWorkspaceUsers started");
     const userRows = await listWorkspaceUsers({ data: { accessToken: token } });
+    console.info("[USUARIOS] listWorkspaceUsers success", { count: userRows.length });
     setUsers(userRows);
+    setRouteState({ status: "success" });
   }
 
   useEffect(() => {
     let active = true;
+    console.info("[USUARIOS] route mounted");
 
     async function load() {
-      setLoading(true);
-      setError("");
+      setRouteState({ status: "loading", message: "Carregando usuarios..." });
       try {
+        console.info("[USUARIOS] auth ready");
         const token = await getCurrentAccessToken();
+        console.info(`[USUARIOS] access token: ${token ? "YES" : "NO"}`);
         if (!token) {
           if (active) {
             setAccess(null);
-            setError("Sessão expirada. Entre novamente pelo login central.");
+            setUsers([]);
+            setAccessToken(null);
+            setRouteState({
+              status: "sessionExpired",
+              message: "Sessao expirada. Entre novamente pelo login central.",
+            });
           }
           return;
         }
 
         if (active) setAccessToken(token);
-        await loadUsers(token);
+        await reloadUsers(token);
       } catch (loadError) {
         const message =
-          loadError instanceof Error ? loadError.message : "Não foi possível carregar os usuários.";
+          loadError instanceof Error ? loadError.message : "Nao foi possivel carregar os usuarios.";
+        console.error("[USUARIOS] load error", loadError);
         if (active) {
           setAccess(null);
           setUsers([]);
-          setError(message);
+          setRouteState({ status: "error", message });
         }
-      } finally {
-        if (active) setLoading(false);
       }
     }
 
@@ -182,7 +211,7 @@ function UsuariosPage() {
       });
       setForm(emptyForm());
       setOpen(false);
-      await loadUsers(accessToken);
+      await reloadUsers(accessToken);
       toast.success("Usuário criado com sucesso.");
     } catch (createError) {
       const message =
@@ -193,38 +222,53 @@ function UsuariosPage() {
     }
   }
 
-  if (loading) {
+  if (routeState.status === "loading") {
     return (
       <div className="mx-3 mt-3 md:mx-0 md:mt-0">
         <div className="premium-card flex min-h-[260px] items-center justify-center px-6 py-12 text-[13px] font-semibold text-muted-foreground">
-          Carregando usuários...
+          {routeState.message || "Carregando usuarios..."}
         </div>
       </div>
     );
   }
 
-  if (error || access?.isOwner !== true) {
+  if (routeState.status === "sessionExpired") {
     return (
-      <div className="mx-3 mt-3 md:mx-0 md:mt-0">
-        <div className="premium-card flex min-h-[360px] flex-col items-center justify-center px-6 py-12 text-center">
-          <div className="mb-4 inline-flex size-12 items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/10 text-destructive">
-            <LockKeyhole className="size-5" />
-          </div>
-          <h1 className="text-[20px] font-extrabold text-foreground">Acesso restrito</h1>
-          <p className="mt-2 max-w-md text-[13px] leading-relaxed text-muted-foreground">
-            Apenas o owner do workspace pode visualizar e gerenciar usuários da empresa.
-          </p>
-          {error ? (
-            <div className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-border bg-surface/70 px-3 py-2 text-[12px] text-muted-foreground">
-              <AlertCircle className="size-4 text-destructive" />
-              {error}
-            </div>
-          ) : null}
-          <Button asChild className="mt-6 h-9 rounded-2xl text-[12px]">
-            <Link to="/">Voltar ao dashboard</Link>
-          </Button>
-        </div>
-      </div>
+      <UsuariosStatusCard
+        icon="alert"
+        title="Sessao expirada"
+        message={routeState.message || "Entre novamente pelo login central."}
+      />
+    );
+  }
+
+  if (routeState.status === "accessDenied") {
+    return (
+      <UsuariosStatusCard
+        icon="lock"
+        title="Acesso restrito"
+        message={routeState.message || "Apenas o owner do workspace pode gerenciar usuarios."}
+      />
+    );
+  }
+
+  if (routeState.status === "error") {
+    return (
+      <UsuariosStatusCard
+        icon="alert"
+        title="Nao foi possivel carregar usuarios"
+        message={routeState.message}
+      />
+    );
+  }
+
+  if (!access || access.isOwner !== true) {
+    return (
+      <UsuariosStatusCard
+        icon="lock"
+        title="Acesso restrito"
+        message="Apenas o owner do workspace pode gerenciar usuarios."
+      />
     );
   }
 
@@ -438,22 +482,35 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function UsuariosStatusCard({
+  icon,
+  title,
+  message,
+}: {
+  icon: "alert" | "lock";
+  title: string;
+  message: string;
+}) {
+  const Icon = icon === "lock" ? LockKeyhole : AlertCircle;
+
+  return (
+    <div className="mx-3 mt-3 md:mx-0 md:mt-0">
+      <div className="premium-card flex min-h-[360px] flex-col items-center justify-center px-6 py-12 text-center">
+        <div className="mb-4 inline-flex size-12 items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/10 text-destructive">
+          <Icon className="size-5" />
+        </div>
+        <h1 className="text-[20px] font-extrabold text-foreground">{title}</h1>
+        <p className="mt-2 max-w-md text-[13px] leading-relaxed text-muted-foreground">{message}</p>
+        <Button asChild className="mt-6 h-9 rounded-2xl text-[12px]">
+          <Link to="/">Voltar ao dashboard</Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function UsuariosErrorFallback({ error }: { error: Error }) {
-  useEffect(() => {
-    const message = error.message || "";
-    const isStaleChunkError =
-      /failed to fetch dynamically imported module/i.test(message) ||
-      /importing a module script failed/i.test(message) ||
-      /loading chunk/i.test(message);
-
-    if (!isStaleChunkError || typeof window === "undefined") return;
-
-    const reloadKey = "frotak-usuarios-route-reloaded";
-    if (window.sessionStorage.getItem(reloadKey) === "1") return;
-
-    window.sessionStorage.setItem(reloadKey, "1");
-    window.location.reload();
-  }, [error.message]);
+  console.error("[USUARIOS ROUTE ERROR]", error);
 
   return (
     <div className="mx-3 mt-3 md:mx-0 md:mt-0">
@@ -467,9 +524,13 @@ function UsuariosErrorFallback({ error }: { error: Error }) {
         <p className="mt-2 max-w-md text-[13px] leading-relaxed text-muted-foreground">
           Atualize a pagina ou entre novamente pelo login central.
         </p>
-        {import.meta.env.DEV && error.message ? (
-          <pre className="mt-4 max-w-xl overflow-auto rounded-2xl border border-border bg-surface/70 px-4 py-3 text-left font-mono text-[11px] text-muted-foreground">
-            {error.message}
+        {import.meta.env.DEV ? (
+          <pre className="mt-4 max-h-64 max-w-xl overflow-auto rounded-2xl border border-border bg-surface/70 px-4 py-3 text-left font-mono text-[11px] text-muted-foreground">
+            {[
+              `name: ${error.name || "Error"}`,
+              `message: ${error.message || "-"}`,
+              `stack: ${error.stack || "-"}`,
+            ].join("\n")}
           </pre>
         ) : null}
         <Button asChild className="mt-6 h-9 rounded-2xl text-[12px]">
