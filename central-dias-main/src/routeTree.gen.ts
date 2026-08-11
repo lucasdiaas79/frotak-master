@@ -24,6 +24,7 @@ import { Route as ClientesRouteImport } from './routes/clientes'
 import { Route as CarretasRouteImport } from './routes/carretas'
 import { Route as AbastecimentosRouteImport } from './routes/abastecimentos'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiWorkspaceUsersDiagnosticsRouteImport } from './routes/api/workspace-users-diagnostics'
 
 const VinculacaoRoute = VinculacaoRouteImport.update({
   id: '/vinculacao',
@@ -100,6 +101,12 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiWorkspaceUsersDiagnosticsRoute =
+  ApiWorkspaceUsersDiagnosticsRouteImport.update({
+    id: '/api/workspace-users-diagnostics',
+    path: '/api/workspace-users-diagnostics',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -117,6 +124,7 @@ export interface FileRoutesByFullPath {
   '/usuarios': typeof UsuariosRoute
   '/veiculos': typeof VeiculosRoute
   '/vinculacao': typeof VinculacaoRoute
+  '/api/workspace-users-diagnostics': typeof ApiWorkspaceUsersDiagnosticsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -134,6 +142,7 @@ export interface FileRoutesByTo {
   '/usuarios': typeof UsuariosRoute
   '/veiculos': typeof VeiculosRoute
   '/vinculacao': typeof VinculacaoRoute
+  '/api/workspace-users-diagnostics': typeof ApiWorkspaceUsersDiagnosticsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -152,6 +161,7 @@ export interface FileRoutesById {
   '/usuarios': typeof UsuariosRoute
   '/veiculos': typeof VeiculosRoute
   '/vinculacao': typeof VinculacaoRoute
+  '/api/workspace-users-diagnostics': typeof ApiWorkspaceUsersDiagnosticsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -171,6 +181,7 @@ export interface FileRouteTypes {
     | '/usuarios'
     | '/veiculos'
     | '/vinculacao'
+    | '/api/workspace-users-diagnostics'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -188,6 +199,7 @@ export interface FileRouteTypes {
     | '/usuarios'
     | '/veiculos'
     | '/vinculacao'
+    | '/api/workspace-users-diagnostics'
   id:
     | '__root__'
     | '/'
@@ -205,6 +217,7 @@ export interface FileRouteTypes {
     | '/usuarios'
     | '/veiculos'
     | '/vinculacao'
+    | '/api/workspace-users-diagnostics'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -223,6 +236,7 @@ export interface RootRouteChildren {
   UsuariosRoute: typeof UsuariosRoute
   VeiculosRoute: typeof VeiculosRoute
   VinculacaoRoute: typeof VinculacaoRoute
+  ApiWorkspaceUsersDiagnosticsRoute: typeof ApiWorkspaceUsersDiagnosticsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -332,6 +346,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/workspace-users-diagnostics': {
+      id: '/api/workspace-users-diagnostics'
+      path: '/api/workspace-users-diagnostics'
+      fullPath: '/api/workspace-users-diagnostics'
+      preLoaderRoute: typeof ApiWorkspaceUsersDiagnosticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -351,6 +372,7 @@ const rootRouteChildren: RootRouteChildren = {
   UsuariosRoute: UsuariosRoute,
   VeiculosRoute: VeiculosRoute,
   VinculacaoRoute: VinculacaoRoute,
+  ApiWorkspaceUsersDiagnosticsRoute: ApiWorkspaceUsersDiagnosticsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
