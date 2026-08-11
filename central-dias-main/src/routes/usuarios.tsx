@@ -42,12 +42,16 @@ export const Route = createFileRoute("/usuarios")({
 type FormState = {
   name: string;
   email: string;
+  phone: string;
+  sector: string;
   temporaryPassword: string;
 };
 
 const emptyForm = (): FormState => ({
   name: "",
   email: "",
+  phone: "",
+  sector: "",
   temporaryPassword: "",
 });
 
@@ -133,7 +137,10 @@ function UsuariosPage() {
     const query = search.trim().toLowerCase();
     if (!query) return users;
     return users.filter((user) =>
-      [user.name, user.email, statusLabel[user.status]].join(" ").toLowerCase().includes(query),
+      [user.name, user.email, user.phone, user.sector, statusLabel[user.status]]
+        .join(" ")
+        .toLowerCase()
+        .includes(query),
     );
   }, [search, users]);
 
@@ -146,8 +153,13 @@ function UsuariosPage() {
       return;
     }
 
-    if (!form.name.trim() || !form.email.trim() || !form.temporaryPassword.trim()) {
-      toast.error("Preencha nome, e-mail e senha temporária.");
+    if (
+      !form.name.trim() ||
+      !form.email.trim() ||
+      !form.sector.trim() ||
+      !form.temporaryPassword.trim()
+    ) {
+      toast.error("Preencha nome completo, login, setor e senha.");
       return;
     }
 
@@ -163,6 +175,8 @@ function UsuariosPage() {
           accessToken,
           name: form.name,
           email: form.email,
+          phone: form.phone,
+          sector: form.sector,
           temporaryPassword: form.temporaryPassword,
         },
       });
@@ -233,11 +247,11 @@ function UsuariosPage() {
               <DialogHeader>
                 <DialogTitle>Novo usuário</DialogTitle>
                 <DialogDescription>
-                  O acesso será criado diretamente no workspace atual.
+                  O acesso será criado como funcionário deste tenant.
                 </DialogDescription>
               </DialogHeader>
               <form className="grid gap-4" onSubmit={createUser}>
-                <Field label="Nome">
+                <Field label="Nome completo">
                   <Input
                     value={form.name}
                     onChange={(event) => setForm({ ...form, name: event.target.value })}
@@ -245,7 +259,7 @@ function UsuariosPage() {
                     autoComplete="name"
                   />
                 </Field>
-                <Field label="E-mail">
+                <Field label="Login / e-mail">
                   <Input
                     type="email"
                     value={form.email}
@@ -254,6 +268,24 @@ function UsuariosPage() {
                     autoComplete="email"
                   />
                 </Field>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Setor">
+                    <Input
+                      value={form.sector}
+                      onChange={(event) => setForm({ ...form, sector: event.target.value })}
+                      placeholder="Ex.: Operação"
+                      autoComplete="organization-title"
+                    />
+                  </Field>
+                  <Field label="Telefone">
+                    <Input
+                      value={form.phone}
+                      onChange={(event) => setForm({ ...form, phone: event.target.value })}
+                      placeholder="(00) 00000-0000"
+                      autoComplete="tel"
+                    />
+                  </Field>
+                </div>
                 <Field label="Senha temporária">
                   <Input
                     type="password"
@@ -326,6 +358,8 @@ function UsuariosPage() {
               <tr>
                 <th>Nome</th>
                 <th>E-mail</th>
+                <th>Setor</th>
+                <th>Telefone</th>
                 <th>Status</th>
                 <th>Criado em</th>
               </tr>
@@ -354,6 +388,12 @@ function UsuariosPage() {
                       {user.email || "-"}
                     </div>
                   </td>
+                  <td className="font-sans text-[12.5px] text-muted-foreground">
+                    {user.sector || "-"}
+                  </td>
+                  <td className="font-sans text-[12.5px] text-muted-foreground">
+                    {user.phone || "-"}
+                  </td>
                   <td>
                     <Badge variant={user.status === "active" ? "default" : "outline"}>
                       {statusLabel[user.status]}
@@ -366,7 +406,7 @@ function UsuariosPage() {
               ))}
               {filteredUsers.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-12 text-center">
+                  <td colSpan={6} className="py-12 text-center">
                     <div className="mx-auto flex max-w-sm flex-col items-center gap-2 text-muted-foreground">
                       <span className="inline-flex size-11 items-center justify-center rounded-full border border-border bg-surface-2">
                         <Search className="size-5" />

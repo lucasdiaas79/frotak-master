@@ -10,6 +10,8 @@ export type WorkspaceUserAccess = {
 export type WorkspaceUser = {
   name: string;
   email: string;
+  phone: string;
+  sector: string;
   status: "active" | "invited" | "suspended" | "revoked";
   isOwner: boolean;
   createdAt: string;
@@ -19,6 +21,8 @@ export type CreateWorkspaceUserInput = {
   accessToken: string;
   name: string;
   email: string;
+  phone: string;
+  sector: string;
   temporaryPassword: string;
 };
 
@@ -85,21 +89,19 @@ type WorkspaceMembershipRow = {
 
 type MemberListRow = {
   id: string;
+  user_id: string;
   status: WorkspaceUser["status"];
   is_owner: boolean;
   created_at: string;
-  profiles:
-    | {
-        full_name: string | null;
-        email: string | null;
-        active: boolean | null;
-      }
-    | Array<{
-        full_name: string | null;
-        email: string | null;
-        active: boolean | null;
-      }>
-    | null;
+};
+
+type ProfileListRow = {
+  id: string;
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  sector: string | null;
+  active: boolean | null;
 };
 
 type WorkspaceRoleRow = {
@@ -254,18 +256,37 @@ export const listWorkspaceUsers = createServerFn({ method: "POST" })
       const context = await requireOwnerContext(supabase, data.accessToken);
       const { data: rows, error } = await supabase
         .from("workspace_memberships")
-        .select("id, status, is_owner, created_at, profiles(full_name, email, active)")
+        .select("id, user_id, status, is_owner, created_at")
         .eq("workspace_id", context.workspaceId)
         .neq("status", "revoked")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      return ((rows ?? []) as MemberListRow[]).map((row) => {
-        const profile = firstRelation(row.profiles);
+      const membershipRows = (rows ?? []) as MemberListRow[];
+      const profileIds = [...new Set(membershipRows.map((row) => row.user_id).filter(Boolean))];
+      const profileById = new Map<string, ProfileListRow>();
+
+      if (profileIds.length > 0) {
+        const { data: profileRows, error: profilesError } = await supabase
+          .from("profiles")
+          .select("id, full_name, email, phone, sector, active")
+          .in("id", profileIds);
+
+        if (profilesError) throw profilesError;
+
+        for (const profile of (profileRows ?? []) as ProfileListRow[]) {
+          profileById.set(profile.id, profile);
+        }
+      }
+
+      return membershipRows.map((row) => {
+        const profile = profileById.get(row.user_id);
         return {
           name: profile?.full_name || profile?.email || "Usuario",
           email: profile?.email || "",
+          phone: profile?.phone || "",
+          sector: profile?.sector || "",
           status: profile?.active === false ? "suspended" : row.status,
           isOwner: row.is_owner,
           createdAt: row.created_at,
@@ -287,12 +308,15 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
       const context = await requireOwnerContext(supabase, data.accessToken);
       const name = normalizeText(data.name);
       const email = normalizeEmail(data.email);
+      const phone = normalizeText(data.phone);
+      const sector = normalizeText(data.sector);
       const temporaryPassword = normalizeText(data.temporaryPassword);
 
       if (!name) throw new Error("name is required");
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         throw new Error("email is invalid");
       }
+      if (!sector) throw new Error("sector is required");
       if (temporaryPassword.length < 8) throw new Error("password is invalid");
 
       const existingUser = await findAuthUserByEmail(supabase, email);
@@ -304,6 +328,8 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
         email_confirm: true,
         user_metadata: {
           full_name: name,
+          phone,
+          sector,
           must_change_password: true,
         },
       });
@@ -318,6 +344,8 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
         id: createdUserId,
         full_name: name,
         email,
+        phone: phone || null,
+        sector,
         active: true,
         must_change_password: true,
       });
@@ -375,6 +403,8 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
         new_data: {
           userId: createdUserId,
           email,
+          phone,
+          sector,
           isOwner: false,
           roleCode: role?.code ?? null,
         },
@@ -387,6 +417,8 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
       return {
         name,
         email,
+        phone,
+        sector,
         status: "active",
         isOwner: false,
         createdAt: new Date().toISOString(),
