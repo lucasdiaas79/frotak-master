@@ -396,6 +396,9 @@ function UsuariosPage() {
           </Dialog>
         }
       />
+      <p className="mx-3 mt-2 font-mono text-[10px] font-semibold text-muted-foreground md:mx-0">
+        CLIENT BUILD CHECK: 06da97f-A
+      </p>
 
       <section className="premium-card mx-3 mt-4 px-4 py-4 md:mx-0 md:px-5">
         <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_auto] md:items-end">
@@ -562,6 +565,9 @@ function UsuariosErrorFallback({ error }: { error: Error }) {
         </h1>
         <p className="mt-2 max-w-md text-[13px] leading-relaxed text-muted-foreground">
           Atualize a pagina ou entre novamente pelo login central.
+        </p>
+        <p className="mt-3 font-mono text-[10px] font-semibold text-muted-foreground">
+          CLIENT BUILD CHECK: 06da97f-A
         </p>
         {import.meta.env.DEV ? (
           <pre className="mt-4 max-h-64 max-w-xl overflow-auto rounded-2xl border border-border bg-surface/70 px-4 py-3 text-left font-mono text-[11px] text-muted-foreground">
