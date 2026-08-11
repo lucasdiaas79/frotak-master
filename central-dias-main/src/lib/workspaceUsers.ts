@@ -1,4 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
+import {
+  createWorkspaceUserData,
+  getWorkspaceUserAccessData,
+  getWorkspaceUsersServerDiagnosticsSnapshot,
+  listWorkspaceRolesData,
+  listWorkspaceUsersData,
+} from "./workspaceUsers.server";
 
 export type WorkspaceUserAccess = {
   isOwner: boolean;
@@ -36,36 +43,29 @@ export type CreateWorkspaceUserInput = {
 };
 
 export const getWorkspaceUsersServerDiagnostics = createServerFn({ method: "GET" }).handler(
-  async () => {
-    const server = await import("./workspaceUsers.server");
-    return server.getWorkspaceUsersServerDiagnosticsSnapshot();
-  },
+  async () => getWorkspaceUsersServerDiagnosticsSnapshot(),
 );
 
 export const getWorkspaceUserAccess = createServerFn({ method: "POST" })
   .validator((input: { accessToken: string }) => input)
   .handler(async ({ data }) => {
-    const server = await import("./workspaceUsers.server");
-    return server.getWorkspaceUserAccessData(data.accessToken);
+    return getWorkspaceUserAccessData(data.accessToken);
   });
 
 export const listWorkspaceUsers = createServerFn({ method: "POST" })
   .validator((input: { accessToken: string }) => input)
   .handler(async ({ data }) => {
-    const server = await import("./workspaceUsers.server");
-    return server.listWorkspaceUsersData(data.accessToken);
+    return listWorkspaceUsersData(data.accessToken);
   });
 
 export const listWorkspaceRoles = createServerFn({ method: "POST" })
   .validator((input: { accessToken: string }) => input)
   .handler(async ({ data }) => {
-    const server = await import("./workspaceUsers.server");
-    return server.listWorkspaceRolesData(data.accessToken);
+    return listWorkspaceRolesData(data.accessToken);
   });
 
 export const createWorkspaceUser = createServerFn({ method: "POST" })
   .validator((input: CreateWorkspaceUserInput) => input)
   .handler(async ({ data }) => {
-    const server = await import("./workspaceUsers.server");
-    return server.createWorkspaceUserData(data);
+    return createWorkspaceUserData(data);
   });
