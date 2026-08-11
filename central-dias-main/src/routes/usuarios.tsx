@@ -90,10 +90,6 @@ function formatDate(value: string) {
 }
 
 function UsuariosPage() {
-  return <div>USUARIOS ROUTE RENDER OK</div>;
-}
-
-function UsuariosPageOriginal() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [access, setAccess] = useState<WorkspaceUserAccess | null>(null);
   const [users, setUsers] = useState<WorkspaceUser[]>([]);
@@ -557,10 +553,6 @@ function UsuariosStatusCard({
 
 function UsuariosErrorFallback({ error }: { error: Error }) {
   console.error("[USUARIOS ROUTE ERROR]", error);
-  const stackLines = (error.stack || "")
-    .split("\n")
-    .slice(0, 5)
-    .join("\n");
 
   return (
     <div className="mx-3 mt-3 md:mx-0 md:mt-0">
@@ -568,18 +560,22 @@ function UsuariosErrorFallback({ error }: { error: Error }) {
         <div className="mb-4 inline-flex size-12 items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/10 text-destructive">
           <AlertCircle className="size-5" />
         </div>
-        <h1 className="text-[20px] font-extrabold text-foreground">ERRO REAL DA ROTA</h1>
+        <h1 className="text-[20px] font-extrabold text-foreground">
+          Nao foi possivel abrir usuarios
+        </h1>
         <p className="mt-2 max-w-md text-[13px] leading-relaxed text-muted-foreground">
-          Name: {error.name || "Error"}
-          <br />
-          Message: {error.message || "-"}
+          Atualize a pagina ou entre novamente pelo login central.
         </p>
         <p className="mt-3 font-mono text-[10px] font-semibold text-muted-foreground">
           CLIENT BUILD CHECK: 06da97f-A
         </p>
-        {stackLines ? (
+        {import.meta.env.DEV ? (
           <pre className="mt-4 max-h-64 max-w-xl overflow-auto rounded-2xl border border-border bg-surface/70 px-4 py-3 text-left font-mono text-[11px] text-muted-foreground">
-            {stackLines}
+            {[
+              `name: ${error.name || "Error"}`,
+              `message: ${error.message || "-"}`,
+              `stack: ${error.stack || "-"}`,
+            ].join("\n")}
           </pre>
         ) : null}
         <Button asChild className="mt-6 h-9 rounded-2xl text-[12px]">
