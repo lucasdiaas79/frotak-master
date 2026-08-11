@@ -1,8 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { acceptMasterSsoFromUrl } from "@/lib/auth";
-
-const MASTER_LOGIN_URL = "https://login.frotak.log.br";
+import { acceptMasterSsoFromUrl, getMasterLoginUrl } from "@/lib/auth";
 
 export const Route = createFileRoute("/login")({
   ssr: false,
@@ -23,11 +21,19 @@ function LoginRedirect() {
 
     async function redirect() {
       const params = new URLSearchParams(window.location.search);
+      const hash = window.location.hash.startsWith("#")
+        ? window.location.hash.slice(1)
+        : window.location.hash;
+      const hashParams = new URLSearchParams(hash);
+      for (const [key, value] of hashParams.entries()) {
+        if (!params.has(key)) params.set(key, value);
+      }
+
       const token = params.get("sso_token");
       const source = params.get("source");
 
       if (!token || source !== "frotak-master") {
-        window.location.replace(MASTER_LOGIN_URL);
+        window.location.replace(getMasterLoginUrl());
         return;
       }
 
@@ -35,7 +41,7 @@ function LoginRedirect() {
         await acceptMasterSsoFromUrl(window.location.search);
         if (!cancelled) navigate({ to: "/", replace: true });
       } catch {
-        window.location.replace(MASTER_LOGIN_URL);
+        window.location.replace(getMasterLoginUrl());
       }
     }
 

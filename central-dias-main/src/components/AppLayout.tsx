@@ -30,14 +30,18 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { acceptMasterSsoFromUrl, getCurrentUser, getProfile, signOut } from "@/lib/auth";
+import {
+  acceptMasterSsoFromUrl,
+  getCurrentUser,
+  getMasterLoginUrl,
+  getProfile,
+  signOut,
+} from "@/lib/auth";
 import { useFleet } from "@/lib/store";
 import type { Profile } from "@/lib/types";
 import { vehicleTrailerLabel } from "@/lib/vehicle-trailers";
 import logoCentral from "@/assets/logo-central.png";
 import faviconCentral from "@/assets/favicon.png";
-
-const MASTER_LOGIN_URL = "https://login.frotak.log.br";
 
 interface NavItem {
   to: string;
@@ -119,6 +123,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/produtos": "Produtos",
   "/remetentes": "Cadastro de Clientes",
   "/destinatarios": "Cadastro de Clientes",
+  "/usuarios": "Usuários",
 };
 
 const ROUTE_GROUPS: Record<string, string> = {
@@ -135,6 +140,7 @@ const ROUTE_GROUPS: Record<string, string> = {
   "/produtos": "Cadastros",
   "/remetentes": "Cadastros",
   "/destinatarios": "Cadastros",
+  "/usuarios": "Administração",
 };
 
 function getInitials(profile: Profile | null) {
@@ -737,7 +743,7 @@ export function AppLayout() {
         const user = await getCurrentUser();
         if (!user) {
           if (!cancelled) {
-            window.location.href = MASTER_LOGIN_URL;
+            window.location.href = getMasterLoginUrl();
           }
           return;
         }
@@ -755,7 +761,7 @@ export function AppLayout() {
         }
       } catch {
         if (!cancelled) {
-          window.location.href = MASTER_LOGIN_URL;
+          window.location.href = getMasterLoginUrl();
         }
       }
     }
@@ -788,7 +794,7 @@ export function AppLayout() {
 
   async function handleLogout() {
     await signOut();
-    window.location.href = "https://login.frotak.log.br";
+    window.location.href = getMasterLoginUrl();
   }
 
   return (

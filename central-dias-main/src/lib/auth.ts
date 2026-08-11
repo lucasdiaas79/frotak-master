@@ -196,6 +196,20 @@ export async function acceptMasterSsoFromUrl(search: string) {
   return session;
 }
 
+export function getMasterLoginUrl() {
+  const configuredUrl = import.meta.env.VITE_FROTAK_MASTER_LOGIN_URL;
+  if (typeof configuredUrl === "string" && configuredUrl.trim()) return configuredUrl.trim();
+
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return `${window.location.protocol}//${hostname}:5173/login`;
+    }
+  }
+
+  return "https://login.frotak.log.br";
+}
+
 export async function getSession(): Promise<Session | null> {
   if (hasSupabaseConfig()) {
     const { data, error } = await supabase.auth.getSession();
