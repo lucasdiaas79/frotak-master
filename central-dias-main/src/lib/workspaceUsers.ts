@@ -17,7 +17,13 @@ export type WorkspaceUser = {
   sector: string;
   status: "active" | "invited" | "suspended" | "revoked";
   isOwner: boolean;
+  roles: WorkspaceRole[];
   createdAt: string;
+};
+
+export type WorkspaceRole = {
+  code: string;
+  name: string;
 };
 
 export type CreateWorkspaceUserInput = {
@@ -26,6 +32,7 @@ export type CreateWorkspaceUserInput = {
   email: string;
   phone: string;
   sector: string;
+  roleCode: string;
   temporaryPassword: string;
 };
 
@@ -82,6 +89,12 @@ type ProfileListRow = {
 type WorkspaceRoleRow = {
   id: string;
   code: string;
+  name: string;
+};
+
+type MembershipRoleRow = {
+  membership_id: string;
+  role_id: string;
 };
 
 function logSupabaseError(
@@ -283,7 +296,10 @@ export const listWorkspaceUsers = createServerFn({ method: "POST" })
 
       const membershipRows = (rows ?? []) as MemberListRow[];
       const profileIds = [...new Set(membershipRows.map((row) => row.user_id).filter(Boolean))];
+      const membershipIds = [...new Set(membershipRows.map((row) => row.id).filter(Boolean))];
       const profileById = new Map<string, ProfileListRow>();
+      const roleById = new Map<string, WorkspaceRoleRow>();
+      const rolesByMembershipId = new Map<string, WorkspaceRole[]>();
 
       if (profileIds.length > 0) {
         const { data: profileRows, error: profilesError } = await supabase
@@ -301,6 +317,48 @@ export const listWorkspaceUsers = createServerFn({ method: "POST" })
         }
       }
 
+      if (membershipIds.length > 0) {
+        const { data: membershipRoleRows, error: membershipRolesError } = await supabase
+          .from("membership_roles")
+          .select("membership_id, role_id")
+          .eq("workspace_id", context.workspaceId)
+          .in("membership_id", membershipIds);
+
+        if (membershipRolesError) {
+          logSupabaseError("membership_roles", membershipRolesError);
+          throwStageError("membership_roles", membershipRolesError);
+        }
+
+        const membershipRoles = (membershipRoleRows ?? []) as MembershipRoleRow[];
+        const roleIds = [...new Set(membershipRoles.map((row) => row.role_id).filter(Boolean))];
+
+        if (roleIds.length > 0) {
+          const { data: roleRows, error: rolesError } = await supabase
+            .from("workspace_roles")
+            .select("id, code, name")
+            .eq("workspace_id", context.workspaceId)
+            .in("id", roleIds);
+
+          if (rolesError) {
+            logSupabaseError("workspace_roles", rolesError);
+            throwStageError("workspace_roles", rolesError);
+          }
+
+          for (const role of (roleRows ?? []) as WorkspaceRoleRow[]) {
+            roleById.set(role.id, role);
+          }
+        }
+
+        for (const membershipRole of membershipRoles) {
+          const role = roleById.get(membershipRole.role_id);
+          if (!role) continue;
+
+          const current = rolesByMembershipId.get(membershipRole.membership_id) ?? [];
+          current.push({ code: role.code, name: role.name });
+          rolesByMembershipId.set(membershipRole.membership_id, current);
+        }
+      }
+
       return membershipRows.map((row) => {
         const profile = profileById.get(row.user_id);
         return {
@@ -310,11 +368,41 @@ export const listWorkspaceUsers = createServerFn({ method: "POST" })
           sector: profile?.sector || "",
           status: profile?.active === false ? "suspended" : row.status,
           isOwner: row.is_owner,
+          roles: rolesByMembershipId.get(row.id) ?? [],
           createdAt: row.created_at,
         } satisfies WorkspaceUser;
       });
     } catch (error) {
       console.error("[workspaceUsers] createServerFn listWorkspaceUsers failed", error);
+      throw new Error(publicError(error));
+    }
+  });
+
+export const listWorkspaceRoles = createServerFn({ method: "POST" })
+  .validator((input: { accessToken: string }) => input)
+  .handler(async ({ data }) => {
+    try {
+      const supabase = getSupabaseAdmin();
+      const context = await requireOwnerContext(supabase, data.accessToken);
+
+      const { data: roles, error } = await supabase
+        .from("workspace_roles")
+        .select("id, code, name")
+        .eq("workspace_id", context.workspaceId)
+        .eq("active", true)
+        .order("name", { ascending: true });
+
+      if (error) {
+        logSupabaseError("workspace_roles", error);
+        throwStageError("workspace_roles", error);
+      }
+
+      return ((roles ?? []) as WorkspaceRoleRow[]).map((role) => ({
+        code: role.code,
+        name: role.name,
+      })) satisfies WorkspaceRole[];
+    } catch (error) {
+      console.error("[workspaceUsers] createServerFn listWorkspaceRoles failed", error);
       throw new Error(publicError(error));
     }
   });
@@ -332,6 +420,7 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
       const email = normalizeEmail(data.email);
       const phone = normalizeText(data.phone);
       const sector = normalizeText(data.sector);
+      const roleCode = normalizeText(data.roleCode).toUpperCase();
       const temporaryPassword = normalizeText(data.temporaryPassword);
 
       if (!name) throw new Error("name is required");
@@ -339,6 +428,7 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
         throw new Error("email is invalid");
       }
       if (!sector) throw new Error("sector is required");
+      if (!roleCode) throw new Error("role is required");
       if (temporaryPassword.length < 8) throw new Error("password is invalid");
 
       const existingUser = await findAuthUserByEmail(supabase, email);
@@ -404,34 +494,29 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
 
       membershipId = membership.id;
 
-      const { data: roles, error: rolesError } = await supabase
+      const { data: role, error: rolesError } = await supabase
         .from("workspace_roles")
         .select("id, code")
         .eq("workspace_id", context.workspaceId)
         .eq("active", true)
-        .in("code", ["DISPATCHER", "VIEWER", "MANAGER", "ADMIN"]);
+        .eq("code", roleCode)
+        .maybeSingle();
       if (rolesError) {
         logSupabaseError("workspace_roles", rolesError);
         throwStageError("workspace_roles", rolesError);
       }
 
-      const roleRows = (roles ?? []) as WorkspaceRoleRow[];
-      const role =
-        roleRows.find((item) => item.code === "DISPATCHER") ??
-        roleRows.find((item) => item.code === "MANAGER") ??
-        roleRows.find((item) => item.code === "VIEWER") ??
-        roleRows.find((item) => item.code === "ADMIN");
+      const workspaceRole = role as Pick<WorkspaceRoleRow, "id" | "code"> | null;
+      if (!workspaceRole) throw new Error("workspace_roles: role ausente no workspace");
 
-      if (role) {
-        const { error: roleError } = await supabase.from("membership_roles").insert({
-          membership_id: membershipId,
-          role_id: role.id,
-          workspace_id: context.workspaceId,
-        });
-        if (roleError) {
-          logSupabaseError("membership_roles", roleError);
-          throwStageError("membership_roles", roleError);
-        }
+      const { error: roleError } = await supabase.from("membership_roles").insert({
+        membership_id: membershipId,
+        role_id: workspaceRole.id,
+        workspace_id: context.workspaceId,
+      });
+      if (roleError) {
+        logSupabaseError("membership_roles", roleError);
+        throwStageError("membership_roles", roleError);
       }
 
       const { error: auditError } = await supabase.from("audit_logs").insert({
@@ -447,7 +532,7 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
           phone,
           sector,
           isOwner: false,
-          roleCode: role?.code ?? null,
+          roleCode: workspaceRole.code,
         },
         metadata: { source: "client.workspace_users" },
       });
@@ -462,6 +547,7 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
         sector,
         status: "active",
         isOwner: false,
+        roles: [{ code: workspaceRole.code, name: workspaceRole.code }],
         createdAt: new Date().toISOString(),
       } satisfies WorkspaceUser;
     } catch (error) {
