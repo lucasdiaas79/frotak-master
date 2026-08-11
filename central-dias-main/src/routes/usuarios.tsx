@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getCurrentAccessToken } from "@/lib/auth";
+import { getCurrentAccessToken, getCurrentUser } from "@/lib/auth";
 import {
   createWorkspaceUser,
   getWorkspaceUserAccess,
@@ -54,6 +54,40 @@ type UsuariosState =
   | { status: "sessionExpired"; message?: string }
   | { status: "error"; message: string };
 
+type StepStatus = "PENDING" | "SUCCESS" | "ERROR";
+
+type UsuariosDiagnosticState = {
+  authInitialized: boolean;
+  accessToken: boolean;
+  userId: boolean;
+  getWorkspaceUserAccess: StepStatus;
+  isOwner: boolean;
+  workspaceId: boolean;
+  tenantId: boolean;
+  listWorkspaceUsers: StepStatus;
+  userCount: number;
+  error: string;
+  failedStage: string;
+  errorName: string;
+  errorMessage: string;
+};
+
+const initialDiagnostic = (): UsuariosDiagnosticState => ({
+  authInitialized: false,
+  accessToken: false,
+  userId: false,
+  getWorkspaceUserAccess: "PENDING",
+  isOwner: false,
+  workspaceId: false,
+  tenantId: false,
+  listWorkspaceUsers: "PENDING",
+  userCount: 0,
+  error: "",
+  failedStage: "",
+  errorName: "",
+  errorMessage: "",
+});
+
 const emptyForm = (): FormState => ({
   name: "",
   email: "",
@@ -78,6 +112,21 @@ function formatDate(value: string) {
   }).format(date);
 }
 
+function sanitizeMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return message
+    .replace(/eyJ[a-zA-Z0-9._-]+/g, "[redacted]")
+    .replace(
+      /(service[_-]?role|anon[_-]?key|password|refresh[_-]?token|access[_-]?token)[^,\s)]*/gi,
+      "$1=[redacted]",
+    )
+    .slice(0, 280);
+}
+
+function errorName(error: unknown) {
+  return error instanceof Error ? error.name || "Error" : "Error";
+}
+
 function UsuariosPage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [access, setAccess] = useState<WorkspaceUserAccess | null>(null);
@@ -86,6 +135,7 @@ function UsuariosPage() {
     status: "loading",
     message: "Carregando usuarios...",
   });
+  const [diagnostic, setDiagnostic] = useState<UsuariosDiagnosticState>(initialDiagnostic);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -98,13 +148,30 @@ function UsuariosPage() {
       accessData = await getWorkspaceUserAccess({ data: { accessToken: token } });
     } catch (accessError) {
       console.error("[USUARIOS] getWorkspaceUserAccess error", accessError);
+      setDiagnostic((current) => ({
+        ...current,
+        getWorkspaceUserAccess: "ERROR",
+        error: sanitizeMessage(accessError),
+        failedStage: "getWorkspaceUserAccess",
+        errorName: errorName(accessError),
+        errorMessage: sanitizeMessage(accessError),
+      }));
       throw accessError;
     }
     console.info("[USUARIOS] getWorkspaceUserAccess success", {
       isOwner: accessData.isOwner,
+      workspaceId: accessData.workspaceId ? "presente" : "ausente",
+      tenantId: accessData.tenantId ? "presente" : "ausente",
       workspaceName: accessData.workspaceName,
       tenantName: accessData.tenantName,
     });
+    setDiagnostic((current) => ({
+      ...current,
+      getWorkspaceUserAccess: "SUCCESS",
+      isOwner: accessData.isOwner === true,
+      workspaceId: Boolean(accessData.workspaceId),
+      tenantId: Boolean(accessData.tenantId),
+    }));
 
     setAccess(accessData);
 
@@ -123,10 +190,27 @@ function UsuariosPage() {
       userRows = await listWorkspaceUsers({ data: { accessToken: token } });
     } catch (listError) {
       console.error("[USUARIOS] listWorkspaceUsers error", listError);
+      setDiagnostic((current) => ({
+        ...current,
+        listWorkspaceUsers: "ERROR",
+        error: sanitizeMessage(listError),
+        failedStage: "listWorkspaceUsers",
+        errorName: errorName(listError),
+        errorMessage: sanitizeMessage(listError),
+      }));
       throw listError;
     }
     console.info("[USUARIOS] listWorkspaceUsers success", { count: userRows.length });
     setUsers(userRows);
+    setDiagnostic((current) => ({
+      ...current,
+      listWorkspaceUsers: "SUCCESS",
+      userCount: userRows.length,
+      error: "",
+      failedStage: "",
+      errorName: "",
+      errorMessage: "",
+    }));
     setRouteState({ status: "success" });
   }
 
@@ -136,24 +220,79 @@ function UsuariosPage() {
 
     async function load() {
       setRouteState({ status: "loading", message: "Carregando usuarios..." });
-      try {
-        console.info("[USUARIOS] auth ready");
-        const token = await getCurrentAccessToken();
-        console.info(`[USUARIOS] access token: ${token ? "YES" : "NO"}`);
-        if (!token) {
-          if (active) {
-            setAccess(null);
-            setUsers([]);
-            setAccessToken(null);
-            setRouteState({
-              status: "sessionExpired",
-              message: "Sessao expirada. Entre novamente pelo login central.",
-            });
-          }
-          return;
-        }
+      setDiagnostic(initialDiagnostic());
 
-        if (active) setAccessToken(token);
+      console.info("[USUARIOS] auth ready");
+      setDiagnostic((current) => ({ ...current, authInitialized: true }));
+
+      let token: string | null = null;
+      try {
+        token = await getCurrentAccessToken();
+      } catch (tokenError) {
+        console.error("[USUARIOS] getCurrentAccessToken error", tokenError);
+        const message = sanitizeMessage(tokenError);
+        if (active) {
+          setAccess(null);
+          setUsers([]);
+          setAccessToken(null);
+          setDiagnostic((current) => ({
+            ...current,
+            accessToken: false,
+            error: message,
+            failedStage: "getCurrentAccessToken",
+            errorName: errorName(tokenError),
+            errorMessage: message,
+          }));
+          setRouteState({
+            status: "sessionExpired",
+            message: "Sessao expirada. Entre novamente pelo login central.",
+          });
+        }
+        return;
+      }
+
+      console.info(`[USUARIOS] access token: ${token ? "YES" : "NO"}`);
+
+      let currentUserId = false;
+      try {
+        const currentUser = await getCurrentUser();
+        currentUserId = Boolean(currentUser?.id);
+      } catch (userError) {
+        console.error("[USUARIOS] getCurrentUser error", userError);
+      }
+
+      if (!token) {
+        if (active) {
+          setAccess(null);
+          setUsers([]);
+          setAccessToken(null);
+          setDiagnostic((current) => ({
+            ...current,
+            accessToken: false,
+            userId: currentUserId,
+            error: "Sessao expirada. Entre novamente pelo login central.",
+            failedStage: "getCurrentAccessToken",
+            errorName: "SessionExpired",
+            errorMessage: "Access token ausente.",
+          }));
+          setRouteState({
+            status: "sessionExpired",
+            message: "Sessao expirada. Entre novamente pelo login central.",
+          });
+        }
+        return;
+      }
+
+      if (active) {
+        setAccessToken(token);
+        setDiagnostic((current) => ({
+          ...current,
+          accessToken: true,
+          userId: currentUserId,
+        }));
+      }
+
+      try {
         await reloadUsers(token);
       } catch (loadError) {
         const message =
@@ -162,7 +301,7 @@ function UsuariosPage() {
         if (active) {
           setAccess(null);
           setUsers([]);
-          setRouteState({ status: "error", message });
+          setRouteState({ status: "error", message: sanitizeMessage(message) });
         }
       }
     }
@@ -184,6 +323,15 @@ function UsuariosPage() {
         .includes(query),
     );
   }, [search, users]);
+
+  function withDiagnostic(children: React.ReactNode) {
+    return (
+      <>
+        <UsuariosDiagnosticPanel diagnostic={diagnostic} />
+        {children}
+      </>
+    );
+  }
 
   async function createUser(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -235,52 +383,52 @@ function UsuariosPage() {
   }
 
   if (routeState.status === "loading") {
-    return (
+    return withDiagnostic(
       <div className="mx-3 mt-3 md:mx-0 md:mt-0">
         <div className="premium-card flex min-h-[260px] items-center justify-center px-6 py-12 text-[13px] font-semibold text-muted-foreground">
           {routeState.message || "Carregando usuarios..."}
         </div>
-      </div>
+      </div>,
     );
   }
 
   if (routeState.status === "sessionExpired") {
-    return (
+    return withDiagnostic(
       <UsuariosStatusCard
         icon="alert"
         title="Sessao expirada"
         message={routeState.message || "Entre novamente pelo login central."}
-      />
+      />,
     );
   }
 
   if (routeState.status === "accessDenied") {
-    return (
+    return withDiagnostic(
       <UsuariosStatusCard
         icon="lock"
         title="Acesso restrito"
         message={routeState.message || "Apenas o owner do workspace pode gerenciar usuarios."}
-      />
+      />,
     );
   }
 
   if (routeState.status === "error") {
-    return (
+    return withDiagnostic(
       <UsuariosStatusCard
         icon="alert"
         title="Nao foi possivel carregar usuarios"
         message={routeState.message}
-      />
+      />,
     );
   }
 
   if (!access || access.isOwner !== true) {
-    return (
+    return withDiagnostic(
       <UsuariosStatusCard
         icon="lock"
         title="Acesso restrito"
         message="Apenas o owner do workspace pode gerenciar usuarios."
-      />
+      />,
     );
   }
 
@@ -288,6 +436,7 @@ function UsuariosPage() {
 
   return (
     <>
+      <UsuariosDiagnosticPanel diagnostic={diagnostic} />
       <PageHeader
         title="Usuários"
         subtitle={`${ownerAccess.tenantName || "Workspace"} · ${users.length} usuários`}
@@ -490,6 +639,37 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <Label className="label-tiny mb-1.5 block">{label}</Label>
       {children}
+    </div>
+  );
+}
+
+function UsuariosDiagnosticPanel({ diagnostic }: { diagnostic: UsuariosDiagnosticState }) {
+  const lines = [
+    `Auth inicializado: ${diagnostic.authInitialized ? "YES" : "NO"}`,
+    `Access token: ${diagnostic.accessToken ? "YES" : "NO"}`,
+    `User ID: ${diagnostic.userId ? "presente" : "ausente"}`,
+    `getWorkspaceUserAccess: ${diagnostic.getWorkspaceUserAccess}`,
+    `isOwner: ${diagnostic.isOwner ? "true" : "false"}`,
+    `workspaceId: ${diagnostic.workspaceId ? "presente" : "ausente"}`,
+    `tenantId: ${diagnostic.tenantId ? "presente" : "ausente"}`,
+    `listWorkspaceUsers: ${diagnostic.listWorkspaceUsers}`,
+    `Quantidade de usuários: ${diagnostic.userCount}`,
+    `Erro: ${diagnostic.error || "-"}`,
+  ];
+
+  if (diagnostic.failedStage) {
+    lines.push(
+      `ETAPA QUE FALHOU: ${diagnostic.failedStage}`,
+      `NOME DO ERRO: ${diagnostic.errorName || "Error"}`,
+      `MENSAGEM: ${diagnostic.errorMessage || diagnostic.error || "-"}`,
+    );
+  }
+
+  return (
+    <div className="mx-3 mt-3 md:mx-0 md:mt-0">
+      <pre className="premium-card overflow-auto px-4 py-3 font-mono text-[11px] leading-5 text-foreground">
+        {lines.join("\n")}
+      </pre>
     </div>
   );
 }

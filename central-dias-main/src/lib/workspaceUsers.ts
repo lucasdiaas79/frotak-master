@@ -3,6 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 
 export type WorkspaceUserAccess = {
   isOwner: boolean;
+  userId: string;
+  workspaceId: string;
+  tenantId: string;
   workspaceName: string;
   tenantName: string;
 };
@@ -43,48 +46,20 @@ type WorkspaceMembershipRow = {
   status: string;
   is_owner: boolean;
   created_at: string;
-  workspaces:
-    | {
-        id: string;
-        tenant_id: string;
-        name: string;
-        status: string;
-        tenants:
-          | {
-              id: string;
-              legal_name: string;
-              trade_name: string | null;
-              status: string;
-            }
-          | Array<{
-              id: string;
-              legal_name: string;
-              trade_name: string | null;
-              status: string;
-            }>
-          | null;
-      }
-    | Array<{
-        id: string;
-        tenant_id: string;
-        name: string;
-        status: string;
-        tenants:
-          | {
-              id: string;
-              legal_name: string;
-              trade_name: string | null;
-              status: string;
-            }
-          | Array<{
-              id: string;
-              legal_name: string;
-              trade_name: string | null;
-              status: string;
-            }>
-          | null;
-      }>
-    | null;
+};
+
+type WorkspaceRow = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  status: string;
+};
+
+type TenantRow = {
+  id: string;
+  legal_name: string;
+  trade_name: string | null;
+  status: string;
 };
 
 type MemberListRow = {
@@ -108,6 +83,22 @@ type WorkspaceRoleRow = {
   id: string;
   code: string;
 };
+
+function logSupabaseError(
+  stage: string,
+  error: { message?: string; code?: string; details?: string },
+) {
+  console.error(`[workspaceUsers] ${stage} failed`, {
+    message: error.message,
+    code: error.code,
+    details: error.details,
+  });
+}
+
+function throwStageError(stage: string, error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error);
+  throw new Error(`${stage}: ${message || "erro desconhecido"}`);
+}
 
 function readEnv(name: string) {
   const value = process.env[name];
@@ -133,11 +124,6 @@ function getSupabaseAdmin() {
   );
 }
 
-function firstRelation<T>(value: T | T[] | null | undefined): T | null {
-  if (Array.isArray(value)) return value[0] ?? null;
-  return value ?? null;
-}
-
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
@@ -148,25 +134,30 @@ function normalizeText(value: unknown) {
 
 function publicError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
+  const stage = message.match(/^([a-zA-Z0-9_.]+):/)?.[1];
+  const prefix = stage ? `Falha em ${stage}. ` : "";
   if (/unauthorized|owner|forbidden|not allowed/i.test(message)) {
-    return "Voce nao tem permissao para gerenciar usuarios.";
+    return `${prefix}Voce nao tem permissao para gerenciar usuarios.`;
   }
   if (/already exists|already registered|email/i.test(message)) {
-    return "Este e-mail ja esta cadastrado.";
+    return `${prefix}Este e-mail ja esta cadastrado.`;
   }
   if (/password/i.test(message)) {
-    return "A senha temporaria nao atende as regras atuais.";
+    return `${prefix}A senha temporaria nao atende as regras atuais.`;
   }
   if (/config|environment/i.test(message)) {
-    return "Configuracao do servidor indisponivel.";
+    return `${prefix}Configuracao do servidor indisponivel.`;
   }
-  return "Nao foi possivel concluir a operacao.";
+  return `${prefix}Nao foi possivel concluir a operacao.`;
 }
 
 async function findAuthUserByEmail(supabase: ReturnType<typeof getSupabaseAdmin>, email: string) {
   for (let page = 1; page <= 10; page += 1) {
     const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
-    if (error) throw error;
+    if (error) {
+      logSupabaseError("auth.admin.listUsers", error);
+      throwStageError("auth.admin.listUsers", error);
+    }
     const found = data.users.find((user) => user.email?.toLowerCase() === email);
     if (found) return found;
     if (data.users.length < 1000) break;
@@ -181,40 +172,64 @@ async function resolveWorkspaceContext(
   if (!normalizeText(accessToken)) throw new Error("unauthorized");
 
   const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
-  if (authError || !authData.user) throw new Error("unauthorized");
+  if (authError) {
+    logSupabaseError("auth.getUser", authError);
+    throwStageError("auth.getUser", authError);
+  }
+  if (!authData.user) throw new Error("auth.getUser: usuario ausente");
 
   const { data: memberships, error: membershipError } = await supabase
     .from("workspace_memberships")
-    .select(
-      "id, workspace_id, user_id, status, is_owner, created_at, workspaces(id, tenant_id, name, status, tenants(id, legal_name, trade_name, status))",
-    )
+    .select("id, workspace_id, user_id, status, is_owner, created_at")
     .eq("user_id", authData.user.id)
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(1);
 
-  if (membershipError) throw membershipError;
-  const membership = (memberships?.[0] ?? null) as WorkspaceMembershipRow | null;
-  const workspace = firstRelation(membership?.workspaces);
-  const tenant = firstRelation(workspace?.tenants);
-
-  if (
-    !membership ||
-    !workspace ||
-    !tenant ||
-    workspace.status !== "active" ||
-    !["active", "trial"].includes(tenant.status)
-  ) {
-    throw new Error("unauthorized");
+  if (membershipError) {
+    logSupabaseError("workspace_memberships", membershipError);
+    throwStageError("workspace_memberships", membershipError);
   }
+  const membership = (memberships?.[0] ?? null) as WorkspaceMembershipRow | null;
+  if (!membership) throw new Error("workspace_memberships: membership ativa ausente");
+
+  const { data: workspace, error: workspaceError } = await supabase
+    .from("workspaces")
+    .select("id, tenant_id, name, status")
+    .eq("id", membership.workspace_id)
+    .maybeSingle();
+
+  if (workspaceError) {
+    logSupabaseError("workspaces", workspaceError);
+    throwStageError("workspaces", workspaceError);
+  }
+  if (!workspace) throw new Error("workspaces: workspace ausente");
+
+  const workspaceRow = workspace as WorkspaceRow;
+  if (workspaceRow.status !== "active") throw new Error("workspaces: workspace inativo");
+
+  const { data: tenant, error: tenantError } = await supabase
+    .from("tenants")
+    .select("id, legal_name, trade_name, status")
+    .eq("id", workspaceRow.tenant_id)
+    .maybeSingle();
+
+  if (tenantError) {
+    logSupabaseError("tenants", tenantError);
+    throwStageError("tenants", tenantError);
+  }
+  if (!tenant) throw new Error("tenants: tenant ausente");
+
+  const tenantRow = tenant as TenantRow;
+  if (!["active", "trial"].includes(tenantRow.status)) throw new Error("tenants: tenant inativo");
 
   return {
     actorUserId: authData.user.id,
     membershipId: membership.id,
     workspaceId: membership.workspace_id,
-    tenantId: workspace.tenant_id,
-    workspaceName: workspace.name,
-    tenantName: tenant.trade_name || tenant.legal_name || workspace.name,
+    tenantId: workspaceRow.tenant_id,
+    workspaceName: workspaceRow.name,
+    tenantName: tenantRow.trade_name || tenantRow.legal_name || workspaceRow.name,
     isOwner: membership.is_owner === true,
   };
 }
@@ -236,15 +251,15 @@ export const getWorkspaceUserAccess = createServerFn({ method: "POST" })
       const context = await resolveWorkspaceContext(supabase, data.accessToken);
       return {
         isOwner: context.isOwner,
+        userId: context.actorUserId,
+        workspaceId: context.workspaceId,
+        tenantId: context.tenantId,
         workspaceName: context.workspaceName,
         tenantName: context.tenantName,
       } satisfies WorkspaceUserAccess;
-    } catch {
-      return {
-        isOwner: false,
-        workspaceName: "",
-        tenantName: "",
-      } satisfies WorkspaceUserAccess;
+    } catch (error) {
+      console.error("[workspaceUsers] createServerFn getWorkspaceUserAccess failed", error);
+      throw new Error(publicError(error));
     }
   });
 
@@ -261,7 +276,10 @@ export const listWorkspaceUsers = createServerFn({ method: "POST" })
         .neq("status", "revoked")
         .order("created_at", { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        logSupabaseError("workspace_memberships", error);
+        throwStageError("workspace_memberships", error);
+      }
 
       const membershipRows = (rows ?? []) as MemberListRow[];
       const profileIds = [...new Set(membershipRows.map((row) => row.user_id).filter(Boolean))];
@@ -273,7 +291,10 @@ export const listWorkspaceUsers = createServerFn({ method: "POST" })
           .select("id, full_name, email, phone, sector, active")
           .in("id", profileIds);
 
-        if (profilesError) throw profilesError;
+        if (profilesError) {
+          logSupabaseError("profiles", profilesError);
+          throwStageError("profiles", profilesError);
+        }
 
         for (const profile of (profileRows ?? []) as ProfileListRow[]) {
           profileById.set(profile.id, profile);
@@ -293,6 +314,7 @@ export const listWorkspaceUsers = createServerFn({ method: "POST" })
         } satisfies WorkspaceUser;
       });
     } catch (error) {
+      console.error("[workspaceUsers] createServerFn listWorkspaceUsers failed", error);
       throw new Error(publicError(error));
     }
   });
@@ -335,7 +357,12 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
       });
 
       if (createAuthError || !authData.user) {
-        throw createAuthError ?? new Error("auth user was not created");
+        if (createAuthError) {
+          logSupabaseError("auth.admin.createUser", createAuthError);
+        }
+        throw createAuthError
+          ? new Error(`auth.admin.createUser: ${createAuthError.message}`)
+          : new Error("auth.admin.createUser: auth user was not created");
       }
 
       createdUserId = authData.user.id;
@@ -349,7 +376,10 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
         active: true,
         must_change_password: true,
       });
-      if (profileError) throw profileError;
+      if (profileError) {
+        logSupabaseError("profiles", profileError);
+        throwStageError("profiles", profileError);
+      }
 
       const { data: membership, error: membershipError } = await supabase
         .from("workspace_memberships")
@@ -364,7 +394,12 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
         .select("id")
         .single();
       if (membershipError || !membership) {
-        throw membershipError ?? new Error("membership was not created");
+        if (membershipError) {
+          logSupabaseError("workspace_memberships", membershipError);
+        }
+        throw membershipError
+          ? new Error(`workspace_memberships: ${membershipError.message}`)
+          : new Error("workspace_memberships: membership was not created");
       }
 
       membershipId = membership.id;
@@ -375,7 +410,10 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
         .eq("workspace_id", context.workspaceId)
         .eq("active", true)
         .in("code", ["DISPATCHER", "VIEWER", "MANAGER", "ADMIN"]);
-      if (rolesError) throw rolesError;
+      if (rolesError) {
+        logSupabaseError("workspace_roles", rolesError);
+        throwStageError("workspace_roles", rolesError);
+      }
 
       const roleRows = (roles ?? []) as WorkspaceRoleRow[];
       const role =
@@ -390,7 +428,10 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
           role_id: role.id,
           workspace_id: context.workspaceId,
         });
-        if (roleError) throw roleError;
+        if (roleError) {
+          logSupabaseError("membership_roles", roleError);
+          throwStageError("membership_roles", roleError);
+        }
       }
 
       const { error: auditError } = await supabase.from("audit_logs").insert({
@@ -411,7 +452,7 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
         metadata: { source: "client.workspace_users" },
       });
       if (auditError) {
-        console.warn("workspace member audit failed", auditError.message);
+        logSupabaseError("audit_logs", auditError);
       }
 
       return {
@@ -425,13 +466,26 @@ export const createWorkspaceUser = createServerFn({ method: "POST" })
       } satisfies WorkspaceUser;
     } catch (error) {
       if (membershipId) {
-        await supabase.from("membership_roles").delete().eq("membership_id", membershipId);
-        await supabase.from("workspace_memberships").delete().eq("id", membershipId);
+        const membershipRolesCleanup = await supabase
+          .from("membership_roles")
+          .delete()
+          .eq("membership_id", membershipId);
+        if (membershipRolesCleanup.error) {
+          logSupabaseError("membership_roles.cleanup", membershipRolesCleanup.error);
+        }
+
+        const membershipCleanup = await supabase
+          .from("workspace_memberships")
+          .delete()
+          .eq("id", membershipId);
+        if (membershipCleanup.error) {
+          logSupabaseError("workspace_memberships.cleanup", membershipCleanup.error);
+        }
       }
       if (createdUserId) {
         const cleanup = await supabase.auth.admin.deleteUser(createdUserId);
         if (cleanup.error) {
-          console.error("workspace user cleanup failed", cleanup.error.message);
+          logSupabaseError("auth.admin.deleteUser", cleanup.error);
         }
       }
 
