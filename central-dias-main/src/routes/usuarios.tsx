@@ -97,16 +97,6 @@ function formatDate(value: string) {
   }).format(date);
 }
 
-function formatLoadFailure(stage: string, error: unknown) {
-  const rawMessage = error instanceof Error ? error.message : String(error);
-  const message = rawMessage
-    .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "[token]")
-    .replace(/service[_-]?role/gi, "server key")
-    .slice(0, 280);
-
-  return `Falha em: ${stage}\nErro: ${message || "erro desconhecido"}`;
-}
-
 function UsuariosPage() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [access, setAccess] = useState<WorkspaceUserAccess | null>(null);
@@ -125,19 +115,11 @@ function UsuariosPage() {
     let accessData: WorkspaceUserAccess;
 
     try {
-      console.info("[USUARIOS] getWorkspaceUserAccess started");
       accessData = await getWorkspaceUserAccess({ data: { accessToken: token } });
-      console.info("[USUARIOS] getWorkspaceUserAccess success", {
-        hasAccess: Boolean(accessData),
-        isOwner: accessData?.isOwner === true,
-        workspaceId: Boolean(accessData?.workspaceId),
-        tenantId: Boolean(accessData?.tenantId),
-      });
     } catch (error) {
-      console.error("[USUARIOS] getWorkspaceUserAccess error", error);
       setRouteState({
         status: "error",
-        message: formatLoadFailure("getWorkspaceUserAccess", error),
+        message: "Nao foi possivel carregar os usuarios. Tente novamente.",
       });
       return;
     }
@@ -157,18 +139,12 @@ function UsuariosPage() {
     let roleRows: WorkspaceRole[] = [];
 
     try {
-      console.info("[USUARIOS] listWorkspaceUsers started");
       const rawUsers = await listWorkspaceUsers({ data: { accessToken: token } });
       userRows = asWorkspaceUsers(rawUsers);
-      console.info("[USUARIOS] listWorkspaceUsers success", {
-        isArray: Array.isArray(rawUsers),
-        count: userRows.length,
-      });
     } catch (error) {
-      console.error("[USUARIOS] listWorkspaceUsers error", error);
       setRouteState({
         status: "error",
-        message: formatLoadFailure("listWorkspaceUsers", error),
+        message: "Nao foi possivel carregar os usuarios. Tente novamente.",
       });
       return;
     }
@@ -177,7 +153,6 @@ function UsuariosPage() {
       const rawRoles = await listWorkspaceRoles({ data: { accessToken: token } });
       roleRows = asWorkspaceRoles(rawRoles);
     } catch (error) {
-      console.error("[USUARIOS] listWorkspaceRoles error", error);
       roleRows = [];
     }
 
@@ -192,14 +167,12 @@ function UsuariosPage() {
 
   useEffect(() => {
     let active = true;
-    console.info("[USUARIOS] route mounted");
 
     async function load() {
       setRouteState({ status: "loading", message: "Carregando usuarios..." });
 
       try {
         const token = await getCurrentAccessToken();
-        console.info("[USUARIOS] auth ready", { token: token ? "YES" : "NO" });
         if (!token) {
           if (active) {
             setAccess(null);
@@ -217,14 +190,14 @@ function UsuariosPage() {
         if (active) setAccessToken(token);
         await reloadUsers(token);
       } catch (loadError) {
-        const message =
-          loadError instanceof Error ? loadError.message : "Nao foi possivel carregar os usuarios.";
-        console.error("[USUARIOS] load error", loadError);
         if (active) {
           setAccess(null);
           setUsers([]);
           setRoles([]);
-          setRouteState({ status: "error", message });
+          setRouteState({
+            status: "error",
+            message: "Nao foi possivel carregar os usuarios. Tente novamente.",
+          });
         }
       }
     }
@@ -239,8 +212,6 @@ function UsuariosPage() {
   const filteredUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
     const safeUsers = asWorkspaceUsers(users);
-    console.info("[USUARIOS] users type", Array.isArray(users));
-    console.info("[USUARIOS] users count", safeUsers.length);
     if (!query) return safeUsers;
     return safeUsers.filter((user) =>
       [
