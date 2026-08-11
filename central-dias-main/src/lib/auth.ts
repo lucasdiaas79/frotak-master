@@ -21,6 +21,8 @@ interface ProfileRow {
 }
 
 interface MembershipProfileRow {
+  workspace_id?: string;
+  is_owner?: boolean;
   status: string;
   workspaces:
     | {
@@ -146,6 +148,7 @@ function createLocalSession(input: {
       email: input.email,
       role: "admin",
       active: true,
+      isOwner: false,
       createdAt: new Date().toISOString(),
     },
   };
@@ -194,17 +197,19 @@ export async function acceptMasterSsoFromUrl(search: string) {
 }
 
 export async function getSession(): Promise<Session | null> {
-  const local = readLocalSession();
-
-  if (local) {
-    return localSessionToSupabaseSession(local);
+  if (hasSupabaseConfig()) {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    if (data.session) return data.session;
   }
 
-  if (!hasSupabaseConfig()) return null;
+  const local = readLocalSession();
+  return local ? localSessionToSupabaseSession(local) : null;
+}
 
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw error;
-  return data.session ?? null;
+export async function getCurrentAccessToken() {
+  const session = await getSession();
+  return session?.access_token ?? null;
 }
 
 export async function isAuthed(): Promise<boolean> {
@@ -249,10 +254,9 @@ export async function signOut() {
 }
 
 export async function getProfile(userId: string): Promise<Profile | null> {
-  const local = readLocalSession();
-  if (local && local.user.id === userId) return local.profile;
-
   if (!hasSupabaseConfig()) {
+    const local = readLocalSession();
+    if (local && local.user.id === userId) return local.profile;
     return null;
   }
 
@@ -266,7 +270,9 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 
   const { data: membership, error: membershipError } = await supabase
     .from("workspace_memberships")
-    .select("status, workspaces(tenant_id, name, tenants(legal_name, trade_name))")
+    .select(
+      "workspace_id, status, is_owner, workspaces(tenant_id, name, tenants(legal_name, trade_name))",
+    )
     .eq("user_id", userId)
     .eq("status", "active")
     .limit(1)
@@ -276,24 +282,31 @@ export async function getProfile(userId: string): Promise<Profile | null> {
   const workspace = firstRelation(membership?.workspaces);
   const tenant = firstRelation(workspace?.tenants);
   const tenantId = workspace?.tenant_id;
-  const tenantName = tenant?.trade_name || tenant?.legal_name || workspace?.name || profile.full_name;
-
-  return profileFromRow({
+  const tenantName =
+    tenant?.trade_name || tenant?.legal_name || workspace?.name || profile.full_name;
+  const baseProfile = profileFromRow({
     ...profile,
     tenant_id: tenantId,
     name: tenantName,
   });
+
+  return {
+    ...baseProfile,
+    workspaceId: membership?.workspace_id,
+    isOwner: membership?.is_owner === true,
+  };
 }
 
 export async function getCurrentUser(): Promise<User | null> {
+  if (hasSupabaseConfig()) {
+    const { data, error } = await supabase.auth.getUser();
+    if (!error && data.user) return data.user;
+  }
+
   const local = readLocalSession();
 
   if (local) return local.user;
-  if (!hasSupabaseConfig()) return null;
-
-  const { data, error } = await supabase.auth.getUser();
-  if (error) throw error;
-  return data.user ?? null;
+  return null;
 }
 
 function localSessionToSupabaseSession(local: LocalSession): Session {

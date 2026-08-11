@@ -391,10 +391,12 @@ export type UserRole = "admin" | "operador" | "gestor";
 export interface Profile {
   id: string;
   tenantId: string;
+  workspaceId?: string;
   name: string;
   email: string;
   role: UserRole;
   active: boolean;
+  isOwner?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -103,6 +103,8 @@ const MOBILE_NAV: NavItem[] = [
   },
 ];
 
+const ADMIN_NAV: NavItem[] = [{ to: "/usuarios", label: "Usuários", icon: Users }];
+
 const ROUTE_TITLES: Record<string, string> = {
   "/": "Dashboard Operacional",
   "/gestao-frota": "Gestão de Frota",
@@ -503,6 +505,12 @@ function SidebarBody({
         <NavSection title="Operacional" items={OPERACIONAL} collapsed={collapsed} />
         <div className="mx-5 my-2 h-px bg-sidebar-border/80" />
         <CadastrosSection collapsed={collapsed} />
+        {profile?.isOwner && (
+          <>
+            <div className="mx-5 my-2 h-px bg-sidebar-border/80" />
+            <NavSection title="Administração" items={ADMIN_NAV} collapsed={collapsed} compact />
+          </>
+        )}
       </div>
 
       <div className="relative z-10 border-t border-sidebar-border/80 p-3">
@@ -886,6 +894,14 @@ export function AppLayout() {
               currentPath={loc.pathname}
               onNavigate={() => setMobileMenuOpen(false)}
             />
+            {profile?.isOwner && (
+              <MobileMenuSection
+                title="Administração"
+                items={ADMIN_NAV}
+                currentPath={loc.pathname}
+                onNavigate={() => setMobileMenuOpen(false)}
+              />
+            )}
             <button
               type="button"
               onClick={() => {
