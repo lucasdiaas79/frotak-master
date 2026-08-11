@@ -93,7 +93,13 @@ function UsuariosPage() {
 
   async function reloadUsers(token: string) {
     console.info("[USUARIOS] getWorkspaceUserAccess started");
-    const accessData = await getWorkspaceUserAccess({ data: { accessToken: token } });
+    let accessData: WorkspaceUserAccess;
+    try {
+      accessData = await getWorkspaceUserAccess({ data: { accessToken: token } });
+    } catch (accessError) {
+      console.error("[USUARIOS] getWorkspaceUserAccess error", accessError);
+      throw accessError;
+    }
     console.info("[USUARIOS] getWorkspaceUserAccess success", {
       isOwner: accessData.isOwner,
       workspaceName: accessData.workspaceName,
@@ -112,7 +118,13 @@ function UsuariosPage() {
     }
 
     console.info("[USUARIOS] listWorkspaceUsers started");
-    const userRows = await listWorkspaceUsers({ data: { accessToken: token } });
+    let userRows: WorkspaceUser[];
+    try {
+      userRows = await listWorkspaceUsers({ data: { accessToken: token } });
+    } catch (listError) {
+      console.error("[USUARIOS] listWorkspaceUsers error", listError);
+      throw listError;
+    }
     console.info("[USUARIOS] listWorkspaceUsers success", { count: userRows.length });
     setUsers(userRows);
     setRouteState({ status: "success" });
