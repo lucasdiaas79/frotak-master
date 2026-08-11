@@ -36,6 +36,7 @@ export const Route = createFileRoute("/usuarios")({
     ],
   }),
   component: UsuariosPage,
+  errorComponent: UsuariosErrorFallback,
 });
 
 type FormState = {
@@ -78,12 +79,15 @@ function UsuariosPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
 
   async function loadUsers(token: string) {
-    const [accessData, userRows] = await Promise.all([
-      getWorkspaceUserAccess({ data: { accessToken: token } }),
-      listWorkspaceUsers({ data: { accessToken: token } }),
-    ]);
-
+    const accessData = await getWorkspaceUserAccess({ data: { accessToken: token } });
     setAccess(accessData);
+
+    if (accessData.isOwner !== true) {
+      setUsers([]);
+      return;
+    }
+
+    const userRows = await listWorkspaceUsers({ data: { accessToken: token } });
     setUsers(userRows);
   }
 
@@ -108,7 +112,11 @@ function UsuariosPage() {
       } catch (loadError) {
         const message =
           loadError instanceof Error ? loadError.message : "Não foi possível carregar os usuários.";
-        if (active) setError(message);
+        if (active) {
+          setAccess(null);
+          setUsers([]);
+          setError(message);
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -206,11 +214,13 @@ function UsuariosPage() {
     );
   }
 
+  const ownerAccess = access;
+
   return (
     <>
       <PageHeader
         title="Usuários"
-        subtitle={`${access.tenantName || "Workspace"} · ${users.length} usuários`}
+        subtitle={`${ownerAccess.tenantName || "Workspace"} · ${users.length} usuários`}
         actions={
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
@@ -291,7 +301,7 @@ function UsuariosPage() {
             </div>
           </div>
           <div className="rounded-2xl border border-primary/20 bg-primary/10 px-3 py-2 text-[12px] font-bold text-primary">
-            {access.workspaceName || "Workspace atual"}
+            {ownerAccess.workspaceName || "Workspace atual"}
           </div>
         </div>
       </section>
@@ -384,6 +394,27 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <Label className="label-tiny mb-1.5 block">{label}</Label>
       {children}
+    </div>
+  );
+}
+
+function UsuariosErrorFallback() {
+  return (
+    <div className="mx-3 mt-3 md:mx-0 md:mt-0">
+      <div className="premium-card flex min-h-[360px] flex-col items-center justify-center px-6 py-12 text-center">
+        <div className="mb-4 inline-flex size-12 items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/10 text-destructive">
+          <AlertCircle className="size-5" />
+        </div>
+        <h1 className="text-[20px] font-extrabold text-foreground">
+          Nao foi possivel abrir usuarios
+        </h1>
+        <p className="mt-2 max-w-md text-[13px] leading-relaxed text-muted-foreground">
+          Atualize a pagina ou entre novamente pelo login central.
+        </p>
+        <Button asChild className="mt-6 h-9 rounded-2xl text-[12px]">
+          <Link to="/">Voltar ao dashboard</Link>
+        </Button>
+      </div>
     </div>
   );
 }
