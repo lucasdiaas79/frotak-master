@@ -1723,6 +1723,7 @@ function FreightCard({
   draggable?: boolean;
   isOverlay?: boolean;
 }) {
+  const urgent = isUrgentMicroStatus(demand.microStatus);
   const trailerLabel = cardTrailerLabel(demand.trailer);
   const productLabel = cardProductLabel(demand.product);
   const routeLabel = cardRouteLabel(demand.sender, demand.recipient);
@@ -1743,8 +1744,9 @@ function FreightCard({
         drag.isDragging && !isOverlay && "opacity-25",
         isOverlay &&
           "rotate-[1.2deg] scale-[1.025] border-primary/70 shadow-[0_22px_60px_color-mix(in_oklch,var(--color-primary)_25%,transparent)]",
-        CARD_TONE_CLASS[demand.microStatus.tone],
-        "disabled:hover:border-border",
+        urgent
+          ? "animate-pulse border-destructive/55 bg-destructive/[0.04] shadow-[0_0_0_1px_color-mix(in_oklch,var(--color-destructive)_28%,transparent),0_0_18px_color-mix(in_oklch,var(--color-destructive)_18%,transparent)] hover:border-destructive/70 disabled:hover:border-destructive/55"
+          : [CARD_TONE_CLASS[demand.microStatus.tone], "disabled:hover:border-border"],
       )}
     >
       <button type="button" onClick={onOpen} disabled={!onOpen} className="block w-full text-left">
@@ -1770,6 +1772,9 @@ function FreightCard({
           )}
         </div>
       </button>
+      <div className="mt-2 flex min-w-0 items-center">
+        <MicroStatusBadge status={demand.microStatus} />
+      </div>
     </article>
   );
 }
@@ -1785,12 +1790,17 @@ function AvailableDriverCard({
   draggable?: boolean;
   isOverlay?: boolean;
 }) {
+  const status: MicroStatus = {
+    label: isAvailableVehicleSituation(resource.vehicle.situation)
+      ? VEHICLE_SITUATION_LABEL[resource.vehicle.situation]
+      : VEHICLE_STATUS_LABEL[resource.vehicle.status],
+    tone:
+      resource.vehicle.situation === "disponivel-oficina" ||
+      resource.vehicle.status === "disponivel-oficina"
+        ? "maintenance"
+        : "primary",
+  };
   const trailerLabel = cardTrailerLabel(resource.trailer);
-  const cardTone =
-    resource.vehicle.situation === "disponivel-oficina" ||
-    resource.vehicle.status === "disponivel-oficina"
-      ? "maintenance"
-      : "primary";
   const locationLabel = cardLocationLabel(resource.vehicle.city, resource.vehicle.state);
   const drag = useDraggable({
     id: isOverlay ? `overlay-available-${resource.id}` : `available-${resource.id}`,
@@ -1811,7 +1821,7 @@ function AvailableDriverCard({
         drag.isDragging && !isOverlay && "opacity-25",
         isOverlay &&
           "rotate-[1.2deg] scale-[1.025] border-primary/70 shadow-[0_22px_60px_color-mix(in_oklch,var(--color-primary)_25%,transparent)]",
-        CARD_TONE_CLASS[cardTone],
+        CARD_TONE_CLASS[status.tone],
       )}
     >
       <div className="flex min-w-0 items-start justify-between gap-2">
@@ -1834,6 +1844,9 @@ function AvailableDriverCard({
             <GripVertical className="size-3.5" />
           </span>
         )}
+      </div>
+      <div className="mt-2 flex min-w-0 items-center">
+        <MicroStatusBadge status={status} />
       </div>
     </button>
   );
