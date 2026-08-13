@@ -284,19 +284,30 @@ const TABLE_SITUACOES: Array<Exclude<Situacao, "all">> = [
   "sem-vinculo",
 ];
 
+function cardValue(value?: string | null) {
+  return value?.trim() || "—";
+}
+
 function cardTrailerLabel(trailer?: Trailer) {
-  return trailer?.implementModel?.trim() || "Modelo implemento não informado";
+  return cardValue(trailer?.implementModel);
 }
 
 function cardProductLabel(product?: Product) {
-  return product?.name?.trim() || "Produto não informado";
+  return cardValue(product?.name);
+}
+
+function cardLocationLabel(city?: string | null, state?: string | null) {
+  const cityLabel = city?.trim();
+  const stateLabel = state?.trim();
+  if (cityLabel && stateLabel) return `${cityLabel} - ${stateLabel}`;
+  return cardValue(cityLabel || stateLabel);
 }
 
 function cardRouteLabel(sender?: Sender, recipient?: Recipient) {
-  const senderName = sender?.name?.trim();
-  const recipientName = recipient?.name?.trim();
-  if (senderName && recipientName) return `${senderName}/${recipientName}`;
-  return "Remetente/Destinatário não informado";
+  return `${cardLocationLabel(sender?.city, sender?.state)} → ${cardLocationLabel(
+    recipient?.city,
+    recipient?.state,
+  )}`;
 }
 
 function uniqueNonEmpty(values: Array<string | null | undefined>) {
@@ -1703,7 +1714,6 @@ function StageHeader({
 function FreightCard({
   demand,
   onOpen,
-  onOpenStatus,
   draggable,
   isOverlay,
 }: {
@@ -1713,7 +1723,6 @@ function FreightCard({
   draggable?: boolean;
   isOverlay?: boolean;
 }) {
-  const urgent = isUrgentMicroStatus(demand.microStatus);
   const trailerLabel = cardTrailerLabel(demand.trailer);
   const productLabel = cardProductLabel(demand.product);
   const routeLabel = cardRouteLabel(demand.sender, demand.recipient);
@@ -1722,8 +1731,6 @@ function FreightCard({
     data: { kind: "demand", demand },
     disabled: !draggable || isOverlay,
   });
-  const pendingDocuments = demand.workflowFlags?.pendingDocuments ?? [];
-  const manuallyReconciled = Boolean(demand.workflowFlags?.lastManualOverride);
 
   return (
     <article
@@ -1736,73 +1743,33 @@ function FreightCard({
         drag.isDragging && !isOverlay && "opacity-25",
         isOverlay &&
           "rotate-[1.2deg] scale-[1.025] border-primary/70 shadow-[0_22px_60px_color-mix(in_oklch,var(--color-primary)_25%,transparent)]",
-        urgent
-          ? "animate-pulse border-destructive/55 bg-destructive/[0.04] shadow-[0_0_0_1px_color-mix(in_oklch,var(--color-destructive)_28%,transparent),0_0_18px_color-mix(in_oklch,var(--color-destructive)_18%,transparent)] hover:border-destructive/70 disabled:hover:border-destructive/55"
-          : [CARD_TONE_CLASS[demand.microStatus.tone], "disabled:hover:border-border"],
+        CARD_TONE_CLASS[demand.microStatus.tone],
+        "disabled:hover:border-border",
       )}
     >
       <button type="button" onClick={onOpen} disabled={!onOpen} className="block w-full text-left">
-        <div className="min-w-0 space-y-1">
-          <div className="flex min-w-0 items-start justify-between gap-2">
-            <div className="min-w-0">
-              <div className="font-sans text-[13px] font-black text-foreground">{demand.plate}</div>
-              <div className="truncate text-[10.5px] font-semibold text-muted-foreground">
-                {[demand.type, demand.model].filter(Boolean).join(" · ")}
-              </div>
+        <div className="flex min-w-0 items-start justify-between gap-2">
+          <div className="min-w-0 space-y-0.5">
+            <div className="truncate font-sans text-[13px] font-black text-foreground">
+              {cardValue(demand.plate)}
             </div>
-            {draggable && (
-              <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
-                <GripVertical className="size-3.5" />
-              </span>
-            )}
+            <div className="truncate text-[11px] font-medium text-muted-foreground">
+              {trailerLabel}
+            </div>
+            <div className="truncate text-[11px] font-medium text-muted-foreground">
+              {productLabel}
+            </div>
+            <div className="truncate text-[11px] font-medium text-muted-foreground">
+              {routeLabel}
+            </div>
           </div>
-          <div className="truncate text-[11px] font-medium text-muted-foreground">
-            {trailerLabel} · {productLabel}
-          </div>
-        </div>
-
-        <div className="mt-1 truncate text-[11px] font-medium text-muted-foreground">
-          {routeLabel}
-        </div>
-        <div className="mt-1 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2 text-[10.5px] font-semibold text-muted-foreground">
-          <span className="truncate">{demand.driver?.name ?? "Motorista não vinculado"}</span>
-          <span className="shrink-0">
-            {[demand.city, demand.state].filter(Boolean).join("/") || "Sem localização"}
-          </span>
+          {draggable && (
+            <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
+              <GripVertical className="size-3.5" />
+            </span>
+          )}
         </div>
       </button>
-
-      <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1">
-        <MicroStatusBadge status={demand.microStatus} />
-        {manuallyReconciled && (
-          <span className="inline-flex items-center gap-1 rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-0.5 text-[9px] font-bold uppercase text-blue-400">
-            <Clock3 className="size-2.5" />
-            Expedição
-          </span>
-        )}
-        {pendingDocuments.length > 0 && (
-          <span className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[9px] font-bold uppercase text-warning">
-            <AlertTriangle className="size-2.5" />
-            Documento pendente
-          </span>
-        )}
-      </div>
-
-      <div className="mt-1.5 flex min-w-0 items-center justify-end gap-1">
-        <div className="flex shrink-0 items-center gap-1">
-          <button
-            type="button"
-            title="Alterar status"
-            onClick={onOpenStatus}
-            className="inline-flex size-7 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
-          >
-            <RefreshCw className="size-3.5" />
-          </button>
-          <span className="font-sans text-[10px] font-semibold text-muted-foreground">
-            {formatRelative(demand.lastTransitionAt ?? demand.updatedAt)}
-          </span>
-        </div>
-      </div>
     </article>
   );
 }
@@ -1818,17 +1785,13 @@ function AvailableDriverCard({
   draggable?: boolean;
   isOverlay?: boolean;
 }) {
-  const status: MicroStatus = {
-    label: isAvailableVehicleSituation(resource.vehicle.situation)
-      ? VEHICLE_SITUATION_LABEL[resource.vehicle.situation]
-      : VEHICLE_STATUS_LABEL[resource.vehicle.status],
-    tone:
-      resource.vehicle.situation === "disponivel-oficina" ||
-      resource.vehicle.status === "disponivel-oficina"
-        ? "maintenance"
-        : "primary",
-  };
   const trailerLabel = cardTrailerLabel(resource.trailer);
+  const cardTone =
+    resource.vehicle.situation === "disponivel-oficina" ||
+    resource.vehicle.status === "disponivel-oficina"
+      ? "maintenance"
+      : "primary";
+  const locationLabel = cardLocationLabel(resource.vehicle.city, resource.vehicle.state);
   const drag = useDraggable({
     id: isOverlay ? `overlay-available-${resource.id}` : `available-${resource.id}`,
     data: { kind: "available", resource },
@@ -1848,35 +1811,29 @@ function AvailableDriverCard({
         drag.isDragging && !isOverlay && "opacity-25",
         isOverlay &&
           "rotate-[1.2deg] scale-[1.025] border-primary/70 shadow-[0_22px_60px_color-mix(in_oklch,var(--color-primary)_25%,transparent)]",
-        CARD_TONE_CLASS[status.tone],
+        CARD_TONE_CLASS[cardTone],
       )}
     >
       <div className="flex min-w-0 items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="font-sans text-[13px] font-black text-foreground">
-            {resource.vehicle.plate}
+        <div className="min-w-0 space-y-0.5">
+          <div className="truncate font-sans text-[13px] font-black text-foreground">
+            {cardValue(resource.vehicle.plate)}
           </div>
-          <span className="block truncate text-[10.5px] font-medium text-muted-foreground">
-            {[resource.vehicle.type, resource.vehicle.model].filter(Boolean).join(" · ")}
-          </span>
+          <div className="truncate text-[11px] font-medium text-muted-foreground">
+            {cardValue(resource.driver?.name)}
+          </div>
+          <div className="truncate text-[11px] font-medium text-muted-foreground">
+            {trailerLabel}
+          </div>
+          <div className="truncate text-[11px] font-medium text-muted-foreground">
+            {locationLabel}
+          </div>
         </div>
         {draggable && (
           <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
             <GripVertical className="size-3.5" />
           </span>
         )}
-      </div>
-      <div className="mt-1 truncate text-[11px] font-medium text-muted-foreground">
-        {resource.driver?.name ?? "Motorista não vinculado"}
-      </div>
-      <div className="mt-0.5 truncate text-[10.5px] font-medium text-muted-foreground">
-        {trailerLabel} · {resource.cityLabel}
-      </div>
-
-      <div className="mt-2 flex min-w-0 items-center">
-        <span className="min-w-0">
-          <MicroStatusBadge status={status} />
-        </span>
       </div>
     </button>
   );
