@@ -90,7 +90,7 @@ import type {
   FreightTone,
 } from "@/lib/freight-workflow";
 import { useFleet } from "@/lib/store";
-import { vehicleTrailerLabel } from "@/lib/vehicle-trailers";
+import { vehicleTrailerIds, vehicleTrailerLabel } from "@/lib/vehicle-trailers";
 import {
   ALL_STATUSES,
   UFS,
@@ -158,6 +158,8 @@ interface FreightDemand extends Vehicle {
   driver?: Driver;
   trailer?: Trailer;
   trailerLabel: string;
+  implementTypes: string[];
+  implementTypeLabel: string;
   sender?: Sender;
   recipient?: Recipient;
   product?: Product;
@@ -177,6 +179,8 @@ interface AvailableDriverResource {
   vehicle: Vehicle;
   trailer?: Trailer;
   trailerLabel: string;
+  implementTypes: string[];
+  implementTypeLabel: string;
   implementModel: string;
   cityLabel: string;
 }
@@ -295,6 +299,19 @@ function cardRouteLabel(sender?: Sender, recipient?: Recipient) {
   return "Remetente/Destinatário não informado";
 }
 
+function uniqueNonEmpty(values: Array<string | null | undefined>) {
+  return [...new Set(values.map((value) => value?.trim()).filter(Boolean) as string[])];
+}
+
+function trailerImplementTypes(
+  vehicle: Pick<Vehicle, "trailerId" | "trailerIds">,
+  trailersById: Map<string, Trailer>,
+) {
+  return uniqueNonEmpty(
+    vehicleTrailerIds(vehicle).map((id) => trailersById.get(id)?.implementType),
+  );
+}
+
 function GestaoFrotaPage() {
   const navigate = useNavigate();
   const {
@@ -313,6 +330,7 @@ function GestaoFrotaPage() {
   const [search, setSearch] = useState("");
   const [stageF, setStageF] = useState<string>("all");
   const [legacyStatusF, setLegacyStatusF] = useState<string>("all");
+  const [implementTypeF, setImplementTypeF] = useState<string>("all");
   const [ufF, setUfF] = useState<string>("all");
   const [sitF, setSitF] = useState<Situacao>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("pipeline");
@@ -359,6 +377,13 @@ function GestaoFrotaPage() {
   const productsById = useMemo(
     () => new Map(products.map((product) => [product.id, product])),
     [products],
+  );
+  const implementTypeOptions = useMemo(
+    () =>
+      uniqueNonEmpty(trailers.map((trailer) => trailer.implementType)).sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [trailers],
   );
   const activeDriverIds = useMemo(() => {
     return new Set(
@@ -418,7 +443,7 @@ function GestaoFrotaPage() {
                     ? "aprovado"
                     : document.status === "rejeitado"
                       ? "rejeitado"
-                    : "anexado",
+                      : "anexado",
               url: document.url,
               source: document.source,
               mimeType: document.mimeType,
@@ -445,6 +470,7 @@ function GestaoFrotaPage() {
         const macroStage = freightMacroStageById(macroStageOfVehicle(vehicle));
         const driver = vehicle.driverId ? driversById.get(vehicle.driverId) : undefined;
         const linkedTrailer = vehicle.trailerId ? trailersById.get(vehicle.trailerId) : undefined;
+        const implementTypes = trailerImplementTypes(vehicle, trailersById);
         const trailerLabel = vehicleTrailerLabel(vehicle, trailers, "");
         const linkedProduct = vehicle.productId ? productsById.get(vehicle.productId) : undefined;
         return {
@@ -462,6 +488,8 @@ function GestaoFrotaPage() {
           driver,
           trailer: linkedTrailer,
           trailerLabel,
+          implementTypes,
+          implementTypeLabel: implementTypes.join(" + "),
           sender: vehicle.senderId ? sendersById.get(vehicle.senderId) : undefined,
           recipient: vehicle.recipientId ? recipientsById.get(vehicle.recipientId) : undefined,
           product: linkedProduct,
@@ -489,6 +517,7 @@ function GestaoFrotaPage() {
         const driver = vehicle.driverId ? driversById.get(vehicle.driverId) : undefined;
         const linkedTrailer = vehicle.trailerId ? trailersById.get(vehicle.trailerId) : undefined;
         const trailerLabel = vehicleTrailerLabel(vehicle, trailers, "");
+        const implementTypes = trailerImplementTypes(vehicle, trailersById);
         const implementModel = linkedTrailer?.implementModel?.trim() || "";
         return {
           id: vehicle.id,
@@ -496,6 +525,8 @@ function GestaoFrotaPage() {
           vehicle,
           trailer: linkedTrailer,
           trailerLabel,
+          implementTypes,
+          implementTypeLabel: implementTypes.join(" + "),
           implementModel,
           cityLabel: `${vehicle.city}/${vehicle.state}`,
         };
@@ -511,6 +542,7 @@ function GestaoFrotaPage() {
             resource.vehicle.city,
             resource.vehicle.state,
             resource.trailerLabel,
+            resource.implementTypeLabel,
             resource.trailer?.implementModel,
           ]
             .filter(Boolean)
@@ -518,12 +550,15 @@ function GestaoFrotaPage() {
             .toLowerCase();
           if (!haystack.includes(q)) return false;
         }
+        if (implementTypeF !== "all" && !resource.implementTypes.includes(implementTypeF)) {
+          return false;
+        }
         if (ufF !== "all" && resource.vehicle.state !== ufF) return false;
         if (sitF !== "all" && sitF !== "parado") return false;
         return true;
       })
       .sort((a, b) => a.vehicle.plate.localeCompare(b.vehicle.plate));
-  }, [vehicles, driversById, trailersById, trailers, search, stageF, ufF, sitF]);
+  }, [vehicles, driversById, trailersById, trailers, search, stageF, implementTypeF, ufF, sitF]);
 
   const filteredDemands = useMemo(() => {
     return demands.filter((demand) => {
@@ -541,6 +576,7 @@ function GestaoFrotaPage() {
           demand.recipient?.city,
           demand.product?.name,
           demand.trailerLabel,
+          demand.implementTypeLabel,
           demand.trailer?.implementModel,
         ]
           .filter(Boolean)
@@ -550,11 +586,12 @@ function GestaoFrotaPage() {
       }
       if (stageF !== "all" && demand.macroStage.id !== stageF) return false;
       if (legacyStatusF !== "all" && demand.status !== legacyStatusF) return false;
+      if (implementTypeF !== "all" && !demand.implementTypes.includes(implementTypeF)) return false;
       if (ufF !== "all" && demand.state !== ufF) return false;
       if (sitF !== "all" && demand.situacao !== sitF) return false;
       return true;
     });
-  }, [demands, search, stageF, legacyStatusF, ufF, sitF]);
+  }, [demands, search, stageF, legacyStatusF, implementTypeF, ufF, sitF]);
 
   const countsByStage = useMemo(() => {
     return FREIGHT_MACRO_STAGES.reduce(
@@ -593,6 +630,7 @@ function GestaoFrotaPage() {
     setSearch("");
     setStageF("all");
     setLegacyStatusF("all");
+    setImplementTypeF("all");
     setUfF("all");
     setSitF("all");
   };
@@ -722,7 +760,9 @@ function GestaoFrotaPage() {
       return;
     }
     if (!result.ok) return;
-    toast.success("Etapa atualizada", { description: `${demand.code} ? ${result.nextStage.label}` });
+    toast.success("Etapa atualizada", {
+      description: `${demand.code} ? ${result.nextStage.label}`,
+    });
   };
 
   const setFinalCommand = async (demand: FreightDemand, command: FinalCommand) => {
@@ -790,7 +830,10 @@ function GestaoFrotaPage() {
 
   const approveNote = async (demand: FreightDemand) => {
     if (demand.documents.note?.id) {
-      await freightDocumentsService.updateFreightDocumentStatus(demand.documents.note.id, "aprovado");
+      await freightDocumentsService.updateFreightDocumentStatus(
+        demand.documents.note.id,
+        "aprovado",
+      );
     }
     setDocumentsByVehicle((current) => ({
       ...current,
@@ -799,7 +842,7 @@ function GestaoFrotaPage() {
         note: current[demand.id]?.note
           ? { ...current[demand.id]!.note!, status: "aprovado" }
           : {
-            name: "Nota fiscal",
+              name: "Nota fiscal",
               uploadedAt: new Date().toISOString(),
               status: "aprovado",
             },
@@ -811,7 +854,10 @@ function GestaoFrotaPage() {
   const rejectNote = async (demand: FreightDemand) => {
     if (!demand.documents.note?.id) return;
 
-    await freightDocumentsService.updateFreightDocumentStatus(demand.documents.note.id, "rejeitado");
+    await freightDocumentsService.updateFreightDocumentStatus(
+      demand.documents.note.id,
+      "rejeitado",
+    );
     await setVehicleStatus(demand.id, "aguardando-cte", "NOTA_EM_CONFERENCIA");
     await supabase.from("fleet_events").insert({
       vehicle_id: demand.id,
@@ -999,7 +1045,7 @@ function GestaoFrotaPage() {
           </button>
         </div>
 
-        <div className="grid gap-3 xl:grid-cols-[minmax(260px,1.4fr)_minmax(190px,1fr)_minmax(190px,1fr)_110px_minmax(160px,1fr)]">
+        <div className="grid gap-3 xl:grid-cols-[minmax(240px,1.4fr)_minmax(170px,1fr)_minmax(170px,1fr)_minmax(170px,1fr)_100px_minmax(150px,1fr)]">
           <div className="field-shell flex h-10 items-center gap-2 px-3">
             <Search className="size-4 shrink-0 text-primary" />
             <Input
@@ -1033,6 +1079,20 @@ function GestaoFrotaPage() {
               {ALL_STATUSES.map((status) => (
                 <SelectItem key={status} value={status}>
                   {VEHICLE_STATUS_LABEL[status]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={implementTypeF} onValueChange={setImplementTypeF}>
+            <SelectTrigger className="h-10 text-[12.5px]">
+              <SelectValue placeholder="Tipo implemento" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os implementos</SelectItem>
+              {implementTypeOptions.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {type}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1278,9 +1338,7 @@ function GestaoFrotaPage() {
           if (!open && !closingFreight) setCloseFreightDemand(null);
         }}
         title={
-          closeFreightDemand
-            ? `Encerrar frete - ${closeFreightDemand.plate}`
-            : "Encerrar frete"
+          closeFreightDemand ? `Encerrar frete - ${closeFreightDemand.plate}` : "Encerrar frete"
         }
         description="O frete será arquivado antes de o veículo voltar para Disponíveis"
         size="sm"
@@ -2044,11 +2102,7 @@ function GroupFreightWorkspace({
   const groupableResources = availableResources.filter((resource) => resource.driver);
   const normalizedPlateFilter = plateFilter.trim().toLowerCase();
   const implementModelOptions = Array.from(
-    new Set(
-      groupableResources
-        .map((resource) => resource.implementModel.trim())
-        .filter(Boolean),
-    ),
+    new Set(groupableResources.map((resource) => resource.implementModel.trim()).filter(Boolean)),
   ).sort((a, b) => a.localeCompare(b));
   const filteredResources = groupableResources.filter((resource) => {
     if (normalizedPlateFilter) {
@@ -2174,7 +2228,9 @@ function GroupFreightWorkspace({
               <SelectContent>
                 <SelectItem value="all">Todos os estados</SelectItem>
                 {Array.from(
-                  new Set(groupableResources.map((resource) => resource.vehicle.state).filter(Boolean)),
+                  new Set(
+                    groupableResources.map((resource) => resource.vehicle.state).filter(Boolean),
+                  ),
                 )
                   .sort()
                   .map((state) => (
@@ -2468,10 +2524,15 @@ function DemandWorkspace({
                 onAdvance={onAdvance}
                 onFinalCommand={onFinalCommand}
               />
-            </Block>            <Block
+            </Block>
+            <Block
               step="4"
               icon={FileText}
-              title={demand.macroStage.id === "AGUARDANDO_CTE" ? "Conferência da nota / CTE" : "Nota fiscal"}
+              title={
+                demand.macroStage.id === "AGUARDANDO_CTE"
+                  ? "Conferência da nota / CTE"
+                  : "Nota fiscal"
+              }
               subtitle={
                 demand.macroStage.id === "AGUARDANDO_CTE"
                   ? "Confira a nota primeiro. Depois envie o CTE uma única vez."
@@ -2871,7 +2932,9 @@ function AwaitingCtePanel({
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <DocumentBadge demand={demand} kind="note" />
           {note?.uploadedAt ? (
-            <span className="text-[12px] text-muted-foreground">{formatRelative(note.uploadedAt)}</span>
+            <span className="text-[12px] text-muted-foreground">
+              {formatRelative(note.uploadedAt)}
+            </span>
           ) : null}
         </div>
         {noteIsImage ? (
@@ -3138,8 +3201,8 @@ function MicroStatusBadge({ status }: { status: MicroStatus }) {
         critical
           ? "animate-[pulse_0.6s_ease-in-out_infinite] border-destructive/55 bg-destructive/20 text-destructive ring-1 ring-destructive/30"
           : urgent
-          ? "animate-pulse border-destructive/45 bg-destructive/15 text-destructive ring-1 ring-destructive/25"
-          : TONE_CLASS[status.tone],
+            ? "animate-pulse border-destructive/45 bg-destructive/15 text-destructive ring-1 ring-destructive/25"
+            : TONE_CLASS[status.tone],
       )}
     >
       {status.label}
