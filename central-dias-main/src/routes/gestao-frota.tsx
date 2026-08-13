@@ -158,8 +158,8 @@ interface FreightDemand extends Vehicle {
   driver?: Driver;
   trailer?: Trailer;
   trailerLabel: string;
-  implementTypes: string[];
-  implementTypeLabel: string;
+  implementModels: string[];
+  implementModelLabel: string;
   sender?: Sender;
   recipient?: Recipient;
   product?: Product;
@@ -179,8 +179,8 @@ interface AvailableDriverResource {
   vehicle: Vehicle;
   trailer?: Trailer;
   trailerLabel: string;
-  implementTypes: string[];
-  implementTypeLabel: string;
+  implementModels: string[];
+  implementModelLabel: string;
   implementModel: string;
   cityLabel: string;
 }
@@ -314,12 +314,12 @@ function uniqueNonEmpty(values: Array<string | null | undefined>) {
   return [...new Set(values.map((value) => value?.trim()).filter(Boolean) as string[])];
 }
 
-function trailerImplementTypes(
+function trailerImplementModels(
   vehicle: Pick<Vehicle, "trailerId" | "trailerIds">,
   trailersById: Map<string, Trailer>,
 ) {
   return uniqueNonEmpty(
-    vehicleTrailerIds(vehicle).map((id) => trailersById.get(id)?.implementType),
+    vehicleTrailerIds(vehicle).map((id) => trailersById.get(id)?.implementModel),
   );
 }
 
@@ -341,7 +341,7 @@ function GestaoFrotaPage() {
   const [search, setSearch] = useState("");
   const [stageF, setStageF] = useState<string>("all");
   const [legacyStatusF, setLegacyStatusF] = useState<string>("all");
-  const [implementTypeF, setImplementTypeF] = useState<string>("all");
+  const [implementModelF, setImplementModelF] = useState<string>("all");
   const [ufF, setUfF] = useState<string>("all");
   const [sitF, setSitF] = useState<Situacao>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("pipeline");
@@ -389,9 +389,9 @@ function GestaoFrotaPage() {
     () => new Map(products.map((product) => [product.id, product])),
     [products],
   );
-  const implementTypeOptions = useMemo(
+  const implementModelOptions = useMemo(
     () =>
-      uniqueNonEmpty(trailers.map((trailer) => trailer.implementType)).sort((a, b) =>
+      uniqueNonEmpty(trailers.map((trailer) => trailer.implementModel)).sort((a, b) =>
         a.localeCompare(b),
       ),
     [trailers],
@@ -481,7 +481,7 @@ function GestaoFrotaPage() {
         const macroStage = freightMacroStageById(macroStageOfVehicle(vehicle));
         const driver = vehicle.driverId ? driversById.get(vehicle.driverId) : undefined;
         const linkedTrailer = vehicle.trailerId ? trailersById.get(vehicle.trailerId) : undefined;
-        const implementTypes = trailerImplementTypes(vehicle, trailersById);
+        const implementModels = trailerImplementModels(vehicle, trailersById);
         const trailerLabel = vehicleTrailerLabel(vehicle, trailers, "");
         const linkedProduct = vehicle.productId ? productsById.get(vehicle.productId) : undefined;
         return {
@@ -499,8 +499,8 @@ function GestaoFrotaPage() {
           driver,
           trailer: linkedTrailer,
           trailerLabel,
-          implementTypes,
-          implementTypeLabel: implementTypes.join(" + "),
+          implementModels,
+          implementModelLabel: implementModels.join(" + "),
           sender: vehicle.senderId ? sendersById.get(vehicle.senderId) : undefined,
           recipient: vehicle.recipientId ? recipientsById.get(vehicle.recipientId) : undefined,
           product: linkedProduct,
@@ -528,7 +528,7 @@ function GestaoFrotaPage() {
         const driver = vehicle.driverId ? driversById.get(vehicle.driverId) : undefined;
         const linkedTrailer = vehicle.trailerId ? trailersById.get(vehicle.trailerId) : undefined;
         const trailerLabel = vehicleTrailerLabel(vehicle, trailers, "");
-        const implementTypes = trailerImplementTypes(vehicle, trailersById);
+        const implementModels = trailerImplementModels(vehicle, trailersById);
         const implementModel = linkedTrailer?.implementModel?.trim() || "";
         return {
           id: vehicle.id,
@@ -536,8 +536,8 @@ function GestaoFrotaPage() {
           vehicle,
           trailer: linkedTrailer,
           trailerLabel,
-          implementTypes,
-          implementTypeLabel: implementTypes.join(" + "),
+          implementModels,
+          implementModelLabel: implementModels.join(" + "),
           implementModel,
           cityLabel: `${vehicle.city}/${vehicle.state}`,
         };
@@ -553,7 +553,7 @@ function GestaoFrotaPage() {
             resource.vehicle.city,
             resource.vehicle.state,
             resource.trailerLabel,
-            resource.implementTypeLabel,
+            resource.implementModelLabel,
             resource.trailer?.implementModel,
           ]
             .filter(Boolean)
@@ -561,7 +561,7 @@ function GestaoFrotaPage() {
             .toLowerCase();
           if (!haystack.includes(q)) return false;
         }
-        if (implementTypeF !== "all" && !resource.implementTypes.includes(implementTypeF)) {
+        if (implementModelF !== "all" && !resource.implementModels.includes(implementModelF)) {
           return false;
         }
         if (ufF !== "all" && resource.vehicle.state !== ufF) return false;
@@ -569,7 +569,7 @@ function GestaoFrotaPage() {
         return true;
       })
       .sort((a, b) => a.vehicle.plate.localeCompare(b.vehicle.plate));
-  }, [vehicles, driversById, trailersById, trailers, search, stageF, implementTypeF, ufF, sitF]);
+  }, [vehicles, driversById, trailersById, trailers, search, stageF, implementModelF, ufF, sitF]);
 
   const filteredDemands = useMemo(() => {
     return demands.filter((demand) => {
@@ -587,7 +587,7 @@ function GestaoFrotaPage() {
           demand.recipient?.city,
           demand.product?.name,
           demand.trailerLabel,
-          demand.implementTypeLabel,
+          demand.implementModelLabel,
           demand.trailer?.implementModel,
         ]
           .filter(Boolean)
@@ -597,12 +597,14 @@ function GestaoFrotaPage() {
       }
       if (stageF !== "all" && demand.macroStage.id !== stageF) return false;
       if (legacyStatusF !== "all" && demand.status !== legacyStatusF) return false;
-      if (implementTypeF !== "all" && !demand.implementTypes.includes(implementTypeF)) return false;
+      if (implementModelF !== "all" && !demand.implementModels.includes(implementModelF)) {
+        return false;
+      }
       if (ufF !== "all" && demand.state !== ufF) return false;
       if (sitF !== "all" && demand.situacao !== sitF) return false;
       return true;
     });
-  }, [demands, search, stageF, legacyStatusF, implementTypeF, ufF, sitF]);
+  }, [demands, search, stageF, legacyStatusF, implementModelF, ufF, sitF]);
 
   const countsByStage = useMemo(() => {
     return FREIGHT_MACRO_STAGES.reduce(
@@ -641,7 +643,7 @@ function GestaoFrotaPage() {
     setSearch("");
     setStageF("all");
     setLegacyStatusF("all");
-    setImplementTypeF("all");
+    setImplementModelF("all");
     setUfF("all");
     setSitF("all");
   };
@@ -1095,15 +1097,15 @@ function GestaoFrotaPage() {
             </SelectContent>
           </Select>
 
-          <Select value={implementTypeF} onValueChange={setImplementTypeF}>
+          <Select value={implementModelF} onValueChange={setImplementModelF}>
             <SelectTrigger className="h-10 text-[12.5px]">
-              <SelectValue placeholder="Tipo implemento" />
+              <SelectValue placeholder="Modelo implemento" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Todos os implementos</SelectItem>
-              {implementTypeOptions.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {type}
+              <SelectItem value="all">Todos os modelos</SelectItem>
+              {implementModelOptions.map((model) => (
+                <SelectItem key={model} value={model}>
+                  {model}
                 </SelectItem>
               ))}
             </SelectContent>
