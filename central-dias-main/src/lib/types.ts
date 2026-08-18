@@ -83,6 +83,7 @@ export interface VehicleWorkflowFlags {
 
 export interface Driver {
   id: string;
+  authUserId?: string;
   name: string;
   phone: string;
   cnh: string;

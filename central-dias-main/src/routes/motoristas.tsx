@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useFleet } from "@/lib/store";
+import { getCurrentAccessToken } from "@/lib/auth";
+import { createDriverAppAccess } from "@/lib/driverAppUsers";
 import { PageHeader } from "@/components/PageHeader";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/ui/button";
@@ -17,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import type { Driver } from "@/lib/types";
 import { vehicleTrailerLabel } from "@/lib/vehicle-trailers";
-import { Link2, Pencil, Plus, Search, UserRound, UsersRound } from "lucide-react";
+import { KeyRound, Link2, Pencil, Plus, Search, UserRound, UsersRound } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/motoristas")({
@@ -38,6 +40,8 @@ function MotoristasPage() {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Driver | null>(null);
   const [linking, setLinking] = useState<Driver | null>(null);
+  const [appAccessDriver, setAppAccessDriver] = useState<Driver | null>(null);
+  const [temporaryPassword, setTemporaryPassword] = useState("");
   const [linkVehicleId, setLinkVehicleId] = useState<string>("");
 
   const filtered = useMemo(() => {
@@ -71,6 +75,34 @@ function MotoristasPage() {
     toast.success(`${linking.name} vinculado a ${veh.plate}`);
     setLinking(null);
     setLinkVehicleId("");
+  };
+
+  const onCreateAppAccess = async () => {
+    if (!appAccessDriver) return;
+    if (!appAccessDriver.phone.trim()) return toast.error("Informe o telefone do motorista");
+    if (temporaryPassword.trim().length < 6)
+      return toast.error("Informe uma senha com pelo menos 6 caracteres");
+
+    try {
+      const accessToken = await getCurrentAccessToken();
+      if (!accessToken) return toast.error("Sessao expirada. Entre novamente.");
+
+      await createDriverAppAccess({
+        data: {
+          accessToken,
+          driverId: appAccessDriver.id,
+          phone: appAccessDriver.phone,
+          temporaryPassword,
+        },
+      });
+
+      toast.success("Acesso do app motorista criado");
+      setAppAccessDriver(null);
+      setTemporaryPassword("");
+      void useFleet.getState().loadAll();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nao foi possivel criar acesso");
+    }
   };
 
   const availableVehicles = vehicles.filter((v) => !v.driverId || v.driverId === linking?.id);
@@ -159,9 +191,21 @@ function MotoristasPage() {
                     <StatusPill active={d.active} />
                   </td>
                   <td className="font-sans text-[12.5px]">{vehiclePlate(d.vehicleId)}</td>
-                  <td className="font-sans text-[12.5px] text-muted-foreground">{vehicleTrailers(d.vehicleId)}</td>
+                  <td className="font-sans text-[12.5px] text-muted-foreground">
+                    {vehicleTrailers(d.vehicleId)}
+                  </td>
                   <td>
                     <div className="flex justify-end gap-1">
+                      <button
+                        onClick={() => {
+                          setAppAccessDriver(d);
+                          setTemporaryPassword("");
+                        }}
+                        className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+                        title={d.authUserId ? "Atualizar acesso do app" : "Criar acesso do app"}
+                      >
+                        <KeyRound className="size-3.5" />
+                      </button>
                       <button
                         onClick={() => {
                           setLinking(d);
@@ -261,6 +305,57 @@ function MotoristasPage() {
       </Modal>
 
       <Modal
+        open={!!appAccessDriver}
+        onOpenChange={(o) => !o && setAppAccessDriver(null)}
+        title={`Acesso app motorista`}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9"
+              onClick={() => setAppAccessDriver(null)}
+            >
+              Cancelar
+            </Button>
+            <Button size="sm" className="h-9" onClick={onCreateAppAccess}>
+              Salvar acesso
+            </Button>
+          </>
+        }
+      >
+        {appAccessDriver && (
+          <div className="grid gap-3">
+            <div className="rounded-2xl border border-border/70 bg-surface/60 px-4 py-3 text-[12px] text-muted-foreground">
+              O login será feito pelo telefone cadastrado. O motorista não recebe acesso
+              administrativo ao sistema cliente.
+            </div>
+            <div>
+              <Label className="label-tiny mb-1.5 block">Motorista</Label>
+              <Input value={appAccessDriver.name} readOnly className="h-9 font-sans" />
+            </div>
+            <div>
+              <Label className="label-tiny mb-1.5 block">Telefone de login</Label>
+              <Input
+                value={appAccessDriver.phone}
+                onChange={(e) => setAppAccessDriver({ ...appAccessDriver, phone: e.target.value })}
+                className="h-9 font-sans"
+              />
+            </div>
+            <div>
+              <Label className="label-tiny mb-1.5 block">Senha temporária</Label>
+              <Input
+                type="password"
+                value={temporaryPassword}
+                onChange={(e) => setTemporaryPassword(e.target.value)}
+                className="h-9 font-sans"
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
         open={!!linking}
         onOpenChange={(o) => !o && setLinking(null)}
         title={`Vincular ${linking?.name ?? ""} a um veículo`}
@@ -314,4 +409,3 @@ function StatusPill({ active }: { active: boolean }) {
     </span>
   );
 }
-

@@ -66,6 +66,7 @@ interface VehicleRow {
 
 interface DriverRow {
   id: string;
+  auth_user_id?: string | null;
   name: string;
   phone?: string | null;
   cnh?: string | null;
@@ -238,6 +239,7 @@ export function vehicleToRow(vehicle: Partial<Vehicle>) {
 export function driverFromRow(row: DriverRow): Driver {
   return {
     id: row.id,
+    authUserId: nil(row.auth_user_id),
     name: row.name,
     phone: row.phone ?? "",
     cnh: row.cnh ?? "",
@@ -253,6 +255,7 @@ export function driverFromRow(row: DriverRow): Driver {
 export function driverToRow(driver: Partial<Driver>) {
   return {
     id: driver.id || undefined,
+    auth_user_id: driver.authUserId ?? null,
     name: driver.name,
     phone: driver.phone ?? null,
     cnh: driver.cnh ?? null,
