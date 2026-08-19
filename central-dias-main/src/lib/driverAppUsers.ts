@@ -5,8 +5,9 @@ export type CreateDriverAppAccessInput = {
   accessToken: string;
   driverId: string;
   phone: string;
-  temporaryPassword: string;
 };
+
+const DRIVER_TEMPORARY_PASSWORD = "1234";
 
 function readEnv(name: string) {
   const value = process.env[name];
@@ -108,17 +109,13 @@ export const createDriverAppAccess = createServerFn({ method: "POST" })
 
     const phone = normalizePhone(data.phone || driver.phone || "");
     if (phone.length < 12) throw new Error("Telefone invalido para login do motorista.");
-    if (!data.temporaryPassword || data.temporaryPassword.length < 6) {
-      throw new Error("Senha temporaria invalida.");
-    }
-
     let authUserId = driver.auth_user_id;
     if (!authUserId) {
       const existing = await findAuthUserByPhone(supabase, phone);
       if (existing) {
         authUserId = existing.id;
         const { error } = await supabase.auth.admin.updateUserById(existing.id, {
-          password: data.temporaryPassword,
+          password: DRIVER_TEMPORARY_PASSWORD,
           phone_confirm: true,
           user_metadata: { full_name: driver.name, app_role: "driver" },
         });
@@ -126,7 +123,7 @@ export const createDriverAppAccess = createServerFn({ method: "POST" })
       } else {
         const { data: created, error } = await supabase.auth.admin.createUser({
           phone,
-          password: data.temporaryPassword,
+          password: DRIVER_TEMPORARY_PASSWORD,
           phone_confirm: true,
           user_metadata: { full_name: driver.name, app_role: "driver" },
         });

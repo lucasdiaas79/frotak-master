@@ -41,7 +41,6 @@ function MotoristasPage() {
   const [editing, setEditing] = useState<Driver | null>(null);
   const [linking, setLinking] = useState<Driver | null>(null);
   const [appAccessDriver, setAppAccessDriver] = useState<Driver | null>(null);
-  const [temporaryPassword, setTemporaryPassword] = useState("");
   const [linkVehicleId, setLinkVehicleId] = useState<string>("");
 
   const filtered = useMemo(() => {
@@ -80,8 +79,6 @@ function MotoristasPage() {
   const onCreateAppAccess = async () => {
     if (!appAccessDriver) return;
     if (!appAccessDriver.phone.trim()) return toast.error("Informe o telefone do motorista");
-    if (temporaryPassword.trim().length < 6)
-      return toast.error("Informe uma senha com pelo menos 6 caracteres");
 
     try {
       const accessToken = await getCurrentAccessToken();
@@ -92,13 +89,11 @@ function MotoristasPage() {
           accessToken,
           driverId: appAccessDriver.id,
           phone: appAccessDriver.phone,
-          temporaryPassword,
         },
       });
 
       toast.success("Acesso do app motorista criado");
       setAppAccessDriver(null);
-      setTemporaryPassword("");
       void useFleet.getState().loadAll();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Nao foi possivel criar acesso");
@@ -199,7 +194,6 @@ function MotoristasPage() {
                       <button
                         onClick={() => {
                           setAppAccessDriver(d);
-                          setTemporaryPassword("");
                         }}
                         className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
                         title={d.authUserId ? "Atualizar acesso do app" : "Criar acesso do app"}
@@ -328,7 +322,7 @@ function MotoristasPage() {
           <div className="grid gap-3">
             <div className="rounded-2xl border border-border/70 bg-surface/60 px-4 py-3 text-[12px] text-muted-foreground">
               O login será feito pelo telefone cadastrado. O motorista não recebe acesso
-              administrativo ao sistema cliente.
+              administrativo ao sistema cliente. A senha temporária do primeiro acesso é 1234.
             </div>
             <div>
               <Label className="label-tiny mb-1.5 block">Motorista</Label>
@@ -339,15 +333,6 @@ function MotoristasPage() {
               <Input
                 value={appAccessDriver.phone}
                 onChange={(e) => setAppAccessDriver({ ...appAccessDriver, phone: e.target.value })}
-                className="h-9 font-sans"
-              />
-            </div>
-            <div>
-              <Label className="label-tiny mb-1.5 block">Senha temporária</Label>
-              <Input
-                type="password"
-                value={temporaryPassword}
-                onChange={(e) => setTemporaryPassword(e.target.value)}
                 className="h-9 font-sans"
               />
             </div>
