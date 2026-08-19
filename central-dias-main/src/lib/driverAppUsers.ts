@@ -38,6 +38,10 @@ function normalizePhone(value: string) {
   return digits.startsWith("55") ? `+${digits}` : `+55${digits}`;
 }
 
+function driverLoginEmail(phone: string) {
+  return `${phone.replace(/\D/g, "")}@driver.frotak.local`;
+}
+
 async function assertOwnerCanManageDriver(input: {
   supabase: ReturnType<typeof getSupabaseAdmin>;
   accessToken: string;
@@ -88,10 +92,11 @@ async function assertOwnerCanManageDriver(input: {
 }
 
 async function findAuthUserByPhone(supabase: ReturnType<typeof getSupabaseAdmin>, phone: string) {
+  const email = driverLoginEmail(phone);
   for (let page = 1; page <= 10; page += 1) {
     const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 });
     if (error) throw error;
-    const found = data.users.find((user) => user.phone === phone);
+    const found = data.users.find((user) => user.phone === phone || user.email === email);
     if (found || data.users.length < 1000) return found ?? null;
   }
   return null;
@@ -109,34 +114,36 @@ export const createDriverAppAccess = createServerFn({ method: "POST" })
 
     const phone = normalizePhone(data.phone || driver.phone || "");
     if (phone.length < 12) throw new Error("Telefone invalido para login do motorista.");
+    const email = driverLoginEmail(phone);
+
     let authUserId = driver.auth_user_id;
-    if (!authUserId) {
-      const existing = await findAuthUserByPhone(supabase, phone);
-      if (existing) {
-        authUserId = existing.id;
-        const { error } = await supabase.auth.admin.updateUserById(existing.id, {
-          password: DRIVER_TEMPORARY_PASSWORD,
-          phone_confirm: true,
-          user_metadata: { full_name: driver.name, app_role: "driver" },
-        });
-        if (error) throw error;
-      } else {
-        const { data: created, error } = await supabase.auth.admin.createUser({
-          phone,
-          password: DRIVER_TEMPORARY_PASSWORD,
-          phone_confirm: true,
-          user_metadata: { full_name: driver.name, app_role: "driver" },
-        });
-        if (error) throw error;
-        authUserId = created.user.id;
-      }
+    const existing = authUserId ? null : await findAuthUserByPhone(supabase, phone);
+
+    if (authUserId || existing) {
+      authUserId = authUserId || existing!.id;
+      const { error } = await supabase.auth.admin.updateUserById(authUserId, {
+        email,
+        password: DRIVER_TEMPORARY_PASSWORD,
+        email_confirm: true,
+        user_metadata: { full_name: driver.name, app_role: "driver", phone },
+      });
+      if (error) throw error;
+    } else {
+      const { data: created, error } = await supabase.auth.admin.createUser({
+        email,
+        password: DRIVER_TEMPORARY_PASSWORD,
+        email_confirm: true,
+        user_metadata: { full_name: driver.name, app_role: "driver", phone },
+      });
+      if (error) throw error;
+      authUserId = created.user.id;
     }
 
     const { error: profileError } = await supabase.from("profiles").upsert({
       id: authUserId,
       full_name: driver.name,
       phone,
-      email: `${phone.replace(/\D/g, "")}@driver.frotak.local`,
+      email,
       active: true,
       must_change_password: true,
     });
