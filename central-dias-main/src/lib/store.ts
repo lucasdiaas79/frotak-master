@@ -41,7 +41,7 @@ interface FleetState {
   subscribeRealtime: () => () => void;
   upsertVehicle: (v: Vehicle) => Promise<Vehicle>;
   deleteVehicle: (id: string) => Promise<void>;
-  upsertDriver: (d: Driver) => Promise<void>;
+  upsertDriver: (d: Driver) => Promise<Driver>;
   deleteDriver: (id: string) => Promise<void>;
   upsertTrailer: (t: Trailer) => Promise<void>;
   deleteTrailer: (id: string) => Promise<void>;
@@ -241,7 +241,7 @@ export const useFleet = create<FleetState>((set, get) => ({
         persistLocalState(next);
         return next;
       });
-      return;
+      return saved;
     }
     const saved = await driverService.upsertDriver({ ...d, id: dbId(d.id) });
     set((s) => ({
@@ -249,6 +249,7 @@ export const useFleet = create<FleetState>((set, get) => ({
         ? s.drivers.map((x) => (x.id === saved.id ? saved : x))
         : [...s.drivers, saved].sort((a, b) => a.name.localeCompare(b.name)),
     }));
+    return saved;
   },
 
   deleteDriver: async (id) => {

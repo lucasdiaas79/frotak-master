@@ -7,7 +7,7 @@ export type CreateDriverAppAccessInput = {
   phone: string;
 };
 
-const DRIVER_TEMPORARY_PASSWORD = "1234";
+const DRIVER_TEMPORARY_PASSWORD = "Frotak1234!";
 
 function readEnv(name: string) {
   const value = process.env[name];

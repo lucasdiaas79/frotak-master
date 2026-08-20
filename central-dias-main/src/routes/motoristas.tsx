@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import type { Driver } from "@/lib/types";
 import { vehicleTrailerLabel } from "@/lib/vehicle-trailers";
-import { KeyRound, Link2, Pencil, Plus, Search, UserRound, UsersRound } from "lucide-react";
+import { Link2, Pencil, Plus, Search, UserRound, UsersRound } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/motoristas")({
@@ -40,8 +40,8 @@ function MotoristasPage() {
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Driver | null>(null);
   const [linking, setLinking] = useState<Driver | null>(null);
-  const [appAccessDriver, setAppAccessDriver] = useState<Driver | null>(null);
   const [linkVehicleId, setLinkVehicleId] = useState<string>("");
+  const [saving, setSaving] = useState(false);
 
   const filtered = useMemo(() => {
     return drivers.filter((d) => {
@@ -58,12 +58,39 @@ function MotoristasPage() {
     return vehicle ? vehicleTrailerLabel(vehicle, trailers) : "-";
   };
 
-  const onSave = () => {
-    if (!editing) return;
+  const onSave = async () => {
+    if (!editing || saving) return;
     if (!editing.name.trim()) return toast.error("Informe o nome");
-    upsertDriver({ ...editing, id: editing.id || `d${Date.now()}` });
-    toast.success("Motorista salvo");
-    setEditing(null);
+
+    try {
+      setSaving(true);
+      const saved = await upsertDriver({ ...editing, id: editing.id || `d${Date.now()}` });
+
+      if (saved.phone.trim()) {
+        const accessToken = await getCurrentAccessToken();
+        if (!accessToken) {
+          toast.error("Motorista salvo, mas a sessao expirou antes de liberar o app.");
+        } else {
+          await createDriverAppAccess({
+            data: {
+              accessToken,
+              driverId: saved.id,
+              phone: saved.phone,
+            },
+          });
+          toast.success("Motorista salvo. Login do app ativo com senha temporaria 1234.");
+          void useFleet.getState().loadAll();
+        }
+      } else {
+        toast.success("Motorista salvo");
+      }
+
+      setEditing(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nao foi possivel salvar motorista");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const onLink = () => {
@@ -74,30 +101,6 @@ function MotoristasPage() {
     toast.success(`${linking.name} vinculado a ${veh.plate}`);
     setLinking(null);
     setLinkVehicleId("");
-  };
-
-  const onCreateAppAccess = async () => {
-    if (!appAccessDriver) return;
-    if (!appAccessDriver.phone.trim()) return toast.error("Informe o telefone do motorista");
-
-    try {
-      const accessToken = await getCurrentAccessToken();
-      if (!accessToken) return toast.error("Sessao expirada. Entre novamente.");
-
-      await createDriverAppAccess({
-        data: {
-          accessToken,
-          driverId: appAccessDriver.id,
-          phone: appAccessDriver.phone,
-        },
-      });
-
-      toast.success("Acesso do app motorista criado");
-      setAppAccessDriver(null);
-      void useFleet.getState().loadAll();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Nao foi possivel criar acesso");
-    }
   };
 
   const availableVehicles = vehicles.filter((v) => !v.driverId || v.driverId === linking?.id);
@@ -193,15 +196,6 @@ function MotoristasPage() {
                     <div className="flex justify-end gap-1">
                       <button
                         onClick={() => {
-                          setAppAccessDriver(d);
-                        }}
-                        className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
-                        title={d.authUserId ? "Atualizar acesso do app" : "Criar acesso do app"}
-                      >
-                        <KeyRound className="size-3.5" />
-                      </button>
-                      <button
-                        onClick={() => {
                           setLinking(d);
                           setLinkVehicleId(d.vehicleId ?? "");
                         }}
@@ -250,8 +244,8 @@ function MotoristasPage() {
             <Button variant="ghost" size="sm" className="h-9" onClick={() => setEditing(null)}>
               Cancelar
             </Button>
-            <Button size="sm" className="h-9" onClick={onSave}>
-              Salvar
+            <Button size="sm" className="h-9" onClick={onSave} disabled={saving}>
+              {saving ? "Salvando..." : "Salvar"}
             </Button>
           </>
         }
@@ -292,48 +286,6 @@ function MotoristasPage() {
               <Switch
                 checked={editing.active}
                 onCheckedChange={(v) => setEditing({ ...editing, active: v })}
-              />
-            </div>
-          </div>
-        )}
-      </Modal>
-
-      <Modal
-        open={!!appAccessDriver}
-        onOpenChange={(o) => !o && setAppAccessDriver(null)}
-        title={`Acesso app motorista`}
-        footer={
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9"
-              onClick={() => setAppAccessDriver(null)}
-            >
-              Cancelar
-            </Button>
-            <Button size="sm" className="h-9" onClick={onCreateAppAccess}>
-              Salvar acesso
-            </Button>
-          </>
-        }
-      >
-        {appAccessDriver && (
-          <div className="grid gap-3">
-            <div className="rounded-2xl border border-border/70 bg-surface/60 px-4 py-3 text-[12px] text-muted-foreground">
-              O login será feito pelo telefone cadastrado. O motorista não recebe acesso
-              administrativo ao sistema cliente. A senha temporária do primeiro acesso é 1234.
-            </div>
-            <div>
-              <Label className="label-tiny mb-1.5 block">Motorista</Label>
-              <Input value={appAccessDriver.name} readOnly className="h-9 font-sans" />
-            </div>
-            <div>
-              <Label className="label-tiny mb-1.5 block">Telefone de login</Label>
-              <Input
-                value={appAccessDriver.phone}
-                onChange={(e) => setAppAccessDriver({ ...appAccessDriver, phone: e.target.value })}
-                className="h-9 font-sans"
               />
             </div>
           </div>
