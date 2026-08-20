@@ -369,6 +369,43 @@ export interface FreightHistory {
   updatedAt?: string;
 }
 
+export type FreightExpenseCategory =
+  | "diesel_s10"
+  | "arla"
+  | "pedagio"
+  | "alimentacao"
+  | "estacionamento"
+  | "manutencao"
+  | "outros";
+
+export const FREIGHT_EXPENSE_CATEGORY_LABEL: Record<FreightExpenseCategory, string> = {
+  diesel_s10: "Diesel S10",
+  arla: "Arla",
+  pedagio: "Pedagio",
+  alimentacao: "Alimentacao",
+  estacionamento: "Estacionamento",
+  manutencao: "Manutencao",
+  outros: "Outros",
+};
+
+export interface FreightExpense {
+  id: string;
+  tenantId?: string;
+  freightId: string;
+  vehicleId?: string;
+  driverId?: string;
+  fuelRecordId?: string;
+  category: FreightExpenseCategory;
+  description: string;
+  amount: number;
+  notes?: string;
+  source: "driver_app" | "operator" | "system";
+  recordedBy?: string;
+  recordedAt: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export type FuelType = "diesel_s10" | "arla";
 
 export const FUEL_TYPE_LABEL: Record<FuelType, string> = {

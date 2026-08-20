@@ -17,6 +17,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
+  TrendingUp,
   Truck,
   Users,
   X,
@@ -62,6 +63,7 @@ const OPERACIONAL: NavItem[] = [
   { to: "/gestao-frota", label: "Gestão de Frota", icon: ListChecks },
   { to: "/historicos", label: "Históricos", icon: History },
   { to: "/abastecimentos", label: "Abastecimentos", icon: Fuel },
+  { to: "/lucros-despesas", label: "Lucros e Despesas", icon: TrendingUp },
   { to: "/mapa", label: "Mapa da Frota", icon: MapIcon },
 ];
 
@@ -90,7 +92,7 @@ const MOBILE_NAV: NavItem[] = [
     to: "/historicos",
     label: "Históricos",
     icon: History,
-    activePaths: ["/historicos", "/abastecimentos"],
+    activePaths: ["/historicos", "/abastecimentos", "/lucros-despesas"],
   },
   { to: "/mapa", label: "Mapa", icon: MapIcon },
   {
@@ -114,6 +116,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/gestao-frota": "Gestão de Frota",
   "/historicos": "Históricos",
   "/abastecimentos": "Abastecimentos",
+  "/lucros-despesas": "Lucros e Despesas",
   "/mapa": "Mapa da Frota",
   "/vinculacao": "Despacho Operacional",
   "/veiculos": "Veículos",
@@ -131,6 +134,7 @@ const ROUTE_GROUPS: Record<string, string> = {
   "/gestao-frota": "Operacional",
   "/historicos": "Operacional",
   "/abastecimentos": "Operacional",
+  "/lucros-despesas": "Operacional",
   "/mapa": "Operacional",
   "/vinculacao": "Operacional",
   "/veiculos": "Cadastros",

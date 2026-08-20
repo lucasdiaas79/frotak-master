@@ -192,6 +192,7 @@ interface FreightFormState {
   senderId: string;
   recipientId: string;
   productId: string;
+  freightValue: string;
   observations: string;
 }
 
@@ -199,6 +200,7 @@ interface GroupFreightFormState {
   senderId: string;
   recipientId: string;
   productId: string;
+  freightValue: string;
   observations: string;
   vehicleIds: string[];
 }
@@ -210,6 +212,7 @@ const EMPTY_FORM: FreightFormState = {
   senderId: "",
   recipientId: "",
   productId: "",
+  freightValue: "",
   observations: "",
 };
 
@@ -217,6 +220,7 @@ const EMPTY_GROUP_FORM: GroupFreightFormState = {
   senderId: "",
   recipientId: "",
   productId: "",
+  freightValue: "",
   observations: "",
   vehicleIds: [],
 };
@@ -284,6 +288,15 @@ const TABLE_SITUACOES: Array<Exclude<Situacao, "all">> = [
   "sem-vinculo",
 ];
 
+const moneyFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+function formatMoney(value?: number) {
+  return typeof value === "number" && Number.isFinite(value) ? moneyFormatter.format(value) : "-";
+}
+
 function cardValue(value?: string | null) {
   return value?.trim() || "—";
 }
@@ -312,6 +325,14 @@ function cardRouteLabel(sender?: Sender, recipient?: Recipient) {
 
 function uniqueNonEmpty(values: Array<string | null | undefined>) {
   return [...new Set(values.map((value) => value?.trim()).filter(Boolean) as string[])];
+}
+
+function parseFreightValue(value: string) {
+  const cleaned = value.replace(/[^\d,.-]/g, "").trim();
+  if (!cleaned) return undefined;
+  const normalized = cleaned.includes(",") ? cleaned.replace(/\./g, "").replace(",", ".") : cleaned;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function trailerImplementModels(
@@ -684,6 +705,7 @@ function GestaoFrotaPage() {
         senderId: seed?.senderId ?? "",
         recipientId: seed?.recipientId ?? "",
         productId: seed?.productId ?? "",
+        freightValue: seed?.freightValue ?? "",
         observations: seed?.observations ?? "",
         vehicleIds: seed?.vehicleId ? [seed.vehicleId] : [],
       });
@@ -928,6 +950,7 @@ function GestaoFrotaPage() {
       senderId: form.senderId,
       recipientId: form.recipientId,
       productId: form.productId,
+      freightValue: parseFreightValue(form.freightValue),
       link,
       setVehicleStatus,
     });
@@ -985,6 +1008,7 @@ function GestaoFrotaPage() {
         senderId: groupForm.senderId,
         recipientId: groupForm.recipientId,
         productId: groupForm.productId,
+        freightValue: parseFreightValue(groupForm.freightValue),
         link,
         setVehicleStatus,
       });
@@ -2105,6 +2129,7 @@ function GroupFreightWorkspace({
   const sender = senders.find((item) => item.id === form.senderId);
   const recipient = recipients.find((item) => item.id === form.recipientId);
   const product = products.find((item) => item.id === form.productId);
+  const freightValue = parseFreightValue(form.freightValue);
   const validCreate =
     !!form.senderId && !!form.recipientId && !!form.productId && form.vehicleIds.length > 0;
 
@@ -2154,6 +2179,15 @@ function GroupFreightWorkspace({
                 .filter((item) => item.active)
                 .map((item) => ({ value: item.id, label: item.name }))}
             />
+            <Field label="Valor do frete">
+              <Input
+                value={form.freightValue}
+                onChange={(event) => setForm({ ...form, freightValue: event.target.value })}
+                placeholder="Ex.: 12500,00"
+                inputMode="decimal"
+                className="h-11"
+              />
+            </Field>
             <Field label="Observações" className="md:col-span-2">
               <Textarea
                 value={form.observations}
@@ -2276,6 +2310,7 @@ function GroupFreightWorkspace({
             value={recipient ? `${recipient.city}/${recipient.state}` : "-"}
           />
           <SummaryRow label="Produto" value={product?.name ?? "-"} />
+          <SummaryRow label="Valor" value={formatMoney(freightValue)} />
           <CheckLine ok={selectedResources.length > 0} label="Caminhões selecionados" />
           <CheckLine ok={!!sender} label="Remetente ativo" />
           <CheckLine ok={!!recipient} label="Destinatário ativo" />
@@ -2400,6 +2435,17 @@ function DemandWorkspace({
                 <div className="rounded-2xl border border-dashed border-border bg-surface-2/45 px-3 py-3 text-[12px] text-muted-foreground">
                   Gerado a partir do veículo vinculado
                 </div>
+              </Field>
+              <Field label="Valor do frete">
+                <Input
+                  value={currentForm.freightValue}
+                  onChange={(event) =>
+                    setForm({ ...currentForm, freightValue: event.target.value })
+                  }
+                  placeholder="Ex.: 12500,00"
+                  inputMode="decimal"
+                  className="h-11"
+                />
               </Field>
               <Field label="Observações" className="md:col-span-2">
                 <Textarea
@@ -2608,6 +2654,7 @@ function FreightSummaryPanel({
   const sender = senders.find((item) => item.id === form.senderId);
   const recipient = recipients.find((item) => item.id === form.recipientId);
   const product = products.find((item) => item.id === form.productId);
+  const freightValue = parseFreightValue(form.freightValue);
   const next = demand ? nextFreightStage(demand.stage.id) : null;
   const summaryDriver = mode === "create" ? driver : demand?.driver;
   const whatsappUrl = buildWhatsAppUrl(summaryDriver?.phone);
@@ -2631,6 +2678,7 @@ function FreightSummaryPanel({
               value={recipient ? `${recipient.city}/${recipient.state}` : "-"}
             />
             <SummaryRow label="Produto" value={product?.name ?? "-"} />
+            <SummaryRow label="Valor" value={formatMoney(freightValue)} />
             <CheckLine ok={!!vehicle} label="Veículo selecionado" />
             <CheckLine ok={!!driver} label="Motorista disponível selecionado" />
             <CheckLine ok={!!sender} label="Remetente ativo" />
@@ -2655,6 +2703,7 @@ function FreightSummaryPanel({
               value={demand.recipient ? `${demand.recipient.city}/${demand.recipient.state}` : "-"}
             />
             <SummaryRow label="Produto" value={demand.product?.name ?? "-"} />
+            <SummaryRow label="Valor" value={formatMoney(demand.freightValue)} />
             <SummaryRow label="Nota" value={noteLabel(demand)} />
             <SummaryRow label="CTE" value={cteLabel(demand)} />
             <div className="border-t border-border/80 pt-3">

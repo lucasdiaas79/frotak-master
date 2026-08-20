@@ -1,8 +1,4 @@
-import {
-  freightStageById,
-  nextFreightStage,
-  type FreightStageId,
-} from "@/lib/freight-workflow";
+import { freightStageById, nextFreightStage, type FreightStageId } from "@/lib/freight-workflow";
 import type { Driver, VehicleFreightStage, VehicleStatus } from "@/lib/types";
 
 type FinalCommand = "RETORNO_SOLICITADO" | "PRONTO_NOVO_FRETE";
@@ -95,6 +91,7 @@ export async function createFreightOperation(input: {
   senderId: string;
   recipientId: string;
   productId: string;
+  freightValue?: number;
   link: (
     vehicleId: string,
     driverId?: string,
@@ -118,6 +115,7 @@ export async function createFreightOperation(input: {
     senderId: input.senderId,
     recipientId: input.recipientId,
     productId: input.productId,
+    freightValue: input.freightValue,
   });
   await input.setVehicleStatus(input.vehicleId, "aguardando-motorista", "DISPONIVEL");
 }

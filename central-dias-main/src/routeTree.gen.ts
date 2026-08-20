@@ -16,6 +16,7 @@ import { Route as RemetentesRouteImport } from './routes/remetentes'
 import { Route as ProdutosRouteImport } from './routes/produtos'
 import { Route as MotoristasRouteImport } from './routes/motoristas'
 import { Route as MapaRouteImport } from './routes/mapa'
+import { Route as LucrosDespesasRouteImport } from './routes/lucros-despesas'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HistoricosRouteImport } from './routes/historicos'
 import { Route as GestaoFrotaRouteImport } from './routes/gestao-frota'
@@ -58,6 +59,11 @@ const MotoristasRoute = MotoristasRouteImport.update({
 const MapaRoute = MapaRouteImport.update({
   id: '/mapa',
   path: '/mapa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LucrosDespesasRoute = LucrosDespesasRouteImport.update({
+  id: '/lucros-despesas',
+  path: '/lucros-despesas',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/gestao-frota': typeof GestaoFrotaRoute
   '/historicos': typeof HistoricosRoute
   '/login': typeof LoginRoute
+  '/lucros-despesas': typeof LucrosDespesasRoute
   '/mapa': typeof MapaRoute
   '/motoristas': typeof MotoristasRoute
   '/produtos': typeof ProdutosRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByTo {
   '/gestao-frota': typeof GestaoFrotaRoute
   '/historicos': typeof HistoricosRoute
   '/login': typeof LoginRoute
+  '/lucros-despesas': typeof LucrosDespesasRoute
   '/mapa': typeof MapaRoute
   '/motoristas': typeof MotoristasRoute
   '/produtos': typeof ProdutosRoute
@@ -145,6 +153,7 @@ export interface FileRoutesById {
   '/gestao-frota': typeof GestaoFrotaRoute
   '/historicos': typeof HistoricosRoute
   '/login': typeof LoginRoute
+  '/lucros-despesas': typeof LucrosDespesasRoute
   '/mapa': typeof MapaRoute
   '/motoristas': typeof MotoristasRoute
   '/produtos': typeof ProdutosRoute
@@ -164,6 +173,7 @@ export interface FileRouteTypes {
     | '/gestao-frota'
     | '/historicos'
     | '/login'
+    | '/lucros-despesas'
     | '/mapa'
     | '/motoristas'
     | '/produtos'
@@ -181,6 +191,7 @@ export interface FileRouteTypes {
     | '/gestao-frota'
     | '/historicos'
     | '/login'
+    | '/lucros-despesas'
     | '/mapa'
     | '/motoristas'
     | '/produtos'
@@ -198,6 +209,7 @@ export interface FileRouteTypes {
     | '/gestao-frota'
     | '/historicos'
     | '/login'
+    | '/lucros-despesas'
     | '/mapa'
     | '/motoristas'
     | '/produtos'
@@ -216,6 +228,7 @@ export interface RootRouteChildren {
   GestaoFrotaRoute: typeof GestaoFrotaRoute
   HistoricosRoute: typeof HistoricosRoute
   LoginRoute: typeof LoginRoute
+  LucrosDespesasRoute: typeof LucrosDespesasRoute
   MapaRoute: typeof MapaRoute
   MotoristasRoute: typeof MotoristasRoute
   ProdutosRoute: typeof ProdutosRoute
@@ -274,6 +287,13 @@ declare module '@tanstack/react-router' {
       path: '/mapa'
       fullPath: '/mapa'
       preLoaderRoute: typeof MapaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lucros-despesas': {
+      id: '/lucros-despesas'
+      path: '/lucros-despesas'
+      fullPath: '/lucros-despesas'
+      preLoaderRoute: typeof LucrosDespesasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -344,6 +364,7 @@ const rootRouteChildren: RootRouteChildren = {
   GestaoFrotaRoute: GestaoFrotaRoute,
   HistoricosRoute: HistoricosRoute,
   LoginRoute: LoginRoute,
+  LucrosDespesasRoute: LucrosDespesasRoute,
   MapaRoute: MapaRoute,
   MotoristasRoute: MotoristasRoute,
   ProdutosRoute: ProdutosRoute,
