@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { getCurrentAccessToken } from "@/lib/auth";
 import {
   createFrotakAiVoiceToken,
   FROTAK_AI_VOICE_MODEL,
@@ -197,8 +198,10 @@ function FrotakIaPage() {
     setVoiceState("connecting");
 
     try {
+      const accessToken = await getCurrentAccessToken();
+      if (!accessToken) throw new Error("Sessao expirada. Entre novamente.");
       const { token, model } = await createFrotakAiVoiceToken({
-        data: { requestedAt: new Date().toISOString() },
+        data: { accessToken, requestedAt: new Date().toISOString() },
       });
       setLiveModel(model);
 
@@ -283,6 +286,9 @@ function FrotakIaPage() {
     setSending(true);
 
     try {
+      const accessToken = await getCurrentAccessToken();
+      if (!accessToken) throw new Error("Sessao expirada. Entre novamente.");
+
       if (voiceEnabled && sessionRef.current) {
         sessionRef.current.sendClientContent({
           turns: [{ role: "user", parts: [{ text }] }],
@@ -294,6 +300,7 @@ function FrotakIaPage() {
 
       const response = await sendFrotakAiChatMessage({
         data: {
+          accessToken,
           message: text,
           history,
         },
