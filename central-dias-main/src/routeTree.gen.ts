@@ -20,6 +20,7 @@ import { Route as LucrosDespesasRouteImport } from './routes/lucros-despesas'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HistoricosRouteImport } from './routes/historicos'
 import { Route as GestaoFrotaRouteImport } from './routes/gestao-frota'
+import { Route as FrotakIaRouteImport } from './routes/frotak-ia'
 import { Route as DestinatariosRouteImport } from './routes/destinatarios'
 import { Route as ClientesRouteImport } from './routes/clientes'
 import { Route as CarretasRouteImport } from './routes/carretas'
@@ -81,6 +82,11 @@ const GestaoFrotaRoute = GestaoFrotaRouteImport.update({
   path: '/gestao-frota',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FrotakIaRoute = FrotakIaRouteImport.update({
+  id: '/frotak-ia',
+  path: '/frotak-ia',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DestinatariosRoute = DestinatariosRouteImport.update({
   id: '/destinatarios',
   path: '/destinatarios',
@@ -113,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/carretas': typeof CarretasRoute
   '/clientes': typeof ClientesRoute
   '/destinatarios': typeof DestinatariosRoute
+  '/frotak-ia': typeof FrotakIaRoute
   '/gestao-frota': typeof GestaoFrotaRoute
   '/historicos': typeof HistoricosRoute
   '/login': typeof LoginRoute
@@ -131,6 +138,7 @@ export interface FileRoutesByTo {
   '/carretas': typeof CarretasRoute
   '/clientes': typeof ClientesRoute
   '/destinatarios': typeof DestinatariosRoute
+  '/frotak-ia': typeof FrotakIaRoute
   '/gestao-frota': typeof GestaoFrotaRoute
   '/historicos': typeof HistoricosRoute
   '/login': typeof LoginRoute
@@ -150,6 +158,7 @@ export interface FileRoutesById {
   '/carretas': typeof CarretasRoute
   '/clientes': typeof ClientesRoute
   '/destinatarios': typeof DestinatariosRoute
+  '/frotak-ia': typeof FrotakIaRoute
   '/gestao-frota': typeof GestaoFrotaRoute
   '/historicos': typeof HistoricosRoute
   '/login': typeof LoginRoute
@@ -170,6 +179,7 @@ export interface FileRouteTypes {
     | '/carretas'
     | '/clientes'
     | '/destinatarios'
+    | '/frotak-ia'
     | '/gestao-frota'
     | '/historicos'
     | '/login'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/carretas'
     | '/clientes'
     | '/destinatarios'
+    | '/frotak-ia'
     | '/gestao-frota'
     | '/historicos'
     | '/login'
@@ -206,6 +217,7 @@ export interface FileRouteTypes {
     | '/carretas'
     | '/clientes'
     | '/destinatarios'
+    | '/frotak-ia'
     | '/gestao-frota'
     | '/historicos'
     | '/login'
@@ -225,6 +237,7 @@ export interface RootRouteChildren {
   CarretasRoute: typeof CarretasRoute
   ClientesRoute: typeof ClientesRoute
   DestinatariosRoute: typeof DestinatariosRoute
+  FrotakIaRoute: typeof FrotakIaRoute
   GestaoFrotaRoute: typeof GestaoFrotaRoute
   HistoricosRoute: typeof HistoricosRoute
   LoginRoute: typeof LoginRoute
@@ -317,6 +330,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GestaoFrotaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/frotak-ia': {
+      id: '/frotak-ia'
+      path: '/frotak-ia'
+      fullPath: '/frotak-ia'
+      preLoaderRoute: typeof FrotakIaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/destinatarios': {
       id: '/destinatarios'
       path: '/destinatarios'
@@ -361,6 +381,7 @@ const rootRouteChildren: RootRouteChildren = {
   CarretasRoute: CarretasRoute,
   ClientesRoute: ClientesRoute,
   DestinatariosRoute: DestinatariosRoute,
+  FrotakIaRoute: FrotakIaRoute,
   GestaoFrotaRoute: GestaoFrotaRoute,
   HistoricosRoute: HistoricosRoute,
   LoginRoute: LoginRoute,

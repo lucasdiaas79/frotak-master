@@ -2,6 +2,7 @@
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Bell,
+  Bot,
   Building2,
   ChevronRight,
   Container,
@@ -61,6 +62,7 @@ interface NavGroup {
 const OPERACIONAL: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/gestao-frota", label: "Gestão de Frota", icon: ListChecks },
+  { to: "/frotak-ia", label: "Frotak IA", icon: Bot },
   { to: "/historicos", label: "Históricos", icon: History },
   { to: "/abastecimentos", label: "Abastecimentos", icon: Fuel },
   { to: "/lucros-despesas", label: "Lucros e Despesas", icon: TrendingUp },
@@ -114,6 +116,7 @@ const ADMIN_NAV: NavItem[] = [{ to: "/usuarios", label: "Usuários", icon: Users
 const ROUTE_TITLES: Record<string, string> = {
   "/": "Dashboard Operacional",
   "/gestao-frota": "Gestão de Frota",
+  "/frotak-ia": "Frotak IA",
   "/historicos": "Históricos",
   "/abastecimentos": "Abastecimentos",
   "/lucros-despesas": "Lucros e Despesas",
@@ -132,6 +135,7 @@ const ROUTE_TITLES: Record<string, string> = {
 const ROUTE_GROUPS: Record<string, string> = {
   "/": "Operacional",
   "/gestao-frota": "Operacional",
+  "/frotak-ia": "Operacional",
   "/historicos": "Operacional",
   "/abastecimentos": "Operacional",
   "/lucros-despesas": "Operacional",
