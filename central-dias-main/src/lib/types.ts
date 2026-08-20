@@ -254,6 +254,12 @@ export interface Sender {
   cnpj: string;
   city: string;
   state: string;
+  address?: string;
+  locationLabel?: string;
+  locationSource?: "geocoded" | "manual";
+  lat?: number;
+  lng?: number;
+  geocodedAt?: string;
   active: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -265,6 +271,12 @@ export interface Recipient {
   cnpj: string;
   city: string;
   state: string;
+  address?: string;
+  locationLabel?: string;
+  locationSource?: "geocoded" | "manual";
+  lat?: number;
+  lng?: number;
+  geocodedAt?: string;
   active: boolean;
   createdAt?: string;
   updatedAt?: string;

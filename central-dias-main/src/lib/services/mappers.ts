@@ -101,6 +101,12 @@ interface PartyRow {
   cnpj?: string | null;
   city?: string | null;
   state?: string | null;
+  address?: string | null;
+  location_label?: string | null;
+  location_source?: "geocoded" | "manual" | string | null;
+  lat?: number | null;
+  lng?: number | null;
+  geocoded_at?: string | null;
   active: boolean;
   created_at?: string;
   updated_at?: string;
@@ -309,6 +315,15 @@ export function senderFromRow(row: PartyRow): Sender {
     cnpj: row.cnpj ?? "",
     city: row.city ?? "",
     state: row.state ?? "",
+    address: nil(row.address),
+    locationLabel: nil(row.location_label),
+    locationSource:
+      row.location_source === "geocoded" || row.location_source === "manual"
+        ? row.location_source
+        : undefined,
+    lat: nil(row.lat),
+    lng: nil(row.lng),
+    geocodedAt: nil(row.geocoded_at),
     active: row.active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -322,6 +337,12 @@ export function senderToRow(sender: Partial<Sender>) {
     cnpj: sender.cnpj ?? null,
     city: sender.city ?? null,
     state: sender.state ?? null,
+    address: sender.address ?? null,
+    location_label: sender.locationLabel ?? null,
+    location_source: sender.locationSource ?? null,
+    lat: Number.isFinite(sender.lat) ? sender.lat : null,
+    lng: Number.isFinite(sender.lng) ? sender.lng : null,
+    geocoded_at: sender.geocodedAt ?? null,
     active: sender.active ?? true,
   };
 }

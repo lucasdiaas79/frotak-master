@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { useFleet } from "@/lib/store";
 import { PageHeader } from "@/components/PageHeader";
 import { Modal } from "@/components/Modal";
+import { LocationPickerMap } from "@/components/LocationPickerMap";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,11 +14,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { searchPlaceSuggestions, type PlaceSuggestion } from "@/lib/geocoding";
 import { UFS } from "@/lib/types";
 import type { Recipient, Sender } from "@/lib/types";
-import { Building2, MapPin, Pencil, Plus, Search } from "lucide-react";
+import { Building2, Loader2, MapPin, Pencil, Plus, Search } from "lucide-react";
 
 type Kind = "sender" | "recipient";
+type LocationSource = "geocoded" | "manual";
 
 interface Props {
   kind: Kind;
@@ -29,17 +33,21 @@ const COPY = {
     btn: "Adicionar remetente",
     modalNew: "Novo remetente",
     modalEdit: "Editar remetente",
-    tableTitle: "Origem das operações",
+    tableTitle: "Origem das operacoes",
     filterTitle: "Consultar remetentes",
+    locationTitle: "Local de coleta",
+    locationHint: "Confirme a sugestao ou marque no mapa.",
   },
   recipient: {
-    title: "Destinatários",
+    title: "Destinatarios",
     subtitle: "Empresas de destino das cargas",
-    btn: "Adicionar destinatário",
-    modalNew: "Novo destinatário",
-    modalEdit: "Editar destinatário",
-    tableTitle: "Destino das operações",
-    filterTitle: "Consultar destinatários",
+    btn: "Adicionar destinatario",
+    modalNew: "Novo destinatario",
+    modalEdit: "Editar destinatario",
+    tableTitle: "Destino das operacoes",
+    filterTitle: "Consultar destinatarios",
+    locationTitle: "Local de entrega",
+    locationHint: "Confirme a sugestao ou marque no mapa.",
   },
 } as const;
 
@@ -49,10 +57,37 @@ interface FormState {
   cnpj: string;
   city: string;
   state: string;
+  address: string;
+  locationLabel: string;
+  locationSource?: LocationSource;
+  lat?: number;
+  lng?: number;
+  geocodedAt?: string;
   active: boolean;
 }
 
-const EMPTY: FormState = { name: "", cnpj: "", city: "", state: "SP", active: true };
+const EMPTY: FormState = {
+  name: "",
+  cnpj: "",
+  city: "",
+  state: "SE",
+  address: "",
+  locationLabel: "",
+  active: true,
+};
+
+function partyLocationLabel(p: Sender | Recipient) {
+  return p.locationLabel || p.address || [p.city, p.state].filter(Boolean).join("/");
+}
+
+function locationStatus(p: Sender | Recipient) {
+  return Number.isFinite(p.lat) && Number.isFinite(p.lng) ? "Confirmado" : "Pendente";
+}
+
+function formatCoords(lat?: number, lng?: number) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "-";
+  return `${lat!.toFixed(5)}, ${lng!.toFixed(5)}`;
+}
 
 export function PartiesPage({ kind }: Props) {
   const copy = COPY[kind];
@@ -62,7 +97,10 @@ export function PartiesPage({ kind }: Props) {
   const [search, setSearch] = useState("");
   const [statusF, setStatusF] = useState<string>("all");
   const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [searchingLocation, setSearchingLocation] = useState(false);
 
   const rows = useMemo(() => {
     return list.filter((p) => {
@@ -75,6 +113,7 @@ export function PartiesPage({ kind }: Props) {
 
   const openNew = () => {
     setForm(EMPTY);
+    setSuggestions([]);
     setOpen(true);
   };
 
@@ -85,51 +124,82 @@ export function PartiesPage({ kind }: Props) {
       cnpj: p.cnpj,
       city: p.city,
       state: p.state,
+      address: p.address ?? "",
+      locationLabel: p.locationLabel ?? "",
+      locationSource: p.locationSource,
+      lat: p.lat,
+      lng: p.lng,
+      geocodedAt: p.geocodedAt,
       active: p.active,
     });
+    setSuggestions([]);
     setOpen(true);
   };
 
-  const save = () => {
-    if (!form.name.trim()) return;
-    if (kind === "sender") {
-      if (form.id)
-        store.updateSender({
-          id: form.id,
-          name: form.name,
-          cnpj: form.cnpj,
-          city: form.city,
-          state: form.state,
-          active: form.active,
-        });
-      else
-        store.addSender({
-          name: form.name,
-          cnpj: form.cnpj,
-          city: form.city,
-          state: form.state,
-          active: form.active,
-        });
-    } else {
-      if (form.id)
-        store.updateRecipient({
-          id: form.id,
-          name: form.name,
-          cnpj: form.cnpj,
-          city: form.city,
-          state: form.state,
-          active: form.active,
-        });
-      else
-        store.addRecipient({
-          name: form.name,
-          cnpj: form.cnpj,
-          city: form.city,
-          state: form.state,
-          active: form.active,
-        });
+  const handleSearchLocation = async () => {
+    if (![form.name, form.address, form.city].some((value) => value.trim())) {
+      toast.error("Informe nome, endereco ou cidade para buscar.");
+      return;
     }
-    setOpen(false);
+
+    setSearchingLocation(true);
+    try {
+      const found = await searchPlaceSuggestions(form);
+      setSuggestions(found);
+      if (found.length === 0) {
+        toast("Nenhuma sugestao encontrada. Marque o ponto no mapa.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao buscar localizacao.");
+    } finally {
+      setSearchingLocation(false);
+    }
+  };
+
+  const applySuggestion = (suggestion: PlaceSuggestion) => {
+    setForm((current) => ({
+      ...current,
+      locationLabel: suggestion.label,
+      lat: suggestion.lat,
+      lng: suggestion.lng,
+      locationSource: "geocoded",
+      geocodedAt: new Date().toISOString(),
+    }));
+  };
+
+  const save = async () => {
+    if (!form.name.trim()) return;
+    setSaving(true);
+
+    const payload = {
+      id: form.id,
+      name: form.name.trim(),
+      cnpj: form.cnpj.trim(),
+      city: form.city.trim(),
+      state: form.state,
+      address: form.address.trim(),
+      locationLabel: form.locationLabel.trim(),
+      locationSource: form.locationSource,
+      lat: form.lat,
+      lng: form.lng,
+      geocodedAt: form.geocodedAt,
+      active: form.active,
+    };
+
+    try {
+      if (kind === "sender") {
+        if (form.id) await store.updateSender(payload as Sender);
+        else await store.addSender(payload as Omit<Sender, "id"> & { id?: string });
+      } else {
+        if (form.id) await store.updateRecipient(payload as Recipient);
+        else await store.addRecipient(payload as Omit<Recipient, "id"> & { id?: string });
+      }
+      setOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nao foi possivel salvar.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -187,14 +257,15 @@ export function PartiesPage({ kind }: Props) {
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="data-table min-w-[760px]">
+          <table className="data-table min-w-[920px]">
             <thead>
               <tr>
                 <th>Nome</th>
                 <th>CNPJ</th>
                 <th>Cidade/UF</th>
+                <th>Localizacao</th>
                 <th>Status</th>
-                <th className="text-right">Ações</th>
+                <th className="text-right">Acoes</th>
               </tr>
             </thead>
             <tbody>
@@ -208,12 +279,22 @@ export function PartiesPage({ kind }: Props) {
                       <span className="font-semibold text-foreground">{p.name}</span>
                     </div>
                   </td>
-                  <td className="font-sans text-[12px] text-muted-foreground">{p.cnpj}</td>
+                  <td className="font-sans text-[12px] text-muted-foreground">{p.cnpj || "-"}</td>
                   <td>
                     <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                       <MapPin className="size-3.5" />
-                      {p.city}/{p.state}
+                      {[p.city, p.state].filter(Boolean).join("/") || "-"}
                     </span>
+                  </td>
+                  <td>
+                    <div className="max-w-[280px]">
+                      <span className="block truncate text-[12.5px] font-semibold text-foreground">
+                        {partyLocationLabel(p) || "-"}
+                      </span>
+                      <span className="font-sans text-[11px] text-muted-foreground">
+                        {locationStatus(p)}
+                      </span>
+                    </div>
                   </td>
                   <td>
                     <StatusPill active={p.active} />
@@ -231,7 +312,7 @@ export function PartiesPage({ kind }: Props) {
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center">
+                  <td colSpan={6} className="py-12 text-center">
                     <div className="mx-auto flex max-w-sm flex-col items-center gap-2 text-muted-foreground">
                       <span className="inline-flex size-11 items-center justify-center rounded-full border border-border bg-surface-2">
                         <Search className="size-5" />
@@ -253,74 +334,159 @@ export function PartiesPage({ kind }: Props) {
         open={open}
         onOpenChange={setOpen}
         title={form.id ? copy.modalEdit : copy.modalNew}
-        size="md"
+        size="lg"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="ghost" className="h-9" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
-            <Button className="h-9" onClick={save}>
-              Salvar
+            <Button className="h-9 min-w-24" onClick={save} disabled={saving}>
+              {saving ? <Loader2 className="size-4 animate-spin" /> : "Salvar"}
             </Button>
           </div>
         }
       >
-        <div className="grid gap-3 text-[12.5px] sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <div className="label-tiny mb-1.5">Nome</div>
-            <Input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="h-9"
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <div className="label-tiny mb-1.5">CNPJ</div>
-            <Input
-              value={form.cnpj}
-              onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
-              placeholder="00.000.000/0000-00"
-              className="h-9 font-sans"
-            />
-          </div>
-          <div>
-            <div className="label-tiny mb-1.5">Cidade</div>
-            <Input
-              value={form.city}
-              onChange={(e) => setForm({ ...form, city: e.target.value })}
-              className="h-9"
-            />
-          </div>
-          <div>
-            <div className="label-tiny mb-1.5">UF</div>
-            <Select value={form.state} onValueChange={(v) => setForm({ ...form, state: v })}>
-              <SelectTrigger className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {UFS.map((u) => (
-                  <SelectItem key={u} value={u}>
-                    {u}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="sm:col-span-2 flex items-center justify-between rounded-2xl border border-border/70 bg-surface/60 px-4 py-3">
+        <div className="grid gap-4 text-[12.5px] lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <div className="label-tiny mb-1.5">Nome</div>
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="h-9"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <div className="label-tiny mb-1.5">CNPJ</div>
+              <Input
+                value={form.cnpj}
+                onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
+                placeholder="00.000.000/0000-00"
+                className="h-9 font-sans"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <div className="label-tiny mb-1.5">Endereco / referencia</div>
+              <Input
+                value={form.address}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+                placeholder="Rua, bairro, patio, terminal..."
+                className="h-9"
+              />
+            </div>
             <div>
-              <div className="label-tiny">Status</div>
-              <div className="mt-1 text-[11.5px] text-muted-foreground">
-                Cadastro disponível para vínculo em despachos
+              <div className="label-tiny mb-1.5">Cidade</div>
+              <Input
+                value={form.city}
+                onChange={(e) => setForm({ ...form, city: e.target.value })}
+                className="h-9"
+              />
+            </div>
+            <div>
+              <div className="label-tiny mb-1.5">UF</div>
+              <Select value={form.state} onValueChange={(v) => setForm({ ...form, state: v })}>
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {UFS.map((u) => (
+                    <SelectItem key={u} value={u}>
+                      {u}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="sm:col-span-2 flex items-center justify-between rounded-2xl border border-border/70 bg-surface/60 px-4 py-3">
+              <div>
+                <div className="label-tiny">Status</div>
+                <div className="mt-1 text-[11.5px] text-muted-foreground">
+                  Cadastro disponivel para vinculo em despachos
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] text-muted-foreground">
+                  {form.active ? "Ativo" : "Inativo"}
+                </span>
+                <Switch
+                  checked={form.active}
+                  onCheckedChange={(v) => setForm({ ...form, active: v })}
+                />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[12px] text-muted-foreground">
-                {form.active ? "Ativo" : "Inativo"}
-              </span>
-              <Switch
-                checked={form.active}
-                onCheckedChange={(v) => setForm({ ...form, active: v })}
-              />
+          </div>
+
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-border/70 bg-surface/60 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="label-tiny">{copy.locationTitle}</div>
+                  <div className="mt-1 text-[11.5px] text-muted-foreground">
+                    {copy.locationHint}
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-8 shrink-0 gap-1.5 text-[11.5px]"
+                  onClick={handleSearchLocation}
+                  disabled={searchingLocation}
+                >
+                  {searchingLocation ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Search className="size-3.5" />
+                  )}
+                  Buscar
+                </Button>
+              </div>
+
+              {suggestions.length > 0 && (
+                <div className="mt-3 max-h-36 space-y-2 overflow-y-auto">
+                  {suggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.id}
+                      type="button"
+                      onClick={() => applySuggestion(suggestion)}
+                      className="flex w-full items-start gap-2 rounded-xl border border-border/70 bg-background/60 px-3 py-2 text-left transition hover:border-primary/30 hover:bg-primary/10"
+                    >
+                      <MapPin className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                      <span className="line-clamp-2 text-[11.5px] font-semibold">
+                        {suggestion.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <LocationPickerMap
+              lat={form.lat}
+              lng={form.lng}
+              onChange={({ lat, lng }) =>
+                setForm((current) => ({
+                  ...current,
+                  lat,
+                  lng,
+                  locationSource: "manual",
+                  locationLabel:
+                    current.locationLabel ||
+                    current.address ||
+                    [current.name, current.city, current.state].filter(Boolean).join(", "),
+                  geocodedAt: new Date().toISOString(),
+                }))
+              }
+              className="h-56 overflow-hidden rounded-2xl border border-border bg-surface-2"
+            />
+
+            <div className="rounded-2xl border border-border/70 bg-surface/60 px-3 py-2.5">
+              <div className="label-tiny">Ponto confirmado</div>
+              <div className="mt-1 truncate text-[12px] font-semibold text-foreground">
+                {form.locationLabel || form.address || "-"}
+              </div>
+              <div className="mt-1 font-sans text-[11px] text-muted-foreground">
+                {formatCoords(form.lat, form.lng)}
+              </div>
             </div>
           </div>
         </div>
@@ -345,4 +511,3 @@ function StatusPill({ active }: { active: boolean }) {
     </span>
   );
 }
-
