@@ -1,28 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { GoogleGenAI, Modality, type LiveServerMessage, type Session } from "@google/genai";
-import {
-  Bot,
-  Download,
-  LoaderCircle,
-  Mic,
-  MicOff,
-  Send,
-  Sparkles,
-  User,
-  Volume2,
-  Waves,
-} from "lucide-react";
+import { Bot, Download, LoaderCircle, Mic, MicOff, Send, User, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { getCurrentAccessToken } from "@/lib/auth";
-import {
-  createFrotakAiVoiceToken,
-  FROTAK_AI_VOICE_MODEL,
-  sendFrotakAiChatMessage,
-} from "@/lib/frotakAi";
+import { createFrotakAiVoiceToken, sendFrotakAiChatMessage } from "@/lib/frotakAi";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/frotak-ia")({
@@ -56,7 +41,8 @@ const initialMessages: ChatMessage[] = [
   },
 ];
 
-const SPEECH_RMS_THRESHOLD = 0.018;
+const VOICE_INPUT_SAMPLE_RATE = 16000;
+const MIN_SPEECH_RMS_THRESHOLD = 0.014;
 const SILENCE_END_MS = 850;
 
 function base64ToBytes(base64: string) {
@@ -134,6 +120,30 @@ function float32ToPcm16Base64(input: Float32Array) {
   return window.btoa(binary);
 }
 
+function downsampleBuffer(input: Float32Array, inputSampleRate: number, outputSampleRate: number) {
+  if (outputSampleRate >= inputSampleRate) return input;
+
+  const ratio = inputSampleRate / outputSampleRate;
+  const outputLength = Math.floor(input.length / ratio);
+  const output = new Float32Array(outputLength);
+
+  for (let outputIndex = 0; outputIndex < outputLength; outputIndex += 1) {
+    const start = Math.floor(outputIndex * ratio);
+    const end = Math.min(Math.floor((outputIndex + 1) * ratio), input.length);
+    let sum = 0;
+    let count = 0;
+
+    for (let inputIndex = start; inputIndex < end; inputIndex += 1) {
+      sum += input[inputIndex] ?? 0;
+      count += 1;
+    }
+
+    output[outputIndex] = count ? sum / count : 0;
+  }
+
+  return output;
+}
+
 function audioSampleRate(mimeType?: string) {
   const match = mimeType?.match(/rate=(\d+)/i);
   return match ? Number(match[1]) : 24000;
@@ -175,7 +185,6 @@ function FrotakIaPage() {
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [sending, setSending] = useState(false);
-  const [liveModel, setLiveModel] = useState(FROTAK_AI_VOICE_MODEL);
   const sessionRef = useRef<Session | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const inputSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -191,6 +200,7 @@ function FrotakIaPage() {
   const speakingInputRef = useRef(false);
   const lastSpeechAtRef = useRef(0);
   const lastAudioFlushAtRef = useRef(0);
+  const noiseFloorRef = useRef(0.006);
 
   const voiceEnabled = mode === "voice";
   const listening = voiceEnabled && voiceState === "listening";
@@ -376,7 +386,6 @@ function FrotakIaPage() {
       const { token, model } = await createFrotakAiVoiceToken({
         data: { accessToken, requestedAt: new Date().toISOString() },
       });
-      setLiveModel(model);
 
       const ai = new GoogleGenAI({
         apiKey: token,
@@ -404,7 +413,14 @@ function FrotakIaPage() {
       });
 
       sessionRef.current = session;
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        },
+      });
       streamRef.current = stream;
       const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
       const audioContext = new AudioContextConstructor();
@@ -419,7 +435,11 @@ function FrotakIaPage() {
         const channel = event.inputBuffer.getChannelData(0);
         const now = performance.now();
         const volume = rms(channel);
-        const speaking = volume >= SPEECH_RMS_THRESHOLD;
+        if (!speakingInputRef.current) {
+          noiseFloorRef.current = noiseFloorRef.current * 0.96 + volume * 0.04;
+        }
+        const speechThreshold = Math.max(MIN_SPEECH_RMS_THRESHOLD, noiseFloorRef.current * 3.25);
+        const speaking = volume >= speechThreshold;
 
         if (speaking) {
           speakingInputRef.current = true;
@@ -439,8 +459,15 @@ function FrotakIaPage() {
 
         sessionRef.current.sendRealtimeInput({
           audio: {
-            data: speaking ? float32ToPcm16Base64(channel) : silencePcmBase64(channel.length),
-            mimeType: `audio/pcm;rate=${Math.round(audioContext.sampleRate)}`,
+            data: speaking
+              ? float32ToPcm16Base64(
+                  downsampleBuffer(channel, audioContext.sampleRate, VOICE_INPUT_SAMPLE_RATE),
+                )
+              : silencePcmBase64(
+                  downsampleBuffer(channel, audioContext.sampleRate, VOICE_INPUT_SAMPLE_RATE)
+                    .length,
+                ),
+            mimeType: `audio/pcm;rate=${VOICE_INPUT_SAMPLE_RATE}`,
           },
         });
       };
@@ -589,23 +616,12 @@ function FrotakIaPage() {
               </p>
             </div>
           </div>
-          <div
-            className={cn(
-              "inline-flex h-9 shrink-0 items-center gap-2 rounded-2xl border px-3 text-[12px] font-bold",
-              listening || voiceState === "speaking"
-                ? "border-success/25 bg-success/10 text-success"
-                : "border-border bg-surface-2/70 text-muted-foreground",
-            )}
-          >
-            {voiceState === "connecting" ? (
+          {voiceState === "connecting" ? (
+            <div className="inline-flex h-9 shrink-0 items-center gap-2 rounded-2xl border border-border bg-surface-2/70 px-3 text-[12px] font-bold text-muted-foreground">
               <LoaderCircle className="size-4 animate-spin" />
-            ) : voiceEnabled ? (
-              <Waves className="size-4" />
-            ) : (
-              <Sparkles className="size-4" />
-            )}
-            {voiceEnabled ? liveModel : "Chat Gemini"}
-          </div>
+              Conectando
+            </div>
+          ) : null}
         </div>
 
         <div className="flex-1 overflow-y-auto bg-surface/25 px-4 py-5">

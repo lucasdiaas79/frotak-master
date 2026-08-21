@@ -166,6 +166,44 @@ function sanitizeAiResponse(text: string) {
   return text.replace(/\*/g, "").trim();
 }
 
+function looksLikeEnglishInternalAnswer(text: string) {
+  return /\b(analyzing|focusing|refining|i'?m|i will|i have|therefore|ranking|proxy|context)\b/i.test(
+    text,
+  );
+}
+
+async function ensurePortugueseFinalAnswer(ai: GoogleGenAI, model: string, text: string) {
+  const cleanText = sanitizeAiResponse(text);
+  if (!looksLikeEnglishInternalAnswer(cleanText)) return cleanText;
+
+  const response = await ai.models.generateContent({
+    model,
+    contents: [
+      {
+        role: "user",
+        parts: [
+          {
+            text: [
+              "Reescreva a resposta abaixo em portugues do Brasil.",
+              "Remova qualquer raciocinio interno, planejamento, analise em ingles ou explicacao de bastidores.",
+              "Entregue apenas a resposta final para o usuario da Frotak.",
+              "Use paragrafos curtos e topicos quando fizer sentido.",
+              "Nao use asteriscos.",
+              "",
+              cleanText,
+            ].join("\n"),
+          },
+        ],
+      },
+    ],
+    config: {
+      temperature: 0.1,
+    },
+  });
+
+  return sanitizeAiResponse(response.text ?? cleanText);
+}
+
 function compactText(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
@@ -772,6 +810,9 @@ function tenantContextInstruction(context: TenantAiContext) {
   return [
     FROTAK_AI_KNOWLEDGE_BASE,
     "Responda sempre em portugues do Brasil, de forma objetiva, pratica e operacional.",
+    "Toda a resposta visivel ao usuario deve estar em portugues. Nao escreva frases, titulos ou raciocinio em ingles.",
+    "Nao mostre seu processo interno. Nao escreva 'analisando', 'focusing', 'refining', 'proxy' ou qualquer planejamento de resposta.",
+    "Entregue somente a resposta final para o usuario.",
     "Formato preferido: paragrafos curtos, listas e linhas separadas quando houver varios dados.",
     "Nao escreva tudo em um unico bloco.",
     "Nao use markdown com asteriscos. Se quiser destacar algo, use texto simples e quebras de linha.",
@@ -791,8 +832,9 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
 
       const tenantContext = await buildTenantAiContext(data.accessToken);
       const ai = new GoogleGenAI({ apiKey: geminiApiKey() });
+      const model = process.env.GEMINI_TEXT_MODEL || FROTAK_AI_TEXT_MODEL;
       const response = await ai.models.generateContent({
-        model: process.env.GEMINI_TEXT_MODEL || FROTAK_AI_TEXT_MODEL,
+        model,
         contents: [
           ...historyToContents(data.history ?? []),
           { role: "user", parts: [{ text: message }] },
@@ -803,9 +845,9 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
         },
       });
 
-      const text = sanitizeAiResponse(response.text ?? "");
+      const text = await ensurePortugueseFinalAnswer(ai, model, response.text ?? "");
       if (!text) throw new Error("Resposta vazia do Gemini");
-      return { text, model: process.env.GEMINI_TEXT_MODEL || FROTAK_AI_TEXT_MODEL };
+      return { text, model };
     } catch (error) {
       console.error("[frotakAi] chat failed", {
         message: error instanceof Error ? error.message : String(error),
