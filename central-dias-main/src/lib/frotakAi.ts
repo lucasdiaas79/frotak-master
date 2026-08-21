@@ -167,7 +167,7 @@ function sanitizeAiResponse(text: string) {
 }
 
 function looksLikeEnglishInternalAnswer(text: string) {
-  return /\b(analyzing|focusing|refining|i'?m|i will|i have|therefore|ranking|proxy|context)\b/i.test(
+  return /\b(analyzing|identifying|pinpointing|locating|focusing|refining|examining|cross-referencing|initial scan|revealed|good lead|i'?m|i will|i have|i'?ve|therefore|ranking|proxy|context|requested|confirm)\b/i.test(
     text,
   );
 }
@@ -809,9 +809,12 @@ async function buildTenantAiContext(accessToken: string): Promise<TenantAiContex
 function tenantContextInstruction(context: TenantAiContext) {
   return [
     FROTAK_AI_KNOWLEDGE_BASE,
+    "IDIOMA OBRIGATORIO: portugues do Brasil.",
+    "Nunca responda em ingles, mesmo que o modelo pense, planeje ou organize a resposta internamente em ingles.",
+    "Se qualquer rascunho sair em ingles, converta mentalmente e mostre somente a versao final em portugues.",
     "Responda sempre em portugues do Brasil, de forma objetiva, pratica e operacional.",
     "Toda a resposta visivel ao usuario deve estar em portugues. Nao escreva frases, titulos ou raciocinio em ingles.",
-    "Nao mostre seu processo interno. Nao escreva 'analisando', 'focusing', 'refining', 'proxy' ou qualquer planejamento de resposta.",
+    "Nao mostre seu processo interno. Nao escreva 'Identifying', 'Analyzing', 'Pinpointing', 'Locating', 'focusing', 'refining', 'proxy' ou qualquer planejamento de resposta.",
     "Entregue somente a resposta final para o usuario.",
     "Formato preferido: paragrafos curtos, listas e linhas separadas quando houver varios dados.",
     "Nao escreva tudo em um unico bloco.",
@@ -876,7 +879,6 @@ export const createFrotakAiVoiceToken = createServerFn({ method: "POST" })
             model,
             config: {
               responseModalities: [Modality.AUDIO],
-              inputAudioTranscription: {},
               outputAudioTranscription: {},
               systemInstruction: tenantContextInstruction(tenantContext),
             },

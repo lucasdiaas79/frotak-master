@@ -41,8 +41,7 @@ const initialMessages: ChatMessage[] = [
   },
 ];
 
-const VOICE_INPUT_SAMPLE_RATE = 16000;
-const MIN_SPEECH_RMS_THRESHOLD = 0.014;
+const SPEECH_RMS_THRESHOLD = 0.018;
 const SILENCE_END_MS = 850;
 
 function base64ToBytes(base64: string) {
@@ -120,30 +119,6 @@ function float32ToPcm16Base64(input: Float32Array) {
   return window.btoa(binary);
 }
 
-function downsampleBuffer(input: Float32Array, inputSampleRate: number, outputSampleRate: number) {
-  if (outputSampleRate >= inputSampleRate) return input;
-
-  const ratio = inputSampleRate / outputSampleRate;
-  const outputLength = Math.floor(input.length / ratio);
-  const output = new Float32Array(outputLength);
-
-  for (let outputIndex = 0; outputIndex < outputLength; outputIndex += 1) {
-    const start = Math.floor(outputIndex * ratio);
-    const end = Math.min(Math.floor((outputIndex + 1) * ratio), input.length);
-    let sum = 0;
-    let count = 0;
-
-    for (let inputIndex = start; inputIndex < end; inputIndex += 1) {
-      sum += input[inputIndex] ?? 0;
-      count += 1;
-    }
-
-    output[outputIndex] = count ? sum / count : 0;
-  }
-
-  return output;
-}
-
 function audioSampleRate(mimeType?: string) {
   const match = mimeType?.match(/rate=(\d+)/i);
   return match ? Number(match[1]) : 24000;
@@ -195,12 +170,9 @@ function FrotakIaPage() {
   const nextAudioStartRef = useRef(0);
   const voiceAssistantMessageIdRef = useRef<string | null>(null);
   const voiceAssistantTextRef = useRef("");
-  const voiceUserMessageIdRef = useRef<string | null>(null);
-  const voiceUserTextRef = useRef("");
   const speakingInputRef = useRef(false);
   const lastSpeechAtRef = useRef(0);
   const lastAudioFlushAtRef = useRef(0);
-  const noiseFloorRef = useRef(0.006);
 
   const voiceEnabled = mode === "voice";
   const listening = voiceEnabled && voiceState === "listening";
@@ -226,8 +198,6 @@ function FrotakIaPage() {
   const resetVoiceTurn = () => {
     voiceAssistantMessageIdRef.current = null;
     voiceAssistantTextRef.current = "";
-    voiceUserMessageIdRef.current = null;
-    voiceUserTextRef.current = "";
   };
 
   const appendVoiceAssistantText = (text: string) => {
@@ -248,26 +218,6 @@ function FrotakIaPage() {
       text: cleanText,
       voice: true,
       pending: true,
-    });
-  };
-
-  const appendVoiceUserText = (text: string) => {
-    voiceUserTextRef.current += text.replace(/\*/g, "");
-    const cleanText = voiceUserTextRef.current.trim();
-    if (!cleanText) return;
-
-    if (voiceUserMessageIdRef.current) {
-      updateMessage(voiceUserMessageIdRef.current, cleanText, false);
-      return;
-    }
-
-    const id = `voice-user-${Date.now()}`;
-    voiceUserMessageIdRef.current = id;
-    appendMessage({
-      id,
-      role: "user",
-      text: cleanText,
-      voice: true,
     });
   };
 
@@ -327,14 +277,6 @@ function FrotakIaPage() {
     if (!content) return;
 
     if (content.interrupted) setVoiceState("listening");
-    const transcriptionContent = content as typeof content & {
-      inputTranscription?: { text?: string };
-      inputAudioTranscription?: { text?: string };
-    };
-    const inputText =
-      transcriptionContent.inputTranscription?.text ??
-      transcriptionContent.inputAudioTranscription?.text;
-    if (inputText) appendVoiceUserText(inputText);
     if (content.outputTranscription?.text)
       appendVoiceAssistantText(content.outputTranscription.text);
     if (content.modelTurn?.parts) {
@@ -395,7 +337,6 @@ function FrotakIaPage() {
         model,
         config: {
           responseModalities: [Modality.AUDIO],
-          inputAudioTranscription: {},
           outputAudioTranscription: {},
         },
         callbacks: {
@@ -413,14 +354,7 @@ function FrotakIaPage() {
       });
 
       sessionRef.current = session;
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1,
-        },
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
       const audioContext = new AudioContextConstructor();
@@ -435,11 +369,7 @@ function FrotakIaPage() {
         const channel = event.inputBuffer.getChannelData(0);
         const now = performance.now();
         const volume = rms(channel);
-        if (!speakingInputRef.current) {
-          noiseFloorRef.current = noiseFloorRef.current * 0.96 + volume * 0.04;
-        }
-        const speechThreshold = Math.max(MIN_SPEECH_RMS_THRESHOLD, noiseFloorRef.current * 3.25);
-        const speaking = volume >= speechThreshold;
+        const speaking = volume >= SPEECH_RMS_THRESHOLD;
 
         if (speaking) {
           speakingInputRef.current = true;
@@ -459,15 +389,8 @@ function FrotakIaPage() {
 
         sessionRef.current.sendRealtimeInput({
           audio: {
-            data: speaking
-              ? float32ToPcm16Base64(
-                  downsampleBuffer(channel, audioContext.sampleRate, VOICE_INPUT_SAMPLE_RATE),
-                )
-              : silencePcmBase64(
-                  downsampleBuffer(channel, audioContext.sampleRate, VOICE_INPUT_SAMPLE_RATE)
-                    .length,
-                ),
-            mimeType: `audio/pcm;rate=${VOICE_INPUT_SAMPLE_RATE}`,
+            data: speaking ? float32ToPcm16Base64(channel) : silencePcmBase64(channel.length),
+            mimeType: `audio/pcm;rate=${Math.round(audioContext.sampleRate)}`,
           },
         });
       };
