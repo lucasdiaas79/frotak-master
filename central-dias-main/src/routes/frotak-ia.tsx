@@ -56,6 +56,9 @@ const initialMessages: ChatMessage[] = [
   },
 ];
 
+const SPEECH_RMS_THRESHOLD = 0.018;
+const SILENCE_END_MS = 850;
+
 function base64ToBytes(base64: string) {
   const binary = window.atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -131,6 +134,41 @@ function float32ToPcm16Base64(input: Float32Array) {
   return window.btoa(binary);
 }
 
+function audioSampleRate(mimeType?: string) {
+  const match = mimeType?.match(/rate=(\d+)/i);
+  return match ? Number(match[1]) : 24000;
+}
+
+function pcm16ToAudioBuffer(audioContext: AudioContext, data: string, sampleRate: number) {
+  const bytes = base64ToBytes(data);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const sampleCount = Math.floor(bytes.byteLength / 2);
+  const buffer = audioContext.createBuffer(1, sampleCount, sampleRate);
+  const channel = buffer.getChannelData(0);
+
+  for (let index = 0; index < sampleCount; index += 1) {
+    channel[index] = view.getInt16(index * 2, true) / 32768;
+  }
+
+  return buffer;
+}
+
+function rms(input: Float32Array) {
+  const total = input.reduce((sum, sample) => sum + sample * sample, 0);
+  return Math.sqrt(total / Math.max(input.length, 1));
+}
+
+function silencePcmBase64(sampleCount: number) {
+  const bytes = new Uint8Array(sampleCount * 2);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return window.btoa(binary);
+}
+
 function FrotakIaPage() {
   const [mode, setMode] = useState<ChatMode>("text");
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
@@ -142,8 +180,17 @@ function FrotakIaPage() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const inputSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const inputProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const outputAudioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const playbackQueueRef = useRef(Promise.resolve());
+  const nextAudioStartRef = useRef(0);
+  const voiceAssistantMessageIdRef = useRef<string | null>(null);
+  const voiceAssistantTextRef = useRef("");
+  const voiceUserMessageIdRef = useRef<string | null>(null);
+  const voiceUserTextRef = useRef("");
+  const speakingInputRef = useRef(false);
+  const lastSpeechAtRef = useRef(0);
+  const lastAudioFlushAtRef = useRef(0);
 
   const voiceEnabled = mode === "voice";
   const listening = voiceEnabled && voiceState === "listening";
@@ -166,15 +213,98 @@ function FrotakIaPage() {
     );
   };
 
-  const addVoiceText = (text: string) => {
-    const cleanText = text.replace(/\*/g, "").trim();
+  const resetVoiceTurn = () => {
+    voiceAssistantMessageIdRef.current = null;
+    voiceAssistantTextRef.current = "";
+    voiceUserMessageIdRef.current = null;
+    voiceUserTextRef.current = "";
+  };
+
+  const appendVoiceAssistantText = (text: string) => {
+    voiceAssistantTextRef.current += text.replace(/\*/g, "");
+    const cleanText = voiceAssistantTextRef.current.trim();
     if (!cleanText) return;
+
+    if (voiceAssistantMessageIdRef.current) {
+      updateMessage(voiceAssistantMessageIdRef.current, cleanText, true);
+      return;
+    }
+
+    const id = `voice-assistant-${Date.now()}`;
+    voiceAssistantMessageIdRef.current = id;
     appendMessage({
-      id: `voice-${Date.now()}`,
+      id,
       role: "assistant",
       text: cleanText,
       voice: true,
+      pending: true,
     });
+  };
+
+  const appendVoiceUserText = (text: string) => {
+    voiceUserTextRef.current += text.replace(/\*/g, "");
+    const cleanText = voiceUserTextRef.current.trim();
+    if (!cleanText) return;
+
+    if (voiceUserMessageIdRef.current) {
+      updateMessage(voiceUserMessageIdRef.current, cleanText, false);
+      return;
+    }
+
+    const id = `voice-user-${Date.now()}`;
+    voiceUserMessageIdRef.current = id;
+    appendMessage({
+      id,
+      role: "user",
+      text: cleanText,
+      voice: true,
+    });
+  };
+
+  const getOutputAudioContext = () => {
+    if (outputAudioContextRef.current && outputAudioContextRef.current.state !== "closed") {
+      return outputAudioContextRef.current;
+    }
+    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new AudioContextConstructor();
+    outputAudioContextRef.current = audioContext;
+    nextAudioStartRef.current = audioContext.currentTime + 0.08;
+    return audioContext;
+  };
+
+  const playVoiceChunk = async (data: string, mimeType?: string) => {
+    if (!mimeType?.includes("pcm")) {
+      await playInlineAudio(data, mimeType);
+      return;
+    }
+
+    const audioContext = getOutputAudioContext();
+    if (audioContext.state === "suspended") await audioContext.resume();
+    const buffer = pcm16ToAudioBuffer(audioContext, data, audioSampleRate(mimeType));
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContext.destination);
+
+    const startAt = Math.max(audioContext.currentTime + 0.04, nextAudioStartRef.current);
+    source.start(startAt);
+    nextAudioStartRef.current = startAt + buffer.duration;
+  };
+
+  const finishVoiceTurn = () => {
+    const assistantId = voiceAssistantMessageIdRef.current;
+    if (assistantId) updateMessage(assistantId, voiceAssistantTextRef.current.trim(), false);
+
+    const playbackDelay = outputAudioContextRef.current
+      ? Math.max(
+          150,
+          (nextAudioStartRef.current - outputAudioContextRef.current.currentTime) * 1000 + 250,
+        )
+      : 250;
+
+    window.setTimeout(() => {
+      if (sessionRef.current && voiceState !== "error") setVoiceState("listening");
+      resetVoiceTurn();
+    }, playbackDelay);
   };
 
   const handleLiveMessage = (event: LiveServerMessage) => {
@@ -187,23 +317,31 @@ function FrotakIaPage() {
     if (!content) return;
 
     if (content.interrupted) setVoiceState("listening");
-    if (content.outputTranscription?.text) addVoiceText(content.outputTranscription.text);
+    const transcriptionContent = content as typeof content & {
+      inputTranscription?: { text?: string };
+      inputAudioTranscription?: { text?: string };
+    };
+    const inputText =
+      transcriptionContent.inputTranscription?.text ??
+      transcriptionContent.inputAudioTranscription?.text;
+    if (inputText) appendVoiceUserText(inputText);
+    if (content.outputTranscription?.text)
+      appendVoiceAssistantText(content.outputTranscription.text);
     if (content.modelTurn?.parts) {
       content.modelTurn.parts.forEach((part) => {
-        if (part.text) addVoiceText(part.text);
+        if (part.text) appendVoiceAssistantText(part.text);
         if (part.inlineData?.data) {
           setVoiceState("speaking");
           playbackQueueRef.current = playbackQueueRef.current
-            .then(() => playInlineAudio(part.inlineData!.data!, part.inlineData?.mimeType))
+            .then(() => playVoiceChunk(part.inlineData!.data!, part.inlineData?.mimeType))
             .catch((error) => {
               console.error("[Frotak IA] audio playback failed", error);
-            })
-            .finally(() => setVoiceState("listening"));
+            });
         }
       });
     }
 
-    if (content.turnComplete && voiceState !== "error") setVoiceState("listening");
+    if (content.turnComplete && voiceState !== "error") finishVoiceTurn();
   };
 
   const stopVoice = () => {
@@ -213,6 +351,11 @@ function FrotakIaPage() {
     inputSourceRef.current = null;
     void audioContextRef.current?.close();
     audioContextRef.current = null;
+    void outputAudioContextRef.current?.close();
+    outputAudioContextRef.current = null;
+    nextAudioStartRef.current = 0;
+    resetVoiceTurn();
+    speakingInputRef.current = false;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     sessionRef.current?.sendRealtimeInput({ audioStreamEnd: true });
@@ -274,9 +417,29 @@ function FrotakIaPage() {
       processor.onaudioprocess = (event) => {
         if (!sessionRef.current || audioContext.state === "closed") return;
         const channel = event.inputBuffer.getChannelData(0);
+        const now = performance.now();
+        const volume = rms(channel);
+        const speaking = volume >= SPEECH_RMS_THRESHOLD;
+
+        if (speaking) {
+          speakingInputRef.current = true;
+          lastSpeechAtRef.current = now;
+        }
+
+        if (!speakingInputRef.current) return;
+
+        if (!speaking && now - lastSpeechAtRef.current > SILENCE_END_MS) {
+          if (now - lastAudioFlushAtRef.current > SILENCE_END_MS) {
+            sessionRef.current.sendRealtimeInput({ audioStreamEnd: true });
+            lastAudioFlushAtRef.current = now;
+          }
+          speakingInputRef.current = false;
+          return;
+        }
+
         sessionRef.current.sendRealtimeInput({
           audio: {
-            data: float32ToPcm16Base64(channel),
+            data: speaking ? float32ToPcm16Base64(channel) : silencePcmBase64(channel.length),
             mimeType: `audio/pcm;rate=${Math.round(audioContext.sampleRate)}`,
           },
         });
