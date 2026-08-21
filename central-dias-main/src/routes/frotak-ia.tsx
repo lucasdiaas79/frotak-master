@@ -56,18 +56,6 @@ const initialMessages: ChatMessage[] = [
   },
 ];
 
-function blobToBase64(blob: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      resolve(result.split(",")[1] ?? "");
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("Falha ao ler audio"));
-    reader.readAsDataURL(blob);
-  });
-}
-
 function base64ToBytes(base64: string) {
   const binary = window.atob(base64);
   const bytes = new Uint8Array(binary.length);
@@ -112,12 +100,35 @@ function audioBlobFromInlineData(data: string, mimeType?: string) {
 async function playInlineAudio(data: string, mimeType?: string) {
   const blob = audioBlobFromInlineData(data, mimeType);
   const url = URL.createObjectURL(blob);
-  try {
-    const audio = new Audio(url);
-    await audio.play();
-  } finally {
-    window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  const audio = new Audio(url);
+
+  await new Promise<void>((resolve, reject) => {
+    audio.onended = () => resolve();
+    audio.onerror = () => reject(new Error("Falha ao reproduzir audio da Frotak IA."));
+    void audio.play().catch(reject);
+  }).finally(() => {
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+  });
+}
+
+function float32ToPcm16Base64(input: Float32Array) {
+  const buffer = new ArrayBuffer(input.length * 2);
+  const view = new DataView(buffer);
+
+  for (let index = 0; index < input.length; index += 1) {
+    const sample = Math.max(-1, Math.min(1, input[index] ?? 0));
+    view.setInt16(index * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
   }
+
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return window.btoa(binary);
 }
 
 function FrotakIaPage() {
@@ -128,8 +139,11 @@ function FrotakIaPage() {
   const [sending, setSending] = useState(false);
   const [liveModel, setLiveModel] = useState(FROTAK_AI_VOICE_MODEL);
   const sessionRef = useRef<Session | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const inputSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const inputProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const playbackQueueRef = useRef(Promise.resolve());
 
   const voiceEnabled = mode === "voice";
   const listening = voiceEnabled && voiceState === "listening";
@@ -179,7 +193,8 @@ function FrotakIaPage() {
         if (part.text) addVoiceText(part.text);
         if (part.inlineData?.data) {
           setVoiceState("speaking");
-          void playInlineAudio(part.inlineData.data, part.inlineData.mimeType)
+          playbackQueueRef.current = playbackQueueRef.current
+            .then(() => playInlineAudio(part.inlineData!.data!, part.inlineData?.mimeType))
             .catch((error) => {
               console.error("[Frotak IA] audio playback failed", error);
             })
@@ -192,8 +207,12 @@ function FrotakIaPage() {
   };
 
   const stopVoice = () => {
-    recorderRef.current?.stop();
-    recorderRef.current = null;
+    inputProcessorRef.current?.disconnect();
+    inputProcessorRef.current = null;
+    inputSourceRef.current?.disconnect();
+    inputSourceRef.current = null;
+    void audioContextRef.current?.close();
+    audioContextRef.current = null;
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     sessionRef.current?.sendRealtimeInput({ audioStreamEnd: true });
@@ -244,21 +263,26 @@ function FrotakIaPage() {
       sessionRef.current = session;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const recorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
-      recorderRef.current = recorder;
-      recorder.ondataavailable = (event) => {
-        if (!event.data.size || !sessionRef.current) return;
-        void blobToBase64(event.data)
-          .then((data) => {
-            sessionRef.current?.sendRealtimeInput({
-              audio: { data, mimeType: event.data.type || "audio/webm" },
-            });
-          })
-          .catch((error) => {
-            console.error("[Frotak IA] mic chunk failed", error);
-          });
+      const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
+      const audioContext = new AudioContextConstructor();
+      audioContextRef.current = audioContext;
+      const source = audioContext.createMediaStreamSource(stream);
+      inputSourceRef.current = source;
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      inputProcessorRef.current = processor;
+
+      processor.onaudioprocess = (event) => {
+        if (!sessionRef.current || audioContext.state === "closed") return;
+        const channel = event.inputBuffer.getChannelData(0);
+        sessionRef.current.sendRealtimeInput({
+          audio: {
+            data: float32ToPcm16Base64(channel),
+            mimeType: `audio/pcm;rate=${Math.round(audioContext.sampleRate)}`,
+          },
+        });
       };
-      recorder.start(250);
+      source.connect(processor);
+      processor.connect(audioContext.destination);
       setVoiceState("listening");
     } catch (error) {
       console.error("[Frotak IA] voice start failed", error);
