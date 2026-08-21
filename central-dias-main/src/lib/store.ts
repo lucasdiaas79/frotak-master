@@ -148,6 +148,9 @@ export const useFleet = create<FleetState>((set, get) => ({
         void get().loadAll();
       }, 250);
     };
+    const reloadWhenVisible = () => {
+      if (document.visibilityState !== "hidden") reload();
+    };
     const channel = supabase
       .channel("fleet-operational-data")
       .on("postgres_changes", { event: "*", schema: "public", table: "vehicles" }, reload)
@@ -167,8 +170,17 @@ export const useFleet = create<FleetState>((set, get) => ({
       .on("postgres_changes", { event: "*", schema: "public", table: "vehicle_positions" }, reload)
       .subscribe((status) => set({ realtimeReady: status === "SUBSCRIBED" }));
 
+    window.addEventListener("focus", reload);
+    window.addEventListener("pageshow", reload);
+    document.addEventListener("visibilitychange", reloadWhenVisible);
+    const syncTimer = window.setInterval(reloadWhenVisible, 30_000);
+
     return () => {
       if (reloadTimer) window.clearTimeout(reloadTimer);
+      window.clearInterval(syncTimer);
+      window.removeEventListener("focus", reload);
+      window.removeEventListener("pageshow", reload);
+      document.removeEventListener("visibilitychange", reloadWhenVisible);
       void supabase.removeChannel(channel);
       set({ realtimeReady: false });
     };
