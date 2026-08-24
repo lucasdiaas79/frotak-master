@@ -290,6 +290,9 @@ export function CustomersPage() {
     setForm((current) => ({
       ...current,
       address: current.address || suggestion.address || current.address,
+      city: suggestion.city || current.city,
+      state: suggestion.state || current.state,
+      postalCode: suggestion.postalCode || current.postalCode,
       locationLabel: suggestion.label,
       lat: suggestion.lat,
       lng: suggestion.lng,

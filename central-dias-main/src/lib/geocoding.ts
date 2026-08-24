@@ -8,6 +8,9 @@ export interface PlaceSuggestion {
   provider: "google" | "openstreetmap";
   name?: string;
   address?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
 }
 
 interface PlaceSearchInput {
@@ -39,10 +42,15 @@ function uniqueQueries(input: PlaceSearchInput) {
   const city = normalizeSearchText(input.city);
   const state = normalizeSearchText(input.state);
   const queries = [
+    compact([name, city, state, "Brasil"]).join(", "),
+    compact([name, state, "Brasil"]).join(", "),
+    compact([name, "Brasil"]).join(", "),
     compact([name, address, district, city, state, "Brasil"]).join(", "),
     compact([name, district, city, state, "Brasil"]).join(", "),
-    compact([name, city, state, "Brasil"]).join(", "),
+    compact([name, address, city, state, "Brasil"]).join(", "),
     compact([address, district, city, state, "Brasil"]).join(", "),
+    compact([address, city, state, "Brasil"]).join(", "),
+    compact([district, city, state, "Brasil"]).join(", "),
     compact([postalCode, city, state, "Brasil"]).join(", "),
     compact([postalCode, "Brasil"]).join(", "),
     compact([city, state, "Brasil"]).join(", "),
@@ -58,7 +66,7 @@ export async function searchPlaceSuggestions(input: PlaceSearchInput): Promise<P
   if (googleResults.length > 0) return dedupeSuggestions(googleResults);
 
   const allResults: PlaceSuggestion[] = [];
-  for (const query of queries.slice(0, 4)) {
+  for (const query of queries.slice(0, 8)) {
     try {
       allResults.push(...(await searchOpenStreetMapPlaces(query)));
     } catch (error) {
@@ -85,7 +93,9 @@ const searchGooglePlaces = createServerFn({ method: "POST" })
     const apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.VITE_GOOGLE_MAPS_API_KEY;
     if (!apiKey) return [];
 
-    for (const query of data.queries.slice(0, 4)) {
+    const results: PlaceSuggestion[] = [];
+
+    for (const query of data.queries.slice(0, 8)) {
       const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
         method: "POST",
         headers: {
@@ -138,11 +148,60 @@ const searchGooglePlaces = createServerFn({ method: "POST" })
         })
         .filter((row) => row.label && Number.isFinite(row.lat) && Number.isFinite(row.lng));
 
-      if (places.length > 0) return places;
+      results.push(...places);
+      if (dedupeSuggestions(results).length >= 8) return dedupeSuggestions(results).slice(0, 8);
     }
 
-    return [];
+    return dedupeSuggestions(results).slice(0, 8);
   });
+
+function osmCity(address?: Record<string, string>) {
+  return (
+    address?.city ||
+    address?.town ||
+    address?.village ||
+    address?.municipality ||
+    address?.city_district ||
+    address?.county
+  );
+}
+
+function osmUf(address?: Record<string, string>) {
+  const iso = address?.["ISO3166-2-lvl4"];
+  if (iso?.startsWith("BR-")) return iso.replace("BR-", "");
+
+  const state = address?.state?.toLowerCase();
+  const map: Record<string, string> = {
+    acre: "AC",
+    alagoas: "AL",
+    amapa: "AP",
+    amazonas: "AM",
+    bahia: "BA",
+    ceara: "CE",
+    "distrito federal": "DF",
+    "espirito santo": "ES",
+    goias: "GO",
+    maranhao: "MA",
+    "mato grosso": "MT",
+    "mato grosso do sul": "MS",
+    "minas gerais": "MG",
+    para: "PA",
+    paraiba: "PB",
+    parana: "PR",
+    pernambuco: "PE",
+    piaui: "PI",
+    "rio de janeiro": "RJ",
+    "rio grande do norte": "RN",
+    "rio grande do sul": "RS",
+    rondonia: "RO",
+    roraima: "RR",
+    "santa catarina": "SC",
+    "sao paulo": "SP",
+    sergipe: "SE",
+    tocantins: "TO",
+  };
+  return state ? map[state.normalize("NFD").replace(/[\u0300-\u036f]/g, "")] : undefined;
+}
 
 async function searchOpenStreetMapPlaces(query: string): Promise<PlaceSuggestion[]> {
   const params = new URLSearchParams({
@@ -165,6 +224,7 @@ async function searchOpenStreetMapPlaces(query: string): Promise<PlaceSuggestion
     lat?: string;
     lon?: string;
     name?: string;
+    address?: Record<string, string>;
   }>;
 
   return rows
@@ -173,6 +233,9 @@ async function searchOpenStreetMapPlaces(query: string): Promise<PlaceSuggestion
       label: row.display_name ?? "",
       name: row.name,
       address: row.display_name,
+      city: osmCity(row.address),
+      state: osmUf(row.address),
+      postalCode: row.address?.postcode,
       lat: Number(row.lat),
       lng: Number(row.lon),
       provider: "openstreetmap" as const,
