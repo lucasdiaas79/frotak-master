@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Loader2, MapPin, Pencil, Plus, Search } from "lucide-react";
+import { Building2, ExternalLink, Loader2, MapPin, Pencil, Plus, Search } from "lucide-react";
 import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { LocationPickerMap } from "@/components/LocationPickerMap";
@@ -102,6 +102,14 @@ function locationLabel(input: CustomerRow) {
 function formatCoords(lat?: number, lng?: number) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "-";
   return `${lat!.toFixed(5)}, ${lng!.toFixed(5)}`;
+}
+
+function googleMapsSearchUrl(form: FormState) {
+  const query = [form.name, form.address, form.city, form.state, "Brasil"]
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(", ");
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
 
 function locationFromParty(p: Sender | Recipient) {
@@ -243,6 +251,7 @@ export function CustomersPage() {
   const applySuggestion = (suggestion: PlaceSuggestion) => {
     setForm((current) => ({
       ...current,
+      address: current.address || suggestion.address || current.address,
       locationLabel: suggestion.label,
       lat: suggestion.lat,
       lng: suggestion.lng,
@@ -562,23 +571,36 @@ export function CustomersPage() {
                 <div>
                   <div className="label-tiny">Local exato</div>
                   <div className="mt-1 text-[11.5px] text-muted-foreground">
-                    Confirme a sugestao ou marque no mapa.
+                    Busque pelo nome da empresa, confirme a sugestao ou marque no mapa.
                   </div>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-8 shrink-0 gap-1.5 text-[11.5px]"
-                  onClick={handleSearchLocation}
-                  disabled={searchingLocation}
-                >
-                  {searchingLocation ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Search className="size-3.5" />
-                  )}
-                  Buscar
-                </Button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-8 gap-1.5 text-[11.5px]"
+                    onClick={handleSearchLocation}
+                    disabled={searchingLocation}
+                  >
+                    {searchingLocation ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Search className="size-3.5" />
+                    )}
+                    Buscar
+                  </Button>
+                  <Button
+                    asChild
+                    type="button"
+                    variant="ghost"
+                    className="h-8 gap-1.5 text-[11.5px]"
+                  >
+                    <a href={googleMapsSearchUrl(form)} target="_blank" rel="noreferrer">
+                      <ExternalLink className="size-3.5" />
+                      Google
+                    </a>
+                  </Button>
+                </div>
               </div>
 
               {suggestions.length > 0 && (
@@ -591,8 +613,13 @@ export function CustomersPage() {
                       className="flex w-full items-start gap-2 rounded-xl border border-border/70 bg-background/60 px-3 py-2 text-left transition hover:border-primary/30 hover:bg-primary/10"
                     >
                       <MapPin className="mt-0.5 size-3.5 shrink-0 text-primary" />
-                      <span className="line-clamp-2 text-[11.5px] font-semibold">
-                        {suggestion.label}
+                      <span className="min-w-0 flex-1">
+                        <span className="line-clamp-2 text-[11.5px] font-semibold">
+                          {suggestion.label}
+                        </span>
+                        <span className="mt-1 inline-flex rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+                          {suggestion.provider === "google" ? "Google Maps" : "Mapa aberto"}
+                        </span>
                       </span>
                     </button>
                   ))}
