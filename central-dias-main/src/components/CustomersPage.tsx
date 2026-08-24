@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { searchPlaceSuggestions, type PlaceSuggestion } from "@/lib/geocoding";
 import { useFleet } from "@/lib/store";
 import { UFS } from "@/lib/types";
 import type { Recipient, Sender } from "@/lib/types";
@@ -133,6 +134,8 @@ export function CustomersPage() {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [searchingLocation, setSearchingLocation] = useState(false);
 
   const rows = useMemo<CustomerRow[]>(() => {
     const map = new Map<string, CustomerRow>();
@@ -197,6 +200,7 @@ export function CustomersPage() {
 
   const openNew = () => {
     setForm(EMPTY);
+    setSuggestions([]);
     setOpen(true);
   };
 
@@ -220,7 +224,39 @@ export function CustomersPage() {
       asSender: !!row.senderId,
       asRecipient: !!row.recipientId,
     });
+    setSuggestions([]);
     setOpen(true);
+  };
+
+  const handleSearchLocation = async () => {
+    if (![form.name, form.address, form.city].some((value) => value.trim())) {
+      toast.error("Informe nome, endereco ou cidade para buscar.");
+      return;
+    }
+
+    setSearchingLocation(true);
+    try {
+      const found = await searchPlaceSuggestions(form);
+      setSuggestions(found);
+      if (found.length === 0)
+        toast("Nenhuma sugestao encontrada. Ajuste os dados e busque novamente.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao buscar localizacao.");
+    } finally {
+      setSearchingLocation(false);
+    }
+  };
+
+  const applySuggestion = (suggestion: PlaceSuggestion) => {
+    setForm((current) => ({
+      ...current,
+      address: current.address || suggestion.address || current.address,
+      locationLabel: suggestion.label,
+      lat: suggestion.lat,
+      lng: suggestion.lng,
+      locationSource: "geocoded",
+      geocodedAt: new Date().toISOString(),
+    }));
   };
 
   const applyGoogleLocation = (selection: GoogleLocationSelection) => {
@@ -445,128 +481,174 @@ export function CustomersPage() {
           </div>
         }
       >
-        <div className="grid gap-4 text-[12.5px]">
-          <div className="grid gap-3 md:grid-cols-2">
-            <div>
-              <div className="label-tiny mb-1.5">Nome</div>
-              <Input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="h-9"
-              />
-            </div>
-            <div>
-              <div className="label-tiny mb-1.5">CNPJ</div>
-              <Input
-                value={form.cnpj}
-                onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
-                placeholder="00.000.000/0000-00"
-                className="h-9 font-sans"
-              />
-            </div>
-          </div>
-
-          <GoogleLocationPicker
-            lat={form.lat}
-            lng={form.lng}
-            searchValue={[form.name, form.address, form.city, form.state]
-              .filter(Boolean)
-              .join(", ")}
-            postalCode={form.postalCode}
-            onChange={applyGoogleLocation}
-          />
-
-          <div className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_minmax(180px,0.7fr)_110px_140px]">
-            <div>
-              <div className="label-tiny mb-1.5">Endereco / referencia</div>
-              <Input
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-                placeholder="Rua, bairro, patio, terminal..."
-                className="h-9"
-              />
-            </div>
-            <div>
-              <div className="label-tiny mb-1.5">Cidade</div>
-              <Input
-                value={form.city}
-                onChange={(e) => setForm({ ...form, city: e.target.value })}
-                className="h-9"
-              />
-            </div>
-            <div>
-              <div className="label-tiny mb-1.5">UF</div>
-              <Select value={form.state} onValueChange={(v) => setForm({ ...form, state: v })}>
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {UFS.map((u) => (
-                    <SelectItem key={u} value={u}>
-                      {u}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <div className="label-tiny mb-1.5">CEP</div>
-              <Input
-                value={form.postalCode}
-                onChange={(e) => setForm({ ...form, postalCode: e.target.value })}
-                placeholder="-"
-                className="h-9 font-sans"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-surface/60 px-4 py-3">
+        <div className="grid gap-4 text-[12.5px] xl:grid-cols-[minmax(360px,0.9fr)_minmax(460px,1.1fr)]">
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
               <div>
-                <div className="label-tiny">Remetente</div>
-                <div className="mt-1 text-[11.5px] text-muted-foreground">Pode originar cargas</div>
+                <div className="label-tiny mb-1.5">Nome</div>
+                <Input
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  className="h-9"
+                />
               </div>
-              <Switch
-                checked={form.asSender}
-                onCheckedChange={(checked) => setForm({ ...form, asSender: checked })}
-              />
-            </div>
-            <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-surface/60 px-4 py-3">
               <div>
-                <div className="label-tiny">Destinatario</div>
-                <div className="mt-1 text-[11.5px] text-muted-foreground">Pode receber cargas</div>
-              </div>
-              <Switch
-                checked={form.asRecipient}
-                onCheckedChange={(checked) => setForm({ ...form, asRecipient: checked })}
-              />
-            </div>
-            <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-surface/60 px-4 py-3">
-              <div>
-                <div className="label-tiny">Status</div>
-                <div className="mt-1 text-[11.5px] text-muted-foreground">
-                  Cliente disponivel para vinculo operacional
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] text-muted-foreground">
-                  {form.active ? "Ativo" : "Inativo"}
-                </span>
-                <Switch
-                  checked={form.active}
-                  onCheckedChange={(checked) => setForm({ ...form, active: checked })}
+                <div className="label-tiny mb-1.5">CNPJ</div>
+                <Input
+                  value={form.cnpj}
+                  onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
+                  placeholder="00.000.000/0000-00"
+                  className="h-9 font-sans"
                 />
               </div>
             </div>
+
+            <div className="rounded-2xl border border-border/70 bg-surface/60 p-3">
+              <div className="mb-2 flex items-start justify-between gap-3">
+                <div>
+                  <div className="label-tiny">Local exato</div>
+                  <div className="mt-1 text-[11.5px] text-muted-foreground">
+                    Busque pelo nome, endereco, terminal, fazenda, porto ou pedreira.
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-8 shrink-0 gap-1.5 text-[11.5px]"
+                  onClick={handleSearchLocation}
+                  disabled={searchingLocation}
+                >
+                  {searchingLocation ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Search className="size-3.5" />
+                  )}
+                  Buscar
+                </Button>
+              </div>
+
+              {suggestions.length > 0 ? (
+                <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
+                  {suggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.id}
+                      type="button"
+                      onClick={() => applySuggestion(suggestion)}
+                      className="flex w-full items-start gap-2 rounded-xl border border-border/70 bg-background/60 px-3 py-2 text-left transition hover:border-primary/30 hover:bg-primary/10"
+                    >
+                      <MapPin className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                      <span className="min-w-0 flex-1">
+                        <span className="line-clamp-2 text-[11.5px] font-semibold">
+                          {suggestion.label}
+                        </span>
+                        <span className="mt-1 inline-flex rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+                          {suggestion.provider === "google" ? "Google Maps" : "Mapa aberto"}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-border/70 px-3 py-3 text-[11.5px] font-semibold text-muted-foreground">
+                  Preencha nome, cidade ou endereco e clique em buscar.
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(150px,0.6fr)_90px]">
+              <div>
+                <div className="label-tiny mb-1.5">Endereco / referencia</div>
+                <Input
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  placeholder="Rua, bairro, patio, terminal..."
+                  className="h-9"
+                />
+              </div>
+              <div>
+                <div className="label-tiny mb-1.5">Cidade</div>
+                <Input
+                  value={form.city}
+                  onChange={(e) => setForm({ ...form, city: e.target.value })}
+                  className="h-9"
+                />
+              </div>
+              <div>
+                <div className="label-tiny mb-1.5">UF</div>
+                <Select value={form.state} onValueChange={(v) => setForm({ ...form, state: v })}>
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UFS.map((u) => (
+                      <SelectItem key={u} value={u}>
+                        {u}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+              <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-surface/60 px-4 py-3">
+                <div>
+                  <div className="label-tiny">Remetente</div>
+                  <div className="mt-1 text-[11.5px] text-muted-foreground">
+                    Pode originar cargas
+                  </div>
+                </div>
+                <Switch
+                  checked={form.asSender}
+                  onCheckedChange={(checked) => setForm({ ...form, asSender: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-surface/60 px-4 py-3">
+                <div>
+                  <div className="label-tiny">Destinatario</div>
+                  <div className="mt-1 text-[11.5px] text-muted-foreground">
+                    Pode receber cargas
+                  </div>
+                </div>
+                <Switch
+                  checked={form.asRecipient}
+                  onCheckedChange={(checked) => setForm({ ...form, asRecipient: checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-surface/60 px-4 py-3">
+                <div>
+                  <div className="label-tiny">Status</div>
+                  <div className="mt-1 text-[11.5px] text-muted-foreground">Cliente disponivel</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] text-muted-foreground">
+                    {form.active ? "Ativo" : "Inativo"}
+                  </span>
+                  <Switch
+                    checked={form.active}
+                    onCheckedChange={(checked) => setForm({ ...form, active: checked })}
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-border/70 bg-surface/60 px-3 py-2.5">
-            <div className="label-tiny">Ponto confirmado</div>
-            <div className="mt-1 truncate text-[12px] font-semibold text-foreground">
-              {form.locationLabel || form.address || "-"}
-            </div>
-            <div className="mt-1 font-sans text-[11px] text-muted-foreground">
-              {formatCoords(form.lat, form.lng)}
+          <div className="space-y-3">
+            <GoogleLocationPicker
+              lat={form.lat}
+              lng={form.lng}
+              postalCode={form.postalCode}
+              onChange={applyGoogleLocation}
+            />
+
+            <div className="rounded-2xl border border-border/70 bg-surface/60 px-3 py-2.5">
+              <div className="label-tiny">Ponto confirmado</div>
+              <div className="mt-1 truncate text-[12px] font-semibold text-foreground">
+                {form.locationLabel || form.address || "-"}
+              </div>
+              <div className="mt-1 font-sans text-[11px] text-muted-foreground">
+                {formatCoords(form.lat, form.lng)}
+              </div>
             </div>
           </div>
         </div>

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createServerFn } from "@tanstack/react-start";
 import { Loader2, MapPin } from "lucide-react";
-import { Input } from "@/components/ui/input";
 
 type GoogleLatLngLiteral = { lat: number; lng: number };
 
@@ -58,15 +57,6 @@ type GoogleMapsApi = {
         callback: (results: GoogleGeocoderResult[] | null, status: string) => void,
       ) => void;
     };
-    places: {
-      Autocomplete: new (
-        input: HTMLInputElement,
-        options: Record<string, unknown>,
-      ) => {
-        addListener: (eventName: string, callback: () => void) => void;
-        getPlace: () => GooglePlaceResult;
-      };
-    };
     MapTypeId: { HYBRID: string };
     event: {
       clearInstanceListeners: (instance: unknown) => void;
@@ -100,7 +90,6 @@ export type GoogleLocationSelection = {
 type Props = {
   lat?: number;
   lng?: number;
-  searchValue?: string;
   postalCode?: string;
   onChange: (selection: GoogleLocationSelection) => void;
 };
@@ -113,7 +102,7 @@ const getGoogleMapsClientKey = createServerFn({ method: "GET" }).handler(async (
 
 async function loadGoogleMaps() {
   if (typeof window === "undefined") return Promise.reject(new Error("Mapa indisponivel."));
-  if (window.google?.maps?.places) return Promise.resolve(window.google);
+  if (window.google?.maps) return Promise.resolve(window.google);
   if (window.__frotakGoogleMapsPromise) return window.__frotakGoogleMapsPromise;
 
   let apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
@@ -134,7 +123,6 @@ async function loadGoogleMaps() {
     const script = document.createElement("script");
     const params = new URLSearchParams({
       key: apiKey,
-      libraries: "places",
       language: "pt-BR",
       region: "BR",
       loading: "async",
@@ -143,7 +131,7 @@ async function loadGoogleMaps() {
     script.async = true;
     script.defer = true;
     script.onload = () => {
-      if (window.google?.maps?.places) resolve(window.google);
+      if (window.google?.maps) resolve(window.google);
       else reject(new Error("Google Maps nao carregou corretamente."));
     };
     script.onerror = () => reject(new Error("Nao foi possivel carregar Google Maps."));
@@ -190,9 +178,8 @@ function parseAddress(
   };
 }
 
-export function GoogleLocationPicker({ lat, lng, searchValue, postalCode, onChange }: Props) {
+export function GoogleLocationPicker({ lat, lng, postalCode, onChange }: Props) {
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
   const mapInstanceRef = useRef<InstanceType<GoogleMapsApi["maps"]["Map"]> | null>(null);
   const markerRef = useRef<InstanceType<GoogleMapsApi["maps"]["Marker"]> | null>(null);
   const geocoderRef = useRef<InstanceType<GoogleMapsApi["maps"]["Geocoder"]> | null>(null);
@@ -209,7 +196,7 @@ export function GoogleLocationPicker({ lat, lng, searchValue, postalCode, onChan
 
     loadGoogleMaps()
       .then((google) => {
-        if (cancelled || !mapRef.current || !inputRef.current) return;
+        if (cancelled || !mapRef.current) return;
 
         const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
         const center = hasCoords ? { lat: lat!, lng: lng! } : DEFAULT_CENTER;
@@ -229,12 +216,6 @@ export function GoogleLocationPicker({ lat, lng, searchValue, postalCode, onChan
           draggable: true,
           visible: hasCoords,
         });
-        const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
-          componentRestrictions: { country: "br" },
-          fields: ["name", "formatted_address", "geometry", "address_components"],
-          types: ["establishment", "geocode"],
-        });
-
         const updateMarker = (coords: GoogleLatLngLiteral, visible = true) => {
           marker.setPosition(coords);
           (marker as unknown as { setVisible?: (value: boolean) => void }).setVisible?.(visible);
@@ -261,20 +242,6 @@ export function GoogleLocationPicker({ lat, lng, searchValue, postalCode, onChan
             onChangeRef.current(parseAddress(results[0], coords, "manual"));
           });
         };
-
-        autocomplete.addListener("place_changed", () => {
-          const place = autocomplete.getPlace();
-          const location = place.geometry?.location;
-          if (!location) {
-            setError("Selecione uma sugestao valida do Google Maps.");
-            return;
-          }
-
-          const coords = { lat: location.lat(), lng: location.lng() };
-          setError("");
-          updateMarker(coords);
-          onChangeRef.current(parseAddress(place, coords, "geocoded"));
-        });
 
         marker.addListener("dragend", () => {
           const position = marker.getPosition();
@@ -319,17 +286,7 @@ export function GoogleLocationPicker({ lat, lng, searchValue, postalCode, onChan
 
   return (
     <div className="space-y-3">
-      <div>
-        <div className="label-tiny mb-1.5">Buscar no Google Maps</div>
-        <Input
-          ref={inputRef}
-          defaultValue={searchValue}
-          placeholder="Pesquisar empresa, endereco, terminal, porto, fazenda, pedreira..."
-          className="h-11 text-[13px]"
-        />
-      </div>
-
-      <div className="relative h-[420px] overflow-hidden rounded-2xl border border-border bg-surface-2 md:h-[520px]">
+      <div className="relative h-[300px] overflow-hidden rounded-2xl border border-border bg-surface-2 md:h-[420px]">
         <div ref={mapRef} className="h-full w-full" />
         {loading ? (
           <div className="absolute inset-0 flex items-center justify-center bg-background/75">
@@ -340,8 +297,12 @@ export function GoogleLocationPicker({ lat, lng, searchValue, postalCode, onChan
           </div>
         ) : null}
         {error ? (
-          <div className="absolute inset-x-4 top-4 rounded-2xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-[12px] font-bold text-destructive">
-            {error}
+          <div className="absolute inset-4 flex items-center justify-center rounded-2xl border border-border bg-surface/95 px-4 text-center">
+            <div className="max-w-sm text-[12px] font-semibold text-muted-foreground">
+              Nao foi possivel abrir o mapa agora. A busca continua disponivel e o ponto pode ser
+              salvo quando houver coordenadas.
+              <span className="mt-1 block font-sans text-[10px] opacity-70">{error}</span>
+            </div>
           </div>
         ) : null}
       </div>
