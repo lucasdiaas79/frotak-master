@@ -54,6 +54,7 @@ interface FormState {
   city: string;
   state: string;
   address: string;
+  district: string;
   postalCode: string;
   locationLabel: string;
   locationSource?: LocationSource;
@@ -71,6 +72,7 @@ const EMPTY: FormState = {
   city: "",
   state: "SE",
   address: "",
+  district: "",
   postalCode: "",
   locationLabel: "",
   active: true,
@@ -107,6 +109,10 @@ function locationLabel(input: CustomerRow) {
 function formatCoords(lat?: number, lng?: number) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return "-";
   return `${lat!.toFixed(5)}, ${lng!.toFixed(5)}`;
+}
+
+function onlyDigits(value: string) {
+  return value.replace(/\D/g, "");
 }
 
 function locationFromParty(p: Sender | Recipient) {
@@ -214,6 +220,7 @@ export function CustomersPage() {
       city: row.city,
       state: row.state,
       address: row.address ?? "",
+      district: "",
       postalCode: "",
       locationLabel: row.locationLabel ?? "",
       locationSource: row.locationSource,
@@ -229,8 +236,12 @@ export function CustomersPage() {
   };
 
   const handleSearchLocation = async () => {
-    if (![form.name, form.address, form.city].some((value) => value.trim())) {
-      toast.error("Informe nome, endereco ou cidade para buscar.");
+    if (
+      ![form.name, form.postalCode, form.address, form.district, form.city].some((value) =>
+        value.trim(),
+      )
+    ) {
+      toast.error("Informe nome, CEP, endereco ou cidade para buscar.");
       return;
     }
 
@@ -244,6 +255,34 @@ export function CustomersPage() {
       toast.error(error instanceof Error ? error.message : "Falha ao buscar localizacao.");
     } finally {
       setSearchingLocation(false);
+    }
+  };
+
+  const fillAddressFromPostalCode = async () => {
+    const cep = onlyDigits(form.postalCode);
+    if (cep.length !== 8) return;
+
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      if (!response.ok) return;
+      const data = (await response.json()) as {
+        erro?: boolean;
+        logradouro?: string;
+        bairro?: string;
+        localidade?: string;
+        uf?: string;
+      };
+      if (data.erro) return;
+
+      setForm((current) => ({
+        ...current,
+        address: current.address || data.logradouro || current.address,
+        district: current.district || data.bairro || current.district,
+        city: data.localidade || current.city,
+        state: data.uf || current.state,
+      }));
+    } catch {
+      // CEP e apenas um auxilio de busca; se falhar, o cadastro continua manual.
     }
   };
 
@@ -508,7 +547,7 @@ export function CustomersPage() {
                 <div>
                   <div className="label-tiny">Local exato</div>
                   <div className="mt-1 text-[11.5px] text-muted-foreground">
-                    Busque pelo nome, endereco, terminal, fazenda, porto ou pedreira.
+                    Quanto mais dados, melhor a sugestao: CEP, referencia, bairro, cidade e UF.
                   </div>
                 </div>
                 <Button
@@ -525,6 +564,28 @@ export function CustomersPage() {
                   )}
                   Buscar
                 </Button>
+              </div>
+
+              <div className="mb-3 grid gap-2 md:grid-cols-[120px_minmax(0,1fr)]">
+                <div>
+                  <div className="label-tiny mb-1.5">CEP</div>
+                  <Input
+                    value={form.postalCode}
+                    onChange={(e) => setForm({ ...form, postalCode: e.target.value })}
+                    onBlur={() => void fillAddressFromPostalCode()}
+                    placeholder="00000-000"
+                    className="h-9 font-sans"
+                  />
+                </div>
+                <div>
+                  <div className="label-tiny mb-1.5">Bairro / distrito</div>
+                  <Input
+                    value={form.district}
+                    onChange={(e) => setForm({ ...form, district: e.target.value })}
+                    placeholder="Distrito, bairro, zona rural..."
+                    className="h-9"
+                  />
+                </div>
               </div>
 
               {suggestions.length > 0 ? (
@@ -550,14 +611,14 @@ export function CustomersPage() {
                 </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-border/70 px-3 py-3 text-[11.5px] font-semibold text-muted-foreground">
-                  Preencha nome, cidade ou endereco e clique em buscar.
+                  Preencha os campos acima e clique em buscar. Depois confirme o ponto no mapa.
                 </div>
               )}
             </div>
 
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(150px,0.6fr)_90px]">
               <div>
-                <div className="label-tiny mb-1.5">Endereco / referencia</div>
+                <div className="label-tiny mb-1.5">Endereco / rodovia / referencia</div>
                 <Input
                   value={form.address}
                   onChange={(e) => setForm({ ...form, address: e.target.value })}

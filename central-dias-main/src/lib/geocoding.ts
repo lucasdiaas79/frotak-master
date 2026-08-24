@@ -12,7 +12,9 @@ export interface PlaceSuggestion {
 
 interface PlaceSearchInput {
   name?: string;
+  postalCode?: string;
   address?: string;
+  district?: string;
   city?: string;
   state?: string;
 }
@@ -31,15 +33,18 @@ function normalizeSearchText(value?: string) {
 
 function uniqueQueries(input: PlaceSearchInput) {
   const name = normalizeSearchText(input.name);
+  const postalCode = normalizeSearchText(input.postalCode);
   const address = normalizeSearchText(input.address);
+  const district = normalizeSearchText(input.district);
   const city = normalizeSearchText(input.city);
   const state = normalizeSearchText(input.state);
   const queries = [
-    compact([name, address, city, state, "Brasil"]).join(", "),
+    compact([name, address, district, city, state, "Brasil"]).join(", "),
+    compact([name, district, city, state, "Brasil"]).join(", "),
     compact([name, city, state, "Brasil"]).join(", "),
-    compact([name, state, "Brasil"]).join(", "),
-    compact([address, city, state, "Brasil"]).join(", "),
-    compact([address, state, "Brasil"]).join(", "),
+    compact([address, district, city, state, "Brasil"]).join(", "),
+    compact([postalCode, city, state, "Brasil"]).join(", "),
+    compact([postalCode, "Brasil"]).join(", "),
     compact([city, state, "Brasil"]).join(", "),
   ];
   return Array.from(new Set(queries.filter((query) => query && query !== "Brasil")));
