@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Building2, ExternalLink, Loader2, MapPin, Pencil, Plus, Search } from "lucide-react";
+import { Building2, Loader2, MapPin, Pencil, Plus, Search } from "lucide-react";
+import {
+  GoogleLocationPicker,
+  type GoogleLocationSelection,
+} from "@/components/GoogleLocationPicker";
 import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
-import { LocationPickerMap } from "@/components/LocationPickerMap";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,7 +17,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { searchPlaceSuggestions, type PlaceSuggestion } from "@/lib/geocoding";
 import { useFleet } from "@/lib/store";
 import { UFS } from "@/lib/types";
 import type { Recipient, Sender } from "@/lib/types";
@@ -51,6 +53,7 @@ interface FormState {
   city: string;
   state: string;
   address: string;
+  postalCode: string;
   locationLabel: string;
   locationSource?: LocationSource;
   lat?: number;
@@ -67,6 +70,7 @@ const EMPTY: FormState = {
   city: "",
   state: "SE",
   address: "",
+  postalCode: "",
   locationLabel: "",
   active: true,
   asSender: true,
@@ -104,14 +108,6 @@ function formatCoords(lat?: number, lng?: number) {
   return `${lat!.toFixed(5)}, ${lng!.toFixed(5)}`;
 }
 
-function googleMapsSearchUrl(form: FormState) {
-  const query = [form.name, form.address, form.city, form.state, "Brasil"]
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .join(", ");
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-}
-
 function locationFromParty(p: Sender | Recipient) {
   return {
     address: p.address,
@@ -137,8 +133,6 @@ export function CustomersPage() {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
-  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
-  const [searchingLocation, setSearchingLocation] = useState(false);
 
   const rows = useMemo<CustomerRow[]>(() => {
     const map = new Map<string, CustomerRow>();
@@ -203,7 +197,6 @@ export function CustomersPage() {
 
   const openNew = () => {
     setForm(EMPTY);
-    setSuggestions([]);
     setOpen(true);
   };
 
@@ -217,6 +210,7 @@ export function CustomersPage() {
       city: row.city,
       state: row.state,
       address: row.address ?? "",
+      postalCode: "",
       locationLabel: row.locationLabel ?? "",
       locationSource: row.locationSource,
       lat: row.lat,
@@ -226,36 +220,20 @@ export function CustomersPage() {
       asSender: !!row.senderId,
       asRecipient: !!row.recipientId,
     });
-    setSuggestions([]);
     setOpen(true);
   };
 
-  const handleSearchLocation = async () => {
-    if (![form.name, form.address, form.city].some((value) => value.trim())) {
-      toast.error("Informe nome, endereco ou cidade para buscar.");
-      return;
-    }
-
-    setSearchingLocation(true);
-    try {
-      const found = await searchPlaceSuggestions(form);
-      setSuggestions(found);
-      if (found.length === 0) toast("Nenhuma sugestao encontrada. Marque o ponto no mapa.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao buscar localizacao.");
-    } finally {
-      setSearchingLocation(false);
-    }
-  };
-
-  const applySuggestion = (suggestion: PlaceSuggestion) => {
+  const applyGoogleLocation = (selection: GoogleLocationSelection) => {
     setForm((current) => ({
       ...current,
-      address: current.address || suggestion.address || current.address,
-      locationLabel: suggestion.label,
-      lat: suggestion.lat,
-      lng: suggestion.lng,
-      locationSource: "geocoded",
+      address: selection.address || current.address,
+      postalCode: selection.postalCode,
+      city: selection.city || current.city,
+      state: selection.state || current.state,
+      locationLabel: selection.label,
+      lat: selection.lat,
+      lng: selection.lng,
+      locationSource: selection.source,
       geocodedAt: new Date().toISOString(),
     }));
   };
@@ -455,7 +433,7 @@ export function CustomersPage() {
         open={open}
         onOpenChange={setOpen}
         title={form.key ? "Editar cliente" : "Novo cliente"}
-        size="lg"
+        size="xl"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="ghost" className="h-9" onClick={() => setOpen(false)}>
@@ -467,9 +445,9 @@ export function CustomersPage() {
           </div>
         }
       >
-        <div className="grid gap-4 text-[12.5px] lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="sm:col-span-2">
+        <div className="grid gap-4 text-[12.5px]">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
               <div className="label-tiny mb-1.5">Nome</div>
               <Input
                 value={form.name}
@@ -477,7 +455,7 @@ export function CustomersPage() {
                 className="h-9"
               />
             </div>
-            <div className="sm:col-span-2">
+            <div>
               <div className="label-tiny mb-1.5">CNPJ</div>
               <Input
                 value={form.cnpj}
@@ -486,7 +464,20 @@ export function CustomersPage() {
                 className="h-9 font-sans"
               />
             </div>
-            <div className="sm:col-span-2">
+          </div>
+
+          <GoogleLocationPicker
+            lat={form.lat}
+            lng={form.lng}
+            searchValue={[form.name, form.address, form.city, form.state]
+              .filter(Boolean)
+              .join(", ")}
+            postalCode={form.postalCode}
+            onChange={applyGoogleLocation}
+          />
+
+          <div className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_minmax(180px,0.7fr)_110px_140px]">
+            <div>
               <div className="label-tiny mb-1.5">Endereco / referencia</div>
               <Input
                 value={form.address}
@@ -518,35 +509,39 @@ export function CustomersPage() {
                 </SelectContent>
               </Select>
             </div>
-
-            <div className="sm:col-span-2 grid gap-3 md:grid-cols-2">
-              <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-surface/60 px-4 py-3">
-                <div>
-                  <div className="label-tiny">Remetente</div>
-                  <div className="mt-1 text-[11.5px] text-muted-foreground">
-                    Pode originar cargas
-                  </div>
-                </div>
-                <Switch
-                  checked={form.asSender}
-                  onCheckedChange={(checked) => setForm({ ...form, asSender: checked })}
-                />
-              </div>
-              <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-surface/60 px-4 py-3">
-                <div>
-                  <div className="label-tiny">Destinatario</div>
-                  <div className="mt-1 text-[11.5px] text-muted-foreground">
-                    Pode receber cargas
-                  </div>
-                </div>
-                <Switch
-                  checked={form.asRecipient}
-                  onCheckedChange={(checked) => setForm({ ...form, asRecipient: checked })}
-                />
-              </div>
+            <div>
+              <div className="label-tiny mb-1.5">CEP</div>
+              <Input
+                value={form.postalCode}
+                onChange={(e) => setForm({ ...form, postalCode: e.target.value })}
+                placeholder="-"
+                className="h-9 font-sans"
+              />
             </div>
+          </div>
 
-            <div className="sm:col-span-2 flex items-center justify-between rounded-2xl border border-border/70 bg-surface/60 px-4 py-3">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-surface/60 px-4 py-3">
+              <div>
+                <div className="label-tiny">Remetente</div>
+                <div className="mt-1 text-[11.5px] text-muted-foreground">Pode originar cargas</div>
+              </div>
+              <Switch
+                checked={form.asSender}
+                onCheckedChange={(checked) => setForm({ ...form, asSender: checked })}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-surface/60 px-4 py-3">
+              <div>
+                <div className="label-tiny">Destinatario</div>
+                <div className="mt-1 text-[11.5px] text-muted-foreground">Pode receber cargas</div>
+              </div>
+              <Switch
+                checked={form.asRecipient}
+                onCheckedChange={(checked) => setForm({ ...form, asRecipient: checked })}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-2xl border border-border/70 bg-surface/60 px-4 py-3">
               <div>
                 <div className="label-tiny">Status</div>
                 <div className="mt-1 text-[11.5px] text-muted-foreground">
@@ -565,95 +560,13 @@ export function CustomersPage() {
             </div>
           </div>
 
-          <div className="space-y-3">
-            <div className="rounded-2xl border border-border/70 bg-surface/60 p-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="label-tiny">Local exato</div>
-                  <div className="mt-1 text-[11.5px] text-muted-foreground">
-                    Busque pelo nome da empresa, confirme a sugestao ou marque no mapa.
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-8 gap-1.5 text-[11.5px]"
-                    onClick={handleSearchLocation}
-                    disabled={searchingLocation}
-                  >
-                    {searchingLocation ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <Search className="size-3.5" />
-                    )}
-                    Buscar
-                  </Button>
-                  <Button
-                    asChild
-                    type="button"
-                    variant="ghost"
-                    className="h-8 gap-1.5 text-[11.5px]"
-                  >
-                    <a href={googleMapsSearchUrl(form)} target="_blank" rel="noreferrer">
-                      <ExternalLink className="size-3.5" />
-                      Google
-                    </a>
-                  </Button>
-                </div>
-              </div>
-
-              {suggestions.length > 0 && (
-                <div className="mt-3 max-h-36 space-y-2 overflow-y-auto">
-                  {suggestions.map((suggestion) => (
-                    <button
-                      key={suggestion.id}
-                      type="button"
-                      onClick={() => applySuggestion(suggestion)}
-                      className="flex w-full items-start gap-2 rounded-xl border border-border/70 bg-background/60 px-3 py-2 text-left transition hover:border-primary/30 hover:bg-primary/10"
-                    >
-                      <MapPin className="mt-0.5 size-3.5 shrink-0 text-primary" />
-                      <span className="min-w-0 flex-1">
-                        <span className="line-clamp-2 text-[11.5px] font-semibold">
-                          {suggestion.label}
-                        </span>
-                        <span className="mt-1 inline-flex rounded-full border border-border bg-surface-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
-                          {suggestion.provider === "google" ? "Google Maps" : "Mapa aberto"}
-                        </span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+          <div className="rounded-2xl border border-border/70 bg-surface/60 px-3 py-2.5">
+            <div className="label-tiny">Ponto confirmado</div>
+            <div className="mt-1 truncate text-[12px] font-semibold text-foreground">
+              {form.locationLabel || form.address || "-"}
             </div>
-
-            <LocationPickerMap
-              lat={form.lat}
-              lng={form.lng}
-              onChange={({ lat, lng }) =>
-                setForm((current) => ({
-                  ...current,
-                  lat,
-                  lng,
-                  locationSource: "manual",
-                  locationLabel:
-                    current.locationLabel ||
-                    current.address ||
-                    [current.name, current.city, current.state].filter(Boolean).join(", "),
-                  geocodedAt: new Date().toISOString(),
-                }))
-              }
-              className="h-56 overflow-hidden rounded-2xl border border-border bg-surface-2"
-            />
-
-            <div className="rounded-2xl border border-border/70 bg-surface/60 px-3 py-2.5">
-              <div className="label-tiny">Ponto confirmado</div>
-              <div className="mt-1 truncate text-[12px] font-semibold text-foreground">
-                {form.locationLabel || form.address || "-"}
-              </div>
-              <div className="mt-1 font-sans text-[11px] text-muted-foreground">
-                {formatCoords(form.lat, form.lng)}
-              </div>
+            <div className="mt-1 font-sans text-[11px] text-muted-foreground">
+              {formatCoords(form.lat, form.lng)}
             </div>
           </div>
         </div>
