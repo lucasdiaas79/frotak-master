@@ -37,6 +37,7 @@ Regras obrigatorias:
 - Nunca mostre tokens, refresh tokens, senhas, chaves, service role, anon key ou segredos.
 - Nao use asteriscos para formatacao.
 - Use quebras de linha, topicos e emojis com moderacao quando melhorar a leitura.
+- Responda sempre como produto final. Nunca narre sua analise, plano, interpretacao, busca, refinamento ou etapas internas.
 `.trim();
 
 type FrotakAiMessage = {
@@ -815,12 +816,27 @@ function tenantContextInstruction(context: TenantAiContext) {
     "Responda sempre em portugues do Brasil, de forma objetiva, pratica e operacional.",
     "Toda a resposta visivel ao usuario deve estar em portugues. Nao escreva frases, titulos ou raciocinio em ingles.",
     "Nao mostre seu processo interno. Nao escreva 'Identifying', 'Analyzing', 'Pinpointing', 'Locating', 'focusing', 'refining', 'proxy' ou qualquer planejamento de resposta.",
+    "Nao diga que vai analisar, procurar, identificar ou refinar. Ja responda diretamente com o resultado.",
     "Entregue somente a resposta final para o usuario.",
     "Formato preferido: paragrafos curtos, listas e linhas separadas quando houver varios dados.",
     "Nao escreva tudo em um unico bloco.",
     "Nao use markdown com asteriscos. Se quiser destacar algo, use texto simples e quebras de linha.",
     "CONTEXTO DO TENANT:",
     JSON.stringify(context),
+  ].join("\n");
+}
+
+function tenantVoiceInstruction(context: TenantAiContext) {
+  return [
+    tenantContextInstruction(context),
+    "REGRAS ESPECIFICAS DO BATE-PAPO DE VOZ:",
+    "Responda imediatamente, de forma natural, curta e direta.",
+    "Nunca fale em ingles.",
+    "Nunca fale titulos como 'Analyzing', 'Locating', 'Interpreting', 'Listing', 'Identifying' ou semelhantes.",
+    "Nunca narre seu passo a passo. Nao diga 'vou consultar', 'estou analisando', 'estou interpretando' ou 'meu plano'.",
+    "A resposta por voz deve soar como uma pessoa respondendo ao operador: primeiro o resultado, depois no maximo 2 ou 3 detalhes uteis.",
+    "Se a pergunta pedir lista longa, entregue os principais itens e pergunte se o usuario quer continuar.",
+    "Se nao encontrar a informacao, diga isso em portugues de forma simples.",
   ].join("\n");
 }
 
@@ -879,11 +895,25 @@ export const createFrotakAiVoiceToken = createServerFn({ method: "POST" })
             model,
             config: {
               responseModalities: [Modality.AUDIO],
+              temperature: 0.1,
+              topP: 0.8,
+              maxOutputTokens: 450,
+              thinkingConfig: {
+                includeThoughts: false,
+                thinkingBudget: 0,
+              },
+              inputAudioTranscription: {},
               outputAudioTranscription: {},
-              systemInstruction: tenantContextInstruction(tenantContext),
+              systemInstruction: tenantVoiceInstruction(tenantContext),
             },
           },
-          lockAdditionalFields: ["model", "responseModalities", "systemInstruction"],
+          lockAdditionalFields: [
+            "model",
+            "responseModalities",
+            "systemInstruction",
+            "temperature",
+            "thinkingConfig",
+          ],
         },
       });
 

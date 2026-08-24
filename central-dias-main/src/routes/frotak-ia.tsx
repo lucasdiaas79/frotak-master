@@ -154,6 +154,35 @@ function silencePcmBase64(sampleCount: number) {
   return window.btoa(binary);
 }
 
+function cleanAssistantText(text: string) {
+  return text
+    .replace(/\*/g, "")
+    .replace(/\r/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function isInternalReasoningBlock(text: string) {
+  return /\b(analyzing|identifying|pinpointing|locating|interpreting|listing|focusing|refining|examining|cross-referencing|initial scan|good lead|my plan|my approach|i'?m now|i will|i have|i'?ve|therefore|proxy|requested|context|trackerPositions)\b/i.test(
+    text,
+  );
+}
+
+function finalVoiceText(rawText: string) {
+  const cleanText = cleanAssistantText(rawText);
+  if (!cleanText) return "";
+
+  const blocks = cleanText
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  const visibleBlocks = blocks.filter((block) => !isInternalReasoningBlock(block));
+
+  if (visibleBlocks.length > 0) return visibleBlocks.join("\n\n").trim();
+  if (!isInternalReasoningBlock(cleanText)) return cleanText;
+  return "Resposta concluida em voz.";
+}
+
 function FrotakIaPage() {
   const [mode, setMode] = useState<ChatMode>("text");
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
@@ -200,25 +229,24 @@ function FrotakIaPage() {
     voiceAssistantTextRef.current = "";
   };
 
-  const appendVoiceAssistantText = (text: string) => {
-    voiceAssistantTextRef.current += text.replace(/\*/g, "");
-    const cleanText = voiceAssistantTextRef.current.trim();
-    if (!cleanText) return;
-
-    if (voiceAssistantMessageIdRef.current) {
-      updateMessage(voiceAssistantMessageIdRef.current, cleanText, true);
-      return;
-    }
+  const ensureVoiceAssistantMessage = () => {
+    if (voiceAssistantMessageIdRef.current) return voiceAssistantMessageIdRef.current;
 
     const id = `voice-assistant-${Date.now()}`;
     voiceAssistantMessageIdRef.current = id;
     appendMessage({
       id,
       role: "assistant",
-      text: cleanText,
+      text: "Respondendo...",
       voice: true,
       pending: true,
     });
+    return id;
+  };
+
+  const appendVoiceAssistantText = (text: string) => {
+    voiceAssistantTextRef.current += text.replace(/\*/g, "");
+    ensureVoiceAssistantMessage();
   };
 
   const getOutputAudioContext = () => {
@@ -252,7 +280,9 @@ function FrotakIaPage() {
 
   const finishVoiceTurn = () => {
     const assistantId = voiceAssistantMessageIdRef.current;
-    if (assistantId) updateMessage(assistantId, voiceAssistantTextRef.current.trim(), false);
+    if (assistantId) {
+      updateMessage(assistantId, finalVoiceText(voiceAssistantTextRef.current), false);
+    }
 
     const playbackDelay = outputAudioContextRef.current
       ? Math.max(
@@ -284,6 +314,7 @@ function FrotakIaPage() {
         if (part.text) appendVoiceAssistantText(part.text);
         if (part.inlineData?.data) {
           setVoiceState("speaking");
+          ensureVoiceAssistantMessage();
           playbackQueueRef.current = playbackQueueRef.current
             .then(() => playVoiceChunk(part.inlineData!.data!, part.inlineData?.mimeType))
             .catch((error) => {
@@ -337,6 +368,14 @@ function FrotakIaPage() {
         model,
         config: {
           responseModalities: [Modality.AUDIO],
+          temperature: 0.1,
+          topP: 0.8,
+          maxOutputTokens: 450,
+          thinkingConfig: {
+            includeThoughts: false,
+            thinkingBudget: 0,
+          },
+          inputAudioTranscription: {},
           outputAudioTranscription: {},
         },
         callbacks: {
@@ -406,6 +445,8 @@ function FrotakIaPage() {
     }
   };
 
+  // Encerra microfone/sessao Live somente ao desmontar a tela.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => stopVoice, []);
 
   const sendMessage = async () => {
