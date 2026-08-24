@@ -22,6 +22,16 @@ interface PlaceSearchInput {
   state?: string;
 }
 
+interface GoogleMapsLinkResult {
+  label: string;
+  lat: number;
+  lng: number;
+  address?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+}
+
 function compact(parts: Array<string | undefined>) {
   return parts.map((part) => part?.trim()).filter(Boolean) as string[];
 }
@@ -76,6 +86,146 @@ export async function searchPlaceSuggestions(input: PlaceSearchInput): Promise<P
 
   return dedupeSuggestions(allResults).slice(0, 8);
 }
+
+function validCoords(lat: number, lng: number) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
+}
+
+function parseCoordinatePair(value?: string | null) {
+  const decoded = decodeURIComponent(value ?? "");
+  const match = decoded.match(/(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/);
+  if (!match) return null;
+
+  const lat = Number(match[1]);
+  const lng = Number(match[2]);
+  return validCoords(lat, lng) ? { lat, lng } : null;
+}
+
+function normalizeMapsUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+function extractCoordsFromMapsUrl(value: string) {
+  const decoded = decodeURIComponent(value);
+
+  const placeCoords = decoded.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if (placeCoords) {
+    const lat = Number(placeCoords[1]);
+    const lng = Number(placeCoords[2]);
+    if (validCoords(lat, lng)) return { lat, lng };
+  }
+
+  const atCoords = decoded.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,|z|\/|$)/);
+  if (atCoords) {
+    const lat = Number(atCoords[1]);
+    const lng = Number(atCoords[2]);
+    if (validCoords(lat, lng)) return { lat, lng };
+  }
+
+  try {
+    const url = new URL(decoded);
+    for (const key of ["q", "ll", "query", "destination", "daddr"]) {
+      const coords = parseCoordinatePair(url.searchParams.get(key));
+      if (coords) return coords;
+    }
+  } catch {
+    // Links de Maps podem vir parcialmente codificados; os regex acima cobrem esses casos.
+  }
+
+  return parseCoordinatePair(decoded);
+}
+
+async function expandGoogleMapsUrl(input: string) {
+  let current = normalizeMapsUrl(input);
+  if (!current) throw new Error("Cole um link do Google Maps.");
+
+  for (let step = 0; step < 6; step += 1) {
+    const coords = extractCoordsFromMapsUrl(current);
+    if (coords) return { finalUrl: current, coords };
+
+    const response = await fetch(current, {
+      method: "GET",
+      redirect: "manual",
+      headers: {
+        "User-Agent": "Frotak/1.0 location resolver",
+      },
+    });
+
+    const location = response.headers.get("location");
+    if (!location) {
+      const finalUrl = response.url || current;
+      return { finalUrl, coords: extractCoordsFromMapsUrl(finalUrl) };
+    }
+
+    current = new URL(location, current).toString();
+  }
+
+  return { finalUrl: current, coords: extractCoordsFromMapsUrl(current) };
+}
+
+async function reverseOpenStreetMapLocation(lat: number, lng: number) {
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    lat: String(lat),
+    lon: String(lng),
+    addressdetails: "1",
+  });
+
+  const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params.toString()}`, {
+    headers: { "Accept-Language": "pt-BR,pt;q=0.9" },
+  });
+
+  if (!response.ok) return {};
+
+  const row = (await response.json()) as {
+    display_name?: string;
+    address?: Record<string, string>;
+  };
+
+  return {
+    label: row.display_name,
+    address: row.display_name,
+    city: osmCity(row.address),
+    state: osmUf(row.address),
+    postalCode: row.address?.postcode,
+  };
+}
+
+export const resolveGoogleMapsLink = createServerFn({ method: "POST" })
+  .inputValidator((input: { link: string }) => input)
+  .handler(async ({ data }): Promise<GoogleMapsLinkResult> => {
+    const link = data.link.trim();
+    if (!link) throw new Error("Cole um link do Google Maps.");
+    if (!/(google\.[a-z.]+\/maps|maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(link)) {
+      throw new Error("O link informado nao parece ser do Google Maps.");
+    }
+
+    const { finalUrl, coords } = await expandGoogleMapsUrl(link);
+    if (!coords) {
+      throw new Error("Nao consegui extrair latitude e longitude desse link.");
+    }
+
+    const reverse = await reverseOpenStreetMapLocation(coords.lat, coords.lng);
+    return {
+      label: reverse.label || finalUrl,
+      address: reverse.address,
+      city: reverse.city,
+      state: reverse.state,
+      postalCode: reverse.postalCode,
+      lat: coords.lat,
+      lng: coords.lng,
+    };
+  });
 
 function dedupeSuggestions(results: PlaceSuggestion[]) {
   const seen = new Set<string>();

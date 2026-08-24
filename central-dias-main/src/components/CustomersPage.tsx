@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Building2, Loader2, MapPin, Pencil, Plus, Search } from "lucide-react";
+import { Building2, LinkIcon, Loader2, MapPin, Pencil, Plus, Search } from "lucide-react";
 import {
   GoogleLocationPicker,
   type GoogleLocationSelection,
@@ -17,7 +17,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { searchPlaceSuggestions, type PlaceSuggestion } from "@/lib/geocoding";
+import {
+  resolveGoogleMapsLink,
+  searchPlaceSuggestions,
+  type PlaceSuggestion,
+} from "@/lib/geocoding";
 import { useFleet } from "@/lib/store";
 import { UFS } from "@/lib/types";
 import type { Recipient, Sender } from "@/lib/types";
@@ -56,6 +60,7 @@ interface FormState {
   address: string;
   district: string;
   postalCode: string;
+  googleMapsLink: string;
   locationLabel: string;
   locationSource?: LocationSource;
   lat?: number;
@@ -74,6 +79,7 @@ const EMPTY: FormState = {
   address: "",
   district: "",
   postalCode: "",
+  googleMapsLink: "",
   locationLabel: "",
   active: true,
   asSender: true,
@@ -142,6 +148,7 @@ export function CustomersPage() {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [searchingLocation, setSearchingLocation] = useState(false);
+  const [resolvingMapsLink, setResolvingMapsLink] = useState(false);
 
   const rows = useMemo<CustomerRow[]>(() => {
     const map = new Map<string, CustomerRow>();
@@ -222,6 +229,7 @@ export function CustomersPage() {
       address: row.address ?? "",
       district: "",
       postalCode: "",
+      googleMapsLink: "",
       locationLabel: row.locationLabel ?? "",
       locationSource: row.locationSource,
       lat: row.lat,
@@ -299,6 +307,36 @@ export function CustomersPage() {
       locationSource: "geocoded",
       geocodedAt: new Date().toISOString(),
     }));
+  };
+
+  const applyGoogleMapsLink = async () => {
+    const link = form.googleMapsLink.trim();
+    if (!link) {
+      toast.error("Cole o link compartilhado pelo Google Maps.");
+      return;
+    }
+
+    setResolvingMapsLink(true);
+    try {
+      const location = await resolveGoogleMapsLink({ data: { link } });
+      setForm((current) => ({
+        ...current,
+        address: location.address || current.address,
+        city: location.city || current.city,
+        state: location.state || current.state,
+        postalCode: location.postalCode || current.postalCode,
+        locationLabel: location.label,
+        lat: location.lat,
+        lng: location.lng,
+        locationSource: "geocoded",
+        geocodedAt: new Date().toISOString(),
+      }));
+      toast.success("Localizacao do Google Maps aplicada.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nao consegui ler esse link.");
+    } finally {
+      setResolvingMapsLink(false);
+    }
   };
 
   const applyGoogleLocation = (selection: GoogleLocationSelection) => {
@@ -567,6 +605,35 @@ export function CustomersPage() {
                   )}
                   Buscar
                 </Button>
+              </div>
+
+              <div className="mb-3 rounded-xl border border-border/70 bg-background/45 p-2.5">
+                <div className="mb-1.5 flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                  <LinkIcon className="size-3.5 text-primary" />
+                  Link do Google Maps opcional
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={form.googleMapsLink}
+                    onChange={(e) => setForm({ ...form, googleMapsLink: e.target.value })}
+                    placeholder="Cole aqui o link de compartilhar do Google Maps..."
+                    className="h-9 font-sans text-[12px]"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 shrink-0 gap-1.5 text-[11.5px]"
+                    onClick={() => void applyGoogleMapsLink()}
+                    disabled={resolvingMapsLink}
+                  >
+                    {resolvingMapsLink ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <MapPin className="size-3.5" />
+                    )}
+                    Aplicar
+                  </Button>
+                </div>
               </div>
 
               <div className="mb-3 grid gap-2 md:grid-cols-[120px_minmax(0,1fr)]">
