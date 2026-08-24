@@ -368,13 +368,6 @@ function FrotakIaPage() {
         model,
         config: {
           responseModalities: [Modality.AUDIO],
-          temperature: 0.1,
-          topP: 0.8,
-          maxOutputTokens: 450,
-          thinkingConfig: {
-            includeThoughts: false,
-            thinkingBudget: 0,
-          },
           inputAudioTranscription: {},
           outputAudioTranscription: {},
         },
