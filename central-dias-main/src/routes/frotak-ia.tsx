@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { GoogleGenAI, Modality, type LiveServerMessage, type Session } from "@google/genai";
 import { Bot, Download, LoaderCircle, Mic, MicOff, Send, User, Volume2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -7,7 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { getCurrentAccessToken } from "@/lib/auth";
-import { createFrotakAiVoiceToken, sendFrotakAiChatMessage } from "@/lib/frotakAi";
+import { sendFrotakAiChatMessage } from "@/lib/frotakAi";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/frotak-ia")({
@@ -33,6 +32,46 @@ type ChatMessage = {
   pending?: boolean;
 };
 
+type BrowserSpeechRecognition = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+};
+
+type LegacyVoiceSession = {
+  sendRealtimeInput: (input: unknown) => void;
+  close: () => void;
+};
+
+type LegacyLiveServerMessage = {
+  setupComplete?: unknown;
+  serverContent?: {
+    interrupted?: boolean;
+    outputTranscription?: { text?: string };
+    modelTurn?: {
+      parts?: Array<{
+        text?: string;
+        inlineData?: { data?: string; mimeType?: string };
+      }>;
+    };
+    turnComplete?: boolean;
+  };
+};
+
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => BrowserSpeechRecognition;
+    webkitSpeechRecognition?: new () => BrowserSpeechRecognition;
+  }
+}
+
 const initialMessages: ChatMessage[] = [
   {
     id: "welcome",
@@ -43,6 +82,10 @@ const initialMessages: ChatMessage[] = [
 
 const SPEECH_RMS_THRESHOLD = 0.018;
 const SILENCE_END_MS = 850;
+const INTERNAL_REASONING_PATTERN =
+  /\b(analyzing|identifying|pinpointing|locating|interpreting|listing|focusing|refining|examining|calculating|confirming|verifying|cross-referencing|initial scan|good lead|my plan|my approach|i'?m now|i will|i have|i'?ve|therefore|proxy|requested|context|trackerPositions|calculei|calculando|confirmei|confirmando|verifiquei|verificando|analisei|analisando|interpretei|interpretando|identifiquei|identificando|decidi|entendi a pergunta|objeto|chave|meu plano|minha abordagem|vou responder|estou consultando|estou analisando)\b/i;
+const PORTUGUESE_SIGNAL_PATTERN =
+  /[áàâãéêíóôõúç]|\b(o|a|os|as|um|uma|de|da|do|das|dos|em|no|na|nos|nas|para|por|com|sem|que|qual|quais|tem|está|são|foi|foram|frota|caminh|motorista|veículo|placa|posição|localização|cidade|estado|frete|despesa|lucro)\b/i;
 
 function base64ToBytes(base64: string) {
   const binary = window.atob(base64);
@@ -163,24 +206,39 @@ function cleanAssistantText(text: string) {
 }
 
 function isInternalReasoningBlock(text: string) {
-  return /\b(analyzing|identifying|pinpointing|locating|interpreting|listing|focusing|refining|examining|cross-referencing|initial scan|good lead|my plan|my approach|i'?m now|i will|i have|i'?ve|therefore|proxy|requested|context|trackerPositions)\b/i.test(
-    text,
-  );
+  return INTERNAL_REASONING_PATTERN.test(text);
+}
+
+function isEnglishHeading(text: string) {
+  const value = text.trim();
+  if (!value || value.length > 80) return false;
+  if (/[.!?:,;]/.test(value)) return false;
+  if (PORTUGUESE_SIGNAL_PATTERN.test(value)) return false;
+  return /^[A-Z][A-Za-z0-9 "'-]+$/.test(value);
+}
+
+function splitResponseUnits(text: string) {
+  return text
+    .split(/\n+|(?<=[.!?])\s+(?=[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ])/)
+    .map((unit) => unit.trim())
+    .filter(Boolean);
+}
+
+function isUsefulVoiceAnswerUnit(text: string) {
+  if (isEnglishHeading(text)) return false;
+  if (isInternalReasoningBlock(text)) return false;
+  return PORTUGUESE_SIGNAL_PATTERN.test(text);
 }
 
 function finalVoiceText(rawText: string) {
   const cleanText = cleanAssistantText(rawText);
   if (!cleanText) return "";
 
-  const blocks = cleanText
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean);
-  const visibleBlocks = blocks.filter((block) => !isInternalReasoningBlock(block));
+  const visibleUnits = splitResponseUnits(cleanText).filter(isUsefulVoiceAnswerUnit);
+  if (visibleUnits.length > 0) return visibleUnits.join("\n\n").trim();
 
-  if (visibleBlocks.length > 0) return visibleBlocks.join("\n\n").trim();
   if (!isInternalReasoningBlock(cleanText)) return cleanText;
-  return "Resposta concluida em voz.";
+  return "Resposta concluida.";
 }
 
 function FrotakIaPage() {
@@ -189,7 +247,8 @@ function FrotakIaPage() {
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [sending, setSending] = useState(false);
-  const sessionRef = useRef<Session | null>(null);
+  const sessionRef = useRef<LegacyVoiceSession | null>(null);
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const inputSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const inputProcessorRef = useRef<ScriptProcessorNode | null>(null);
@@ -199,6 +258,10 @@ function FrotakIaPage() {
   const nextAudioStartRef = useRef(0);
   const voiceAssistantMessageIdRef = useRef<string | null>(null);
   const voiceAssistantTextRef = useRef("");
+  const modeRef = useRef<ChatMode>("text");
+  const voiceStateRef = useRef<VoiceState>("idle");
+  const stoppingVoiceRef = useRef(false);
+  const voiceSendingRef = useRef(false);
   const speakingInputRef = useRef(false);
   const lastSpeechAtRef = useRef(0);
   const lastAudioFlushAtRef = useRef(0);
@@ -207,12 +270,20 @@ function FrotakIaPage() {
   const listening = voiceEnabled && voiceState === "listening";
 
   const statusLabel = useMemo(() => {
-    if (voiceState === "connecting") return "Conectando ao Gemini Live";
+    if (voiceState === "connecting") return "Conectando conversa por voz";
     if (voiceState === "listening") return "Microfone captando continuamente";
     if (voiceState === "speaking") return "Frotak IA respondendo em voz";
     if (voiceState === "error") return "Voz indisponivel no momento";
     return voiceEnabled ? "Voz pronta para iniciar" : "Bate-papo por texto";
   }, [voiceEnabled, voiceState]);
+
+  useEffect(() => {
+    voiceStateRef.current = voiceState;
+  }, [voiceState]);
+
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   const appendMessage = (message: ChatMessage) => {
     setMessages((current) => [...current, message]);
@@ -247,6 +318,87 @@ function FrotakIaPage() {
   const appendVoiceAssistantText = (text: string) => {
     voiceAssistantTextRef.current += text.replace(/\*/g, "");
     ensureVoiceAssistantMessage();
+  };
+
+  const speakAssistantText = (text: string) =>
+    new Promise<void>((resolve) => {
+      const speech = window.speechSynthesis;
+      if (!speech || !text.trim()) {
+        resolve();
+        return;
+      }
+
+      speech.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voices = speech.getVoices();
+      utterance.lang = "pt-BR";
+      utterance.rate = 1;
+      utterance.pitch = 1;
+      utterance.voice =
+        voices.find((voice) => voice.lang.toLowerCase().startsWith("pt-br")) ??
+        voices.find((voice) => voice.lang.toLowerCase().startsWith("pt")) ??
+        null;
+      utterance.onend = () => resolve();
+      utterance.onerror = () => resolve();
+      speech.speak(utterance);
+    });
+
+  const restartVoiceListening = () => {
+    if (stoppingVoiceRef.current || voiceSendingRef.current || modeRef.current !== "voice") return;
+    const recognition = recognitionRef.current;
+    if (!recognition) return;
+
+    try {
+      recognition.start();
+      setVoiceState("listening");
+    } catch {
+      // O navegador lança erro se o reconhecimento ja estiver ativo.
+    }
+  };
+
+  const handleVoiceQuestion = async (transcript: string) => {
+    const question = transcript.trim();
+    if (!question || voiceSendingRef.current) return;
+
+    voiceSendingRef.current = true;
+    setVoiceState("speaking");
+    const assistantId = `voice-assistant-${Date.now()}`;
+    appendMessage({
+      id: assistantId,
+      role: "assistant",
+      text: "Respondendo...",
+      voice: true,
+      pending: true,
+    });
+
+    try {
+      const accessToken = await getCurrentAccessToken();
+      if (!accessToken) throw new Error("Sessao expirada. Entre novamente.");
+
+      const history = messages
+        .filter((message) => !message.pending)
+        .map((message) => ({ role: message.role, text: message.text }));
+      const response = await sendFrotakAiChatMessage({
+        data: { accessToken, message: question, history },
+      });
+      const answer = finalVoiceText(response.text) || cleanAssistantText(response.text);
+
+      updateMessage(assistantId, answer, false);
+      await speakAssistantText(answer);
+      if (!stoppingVoiceRef.current) setVoiceState("listening");
+    } catch (error) {
+      console.error("[Frotak IA] voice chat failed", error);
+      updateMessage(
+        assistantId,
+        "Nao foi possivel concluir a conversa com a Frotak IA. Tente novamente.",
+        false,
+      );
+      toast.error("Nao foi possivel concluir a conversa com a Frotak IA.");
+      setVoiceState("error");
+    } finally {
+      voiceSendingRef.current = false;
+      window.setTimeout(restartVoiceListening, 250);
+    }
   };
 
   const getOutputAudioContext = () => {
@@ -292,12 +444,12 @@ function FrotakIaPage() {
       : 250;
 
     window.setTimeout(() => {
-      if (sessionRef.current && voiceState !== "error") setVoiceState("listening");
+      if (sessionRef.current && voiceStateRef.current !== "error") setVoiceState("listening");
       resetVoiceTurn();
     }, playbackDelay);
   };
 
-  const handleLiveMessage = (event: LiveServerMessage) => {
+  const handleLiveMessage = (event: LegacyLiveServerMessage) => {
     if (event.setupComplete) {
       setVoiceState("listening");
       return;
@@ -324,10 +476,14 @@ function FrotakIaPage() {
       });
     }
 
-    if (content.turnComplete && voiceState !== "error") finishVoiceTurn();
+    if (content.turnComplete && voiceStateRef.current !== "error") finishVoiceTurn();
   };
 
   const stopVoice = () => {
+    stoppingVoiceRef.current = true;
+    recognitionRef.current?.abort();
+    recognitionRef.current = null;
+    window.speechSynthesis?.cancel();
     inputProcessorRef.current?.disconnect();
     inputProcessorRef.current = null;
     inputSourceRef.current?.disconnect();
@@ -345,90 +501,50 @@ function FrotakIaPage() {
     sessionRef.current?.close();
     sessionRef.current = null;
     setVoiceState("idle");
+    modeRef.current = "text";
     setMode("text");
+    window.setTimeout(() => {
+      stoppingVoiceRef.current = false;
+    }, 0);
   };
 
   const startVoice = async () => {
-    if (sessionRef.current || voiceState === "connecting") return;
+    if (recognitionRef.current || voiceState === "connecting") return;
+    stoppingVoiceRef.current = false;
+    modeRef.current = "voice";
     setMode("voice");
     setVoiceState("connecting");
 
     try {
-      const accessToken = await getCurrentAccessToken();
-      if (!accessToken) throw new Error("Sessao expirada. Entre novamente.");
-      const { token, model } = await createFrotakAiVoiceToken({
-        data: { accessToken, requestedAt: new Date().toISOString() },
-      });
+      const SpeechRecognitionConstructor =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
 
-      const ai = new GoogleGenAI({
-        apiKey: token,
-        httpOptions: { apiVersion: "v1alpha" },
-      });
-      const session = await ai.live.connect({
-        model,
-        config: {
-          responseModalities: [Modality.AUDIO],
-          inputAudioTranscription: {},
-          outputAudioTranscription: {},
-        },
-        callbacks: {
-          onopen: () => setVoiceState("listening"),
-          onmessage: handleLiveMessage,
-          onerror: (event) => {
-            console.error("[Frotak IA] live error", event);
-            setVoiceState("error");
-            toast.error("Nao foi possivel manter a conversa por voz.");
-          },
-          onclose: () => {
-            if (voiceState !== "error") setVoiceState("idle");
-          },
-        },
-      });
+      if (!SpeechRecognitionConstructor) {
+        throw new Error("Este navegador nao suporta conversa por voz.");
+      }
 
-      sessionRef.current = session;
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const AudioContextConstructor = window.AudioContext || window.webkitAudioContext;
-      const audioContext = new AudioContextConstructor();
-      audioContextRef.current = audioContext;
-      const source = audioContext.createMediaStreamSource(stream);
-      inputSourceRef.current = source;
-      const processor = audioContext.createScriptProcessor(4096, 1, 1);
-      inputProcessorRef.current = processor;
-
-      processor.onaudioprocess = (event) => {
-        if (!sessionRef.current || audioContext.state === "closed") return;
-        const channel = event.inputBuffer.getChannelData(0);
-        const now = performance.now();
-        const volume = rms(channel);
-        const speaking = volume >= SPEECH_RMS_THRESHOLD;
-
-        if (speaking) {
-          speakingInputRef.current = true;
-          lastSpeechAtRef.current = now;
-        }
-
-        if (!speakingInputRef.current) return;
-
-        if (!speaking && now - lastSpeechAtRef.current > SILENCE_END_MS) {
-          if (now - lastAudioFlushAtRef.current > SILENCE_END_MS) {
-            sessionRef.current.sendRealtimeInput({ audioStreamEnd: true });
-            lastAudioFlushAtRef.current = now;
-          }
-          speakingInputRef.current = false;
-          return;
-        }
-
-        sessionRef.current.sendRealtimeInput({
-          audio: {
-            data: speaking ? float32ToPcm16Base64(channel) : silencePcmBase64(channel.length),
-            mimeType: `audio/pcm;rate=${Math.round(audioContext.sampleRate)}`,
-          },
-        });
+      const recognition = new SpeechRecognitionConstructor() as BrowserSpeechRecognition;
+      recognition.lang = "pt-BR";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.onresult = (event) => {
+        const transcript = event.results[0]?.[0]?.transcript ?? "";
+        void handleVoiceQuestion(transcript);
       };
-      source.connect(processor);
-      processor.connect(audioContext.destination);
-      setVoiceState("listening");
+      recognition.onerror = (event) => {
+        if (event.error === "no-speech" || event.error === "aborted") return;
+        console.error("[Frotak IA] speech recognition failed", event.error);
+        toast.error("Nao consegui ouvir com clareza. Tente falar novamente.");
+        setVoiceState("listening");
+      };
+      recognition.onend = () => {
+        if (!stoppingVoiceRef.current && !voiceSendingRef.current) {
+          window.setTimeout(restartVoiceListening, 250);
+        }
+      };
+      recognitionRef.current = recognition;
+      restartVoiceListening();
     } catch (error) {
       console.error("[Frotak IA] voice start failed", error);
       setVoiceState("error");
