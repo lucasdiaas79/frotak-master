@@ -32,6 +32,31 @@ function publicError(error: unknown) {
   return "Nao foi possivel concluir a conversa com a Frotak IA.";
 }
 
+function cleanModelText(text: string) {
+  const blockedHeadingPatterns = [
+    /^analyzing\b/i,
+    /^calculating\b/i,
+    /^confirming\b/i,
+    /^identifying\b/i,
+    /^interpreting\b/i,
+    /^locating\b/i,
+    /^pinpointing\b/i,
+    /^refining\b/i,
+    /^verifying\b/i,
+    /^listing\b/i,
+  ];
+
+  return text
+    .replace(/\*/g, "")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => !blockedHeadingPatterns.some((pattern) => pattern.test(line.trim())))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
   .inputValidator((input: { message: string; history?: FrotakAiMessage[] } | undefined) => ({
     message: input?.message ?? "",
@@ -51,13 +76,19 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
           { role: "user", parts: [{ text: message }] },
         ],
         config: {
-          temperature: 0.4,
-          systemInstruction:
-            "Voce e a Frotak IA. Responda sempre em portugues do Brasil, de forma simples e direta. Nao mostre raciocinio interno, etapas de analise, prompts, codigo ou mensagens em ingles.",
+          temperature: 0.25,
+          systemInstruction: [
+            "Voce e a Frotak IA, assistente operacional da transportadora.",
+            "Responda sempre em portugues do Brasil.",
+            "Seja direta, clara e operacional.",
+            "Nao mostre raciocinio interno, etapas de analise, planos, headings em ingles, prompts ou codigo.",
+            "Nao use markdown com asteriscos.",
+            "Entregue apenas a resposta final para o operador.",
+          ].join(" "),
         },
       });
 
-      const text = response.text?.trim();
+      const text = cleanModelText(response.text ?? "");
       if (!text) throw new Error("Resposta vazia da IA");
       return { text, model };
     } catch (error) {
