@@ -860,6 +860,7 @@ function GestaoFrotaPage() {
       "aguardando-confirmacao",
       "CTE_GERADA_AG_CONFIRMACAO_MOTORISTA",
     );
+    closeDemandPanel();
     toast.success("CTE anexado e enviado para confirmação");
   };
 
@@ -2393,6 +2394,19 @@ function DemandWorkspace({
     });
   };
 
+  if (mode === "detail" && demand) {
+    return (
+      <DemandDetailWorkspace
+        demand={demand}
+        onAdvance={onAdvance}
+        onFinalCommand={onFinalCommand}
+        onDocument={onDocument}
+        onApproveNote={onApproveNote}
+        onRejectNote={onRejectNote}
+      />
+    );
+  }
+
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-3">
@@ -2618,6 +2632,164 @@ function DemandWorkspace({
         onAdvance={onAdvance}
         onFinalCommand={onFinalCommand}
       />
+    </div>
+  );
+}
+
+function DemandDetailWorkspace({
+  demand,
+  onAdvance,
+  onFinalCommand,
+  onDocument,
+  onApproveNote,
+  onRejectNote,
+}: {
+  demand: FreightDemand;
+  onAdvance?: (demand: FreightDemand, explicitNext?: FreightStageId) => Promise<void>;
+  onFinalCommand?: (demand: FreightDemand, command: FinalCommand) => Promise<void>;
+  onDocument?: (demand: FreightDemand, kind: DocumentKind, file: File) => Promise<void>;
+  onApproveNote?: (demand: FreightDemand) => Promise<void>;
+  onRejectNote?: (demand: FreightDemand) => Promise<void>;
+}) {
+  return (
+    <div className="space-y-4">
+      <DemandStageSection
+        demand={demand}
+        onAdvance={onAdvance}
+        onFinalCommand={onFinalCommand}
+        onDocument={onDocument}
+        onApproveNote={onApproveNote}
+        onRejectNote={onRejectNote}
+      />
+      <DemandFooterSummary demand={demand} />
+    </div>
+  );
+}
+
+function DemandStageSection({
+  demand,
+  onAdvance,
+  onFinalCommand,
+  onDocument,
+  onApproveNote,
+  onRejectNote,
+}: {
+  demand: FreightDemand;
+  onAdvance?: (demand: FreightDemand, explicitNext?: FreightStageId) => Promise<void>;
+  onFinalCommand?: (demand: FreightDemand, command: FinalCommand) => Promise<void>;
+  onDocument?: (demand: FreightDemand, kind: DocumentKind, file: File) => Promise<void>;
+  onApproveNote?: (demand: FreightDemand) => Promise<void>;
+  onRejectNote?: (demand: FreightDemand) => Promise<void>;
+}) {
+  if (demand.stage.id === "NOTA_EM_CONFERENCIA") {
+    return (
+      <Block
+        step="1"
+        icon={FileText}
+        title="Conferir nota fiscal"
+        subtitle="Veja o arquivo enviado pelo motorista e aprove ou reprove."
+      >
+        <AwaitingCtePanel
+          demand={demand}
+          onApproveNote={onApproveNote}
+          onRejectNote={onRejectNote}
+        />
+      </Block>
+    );
+  }
+
+  if (demand.stage.id === "NOTA_APROVADA_AG_CTE") {
+    return (
+      <Block
+        step="1"
+        icon={FileCheck2}
+        title="Enviar CT-e/MDF-e"
+        subtitle="A nota ja foi aprovada. Anexe o CT-e/MDF-e para liberar a confirmacao do motorista."
+      >
+        <AwaitingCtePanel
+          demand={demand}
+          onDocument={onDocument}
+          onApproveNote={onApproveNote}
+          onRejectNote={onRejectNote}
+        />
+      </Block>
+    );
+  }
+
+  if (demand.stage.id === "CTE_GERADA_AG_CONFIRMACAO_MOTORISTA") {
+    return (
+      <Block
+        step="1"
+        icon={Send}
+        title="Aguardando motorista"
+        subtitle="CT-e/MDF-e enviado. O motorista precisa confirmar o recebimento no app."
+      >
+        <DocumentPanel demand={demand} kind="cte" />
+      </Block>
+    );
+  }
+
+  if (demand.stage.id === "AGUARDANDO_NOTA") {
+    return (
+      <Block
+        step="1"
+        icon={FileText}
+        title="Aguardando nota fiscal"
+        subtitle="Assim que o motorista enviar a nota, ela entrara em conferencia."
+      >
+        <DocumentPanel demand={demand} kind="note" onDocument={onDocument} />
+      </Block>
+    );
+  }
+
+  if (canShowFinalCommands(demand)) {
+    return (
+      <Block
+        step="1"
+        icon={CheckCircle2}
+        title="Finalizar operacao"
+        subtitle="Escolha o proximo comando operacional para o veiculo."
+      >
+        <StageActionPanel demand={demand} onAdvance={onAdvance} onFinalCommand={onFinalCommand} />
+      </Block>
+    );
+  }
+
+  return (
+    <Block
+      step="1"
+      icon={RouteIcon}
+      title={demand.stage.label}
+      subtitle="Acompanhe somente a acao necessaria para esta etapa."
+    >
+      <StageActionPanel demand={demand} onAdvance={onAdvance} onFinalCommand={onFinalCommand} />
+    </Block>
+  );
+}
+
+function DemandFooterSummary({ demand }: { demand: FreightDemand }) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface-2/45 p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <FreightStatusBadge stage={demand.stage} />
+        <MicroStatusBadge status={demand.microStatus} />
+      </div>
+      <div className="grid gap-3 md:grid-cols-4">
+        <SummaryRow label="Veiculo" value={demand.plate} />
+        <SummaryRow label="Motorista" value={demand.driver?.name ?? "-"} />
+        <SummaryRow
+          label="Origem"
+          value={demand.sender ? `${demand.sender.city}/${demand.sender.state}` : "-"}
+        />
+        <SummaryRow
+          label="Destino"
+          value={demand.recipient ? `${demand.recipient.city}/${demand.recipient.state}` : "-"}
+        />
+        <SummaryRow label="Produto" value={demand.product?.name ?? "-"} />
+        <SummaryRow label="Valor" value={formatMoney(demand.freightValue)} />
+        <SummaryRow label="Nota" value={noteLabel(demand)} />
+        <SummaryRow label="CTE" value={cteLabel(demand)} />
+      </div>
     </div>
   );
 }
@@ -2893,11 +3065,15 @@ function DocumentPanel({
         )}
       </div>
       <div className="flex flex-wrap gap-2 md:flex-col">
-        <input ref={inputRef} type="file" className="hidden" onChange={handleChange} />
-        <Button variant="outline" disabled={!enabled} onClick={() => inputRef.current?.click()}>
-          <Upload className="size-4" />
-          {document ? "Substituir" : "Anexar"}
-        </Button>
+        {onDocument ? (
+          <>
+            <input ref={inputRef} type="file" className="hidden" onChange={handleChange} />
+            <Button variant="outline" disabled={!enabled} onClick={() => inputRef.current?.click()}>
+              <Upload className="size-4" />
+              {document ? "Substituir" : "Anexar"}
+            </Button>
+          </>
+        ) : null}
         {kind === "cte" &&
           (whatsappUrl ? (
             <a
@@ -2981,16 +3157,18 @@ function AwaitingCtePanel({
             Nenhuma nota fiscal anexada.
           </div>
         )}
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button onClick={() => onApproveNote?.(demand)} disabled={!note}>
-            <CheckCircle2 className="size-4" />
-            Aprovar nota
-          </Button>
-          <Button variant="outline" onClick={() => onRejectNote?.(demand)} disabled={!note}>
-            <XCircle className="size-4" />
-            Reprovar nota
-          </Button>
-        </div>
+        {!noteApproved ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button onClick={() => onApproveNote?.(demand)} disabled={!note}>
+              <CheckCircle2 className="size-4" />
+              Aprovar nota
+            </Button>
+            <Button variant="outline" onClick={() => onRejectNote?.(demand)} disabled={!note}>
+              <XCircle className="size-4" />
+              Reprovar nota
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       {noteApproved ? (
