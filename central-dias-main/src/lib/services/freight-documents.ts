@@ -22,7 +22,14 @@ interface FreightDocumentRow {
 
 async function signedUrl(bucket: string, path: string) {
   const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60);
-  if (error) return undefined;
+  if (error) {
+    console.error("[freight-documents] signed url failed", {
+      bucket,
+      path,
+      message: error.message,
+    });
+    return undefined;
+  }
   return data.signedUrl;
 }
 
@@ -46,9 +53,7 @@ async function fromRow(row: FreightDocumentRow): Promise<FreightDocument> {
   };
 }
 
-export async function listFreightDocuments(
-  refs: Array<{ vehicleId: string; freightId?: string }>,
-) {
+export async function listFreightDocuments(refs: Array<{ vehicleId: string; freightId?: string }>) {
   if (refs.length === 0) return [];
 
   const vehicleIds = Array.from(new Set(refs.map((ref) => ref.vehicleId)));
@@ -61,7 +66,9 @@ export async function listFreightDocuments(
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  const documents = await Promise.all((data ?? []).map((row) => fromRow(row as FreightDocumentRow)));
+  const documents = await Promise.all(
+    (data ?? []).map((row) => fromRow(row as FreightDocumentRow)),
+  );
 
   return documents.filter((document) => {
     const currentFreightId = freightByVehicle.get(document.vehicleId);
@@ -86,7 +93,14 @@ export async function uploadFreightDocument(input: {
     contentType: input.file.type || "application/octet-stream",
     upsert: false,
   });
-  if (uploadError) throw uploadError;
+  if (uploadError) {
+    console.error("[freight-documents] storage upload failed", {
+      bucket: BUCKET,
+      path,
+      message: uploadError.message,
+    });
+    throw uploadError;
+  }
 
   const { data, error } = await supabase
     .from("freight_documents")
@@ -106,7 +120,17 @@ export async function uploadFreightDocument(input: {
     .select("*")
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error("[freight-documents] insert failed", {
+      vehicleId: input.vehicleId,
+      freightId: input.freightId,
+      kind: input.kind,
+      message: error.message,
+      code: error.code,
+      details: error.details,
+    });
+    throw error;
+  }
   return fromRow(data as FreightDocumentRow);
 }
 
@@ -118,6 +142,15 @@ export async function updateFreightDocumentStatus(id: string, status: string) {
     .select("*")
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error("[freight-documents] status update failed", {
+      id,
+      status,
+      message: error.message,
+      code: error.code,
+      details: error.details,
+    });
+    throw error;
+  }
   return fromRow(data as FreightDocumentRow);
 }

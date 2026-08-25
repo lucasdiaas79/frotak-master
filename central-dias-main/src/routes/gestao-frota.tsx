@@ -3009,6 +3009,7 @@ function DocumentPanel({
   onRejectNote?: (demand: FreightDemand) => Promise<void>;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
   const document = kind === "note" ? demand.documents.note : demand.documents.cte;
   const driverMessage =
     kind === "cte"
@@ -3022,15 +3023,37 @@ function DocumentPanel({
         ].join("\n")
       : undefined;
   const whatsappUrl = kind === "cte" ? buildWhatsAppUrl(demand.driver?.phone, driverMessage) : null;
+  const cteReady =
+    freightStageIndex(demand.stage.id) >= freightStageIndex("NOTA_APROVADA_AG_CTE") ||
+    demand.documents.note?.status === "aprovado";
   const enabled =
     kind === "note"
       ? freightStageIndex(demand.stage.id) >= freightStageIndex("AGUARDANDO_NOTA")
-      : freightStageIndex(demand.stage.id) >= freightStageIndex("NOTA_APROVADA_AG_CTE");
+      : cteReady;
 
-  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) void onDocument?.(demand, kind, file);
     event.target.value = "";
+    if (!file || !onDocument) return;
+
+    setUploading(true);
+    try {
+      await onDocument(demand, kind, file);
+    } catch (error) {
+      console.error("[gestao-frota] document upload failed", {
+        kind,
+        vehicleId: demand.id,
+        freightId: demand.currentFreightId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      toast.error(
+        kind === "cte"
+          ? "Nao foi possivel anexar o CT-e. Tente novamente."
+          : "Nao foi possivel anexar a nota. Tente novamente.",
+      );
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -3067,10 +3090,24 @@ function DocumentPanel({
       <div className="flex flex-wrap gap-2 md:flex-col">
         {onDocument ? (
           <>
-            <input ref={inputRef} type="file" className="hidden" onChange={handleChange} />
-            <Button variant="outline" disabled={!enabled} onClick={() => inputRef.current?.click()}>
-              <Upload className="size-4" />
-              {document ? "Substituir" : "Anexar"}
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*,.pdf,.xml"
+              className="hidden"
+              onChange={(event) => void handleChange(event)}
+            />
+            <Button
+              variant="outline"
+              disabled={!enabled || uploading}
+              onClick={() => inputRef.current?.click()}
+            >
+              {uploading ? (
+                <RefreshCw className="size-4 animate-spin" />
+              ) : (
+                <Upload className="size-4" />
+              )}
+              {uploading ? "Anexando..." : document ? "Substituir" : "Anexar"}
             </Button>
           </>
         ) : null}
