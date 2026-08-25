@@ -5,6 +5,7 @@ const BUCKET = "freight-documents";
 
 interface FreightDocumentRow {
   id: string;
+  tenant_id?: string | null;
   vehicle_id: string;
   freight_id?: string | null;
   driver_id?: string | null;
@@ -86,8 +87,46 @@ export async function uploadFreightDocument(input: {
   source: FreightDocument["source"];
   status?: string;
 }) {
+  const { data: vehicle, error: vehicleError } = await supabase
+    .from("vehicles")
+    .select("tenant_id,current_freight_id,driver_id")
+    .eq("id", input.vehicleId)
+    .single();
+
+  if (vehicleError) {
+    console.error("[freight-documents] vehicle lookup failed", {
+      vehicleId: input.vehicleId,
+      message: vehicleError.message,
+      code: vehicleError.code,
+      details: vehicleError.details,
+    });
+    throw vehicleError;
+  }
+
+  const tenantId = vehicle?.tenant_id;
+  const freightId = input.freightId ?? vehicle?.current_freight_id ?? undefined;
+  const driverId = input.driverId ?? vehicle?.driver_id ?? undefined;
+
+  if (!tenantId) {
+    console.error("[freight-documents] vehicle tenant missing", {
+      vehicleId: input.vehicleId,
+      freightId,
+      kind: input.kind,
+    });
+    throw new Error("Nao foi possivel identificar o tenant do documento.");
+  }
+
+  if (!freightId) {
+    console.error("[freight-documents] active freight missing", {
+      vehicleId: input.vehicleId,
+      tenantId,
+      kind: input.kind,
+    });
+    throw new Error("Nao foi possivel identificar o frete ativo do documento.");
+  }
+
   const safeName = input.file.name.replace(/[^a-zA-Z0-9._-]+/g, "-");
-  const path = `${input.vehicleId}/${input.kind}/${Date.now()}-${safeName}`;
+  const path = `${tenantId}/${freightId}/${input.kind}/${Date.now()}-${safeName}`;
 
   const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, input.file, {
     contentType: input.file.type || "application/octet-stream",
@@ -105,9 +144,10 @@ export async function uploadFreightDocument(input: {
   const { data, error } = await supabase
     .from("freight_documents")
     .insert({
+      tenant_id: tenantId,
       vehicle_id: input.vehicleId,
-      freight_id: input.freightId ?? null,
-      driver_id: input.driverId ?? null,
+      freight_id: freightId,
+      driver_id: driverId ?? null,
       kind: input.kind,
       source: input.source,
       file_name: input.file.name,
@@ -121,9 +161,11 @@ export async function uploadFreightDocument(input: {
     .single();
 
   if (error) {
+    void supabase.storage.from(BUCKET).remove([path]);
     console.error("[freight-documents] insert failed", {
       vehicleId: input.vehicleId,
-      freightId: input.freightId,
+      freightId,
+      tenantId,
       kind: input.kind,
       message: error.message,
       code: error.code,
