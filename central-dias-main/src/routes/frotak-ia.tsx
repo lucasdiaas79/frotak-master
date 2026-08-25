@@ -40,7 +40,12 @@ type BrowserSpeechRecognition = {
   start: () => void;
   stop: () => void;
   abort: () => void;
-  onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+  onresult:
+    | ((event: {
+        resultIndex?: number;
+        results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal?: boolean }>;
+      }) => void)
+    | null;
   onerror: ((event: { error?: string }) => void) | null;
   onend: (() => void) | null;
 };
@@ -241,6 +246,51 @@ function finalVoiceText(rawText: string) {
   return "Resposta concluida.";
 }
 
+function choosePortugueseFemaleVoice(voices: SpeechSynthesisVoice[]) {
+  const portugueseVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith("pt"));
+  const preferredNames = [
+    "maria",
+    "francisca",
+    "luciana",
+    "helena",
+    "female",
+    "feminina",
+    "portuguese brazil",
+    "portugues do brasil",
+  ];
+
+  return (
+    portugueseVoices.find((voice) =>
+      preferredNames.some((name) => voice.name.toLowerCase().includes(name)),
+    ) ??
+    portugueseVoices.find((voice) => voice.lang.toLowerCase().startsWith("pt-br")) ??
+    portugueseVoices[0] ??
+    null
+  );
+}
+
+function loadSpeechVoices() {
+  return new Promise<SpeechSynthesisVoice[]>((resolve) => {
+    const speech = window.speechSynthesis;
+    const voices = speech?.getVoices() ?? [];
+    if (!speech || voices.length > 0) {
+      resolve(voices);
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      speech.onvoiceschanged = null;
+      resolve(speech.getVoices());
+    }, 500);
+
+    speech.onvoiceschanged = () => {
+      window.clearTimeout(timeout);
+      speech.onvoiceschanged = null;
+      resolve(speech.getVoices());
+    };
+  });
+}
+
 function FrotakIaPage() {
   const [mode, setMode] = useState<ChatMode>("text");
   const [voiceState, setVoiceState] = useState<VoiceState>("idle");
@@ -262,6 +312,11 @@ function FrotakIaPage() {
   const voiceStateRef = useRef<VoiceState>("idle");
   const stoppingVoiceRef = useRef(false);
   const voiceSendingRef = useRef(false);
+  const assistantSpeakingRef = useRef(false);
+  const speechUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const voiceTurnIdRef = useRef(0);
+  const pendingTranscriptRef = useRef("");
+  const transcriptTimerRef = useRef<number | null>(null);
   const speakingInputRef = useRef(false);
   const lastSpeechAtRef = useRef(0);
   const lastAudioFlushAtRef = useRef(0);
@@ -320,7 +375,13 @@ function FrotakIaPage() {
     ensureVoiceAssistantMessage();
   };
 
-  const speakAssistantText = (text: string) =>
+  const cancelAssistantSpeech = () => {
+    window.speechSynthesis?.cancel();
+    assistantSpeakingRef.current = false;
+    speechUtteranceRef.current = null;
+  };
+
+  const speakAssistantText = async (text: string) =>
     new Promise<void>((resolve) => {
       const speech = window.speechSynthesis;
       if (!speech || !text.trim()) {
@@ -330,17 +391,26 @@ function FrotakIaPage() {
 
       speech.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
-      const voices = speech.getVoices();
       utterance.lang = "pt-BR";
-      utterance.rate = 1;
-      utterance.pitch = 1;
-      utterance.voice =
-        voices.find((voice) => voice.lang.toLowerCase().startsWith("pt-br")) ??
-        voices.find((voice) => voice.lang.toLowerCase().startsWith("pt")) ??
-        null;
-      utterance.onend = () => resolve();
-      utterance.onerror = () => resolve();
-      speech.speak(utterance);
+      utterance.rate = 0.96;
+      utterance.pitch = 1.08;
+      utterance.volume = 1;
+
+      const finish = () => {
+        if (speechUtteranceRef.current === utterance) speechUtteranceRef.current = null;
+        assistantSpeakingRef.current = false;
+        resolve();
+      };
+
+      void loadSpeechVoices().then((voices) => {
+        utterance.voice = choosePortugueseFemaleVoice(voices);
+        utterance.onend = finish;
+        utterance.onerror = finish;
+        speechUtteranceRef.current = utterance;
+        assistantSpeakingRef.current = true;
+        setVoiceState("speaking");
+        speech.speak(utterance);
+      });
     });
 
   const restartVoiceListening = () => {
@@ -360,6 +430,9 @@ function FrotakIaPage() {
     const question = transcript.trim();
     if (!question || voiceSendingRef.current) return;
 
+    cancelAssistantSpeech();
+    const turnId = Date.now();
+    voiceTurnIdRef.current = turnId;
     voiceSendingRef.current = true;
     setVoiceState("speaking");
     const assistantId = `voice-assistant-${Date.now()}`;
@@ -379,13 +452,15 @@ function FrotakIaPage() {
         .filter((message) => !message.pending)
         .map((message) => ({ role: message.role, text: message.text }));
       const response = await sendFrotakAiChatMessage({
-        data: { accessToken, message: question, history },
+        data: { accessToken, message: question, history, mode: "voice" },
       });
       const answer = finalVoiceText(response.text) || cleanAssistantText(response.text);
 
       updateMessage(assistantId, answer, false);
-      await speakAssistantText(answer);
-      if (!stoppingVoiceRef.current) setVoiceState("listening");
+      voiceSendingRef.current = false;
+      if (voiceTurnIdRef.current === turnId) await speakAssistantText(answer);
+      if (!stoppingVoiceRef.current && voiceTurnIdRef.current === turnId)
+        setVoiceState("listening");
     } catch (error) {
       console.error("[Frotak IA] voice chat failed", error);
       updateMessage(
@@ -396,8 +471,8 @@ function FrotakIaPage() {
       toast.error("Nao foi possivel concluir a conversa com a Frotak IA.");
       setVoiceState("error");
     } finally {
-      voiceSendingRef.current = false;
-      window.setTimeout(restartVoiceListening, 250);
+      if (voiceTurnIdRef.current === turnId) voiceSendingRef.current = false;
+      window.setTimeout(restartVoiceListening, 180);
     }
   };
 
@@ -481,9 +556,12 @@ function FrotakIaPage() {
 
   const stopVoice = () => {
     stoppingVoiceRef.current = true;
+    if (transcriptTimerRef.current) window.clearTimeout(transcriptTimerRef.current);
+    transcriptTimerRef.current = null;
+    pendingTranscriptRef.current = "";
     recognitionRef.current?.abort();
     recognitionRef.current = null;
-    window.speechSynthesis?.cancel();
+    cancelAssistantSpeech();
     inputProcessorRef.current?.disconnect();
     inputProcessorRef.current = null;
     inputSourceRef.current?.disconnect();
@@ -525,12 +603,36 @@ function FrotakIaPage() {
 
       const recognition = new SpeechRecognitionConstructor() as BrowserSpeechRecognition;
       recognition.lang = "pt-BR";
-      recognition.continuous = false;
-      recognition.interimResults = false;
+      recognition.continuous = true;
+      recognition.interimResults = true;
       recognition.maxAlternatives = 1;
       recognition.onresult = (event) => {
-        const transcript = event.results[0]?.[0]?.transcript ?? "";
-        void handleVoiceQuestion(transcript);
+        let finalTranscript = "";
+        let interimTranscript = "";
+        const startIndex = event.resultIndex ?? 0;
+
+        for (let index = startIndex; index < event.results.length; index += 1) {
+          const result = event.results[index];
+          const transcript = result?.[0]?.transcript?.trim() ?? "";
+          if (!transcript) continue;
+          if (result.isFinal) finalTranscript = `${finalTranscript} ${transcript}`.trim();
+          else interimTranscript = `${interimTranscript} ${transcript}`.trim();
+        }
+
+        const heardText = (finalTranscript || interimTranscript).trim();
+        if (assistantSpeakingRef.current && heardText.length >= 3) {
+          cancelAssistantSpeech();
+          setVoiceState("listening");
+        }
+
+        if (!finalTranscript) return;
+        pendingTranscriptRef.current = `${pendingTranscriptRef.current} ${finalTranscript}`.trim();
+        if (transcriptTimerRef.current) window.clearTimeout(transcriptTimerRef.current);
+        transcriptTimerRef.current = window.setTimeout(() => {
+          const question = pendingTranscriptRef.current.trim();
+          pendingTranscriptRef.current = "";
+          if (question) void handleVoiceQuestion(question);
+        }, 220);
       };
       recognition.onerror = (event) => {
         if (event.error === "no-speech" || event.error === "aborted") return;
@@ -539,8 +641,8 @@ function FrotakIaPage() {
         setVoiceState("listening");
       };
       recognition.onend = () => {
-        if (!stoppingVoiceRef.current && !voiceSendingRef.current) {
-          window.setTimeout(restartVoiceListening, 250);
+        if (!stoppingVoiceRef.current && modeRef.current === "voice") {
+          window.setTimeout(restartVoiceListening, 180);
         }
       };
       recognitionRef.current = recognition;
@@ -601,9 +703,14 @@ function FrotakIaPage() {
           accessToken,
           message: text,
           history,
+          mode: voiceEnabled ? "voice" : "text",
         },
       });
-      updateMessage(pendingId, response.text, false);
+      const answer = voiceEnabled
+        ? finalVoiceText(response.text) || cleanAssistantText(response.text)
+        : response.text;
+      updateMessage(pendingId, answer, false);
+      if (voiceEnabled) await speakAssistantText(answer);
     } catch (error) {
       updateMessage(
         pendingId,

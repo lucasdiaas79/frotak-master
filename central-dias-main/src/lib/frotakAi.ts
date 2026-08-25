@@ -173,9 +173,78 @@ function looksLikeEnglishInternalAnswer(text: string) {
   );
 }
 
-async function ensurePortugueseFinalAnswer(ai: GoogleGenAI, model: string, text: string) {
+type FrotakAiMode = "text" | "voice";
+
+function isEnglishOnlyHeading(text: string) {
+  const value = text.trim();
+  if (!value || value.length > 90) return false;
+  if (/[.!?:,;]/.test(value)) return false;
+  if (/[áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]/.test(value)) return false;
+  return /^[A-Z][A-Za-z0-9 "'-]+$/.test(value);
+}
+
+function hasPortugueseOperationalSignal(text: string) {
+  return /[áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]|\b(voce|voces|caminhao|caminhoes|motorista|placa|frete|frota|veiculo|veiculos|posicao|localizacao|cidade|estado|despesa|lucro|receita|tenant|central|transportes|hoje|ontem|esta|sao|tem|foi|foram)\b/i.test(
+    text,
+  );
+}
+
+function removeInternalReasoning(text: string) {
   const cleanText = sanitizeAiResponse(text);
-  if (!looksLikeEnglishInternalAnswer(cleanText)) return cleanText;
+  if (!cleanText) return "";
+
+  const blocks = cleanText
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  const visibleBlocks = blocks.flatMap((block) => {
+    const lines = block
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const firstLine = lines[0] ?? "";
+
+    if (isEnglishOnlyHeading(firstLine) || looksLikeEnglishInternalAnswer(block)) {
+      return lines.filter(
+        (line) =>
+          hasPortugueseOperationalSignal(line) &&
+          !isEnglishOnlyHeading(line) &&
+          !looksLikeEnglishInternalAnswer(line),
+      );
+    }
+
+    return [block];
+  });
+
+  return visibleBlocks
+    .join("\n\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function conciseVoiceAnswer(text: string) {
+  const cleanText = removeInternalReasoning(text);
+  if (!cleanText) return "";
+
+  const units = cleanText
+    .split(/\n+|(?<=[.!?])\s+/)
+    .map((unit) => unit.trim())
+    .filter(Boolean);
+
+  return units.slice(0, 4).join("\n").slice(0, 650).trim();
+}
+
+async function ensurePortugueseFinalAnswer(
+  ai: GoogleGenAI,
+  model: string,
+  text: string,
+  mode: FrotakAiMode = "text",
+) {
+  const cleanText = sanitizeAiResponse(text);
+  const visibleText =
+    mode === "voice" ? conciseVoiceAnswer(cleanText) : removeInternalReasoning(cleanText);
+  if (visibleText && !looksLikeEnglishInternalAnswer(visibleText)) return visibleText;
 
   const response = await ai.models.generateContent({
     model,
@@ -185,10 +254,13 @@ async function ensurePortugueseFinalAnswer(ai: GoogleGenAI, model: string, text:
         parts: [
           {
             text: [
-              "Reescreva a resposta abaixo em portugues do Brasil.",
+              "Transforme a resposta abaixo em uma resposta final da Frotak IA, em portugues do Brasil.",
               "Remova qualquer raciocinio interno, planejamento, analise em ingles ou explicacao de bastidores.",
-              "Entregue apenas a resposta final para o usuario da Frotak.",
-              "Use paragrafos curtos e topicos quando fizer sentido.",
+              "Nao use titulos em ingles como Analyzing, Identifying, Locating, Confirming, Listing ou Calculating.",
+              "Entregue apenas a resposta final, direta e pronta para o usuario da Frotak.",
+              mode === "voice"
+                ? "Modo voz: use no maximo 4 frases curtas, com comunicacao natural."
+                : "Modo texto: use paragrafos curtos e topicos quando fizer sentido.",
               "Nao use asteriscos.",
               "",
               cleanText,
@@ -202,7 +274,10 @@ async function ensurePortugueseFinalAnswer(ai: GoogleGenAI, model: string, text:
     },
   });
 
-  return sanitizeAiResponse(response.text ?? cleanText);
+  const rewrittenText = sanitizeAiResponse(response.text ?? visibleText ?? cleanText);
+  return mode === "voice"
+    ? conciseVoiceAnswer(rewrittenText)
+    : removeInternalReasoning(rewrittenText);
 }
 
 function compactText(value: unknown) {
@@ -842,13 +917,19 @@ function tenantVoiceInstruction(context: TenantAiContext) {
 
 export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
   .inputValidator(
-    (input: { accessToken: string; message: string; history: FrotakAiMessage[] }) => input,
+    (input: {
+      accessToken: string;
+      message: string;
+      history: FrotakAiMessage[];
+      mode?: FrotakAiMode;
+    }) => input,
   )
   .handler(async ({ data }) => {
     try {
       const message = data.message.trim();
       if (!message) throw new Error("Mensagem vazia");
 
+      const mode: FrotakAiMode = data.mode === "voice" ? "voice" : "text";
       const tenantContext = await buildTenantAiContext(data.accessToken);
       const ai = new GoogleGenAI({ apiKey: geminiApiKey() });
       const model = process.env.GEMINI_TEXT_MODEL || FROTAK_AI_TEXT_MODEL;
@@ -859,12 +940,15 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
           { role: "user", parts: [{ text: message }] },
         ],
         config: {
-          systemInstruction: tenantContextInstruction(tenantContext),
-          temperature: 0.3,
+          systemInstruction:
+            mode === "voice"
+              ? tenantVoiceInstruction(tenantContext)
+              : tenantContextInstruction(tenantContext),
+          temperature: mode === "voice" ? 0.15 : 0.25,
         },
       });
 
-      const text = await ensurePortugueseFinalAnswer(ai, model, response.text ?? "");
+      const text = await ensurePortugueseFinalAnswer(ai, model, response.text ?? "", mode);
       if (!text) throw new Error("Resposta vazia do Gemini");
       return { text, model };
     } catch (error) {
