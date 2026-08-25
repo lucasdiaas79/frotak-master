@@ -85,21 +85,47 @@ function portugueseVoiceScore(voice: SpeechSynthesisVoice) {
   const name = voice.name.toLowerCase();
   const lang = voice.lang.toLowerCase();
   let score = 0;
-  if (lang.startsWith("pt-br")) score += 8;
-  if (lang.startsWith("pt")) score += 4;
-  if (name.includes("female")) score += 3;
-  if (name.includes("maria") || name.includes("francisca") || name.includes("luciana")) score += 3;
-  if (name.includes("google")) score += 1;
+  if (lang === "pt-br") score += 12;
+  if (lang.startsWith("pt-br")) score += 10;
+  if (lang.startsWith("pt")) score += 5;
+  if (name.includes("google portugu")) score += 8;
+  if (name.includes("microsoft")) score += 5;
+  if (name.includes("natural")) score += 5;
+  if (name.includes("online")) score += 4;
+  if (name.includes("female")) score += 4;
+  if (name.includes("francisca")) score += 8;
+  if (name.includes("maria")) score += 7;
+  if (name.includes("luciana")) score += 7;
+  if (name.includes("heloisa") || name.includes("helena")) score += 6;
+  if (name.includes("daniel")) score -= 6;
+  if (name.includes("male")) score -= 5;
   return score;
 }
 
-export function choosePortugueseFemaleVoice() {
+function availableVoices() {
   if (typeof window === "undefined" || !window.speechSynthesis) return undefined;
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length === 0) return undefined;
+  return voices;
+}
 
-  return window.speechSynthesis
-    .getVoices()
+export function choosePortugueseFemaleVoice() {
+  return (availableVoices() ?? [])
     .filter((voice) => voice.lang.toLowerCase().startsWith("pt"))
     .sort((a, b) => portugueseVoiceScore(b) - portugueseVoiceScore(a))[0];
+}
+
+export function waitForSpeechVoices() {
+  if (typeof window === "undefined" || !window.speechSynthesis) return Promise.resolve();
+  if (window.speechSynthesis.getVoices().length > 0) return Promise.resolve();
+
+  return new Promise<void>((resolve) => {
+    const timeout = window.setTimeout(resolve, 700);
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.clearTimeout(timeout);
+      resolve();
+    };
+  });
 }
 
 export function cancelSpeech() {
@@ -113,15 +139,23 @@ export function speakPortuguese(text: string) {
 
   cancelSpeech();
 
-  return new Promise<void>((resolve, reject) => {
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "pt-BR";
-    utterance.voice = choosePortugueseFemaleVoice() ?? null;
-    utterance.rate = 0.96;
-    utterance.pitch = 1.08;
-    utterance.volume = 1;
-    utterance.onend = () => resolve();
-    utterance.onerror = () => reject(new Error("Nao foi possivel reproduzir a voz."));
-    window.speechSynthesis.speak(utterance);
-  });
+  return waitForSpeechVoices().then(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "pt-BR";
+        utterance.voice = choosePortugueseFemaleVoice() ?? null;
+        utterance.rate = 0.98;
+        utterance.pitch = 1.02;
+        utterance.volume = 1;
+        utterance.onend = () => resolve();
+        utterance.onerror = () => reject(new Error("Nao foi possivel reproduzir a voz."));
+        window.speechSynthesis.speak(utterance);
+      }),
+  );
+}
+
+export function previewSelectedVoice() {
+  const voice = choosePortugueseFemaleVoice();
+  return voice ? `${voice.name} (${voice.lang})` : "Voz padrao do navegador";
 }
