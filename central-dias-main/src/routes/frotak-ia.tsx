@@ -295,6 +295,7 @@ function FrotakIaPage() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const inputSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const inputProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const silentGainRef = useRef<GainNode | null>(null);
   const outputAudioContextRef = useRef<AudioContext | null>(null);
   const outputSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const audioPlaybackGenerationRef = useRef(0);
@@ -588,7 +589,7 @@ function FrotakIaPage() {
     if (content.turnComplete && voiceStateRef.current !== "error") finishVoiceTurn();
   };
 
-  const stopVoice = () => {
+  const cleanupVoiceResources = (nextState: VoiceState = "idle", nextMode: ChatMode = "text") => {
     stoppingVoiceRef.current = true;
     if (transcriptTimerRef.current) window.clearTimeout(transcriptTimerRef.current);
     transcriptTimerRef.current = null;
@@ -597,29 +598,49 @@ function FrotakIaPage() {
     recognitionRef.current = null;
     cancelAssistantSpeech();
     stopNativeAudioPlayback();
+    streamRef.current?.getTracks().forEach((track) => {
+      track.stop();
+      streamRef.current?.removeTrack(track);
+    });
+    streamRef.current = null;
+    if (inputProcessorRef.current) inputProcessorRef.current.onaudioprocess = null;
     inputProcessorRef.current?.disconnect();
     inputProcessorRef.current = null;
     inputSourceRef.current?.disconnect();
     inputSourceRef.current = null;
-    void audioContextRef.current?.close();
+    silentGainRef.current?.disconnect();
+    silentGainRef.current = null;
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      void audioContextRef.current.close().catch(() => undefined);
+    }
     audioContextRef.current = null;
-    void outputAudioContextRef.current?.close();
+    if (outputAudioContextRef.current && outputAudioContextRef.current.state !== "closed") {
+      void outputAudioContextRef.current.close().catch(() => undefined);
+    }
     outputAudioContextRef.current = null;
     nextAudioStartRef.current = 0;
     resetVoiceTurn();
     speakingInputRef.current = false;
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-    sessionRef.current?.sendRealtimeInput({ audioStreamEnd: true });
-    sessionRef.current?.close();
+    try {
+      sessionRef.current?.sendRealtimeInput({ audioStreamEnd: true });
+    } catch {
+      // A sessao Live pode ja ter sido fechada pelo servidor.
+    }
+    try {
+      sessionRef.current?.close();
+    } catch {
+      // A sessao Live pode ja ter sido fechada pelo servidor.
+    }
     sessionRef.current = null;
-    setVoiceState("idle");
-    modeRef.current = "text";
-    setMode("text");
+    setVoiceState(nextState);
+    modeRef.current = nextMode;
+    setMode(nextMode);
     window.setTimeout(() => {
       stoppingVoiceRef.current = false;
     }, 0);
   };
+
+  const stopVoice = () => cleanupVoiceResources("idle", "text");
 
   const startVoice = async () => {
     if (sessionRef.current || voiceState === "connecting") return;
@@ -664,11 +685,11 @@ function FrotakIaPage() {
           onerror: (event) => {
             console.error("[Frotak IA] Gemini Live failed", event);
             toast.error("Nao foi possivel manter a conversa por voz.");
-            setVoiceState("error");
+            cleanupVoiceResources("error", "text");
           },
           onclose: () => {
             if (!stoppingVoiceRef.current && modeRef.current === "voice") {
-              setVoiceState("error");
+              cleanupVoiceResources("error", "text");
             }
           },
         },
@@ -696,6 +717,7 @@ function FrotakIaPage() {
 
       inputSourceRef.current = source;
       inputProcessorRef.current = processor;
+      silentGainRef.current = silentGain;
       source.connect(processor);
       processor.connect(silentGain);
       silentGain.connect(audioContext.destination);
@@ -717,10 +739,8 @@ function FrotakIaPage() {
       };
     } catch (error) {
       console.error("[Frotak IA] voice start failed", error);
-      setVoiceState("error");
-      setMode("text");
       toast.error(error instanceof Error ? error.message : "Nao foi possivel iniciar voz.");
-      stopVoice();
+      cleanupVoiceResources("error", "text");
     }
   };
 
