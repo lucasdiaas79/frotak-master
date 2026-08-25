@@ -981,10 +981,28 @@ export const createFrotakAiVoiceToken = createServerFn({ method: "POST" })
               responseModalities: [Modality.AUDIO],
               inputAudioTranscription: {},
               outputAudioTranscription: {},
+              temperature: 0.15,
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: "Aoede",
+                  },
+                },
+              },
+              proactivity: {
+                proactiveAudio: true,
+              },
               systemInstruction: tenantVoiceInstruction(tenantContext),
             },
           },
-          lockAdditionalFields: ["model", "responseModalities", "systemInstruction"],
+          lockAdditionalFields: [
+            "model",
+            "responseModalities",
+            "systemInstruction",
+            "speechConfig",
+            "proactivity",
+            "temperature",
+          ],
         },
       });
 
