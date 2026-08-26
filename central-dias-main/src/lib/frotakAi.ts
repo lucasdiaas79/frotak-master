@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { createServerFn } from "@tanstack/react-start";
 
 export const FROTAK_AI_TEXT_MODEL = "gemini-3.1-flash-lite";
-export const FROTAK_AI_LIVE_MODEL = "gemini-3.1-flash-live-preview";
+export const FROTAK_AI_LIVE_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025";
 
 type FrotakAiMessage = {
   role: "assistant" | "user";
