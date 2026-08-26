@@ -295,15 +295,26 @@ export class FrotakLiveSession {
 
 function waitForWebSocketOpen(websocket: WebSocket) {
   return new Promise<void>((resolve, reject) => {
-    const timeout = window.setTimeout(() => reject(new Error("Timeout ao conectar voz.")), 12_000);
-    websocket.onopen = () => {
+    const cleanup = () => {
       window.clearTimeout(timeout);
+      websocket.removeEventListener("open", handleOpen);
+      websocket.removeEventListener("error", handleError);
+    };
+    const handleOpen = () => {
+      cleanup();
       resolve();
     };
-    websocket.onerror = () => {
-      window.clearTimeout(timeout);
+    const handleError = () => {
+      cleanup();
       reject(new Error("Nao foi possivel abrir o Frotak Live."));
     };
+    const timeout = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Timeout ao conectar voz."));
+    }, 12_000);
+
+    websocket.addEventListener("open", handleOpen, { once: true });
+    websocket.addEventListener("error", handleError, { once: true });
   });
 }
 
