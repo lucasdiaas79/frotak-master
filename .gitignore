@@ -35,6 +35,8 @@ dist-ssr
 .env*
 !.env.example
 .chrome-theme-check/
+.chrome-frotak-live-test/
+.vercel-cli-data/
 .push-target-path
 workspace-check.png
 !.env.example
