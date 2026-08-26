@@ -13,7 +13,8 @@ const GEMINI_LIVE_WS =
   "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
 const INPUT_RATE = 16_000;
 const OUTPUT_RATE = 24_000;
-const ACTIVITY_RMS_THRESHOLD = 0.012;
+const CAPTURE_CHUNK_SIZE = 4096;
+const ACTIVITY_RMS_THRESHOLD = 0.01;
 
 type GeminiLiveMessage = {
   setupComplete?: unknown;
@@ -51,7 +52,7 @@ export async function requestFrotakLiveMicrophone() {
   }
 
   try {
-    return await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
@@ -59,6 +60,12 @@ export async function requestFrotakLiveMicrophone() {
         channelCount: 1,
       },
     });
+    try {
+      window.localStorage.setItem("frotak-live-microphone-granted", "true");
+    } catch {
+      // Browser storage can be disabled; microphone permission still belongs to the browser.
+    }
+    return stream;
   } catch (error) {
     const name = error instanceof DOMException ? error.name : "";
     if (name === "NotAllowedError" || name === "SecurityError") {
@@ -154,6 +161,7 @@ export class FrotakLiveSession {
   private setupComplete = false;
   private closed = false;
   private transcriptBuffer = "";
+  private captureBuffer: number[] = [];
 
   constructor(options: FrotakLiveSessionOptions) {
     this.options = options;
@@ -203,17 +211,7 @@ export class FrotakLiveSession {
               },
             },
           },
-          realtimeInputConfig: {
-            automaticActivityDetection: {
-              disabled: false,
-              startOfSpeechSensitivity: "START_SENSITIVITY_HIGH",
-              endOfSpeechSensitivity: "END_SENSITIVITY_HIGH",
-              prefixPaddingMs: 250,
-              silenceDurationMs: 800,
-            },
-            activityHandling: "START_OF_ACTIVITY_INTERRUPTS",
-            turnCoverage: "TURN_INCLUDES_ONLY_ACTIVITY",
-          },
+          inputAudioTranscription: {},
           outputAudioTranscription: {},
         },
       }),
@@ -233,6 +231,7 @@ export class FrotakLiveSession {
 
   async stop() {
     this.closed = true;
+    this.captureBuffer = [];
     this.captureNode?.port.close();
     this.captureNode?.disconnect();
     this.muteGain?.disconnect();
@@ -298,7 +297,11 @@ export class FrotakLiveSession {
         this.player.stopNow();
       }
 
-      const pcm = resampleToPcm16(input, this.context?.sampleRate ?? 48_000, INPUT_RATE);
+      this.captureBuffer.push(...input);
+      if (this.captureBuffer.length < CAPTURE_CHUNK_SIZE) return;
+
+      const chunk = new Float32Array(this.captureBuffer.splice(0, CAPTURE_CHUNK_SIZE));
+      const pcm = resampleToPcm16(chunk, this.context?.sampleRate ?? 48_000, INPUT_RATE);
       this.websocket.send(
         JSON.stringify({
           realtimeInput: {
