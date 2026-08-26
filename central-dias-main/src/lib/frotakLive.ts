@@ -13,8 +13,7 @@ const GEMINI_LIVE_WS =
   "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
 const INPUT_RATE = 16_000;
 const OUTPUT_RATE = 24_000;
-const RMS_THRESHOLD = 0.018;
-const SILENCE_HANGOVER_MS = 420;
+const ACTIVITY_RMS_THRESHOLD = 0.012;
 
 type GeminiLiveMessage = {
   setupComplete?: unknown;
@@ -37,6 +36,11 @@ type GeminiLiveMessage = {
     interrupted?: boolean;
     turnComplete?: boolean;
     generationComplete?: boolean;
+  };
+  error?: {
+    code?: number;
+    message?: string;
+    status?: string;
   };
   goAway?: unknown;
 };
@@ -147,8 +151,7 @@ export class FrotakLiveSession {
   private captureNode: AudioWorkletNode | null = null;
   private muteGain: GainNode | null = null;
   private player: PcmAudioPlayer;
-  private lastVoiceAt = 0;
-  private isVoiceOpen = false;
+  private setupComplete = false;
   private closed = false;
   private transcriptBuffer = "";
 
@@ -169,11 +172,18 @@ export class FrotakLiveSession {
 
     this.websocket = new WebSocket(`${GEMINI_LIVE_WS}?access_token=${this.options.token}`);
     this.websocket.onmessage = (event) => this.handleMessage(event);
-    this.websocket.onerror = () => {
+    this.websocket.onerror = (event) => {
+      console.error("[frotakLive] websocket error", event);
       this.options.onStatus?.("error");
       this.options.onError?.("Nao foi possivel conectar ao Frotak Live.");
     };
-    this.websocket.onclose = () => {
+    this.websocket.onclose = (event) => {
+      if (event.code !== 1000) {
+        console.error("[frotakLive] websocket closed", {
+          code: event.code,
+          reason: event.reason,
+        });
+      }
       if (!this.closed) this.options.onStatus?.("idle");
     };
 
@@ -182,13 +192,32 @@ export class FrotakLiveSession {
       JSON.stringify({
         setup: {
           model: `models/${this.options.model}`,
-          responseModalities: ["AUDIO"],
+          generationConfig: {
+            responseModalities: ["AUDIO"],
+            temperature: 0.2,
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: "Aoede",
+                },
+              },
+            },
+          },
+          realtimeInputConfig: {
+            automaticActivityDetection: {
+              disabled: false,
+              startOfSpeechSensitivity: "START_SENSITIVITY_HIGH",
+              endOfSpeechSensitivity: "END_SENSITIVITY_HIGH",
+              prefixPaddingMs: 250,
+              silenceDurationMs: 800,
+            },
+            activityHandling: "START_OF_ACTIVITY_INTERRUPTS",
+            turnCoverage: "TURN_INCLUDES_ONLY_ACTIVITY",
+          },
+          outputAudioTranscription: {},
         },
       }),
     );
-
-    await this.startAudioCapture();
-    this.options.onStatus?.("ready");
   }
 
   sendText(text: string) {
@@ -204,7 +233,6 @@ export class FrotakLiveSession {
 
   async stop() {
     this.closed = true;
-    this.isVoiceOpen = false;
     this.captureNode?.port.close();
     this.captureNode?.disconnect();
     this.muteGain?.disconnect();
@@ -254,30 +282,23 @@ export class FrotakLiveSession {
     this.muteGain.gain.value = 0;
 
     this.captureNode.port.onmessage = (event: MessageEvent<Float32Array>) => {
-      if (this.closed || !this.websocket || this.websocket.readyState !== WebSocket.OPEN) return;
+      if (
+        this.closed ||
+        !this.setupComplete ||
+        !this.websocket ||
+        this.websocket.readyState !== WebSocket.OPEN
+      ) {
+        return;
+      }
       const input = event.data;
       const rms = calculateRms(input);
-      const now = performance.now();
-      const voiceDetected = rms > RMS_THRESHOLD;
 
-      if (voiceDetected) {
-        this.lastVoiceAt = now;
-        if (!this.isVoiceOpen) {
-          this.isVoiceOpen = true;
-          this.options.onStatus?.("listening");
-        }
+      if (rms > ACTIVITY_RMS_THRESHOLD) {
+        this.options.onStatus?.("listening");
         this.player.stopNow();
       }
 
-      const shouldSendSpeech = this.isVoiceOpen || now - this.lastVoiceAt < SILENCE_HANGOVER_MS;
-
-      if (this.isVoiceOpen && !voiceDetected && now - this.lastVoiceAt >= SILENCE_HANGOVER_MS) {
-        this.isVoiceOpen = false;
-        this.options.onStatus?.("ready");
-      }
-
-      const audioFrame = shouldSendSpeech ? input : new Float32Array(input.length);
-      const pcm = resampleToPcm16(audioFrame, this.context?.sampleRate ?? 48_000, INPUT_RATE);
+      const pcm = resampleToPcm16(input, this.context?.sampleRate ?? 48_000, INPUT_RATE);
       this.websocket.send(
         JSON.stringify({
           realtimeInput: {
@@ -300,6 +321,33 @@ export class FrotakLiveSession {
     try {
       message = JSON.parse(event.data) as GeminiLiveMessage;
     } catch {
+      return;
+    }
+
+    if (message.error) {
+      console.error("[frotakLive] gemini live error", {
+        code: message.error.code,
+        status: message.error.status,
+        message: message.error.message,
+      });
+      this.options.onStatus?.("error");
+      this.options.onError?.("Nao foi possivel concluir a conversa por voz.");
+      return;
+    }
+
+    if (message.setupComplete) {
+      this.setupComplete = true;
+      void this.startAudioCapture()
+        .then(() => {
+          if (!this.closed) this.options.onStatus?.("ready");
+        })
+        .catch((error) => {
+          console.error("[frotakLive] audio capture failed", {
+            message: error instanceof Error ? error.message : String(error),
+          });
+          this.options.onStatus?.("error");
+          this.options.onError?.("Nao foi possivel iniciar a captura do microfone.");
+        });
       return;
     }
 
