@@ -404,50 +404,97 @@ function ChatComposer({
   startLive: () => Promise<void>;
 }) {
   return (
-    <div className="fixed inset-x-0 bottom-[74px] z-20 border-border/70 bg-transparent p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:static md:border-t md:bg-background/95 md:p-4 md:backdrop-blur">
-      <div className="mx-auto flex h-[64px] max-w-3xl items-center gap-2 rounded-full border border-white/10 bg-[#171717]/95 p-2 shadow-[0_18px_70px_rgba(0,0,0,0.48)] md:h-auto md:items-end md:rounded-[26px] md:border-border md:bg-surface-2/80">
-        <button
-          type="button"
-          className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-black/35 text-white transition hover:bg-primary/10 hover:text-primary md:bg-background md:text-foreground"
-          aria-label="Adicionar"
-        >
-          <Plus className="size-6" />
-        </button>
-        <Textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void sendMessage();
-            }
-          }}
-          placeholder="Pergunte a Frotak IA..."
-          className="max-h-32 min-h-11 flex-1 resize-none border-0 bg-transparent px-1 py-3 text-[16px] font-semibold text-white shadow-none outline-none placeholder:text-white/38 focus-visible:ring-0 md:text-foreground md:placeholder:text-muted-foreground"
-        />
-        <button
-          type="button"
-          className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-black/35 text-white transition hover:bg-primary/20 hover:text-primary md:bg-background md:text-foreground"
-          onClick={() => void startLive()}
-          aria-label="Abrir Frotak Live"
-        >
-          <AudioLines className="size-5" />
-        </button>
-        <button
-          type="button"
-          disabled={sending || !draft.trim()}
-          className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition hover:scale-105 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
-          onClick={() => void sendMessage()}
-          aria-label="Enviar"
-        >
-          {sending ? (
-            <LoaderCircle className="size-5 animate-spin" />
-          ) : (
-            <ArrowUp className="size-5" />
-          )}
-        </button>
+    <>
+      <div className="fixed inset-x-0 bottom-[74px] z-20 bg-transparent px-2.5 pb-[calc(0.7rem+env(safe-area-inset-bottom))] md:hidden">
+        <div className="mx-auto flex h-[58px] w-full max-w-[460px] items-center gap-2 rounded-full border border-white/10 bg-[#171717] px-2 shadow-[0_18px_70px_rgba(0,0,0,0.55)]">
+          <button
+            type="button"
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-black/45 text-white transition hover:bg-primary/15"
+            aria-label="Adicionar"
+          >
+            <Plus className="size-6" />
+          </button>
+          <input
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void sendMessage();
+              }
+            }}
+            placeholder="Pergunte a Frotak IA..."
+            className="h-full min-w-0 flex-1 border-0 bg-transparent px-1 text-[16px] font-semibold text-white outline-none placeholder:text-white/38"
+          />
+          <button
+            type="button"
+            className="inline-flex size-10 shrink-0 items-center justify-center rounded-full bg-black/45 text-white transition hover:bg-primary/20"
+            onClick={() => void startLive()}
+            aria-label="Abrir Frotak Live"
+          >
+            <AudioLines className="size-5" />
+          </button>
+          <button
+            type="button"
+            disabled={sending || !draft.trim()}
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-white text-black transition hover:scale-105 disabled:bg-white/10 disabled:text-white/45"
+            onClick={() => void sendMessage()}
+            aria-label="Enviar"
+          >
+            {sending ? (
+              <LoaderCircle className="size-5 animate-spin" />
+            ) : (
+              <ArrowUp className="size-5" />
+            )}
+          </button>
+        </div>
       </div>
-    </div>
+
+      <div className="hidden border-t border-border/70 bg-background/95 p-4 backdrop-blur md:block">
+        <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-[26px] border border-border bg-surface-2/80 p-2 shadow-[0_18px_70px_rgba(0,0,0,0.48)]">
+          <button
+            type="button"
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-black/35 text-white transition hover:bg-primary/10 hover:text-primary md:bg-background md:text-foreground"
+            aria-label="Adicionar"
+          >
+            <Plus className="size-6" />
+          </button>
+          <Textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void sendMessage();
+              }
+            }}
+            placeholder="Pergunte a Frotak IA..."
+            className="max-h-32 min-h-11 flex-1 resize-none border-0 bg-transparent px-1 py-3 text-[16px] font-semibold text-white shadow-none outline-none placeholder:text-white/38 focus-visible:ring-0 md:text-foreground md:placeholder:text-muted-foreground"
+          />
+          <button
+            type="button"
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-black/35 text-white transition hover:bg-primary/20 hover:text-primary md:bg-background md:text-foreground"
+            onClick={() => void startLive()}
+            aria-label="Abrir Frotak Live"
+          >
+            <AudioLines className="size-5" />
+          </button>
+          <button
+            type="button"
+            disabled={sending || !draft.trim()}
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition hover:scale-105 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+            onClick={() => void sendMessage()}
+            aria-label="Enviar"
+          >
+            {sending ? (
+              <LoaderCircle className="size-5 animate-spin" />
+            ) : (
+              <ArrowUp className="size-5" />
+            )}
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
