@@ -77,7 +77,7 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" }).handler(
     const model = process.env.GEMINI_LIVE_MODEL || FROTAK_AI_LIVE_MODEL;
     const ai = new GoogleGenAI({
       apiKey: geminiApiKey(),
-      httpOptions: { apiVersion: "v1alpha" },
+      httpOptions: { apiVersion: "v1beta" },
     });
 
     const token = await ai.authTokens.create({
@@ -99,9 +99,8 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" }).handler(
             },
             inputAudioTranscription: {},
             outputAudioTranscription: {},
-            enableAffectiveDialog: true,
-            proactivity: {
-              proactiveAudio: true,
+            thinkingConfig: {
+              thinkingLevel: "minimal",
             },
             systemInstruction: {
               parts: [{ text: frotakAiSystemInstruction() }],
