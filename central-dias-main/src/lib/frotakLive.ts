@@ -252,15 +252,15 @@ export class FrotakLiveSession {
         this.player.stopNow();
       }
 
-      const shouldSend = this.isVoiceOpen || now - this.lastVoiceAt < SILENCE_HANGOVER_MS;
-      if (!shouldSend) return;
+      const shouldSendSpeech = this.isVoiceOpen || now - this.lastVoiceAt < SILENCE_HANGOVER_MS;
 
       if (this.isVoiceOpen && !voiceDetected && now - this.lastVoiceAt >= SILENCE_HANGOVER_MS) {
         this.isVoiceOpen = false;
         this.options.onStatus?.("ready");
       }
 
-      const pcm = resampleToPcm16(input, this.context?.sampleRate ?? 48_000, INPUT_RATE);
+      const audioFrame = shouldSendSpeech ? input : new Float32Array(input.length);
+      const pcm = resampleToPcm16(audioFrame, this.context?.sampleRate ?? 48_000, INPUT_RATE);
       this.websocket.send(
         JSON.stringify({
           realtimeInput: {

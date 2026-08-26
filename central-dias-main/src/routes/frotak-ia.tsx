@@ -195,7 +195,6 @@ function FrotakIaPage() {
         lastLiveText={lastLiveText}
         setDraft={setDraft}
         startLive={startLive}
-        stopLive={stopLive}
         exitLiveMode={exitLiveMode}
         sendMessage={sendMessage}
       />
@@ -268,7 +267,6 @@ function FrotakLiveView({
   lastLiveText,
   setDraft,
   startLive,
-  stopLive,
   exitLiveMode,
   sendMessage,
 }: {
@@ -277,7 +275,6 @@ function FrotakLiveView({
   lastLiveText: string;
   setDraft: (value: string) => void;
   startLive: () => Promise<void>;
-  stopLive: () => Promise<void>;
   exitLiveMode: () => Promise<void>;
   sendMessage: () => Promise<void>;
 }) {
@@ -368,12 +365,14 @@ function FrotakLiveView({
         </div>
         <button
           type="button"
-          onClick={() => (active ? void stopLive() : void startLive())}
+          onClick={() => {
+            if (!active) void startLive();
+          }}
           className={cn(
             "inline-flex size-16 items-center justify-center rounded-full border border-white/10 text-white shadow-lg transition",
             active ? "bg-primary" : "bg-white/10",
           )}
-          aria-label={active ? "Pausar voz" : "Iniciar voz"}
+          aria-label={active ? "Microfone ativo" : "Iniciar voz"}
         >
           <Mic className="size-7" />
         </button>
