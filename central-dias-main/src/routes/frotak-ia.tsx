@@ -2,12 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeft,
   ArrowUp,
+  AudioLines,
   Bot,
   LoaderCircle,
   Mic,
-  PhoneOff,
   Plus,
-  Radio,
   SlidersHorizontal,
   User,
   X,
@@ -206,7 +205,7 @@ function FrotakIaPage() {
             <ArrowLeft className="size-5" />
           </button>
           <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 text-primary">
-            <Bot className="size-5" />
+            <span className="text-sm font-black">F</span>
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-primary md:text-muted-foreground">
@@ -222,7 +221,7 @@ function FrotakIaPage() {
             className="hidden h-10 gap-2 rounded-full px-4 md:inline-flex"
             onClick={() => void startLive()}
           >
-            <Radio className="size-4" />
+            <AudioLines className="size-4" />
             Frotak Live
           </Button>
           <button
@@ -234,7 +233,7 @@ function FrotakIaPage() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-5 md:px-6">
+        <div className="flex-1 overflow-y-auto px-4 py-5 pb-32 md:px-6 md:pb-5">
           <div className="mx-auto flex max-w-3xl flex-col gap-5">
             {messages.map((message) => (
               <ChatBubble key={message.id} message={message} />
@@ -307,12 +306,27 @@ function FrotakLiveView({
             "relative flex aspect-square w-[52vw] max-w-[260px] min-w-[190px] items-center justify-center rounded-full transition duration-500",
             "bg-[radial-gradient(circle_at_68%_34%,rgba(255,255,255,0.95),rgba(96,165,250,0.76)_34%,rgba(34,197,94,0.68)_68%,rgba(12,19,15,0.98)_100%)]",
             "shadow-[0_0_90px_rgba(34,197,94,0.25)]",
-            speaking && "scale-105 shadow-[0_0_120px_rgba(34,197,94,0.42)]",
+            speaking && "scale-105 animate-pulse shadow-[0_0_120px_rgba(34,197,94,0.42)]",
             listening && "scale-95 shadow-[0_0_110px_rgba(59,130,246,0.36)]",
           )}
         >
-          <div className="absolute inset-4 rounded-full bg-white/8 blur-xl" />
-          <Bot className="relative size-14 text-white/85" />
+          <div
+            className={cn(
+              "absolute -inset-7 rounded-full border border-primary/0 transition",
+              listening && "animate-ping border-primary/25",
+              speaking && "animate-pulse border-sky-300/25",
+            )}
+          />
+          <div
+            className={cn(
+              "absolute inset-4 rounded-full bg-white/8 blur-xl transition",
+              listening && "scale-110 bg-primary/20",
+              speaking && "scale-125 bg-sky-200/20",
+            )}
+          />
+          <span className="relative text-[56px] font-black tracking-[-0.08em] text-white/88">
+            F
+          </span>
         </div>
 
         <p className="mt-8 text-[15px] font-bold text-white/72">{liveStatusLabel(liveStatus)}</p>
@@ -358,9 +372,9 @@ function FrotakLiveView({
           type="button"
           onClick={() => void exitLiveMode()}
           className="inline-flex size-16 items-center justify-center rounded-full bg-white text-black shadow-lg transition hover:scale-105"
-          aria-label="Encerrar Frotak Live"
+          aria-label="Desativar modo Live"
         >
-          <PhoneOff className="size-7" />
+          <X className="size-8" />
         </button>
       </div>
     </div>
@@ -381,11 +395,11 @@ function ChatComposer({
   startLive: () => Promise<void>;
 }) {
   return (
-    <div className="border-t border-border/70 bg-background/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur md:p-4">
-      <div className="mx-auto flex max-w-3xl items-end gap-2 rounded-full border border-border bg-surface-2/80 p-2 shadow-[0_18px_60px_rgba(0,0,0,0.28)] md:rounded-[26px]">
+    <div className="fixed inset-x-0 bottom-[74px] z-20 border-border/70 bg-transparent p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:static md:border-t md:bg-background/95 md:p-4 md:backdrop-blur">
+      <div className="mx-auto flex h-[64px] max-w-3xl items-center gap-2 rounded-full border border-white/10 bg-[#171717]/95 p-2 shadow-[0_18px_70px_rgba(0,0,0,0.48)] md:h-auto md:items-end md:rounded-[26px] md:border-border md:bg-surface-2/80">
         <button
           type="button"
-          className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-background text-foreground transition hover:bg-primary/10 hover:text-primary"
+          className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-black/35 text-white transition hover:bg-primary/10 hover:text-primary md:bg-background md:text-foreground"
           aria-label="Adicionar"
         >
           <Plus className="size-6" />
@@ -400,15 +414,15 @@ function ChatComposer({
             }
           }}
           placeholder="Pergunte a Frotak IA..."
-          className="max-h-32 min-h-11 flex-1 resize-none border-0 bg-transparent px-1 py-3 text-[15px] font-semibold shadow-none outline-none focus-visible:ring-0"
+          className="max-h-32 min-h-11 flex-1 resize-none border-0 bg-transparent px-1 py-3 text-[16px] font-semibold text-white shadow-none outline-none placeholder:text-white/38 focus-visible:ring-0 md:text-foreground md:placeholder:text-muted-foreground"
         />
         <button
           type="button"
-          className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-background text-foreground transition hover:bg-primary/10 hover:text-primary"
+          className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-black/35 text-white transition hover:bg-primary/20 hover:text-primary md:bg-background md:text-foreground"
           onClick={() => void startLive()}
           aria-label="Abrir Frotak Live"
         >
-          <Radio className="size-5" />
+          <AudioLines className="size-5" />
         </button>
         <button
           type="button"
