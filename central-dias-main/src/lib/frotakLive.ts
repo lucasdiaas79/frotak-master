@@ -144,7 +144,8 @@ export class FrotakLiveSession {
   private stream: MediaStream | null = null;
   private context: AudioContext | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
-  private processor: ScriptProcessorNode | null = null;
+  private captureNode: AudioWorkletNode | null = null;
+  private muteGain: GainNode | null = null;
   private player: PcmAudioPlayer;
   private lastVoiceAt = 0;
   private isVoiceOpen = false;
@@ -204,9 +205,12 @@ export class FrotakLiveSession {
   async stop() {
     this.closed = true;
     this.isVoiceOpen = false;
-    this.processor?.disconnect();
+    this.captureNode?.port.close();
+    this.captureNode?.disconnect();
+    this.muteGain?.disconnect();
     this.source?.disconnect();
-    this.processor = null;
+    this.captureNode = null;
+    this.muteGain = null;
     this.source = null;
 
     this.stream?.getTracks().forEach((track) => track.stop());
@@ -231,14 +235,27 @@ export class FrotakLiveSession {
 
   private async startAudioCapture() {
     if (!this.stream) return;
+    if (!window.AudioWorkletNode) {
+      throw new Error("Este navegador nao suporta o modo de voz em tempo real.");
+    }
+
     this.context = new AudioContext();
     if (this.context.state === "suspended") await this.context.resume();
 
+    await this.context.audioWorklet.addModule("/frotak-live-capture-processor.js");
+
     this.source = this.context.createMediaStreamSource(this.stream);
-    this.processor = this.context.createScriptProcessor(4096, 1, 1);
-    this.processor.onaudioprocess = (event) => {
+    this.captureNode = new AudioWorkletNode(this.context, "frotak-live-capture", {
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      channelCount: 1,
+    });
+    this.muteGain = this.context.createGain();
+    this.muteGain.gain.value = 0;
+
+    this.captureNode.port.onmessage = (event: MessageEvent<Float32Array>) => {
       if (this.closed || !this.websocket || this.websocket.readyState !== WebSocket.OPEN) return;
-      const input = event.inputBuffer.getChannelData(0);
+      const input = event.data;
       const rms = calculateRms(input);
       const now = performance.now();
       const voiceDetected = rms > RMS_THRESHOLD;
@@ -273,8 +290,9 @@ export class FrotakLiveSession {
       );
     };
 
-    this.source.connect(this.processor);
-    this.processor.connect(this.context.destination);
+    this.source.connect(this.captureNode);
+    this.captureNode.connect(this.muteGain);
+    this.muteGain.connect(this.context.destination);
   }
 
   private handleMessage(event: MessageEvent<string>) {
