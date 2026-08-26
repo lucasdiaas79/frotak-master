@@ -16,7 +16,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { createFrotakLiveToken, sendFrotakAiChatMessage } from "@/lib/frotakAi";
-import { FrotakLiveSession, type FrotakLiveStatus } from "@/lib/frotakLive";
+import {
+  FrotakLiveSession,
+  requestFrotakLiveMicrophone,
+  type FrotakLiveStatus,
+} from "@/lib/frotakLive";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/frotak-ia")({
@@ -136,15 +140,18 @@ function FrotakIaPage() {
   const startLive = async () => {
     if (liveSessionRef.current) return;
 
+    let stream: MediaStream | null = null;
     try {
       setMode("live");
       setLiveStatus("connecting");
       setLastLiveText("");
 
+      stream = await requestFrotakLiveMicrophone();
       const liveToken = await createFrotakLiveToken();
       const session = new FrotakLiveSession({
         token: liveToken.token,
         model: liveToken.model,
+        stream,
         onStatus: setLiveStatus,
         onText: (text) => {
           if (text) setLastLiveText(text);
@@ -158,8 +165,10 @@ function FrotakIaPage() {
       liveSessionRef.current = session;
       await session.start();
     } catch (error) {
+      stream?.getTracks().forEach((track) => track.stop());
       liveSessionRef.current = null;
       setLiveStatus("error");
+      setMode("text");
       toast.error(
         error instanceof Error ? error.message : "Nao foi possivel iniciar o Frotak Live.",
       );

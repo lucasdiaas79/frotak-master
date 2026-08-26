@@ -3,6 +3,7 @@ export type FrotakLiveStatus = "idle" | "connecting" | "ready" | "listening" | "
 export type FrotakLiveSessionOptions = {
   token: string;
   model: string;
+  stream: MediaStream;
   onStatus?: (status: FrotakLiveStatus) => void;
   onText?: (text: string) => void;
   onError?: (message: string) => void;
@@ -39,6 +40,34 @@ type GeminiLiveMessage = {
   };
   goAway?: unknown;
 };
+
+export async function requestFrotakLiveMicrophone() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    throw new Error("Este navegador nao permite usar o microfone aqui.");
+  }
+
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        channelCount: 1,
+      },
+    });
+  } catch (error) {
+    const name = error instanceof DOMException ? error.name : "";
+    if (name === "NotAllowedError" || name === "SecurityError") {
+      throw new Error(
+        "Microfone bloqueado. Libere o microfone para central-dias.vercel.app nas permissoes do navegador.",
+      );
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+      throw new Error("Nenhum microfone foi encontrado neste dispositivo.");
+    }
+    throw new Error("Nao foi possivel acessar o microfone.");
+  }
+}
 
 class PcmAudioPlayer {
   private context: AudioContext | null = null;
@@ -124,6 +153,7 @@ export class FrotakLiveSession {
 
   constructor(options: FrotakLiveSessionOptions) {
     this.options = options;
+    this.stream = options.stream;
     this.player = new PcmAudioPlayer({
       onStart: () => this.options.onStatus?.("speaking"),
       onStop: () => {
@@ -155,15 +185,6 @@ export class FrotakLiveSession {
         },
       }),
     );
-
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        channelCount: 1,
-      },
-    });
 
     await this.startAudioCapture();
     this.options.onStatus?.("ready");
