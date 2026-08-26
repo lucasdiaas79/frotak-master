@@ -162,6 +162,7 @@ export class FrotakLiveSession {
   private closed = false;
   private transcriptBuffer = "";
   private captureBuffer: number[] = [];
+  private setupTimeout: number | null = null;
 
   constructor(options: FrotakLiveSessionOptions) {
     this.options = options;
@@ -178,8 +179,13 @@ export class FrotakLiveSession {
     this.closed = false;
     this.options.onStatus?.("connecting");
 
-    this.websocket = new WebSocket(`${GEMINI_LIVE_WS}?access_token=${this.options.token}`);
-    this.websocket.onmessage = (event) => this.handleMessage(event);
+    this.websocket = new WebSocket(
+      `${GEMINI_LIVE_WS}?access_token=${encodeURIComponent(this.options.token)}`,
+    );
+    this.websocket.binaryType = "arraybuffer";
+    this.websocket.onmessage = (event) => {
+      void this.handleMessage(event);
+    };
     this.websocket.onerror = (event) => {
       console.error("[frotakLive] websocket error", event);
       this.options.onStatus?.("error");
@@ -196,6 +202,13 @@ export class FrotakLiveSession {
     };
 
     await waitForWebSocketOpen(this.websocket);
+    this.setupTimeout = window.setTimeout(() => {
+      if (this.closed || this.setupComplete) return;
+      console.error("[frotakLive] setup timeout");
+      this.options.onStatus?.("error");
+      this.options.onError?.("Nao foi possivel iniciar a conexao de voz.");
+      void this.stop();
+    }, 12_000);
     this.websocket.send(
       JSON.stringify({
         setup: {
@@ -231,6 +244,8 @@ export class FrotakLiveSession {
 
   async stop() {
     this.closed = true;
+    if (this.setupTimeout) window.clearTimeout(this.setupTimeout);
+    this.setupTimeout = null;
     this.captureBuffer = [];
     this.captureNode?.port.close();
     this.captureNode?.disconnect();
@@ -319,10 +334,11 @@ export class FrotakLiveSession {
     this.muteGain.connect(this.context.destination);
   }
 
-  private handleMessage(event: MessageEvent<string>) {
+  private async handleMessage(event: MessageEvent<string | ArrayBuffer | Blob>) {
     let message: GeminiLiveMessage;
     try {
-      message = JSON.parse(event.data) as GeminiLiveMessage;
+      const payload = await readWebSocketMessage(event.data);
+      message = JSON.parse(payload) as GeminiLiveMessage;
     } catch {
       return;
     }
@@ -339,6 +355,8 @@ export class FrotakLiveSession {
     }
 
     if (message.setupComplete) {
+      if (this.setupTimeout) window.clearTimeout(this.setupTimeout);
+      this.setupTimeout = null;
       this.setupComplete = true;
       void this.startAudioCapture()
         .then(() => {
@@ -406,6 +424,12 @@ function waitForWebSocketOpen(websocket: WebSocket) {
     websocket.addEventListener("open", handleOpen, { once: true });
     websocket.addEventListener("error", handleError, { once: true });
   });
+}
+
+async function readWebSocketMessage(data: string | ArrayBuffer | Blob) {
+  if (typeof data === "string") return data;
+  if (data instanceof Blob) return data.text();
+  return new TextDecoder().decode(data);
 }
 
 function calculateRms(input: Float32Array) {
