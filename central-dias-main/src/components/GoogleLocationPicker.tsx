@@ -50,19 +50,10 @@ export function GoogleLocationPicker({ lat, lng, postalCode, onChange }: Props) 
         zoomControl: true,
       }).setView(initial, hasCoords ? 16 : 6);
 
-      L.tileLayer(
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-        {
-          maxZoom: 19,
-        },
-      ).addTo(map);
-
-      L.tileLayer(
-        "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-        {
-          maxZoom: 19,
-        },
-      ).addTo(map);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors",
+      }).addTo(map);
 
       map.on("click", (event) => {
         const coords = { lat: event.latlng.lat, lng: event.latlng.lng };
@@ -140,7 +131,7 @@ export function GoogleLocationPicker({ lat, lng, postalCode, onChange }: Props) 
           <div className="absolute inset-0 flex items-center justify-center bg-background/75">
             <div className="inline-flex items-center gap-2 rounded-2xl border border-border bg-surface px-4 py-2 text-[12px] font-bold text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
-              Carregando mapa satelite
+              Carregando mapa
             </div>
           </div>
         ) : null}

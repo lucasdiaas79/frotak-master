@@ -36,8 +36,9 @@ export function LocationPickerMap({ lat, lng, onChange, className }: Props) {
         zoomControl: true,
       }).setView(initial, Number.isFinite(lat) && Number.isFinite(lng) ? 14 : 6);
 
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors",
       }).addTo(map);
 
       map.on("click", (event) => {
