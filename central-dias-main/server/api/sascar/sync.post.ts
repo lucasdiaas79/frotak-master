@@ -40,6 +40,29 @@ function maybeRequireSyncToken(event: Parameters<typeof defineEventHandler>[0]) 
   }
 }
 
+function syncInProgressResponse() {
+  return {
+    ok: true,
+    message: "Sincronização Sascar já está em andamento.",
+    stats: {
+      quantityRequested: 0,
+      sascarVehicles: 0,
+      vehicleBindingsUpdated: 0,
+      packetsFetched: 0,
+      packetsApplied: 0,
+      currentPositionsChecked: 0,
+      currentPositionsApplied: 0,
+      currentPositionErrors: 0,
+      syncedVehicles: 0,
+      skippedPackets: 0,
+      oldPositionsDeleted: 0,
+      lastPacketIdBefore: null,
+      lastPacketIdAfter: null,
+      source: "manual",
+    },
+  };
+}
+
 export default defineEventHandler(async (event) => {
   maybeRequireSyncToken(event);
 
@@ -49,8 +72,12 @@ export default defineEventHandler(async (event) => {
     return await runSascarSync(body);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao sincronizar Sascar.";
+    if (message.includes("ja esta em andamento")) {
+      return syncInProgressResponse();
+    }
+
     throw createError({
-      statusCode: message.includes("ja esta em andamento") ? 409 : 500,
+      statusCode: 500,
       statusMessage: message,
     });
   }
