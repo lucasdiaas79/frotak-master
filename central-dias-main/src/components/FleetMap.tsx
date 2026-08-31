@@ -14,6 +14,69 @@ interface Props {
   className?: string;
 }
 
+type GoogleMap = {
+  setCenter: (position: { lat: number; lng: number }) => void;
+  setZoom: (zoom: number) => void;
+  getZoom: () => number | undefined;
+  fitBounds: (bounds: GoogleLatLngBounds, padding?: number) => void;
+  addListener: (eventName: string, handler: () => void) => { remove: () => void };
+};
+
+type GoogleLatLngBounds = {
+  extend: (position: { lat: number; lng: number }) => void;
+};
+
+type GoogleMarker = {
+  setMap: (map: GoogleMap | null) => void;
+  addListener: (eventName: string, handler: () => void) => { remove: () => void };
+};
+
+type GoogleInfoWindow = {
+  open: (options: { anchor: GoogleMarker; map: GoogleMap }) => void;
+};
+
+type GoogleMapsApi = {
+  maps: {
+    Map: new (
+      element: HTMLElement,
+      options: {
+        center: { lat: number; lng: number };
+        zoom: number;
+        mapTypeId: string;
+        disableDefaultUI?: boolean;
+        zoomControl?: boolean;
+        fullscreenControl?: boolean;
+        streetViewControl?: boolean;
+        mapTypeControl?: boolean;
+      },
+    ) => GoogleMap;
+    Marker: new (options: {
+      position: { lat: number; lng: number };
+      map: GoogleMap;
+      title?: string;
+      icon?: {
+        url: string;
+        scaledSize: unknown;
+        anchor: unknown;
+      };
+    }) => GoogleMarker;
+    InfoWindow: new (options: { content: string }) => GoogleInfoWindow;
+    LatLngBounds: new () => GoogleLatLngBounds;
+    Size: new (width: number, height: number) => unknown;
+    Point: new (x: number, y: number) => unknown;
+    MapTypeId: {
+      ROADMAP: string;
+    };
+  };
+};
+
+declare global {
+  interface Window {
+    google?: GoogleMapsApi;
+    __frotakGoogleMapsPromise?: Promise<GoogleMapsApi>;
+  }
+}
+
 export function FleetMap({
   vehicles,
   selectedId,
@@ -24,19 +87,50 @@ export function FleetMap({
   initialZoom = 5,
   className,
 }: Props) {
+  const googleMapRef = useRef<GoogleMap | null>(null);
+  const googleMarkersRef = useRef<Record<string, GoogleMarker>>({});
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstance = useRef<LeafletMap | null>(null);
   const markersRef = useRef<Record<string, Marker>>({});
   const [zoomLevel, setZoomLevel] = useState(initialZoom);
   const [mapReady, setMapReady] = useState(false);
+  const [provider, setProvider] = useState<"google" | "leaflet" | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    let zoomListener: { remove: () => void } | undefined;
     let map: LeafletMap | null = null;
     const syncZoom = () => {
       if (map) setZoomLevel(map.getZoom());
     };
     (async () => {
+      const googleMapsKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
+      if (googleMapsKey && mapRef.current && !googleMapRef.current) {
+        try {
+          const google = await loadGoogleMaps(googleMapsKey);
+          if (cancelled || !mapRef.current || googleMapRef.current) return;
+          const googleMap = new google.maps.Map(mapRef.current, {
+            center: { lat: initialCenter[0], lng: initialCenter[1] },
+            zoom: initialZoom,
+            mapTypeId: google.maps.MapTypeId.ROADMAP,
+            disableDefaultUI: false,
+            zoomControl: true,
+            fullscreenControl: false,
+            streetViewControl: false,
+            mapTypeControl: false,
+          });
+          zoomListener = googleMap.addListener("zoom_changed", () => {
+            setZoomLevel(googleMap.getZoom() ?? initialZoom);
+          });
+          googleMapRef.current = googleMap;
+          setProvider("google");
+          setMapReady(true);
+          return;
+        } catch (error) {
+          console.error("[FleetMap] Google Maps failed, falling back to Leaflet", error);
+        }
+      }
+
       const L = await import("leaflet");
       if (cancelled || !mapRef.current || mapInstance.current) return;
       map = L.map(mapRef.current, {
@@ -50,11 +144,16 @@ export function FleetMap({
       map.on("zoomend", syncZoom);
       setZoomLevel(map.getZoom());
       mapInstance.current = map;
+      setProvider("leaflet");
       setMapReady(true);
     })();
     return () => {
       cancelled = true;
+      zoomListener?.remove();
       map?.off("zoomend", syncZoom);
+      googleMarkersRef.current &&
+        Object.values(googleMarkersRef.current).forEach((marker) => marker.setMap(null));
+      googleMarkersRef.current = {};
       setMapReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -63,8 +162,47 @@ export function FleetMap({
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (provider === "google" && googleMapRef.current && window.google) {
+        const google = window.google;
+        const map = googleMapRef.current;
+        Object.values(googleMarkersRef.current).forEach((marker) => marker.setMap(null));
+        googleMarkersRef.current = {};
+        vehicles.forEach((v) => {
+          const isSel = v.id === selectedId;
+          const { width, height } = getTruckMarkerSize(zoomLevel, isSel);
+          const iconId = v.id.replace(/[^a-zA-Z0-9_-]/g, "") || "truck";
+          const marker = new google.maps.Marker({
+            position: { lat: v.lat, lng: v.lng },
+            map,
+            title: v.plate,
+            icon: {
+              url: svgToDataUrl(
+                buildTruckMarkerSvg(
+                  vehicleMapColor(v),
+                  iconId,
+                  isSel,
+                  pendingActionKindOfVehicle(v) !== null,
+                  width,
+                  height,
+                ),
+              ),
+              scaledSize: new google.maps.Size(width, height),
+              anchor: new google.maps.Point(width / 2, height - 4),
+            },
+          });
+          if (onSelect) marker.addListener("click", () => onSelect(v.id));
+          const tooltipHtml = getTooltipHtml?.(v);
+          if (tooltipHtml) {
+            const info = new google.maps.InfoWindow({ content: tooltipHtml });
+            marker.addListener("mouseover", () => info.open({ anchor: marker, map }));
+          }
+          googleMarkersRef.current[v.id] = marker;
+        });
+        return;
+      }
+
       const L = await import("leaflet");
-      if (cancelled || !mapReady || !mapInstance.current) return;
+      if (cancelled || provider !== "leaflet" || !mapReady || !mapInstance.current) return;
       const map = mapInstance.current;
       Object.values(markersRef.current).forEach((m) => map.removeLayer(m));
       markersRef.current = {};
@@ -103,16 +241,30 @@ export function FleetMap({
     return () => {
       cancelled = true;
     };
-  }, [vehicles, selectedId, onSelect, getTooltipHtml, zoomLevel, mapReady]);
+  }, [vehicles, selectedId, onSelect, getTooltipHtml, zoomLevel, mapReady, provider]);
 
   useEffect(() => {
-    if (!fitToVehicles || selectedId || !mapReady || !mapInstance.current || vehicles.length === 0)
-      return;
+    if (!fitToVehicles || selectedId || !mapReady || vehicles.length === 0) return;
     const validVehicles = vehicles.filter(
       (vehicle) => Number.isFinite(vehicle.lat) && Number.isFinite(vehicle.lng),
     );
     if (validVehicles.length === 0) return;
 
+    if (provider === "google" && googleMapRef.current && window.google) {
+      const google = window.google;
+      const map = googleMapRef.current;
+      if (validVehicles.length === 1) {
+        map.setCenter({ lat: validVehicles[0].lat, lng: validVehicles[0].lng });
+        map.setZoom(Math.max(map.getZoom() ?? initialZoom, 11));
+        return;
+      }
+      const bounds = new google.maps.LatLngBounds();
+      validVehicles.forEach((vehicle) => bounds.extend({ lat: vehicle.lat, lng: vehicle.lng }));
+      map.fitBounds(bounds, 48);
+      return;
+    }
+
+    if (!mapInstance.current) return;
     const map = mapInstance.current;
     if (validVehicles.length === 1) {
       map.setView([validVehicles[0].lat, validVehicles[0].lng], Math.max(map.getZoom(), 11), {
@@ -123,18 +275,53 @@ export function FleetMap({
 
     const bounds = validVehicles.map((vehicle) => [vehicle.lat, vehicle.lng] as [number, number]);
     map.fitBounds(bounds, { animate: false, maxZoom: 11, padding: [48, 48] });
-  }, [fitToVehicles, selectedId, vehicles, mapReady]);
+  }, [fitToVehicles, selectedId, vehicles, mapReady, provider, initialZoom]);
 
   useEffect(() => {
-    if (!selectedId || !mapInstance.current) return;
+    if (!selectedId) return;
     const v = vehicles.find((x) => x.id === selectedId);
     if (v) {
+      if (provider === "google" && googleMapRef.current) {
+        const map = googleMapRef.current;
+        map.setCenter({ lat: v.lat, lng: v.lng });
+        map.setZoom(Math.max(map.getZoom() ?? initialZoom, 8));
+        return;
+      }
+      if (!mapInstance.current) return;
       const map = mapInstance.current;
       map.setView([v.lat, v.lng], Math.max(map.getZoom(), 8), { animate: true });
     }
-  }, [selectedId, vehicles]);
+  }, [selectedId, vehicles, provider, initialZoom]);
 
   return <div ref={mapRef} className={className} />;
+}
+
+function loadGoogleMaps(apiKey: string) {
+  if (window.google?.maps) return Promise.resolve(window.google);
+  if (window.__frotakGoogleMapsPromise) return window.__frotakGoogleMapsPromise;
+
+  window.__frotakGoogleMapsPromise = new Promise<GoogleMapsApi>((resolve, reject) => {
+    const callbackName = `__frotakInitGoogleMaps_${Date.now()}`;
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
+      apiKey,
+    )}&callback=${callbackName}&v=weekly`;
+    script.async = true;
+    script.defer = true;
+    script.onerror = () => reject(new Error("Nao foi possivel carregar o Google Maps."));
+    window[callbackName as keyof Window] = (() => {
+      delete window[callbackName as keyof Window];
+      if (window.google?.maps) resolve(window.google);
+      else reject(new Error("Google Maps nao inicializado."));
+    }) as never;
+    document.head.appendChild(script);
+  });
+
+  return window.__frotakGoogleMapsPromise;
+}
+
+function svgToDataUrl(svg: string) {
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
 function buildTruckMarkerSvg(
