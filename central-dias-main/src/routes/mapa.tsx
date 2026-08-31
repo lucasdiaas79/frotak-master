@@ -22,6 +22,7 @@ import {
   type SascarSyncState,
   syncSascarPositions,
 } from "@/lib/integrations/sascar";
+import { getActiveTenantId } from "@/lib/auth";
 import { hasSupabaseConfig, supabase } from "@/lib/supabase";
 import { useFleet } from "@/lib/store";
 import { ALL_STATUSES, STATUS_HEX, VEHICLE_STATUS_LABEL, statusGroup } from "@/lib/types";
@@ -92,6 +93,7 @@ function MapaPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const activeTenantId = getActiveTenantId();
 
     void getSascarSyncState()
       .then((state) => {
@@ -117,11 +119,18 @@ function MapaPage() {
           event: "*",
           schema: "public",
           table: "integration_sync_state",
-          filter: "integration=eq.sascar",
+          filter: `tenant_id=eq.${activeTenantId}`,
         },
         (payload) => {
+          const row = payload.new as {
+            integration?: string;
+            synced_at: string | null;
+            metadata: Record<string, unknown> | null;
+          };
+          if (row.integration !== "sascar") return;
+
           const state = mapSascarSyncStateRow(
-            payload.new as { synced_at: string | null; metadata: Record<string, unknown> | null },
+            row,
           );
           if (!state.syncedAt || state.syncedAt === lastRealtimeSyncAtRef.current) return;
 

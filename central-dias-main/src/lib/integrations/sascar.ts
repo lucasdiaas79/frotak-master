@@ -12,6 +12,7 @@ export interface SascarSyncStats {
   packetsApplied: number;
   syncedVehicles: number;
   skippedPackets: number;
+  oldPositionsDeleted?: number;
   lastPacketIdBefore: number | null;
   lastPacketIdAfter: number | null;
   source: SascarSyncSource;
@@ -70,6 +71,7 @@ export async function getSascarSyncState(): Promise<SascarSyncState> {
   const { data, error } = await supabase
     .from("integration_sync_state")
     .select("synced_at, metadata")
+    .eq("tenant_id", getActiveTenantId())
     .eq("integration", "sascar")
     .eq("scope", "positions")
     .maybeSingle();
@@ -100,16 +102,30 @@ export async function syncSascarPositions(
     };
   }
 
-  const { data, error } = await supabase.functions.invoke<SascarSyncResponse>("sascar-sync", {
-    body: {
+  const response = await fetch("/api/sascar/sync", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
       quantity: Number(input.quantity ?? 3000),
       forceFull: Boolean(input.forceFull),
-      source: "manual",
-    },
+    }),
   });
 
-  if (error) {
-    throw new Error(error.message || "Falha ao sincronizar Sascar.");
+  const data = (await response.json().catch(() => null)) as
+    | SascarSyncResponse
+    | { message?: string; statusMessage?: string }
+    | null;
+
+  if (!response.ok) {
+    const message =
+      data && "statusMessage" in data
+        ? data.statusMessage
+        : data && "message" in data
+          ? data.message
+          : "Falha ao sincronizar Sascar.";
+    throw new Error(message || "Falha ao sincronizar Sascar.");
   }
 
   if (!data) {

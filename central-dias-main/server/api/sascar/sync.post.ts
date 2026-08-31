@@ -5,6 +5,26 @@ interface SyncBody {
   quantity?: number;
   forceFull?: boolean;
   includeCurrentHistory?: boolean;
+  source?: "manual" | "cron";
+}
+
+function isSameOriginRequest(event: Parameters<typeof defineEventHandler>[0]) {
+  if (getHeader(event, "sec-fetch-site") === "same-origin") return true;
+
+  const host = getHeader(event, "host");
+  if (!host) return false;
+
+  for (const header of ["origin", "referer"]) {
+    const value = getHeader(event, header);
+    if (!value) continue;
+    try {
+      if (new URL(value).host === host) return true;
+    } catch {
+      // Ignore invalid browser metadata.
+    }
+  }
+
+  return false;
 }
 
 function maybeRequireSyncToken(event: Parameters<typeof defineEventHandler>[0]) {
@@ -13,8 +33,9 @@ function maybeRequireSyncToken(event: Parameters<typeof defineEventHandler>[0]) 
 
   const authHeader = getHeader(event, "authorization") ?? "";
   const providedToken = authHeader.replace(/^Bearer\s+/i, "").trim();
+  const headerToken = getHeader(event, "x-sascar-sync-token")?.trim();
 
-  if (providedToken !== syncToken) {
+  if (providedToken !== syncToken && headerToken !== syncToken && !isSameOriginRequest(event)) {
     throw createError({ statusCode: 401, statusMessage: "Unauthorized" });
   }
 }

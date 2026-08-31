@@ -57,6 +57,7 @@ interface SyncStats {
   packetsApplied: number;
   syncedVehicles: number;
   skippedPackets: number;
+  oldPositionsDeleted: number;
   lastPacketIdBefore: number | null;
   lastPacketIdAfter: number | null;
   source: "cron" | "manual";
@@ -442,31 +443,42 @@ async function runSascarSync(input: SyncInput): Promise<{ ok: true; stats: SyncS
   const quantity = Math.min(Math.max(Number(input.quantity ?? 3000), 1), POSITION_BATCH_LIMIT);
   const forceFull = Boolean(input.forceFull);
   const source = input.source ?? "manual";
+  const lockKey = "sascar-sync";
+  let lockAcquired = false;
 
-  const { data: localVehicles, error: localVehiclesError } = await supabase
-    .from("vehicles")
-    .select("id, tenant_id, plate, sascar_id, last_position_at");
+  const { data: lockData, error: lockError } = await supabase.rpc("acquire_integration_lock", {
+    p_key: lockKey,
+    p_ttl_seconds: 55,
+  });
 
-  if (localVehiclesError) throw localVehiclesError;
-
-  const localRows = (localVehicles ?? []) as LocalVehicleRow[];
-  const tenantIds = Array.from(new Set(localRows.map((vehicle) => vehicle.tenant_id).filter(Boolean)));
-  const primaryTenantId = tenantIds[0] ?? null;
-  let syncState: { synced_at: string | null; metadata: Record<string, unknown> | null } | null = null;
-
-  if (primaryTenantId) {
-    const { data, error } = await supabase
-      .from("integration_sync_state")
-      .select("synced_at, metadata")
-      .eq("tenant_id", primaryTenantId)
-      .eq("integration", "sascar")
-      .eq("scope", "positions")
-      .maybeSingle();
-    if (error) throw error;
-    syncState = data as typeof syncState;
-  }
+  if (lockError) throw lockError;
+  lockAcquired = Boolean(lockData);
+  if (!lockAcquired) throw new Error("A sincronizacao Sascar ja esta em andamento.");
 
   try {
+    const { data: localVehicles, error: localVehiclesError } = await supabase
+      .from("vehicles")
+      .select("id, tenant_id, plate, sascar_id, last_position_at");
+
+    if (localVehiclesError) throw localVehiclesError;
+
+    const localRows = (localVehicles ?? []) as LocalVehicleRow[];
+    const tenantIds = Array.from(new Set(localRows.map((vehicle) => vehicle.tenant_id).filter(Boolean)));
+    const primaryTenantId = tenantIds[0] ?? null;
+    let syncState: { synced_at: string | null; metadata: Record<string, unknown> | null } | null = null;
+
+    if (primaryTenantId) {
+      const { data, error } = await supabase
+        .from("integration_sync_state")
+        .select("synced_at, metadata")
+        .eq("tenant_id", primaryTenantId)
+        .eq("integration", "sascar")
+        .eq("scope", "positions")
+        .maybeSingle();
+      if (error) throw error;
+      syncState = data as typeof syncState;
+    }
+
     const localByPlate = new Map(
       localRows.map((vehicle) => [normalizePlate(vehicle.plate), vehicle]),
     );
@@ -607,6 +619,14 @@ async function runSascarSync(input: SyncInput): Promise<{ ok: true; stats: SyncS
       packetsToProcess.at(-1)?.packetId ?? newestPacketId ?? lastPacketId ?? null;
 
     const syncedAt = new Date().toISOString();
+    const { data: deletedPositions, error: purgeError } = await supabase.rpc(
+      "purge_old_vehicle_positions",
+      {
+        p_retention: "24 hours",
+      },
+    );
+    if (purgeError) throw purgeError;
+
     for (const tenantId of tenantIds) {
       const { error: stateUpsertError } = await supabase.from("integration_sync_state").upsert(
         {
@@ -622,6 +642,7 @@ async function runSascarSync(input: SyncInput): Promise<{ ok: true; stats: SyncS
             packetsApplied,
             syncedVehicles: syncedVehicleIds.size,
             skippedPackets,
+            oldPositionsDeleted: Number(deletedPositions ?? 0),
             newestPacketId,
             lastPacketId: newestProcessedPacketId,
           },
@@ -641,13 +662,20 @@ async function runSascarSync(input: SyncInput): Promise<{ ok: true; stats: SyncS
         packetsApplied,
         syncedVehicles: syncedVehicleIds.size,
         skippedPackets,
+        oldPositionsDeleted: Number(deletedPositions ?? 0),
         lastPacketIdBefore: lastPacketId,
         lastPacketIdAfter: newestProcessedPacketId,
         source,
       },
     };
   } finally {
-    // The new multi-tenant schema stores sync state per tenant in integration_sync_state.
+    if (lockAcquired) {
+      try {
+        await supabase.rpc("release_integration_lock", { p_key: lockKey });
+      } catch (error) {
+        console.error("[sascar-sync] failed to release lock", error);
+      }
+    }
   }
 }
 
@@ -666,6 +694,7 @@ Deno.serve(async (request) => {
     return jsonResponse(await runSascarSync({ ...body, source }));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao sincronizar Sascar.";
+    console.error("[sascar-sync] sync failed", { message });
     return jsonResponse({ error: message }, message.includes("ja esta em andamento") ? 409 : 500);
   }
 });
