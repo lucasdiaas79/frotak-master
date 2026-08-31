@@ -17,6 +17,7 @@ declare
   v_next_situation text;
   v_event_type text;
   v_description text;
+  v_history_id uuid;
 begin
   v_driver := private.current_driver();
 
@@ -155,7 +156,91 @@ begin
       )
     );
 
-    perform public.archive_vehicle_freight(v_vehicle.id, 'retorno_ao_patio_concluido', true);
+    insert into public.freight_history (
+      tenant_id,
+      freight_id,
+      vehicle_id,
+      driver_id,
+      trailer_id,
+      sender_id,
+      recipient_id,
+      product_id,
+      vehicle_plate,
+      freight_value,
+      finish_reason,
+      final_status,
+      final_freight_stage
+    )
+    values (
+      v_vehicle.tenant_id,
+      v_vehicle.current_freight_id,
+      v_vehicle.id,
+      v_vehicle.driver_id,
+      v_vehicle.trailer_id,
+      v_vehicle.sender_id,
+      v_vehicle.recipient_id,
+      v_vehicle.product_id,
+      v_vehicle.plate,
+      v_vehicle.freight_value,
+      'retorno_ao_patio_concluido',
+      'disponivel-patio',
+      'DISPONIVEL'
+    )
+    returning id into v_history_id;
+
+    update public.vehicles
+    set
+      current_freight_id = null,
+      sender_id = null,
+      recipient_id = null,
+      product_id = null,
+      freight_value = null,
+      status = 'disponivel-patio',
+      vehicle_situation = 'disponivel-patio',
+      freight_stage = 'DISPONIVEL',
+      workflow_flags = coalesce(workflow_flags, '{}'::jsonb),
+      last_transition_source = 'driver_app',
+      last_transition_by = auth.uid(),
+      last_transition_at = now(),
+      updated_at = now()
+    where id = v_vehicle.id
+    returning * into v_vehicle;
+
+    insert into public.fleet_events (
+      tenant_id,
+      vehicle_id,
+      freight_id,
+      status,
+      freight_stage,
+      city,
+      state,
+      source,
+      description,
+      created_by,
+      event_type,
+      action_origin,
+      metadata
+    )
+    values (
+      v_vehicle.tenant_id,
+      v_vehicle.id,
+      null,
+      'disponivel-patio',
+      'DISPONIVEL',
+      v_vehicle.city,
+      v_vehicle.state,
+      'Sistema',
+      'Frete registrado e veiculo liberado no patio',
+      auth.uid(),
+      'frete_arquivado',
+      'driver_app',
+      jsonb_build_object(
+        'driver_id', v_driver.id,
+        'historyId', v_history_id,
+        'reason', 'retorno_ao_patio_concluido'
+      )
+    );
+
     return public.get_driver_app_context();
   end if;
 
