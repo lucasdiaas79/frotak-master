@@ -1763,10 +1763,8 @@ function FreightCard({
   return (
     <article
       ref={drag.setNodeRef}
-      {...drag.attributes}
-      {...drag.listeners}
       className={cn(
-        "group w-full min-w-0 touch-none select-none overflow-hidden rounded-xl border bg-surface-2/55 px-2.5 py-2 text-left shadow-sm transition-[transform,opacity,box-shadow,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:bg-surface-2",
+        "group w-full min-w-0 touch-pan-y select-none overflow-hidden rounded-xl border bg-surface-2/55 px-2.5 py-2 text-left shadow-sm transition-[transform,opacity,box-shadow,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:bg-surface-2",
         draggable && "cursor-grab active:cursor-grabbing",
         drag.isDragging && !isOverlay && "opacity-25",
         isOverlay &&
@@ -1793,7 +1791,13 @@ function FreightCard({
             </div>
           </div>
           {draggable && (
-            <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
+            <span
+              ref={drag.setActivatorNodeRef}
+              {...drag.attributes}
+              {...drag.listeners}
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex size-6 shrink-0 touch-none items-center justify-center rounded-lg text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
+            >
               <GripVertical className="size-3.5" />
             </span>
           )}
@@ -1838,12 +1842,10 @@ function AvailableDriverCard({
   return (
     <button
       ref={drag.setNodeRef}
-      {...drag.attributes}
-      {...drag.listeners}
       type="button"
       onClick={onAssign}
       className={cn(
-        "group w-full min-w-0 touch-none select-none overflow-hidden rounded-xl border bg-surface-2/55 px-2.5 py-2 text-left shadow-sm transition-[transform,opacity,box-shadow,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:bg-surface-2",
+        "group w-full min-w-0 touch-pan-y select-none overflow-hidden rounded-xl border bg-surface-2/55 px-2.5 py-2 text-left shadow-sm transition-[transform,opacity,box-shadow,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:bg-surface-2",
         draggable && "cursor-grab active:cursor-grabbing",
         drag.isDragging && !isOverlay && "opacity-25",
         isOverlay &&
@@ -1867,7 +1869,13 @@ function AvailableDriverCard({
           </div>
         </div>
         {draggable && (
-          <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-lg text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
+          <span
+            ref={drag.setActivatorNodeRef}
+            {...drag.attributes}
+            {...drag.listeners}
+            onClick={(event) => event.stopPropagation()}
+            className="inline-flex size-6 shrink-0 touch-none items-center justify-center rounded-lg text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
+          >
             <GripVertical className="size-3.5" />
           </span>
         )}
