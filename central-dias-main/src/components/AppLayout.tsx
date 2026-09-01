@@ -65,7 +65,7 @@ const OPERACIONAL: NavItem[] = [
   { to: "/frotak-ia", label: "Frotak IA", icon: Bot },
   { to: "/historicos", label: "Históricos", icon: History },
   { to: "/abastecimentos", label: "Abastecimentos", icon: Fuel },
-  { to: "/lucros-despesas", label: "Lucros e Despesas", icon: TrendingUp },
+  { to: "/lucros-despesas", label: "Receitas e Despesas", icon: TrendingUp },
   { to: "/mapa", label: "Mapa da Frota", icon: MapIcon },
 ];
 
@@ -119,7 +119,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/frotak-ia": "Frotak IA",
   "/historicos": "Históricos",
   "/abastecimentos": "Abastecimentos",
-  "/lucros-despesas": "Lucros e Despesas",
+  "/lucros-despesas": "Receitas e Despesas",
   "/mapa": "Mapa da Frota",
   "/vinculacao": "Despacho Operacional",
   "/veiculos": "Veículos",
