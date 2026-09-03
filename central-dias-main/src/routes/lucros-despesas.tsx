@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
+import { FinancialNav } from "@/components/financial/FinancialNav";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -290,7 +291,7 @@ function EmptyState({ text }: { text: string }) {
   );
 }
 
-function FleetProfitabilityPage() {
+export function FleetProfitabilityPage() {
   const currentMonth = useMemo(monthRange, []);
   const [filters, setFilters] = useState<UiFilters>({
     startDate: currentMonth.startDate,
@@ -487,7 +488,7 @@ function FleetProfitabilityPage() {
   };
 
   return (
-    <div className="flex min-h-0 flex-col gap-4 pb-8">
+    <div className="financial-shell flex min-h-0 flex-col gap-4 pb-8">
       <PageHeader
         title="Rentabilidade da Frota"
         subtitle="Financeiro operacional por caminhao, frete e cliente"
@@ -504,6 +505,7 @@ function FleetProfitabilityPage() {
           </>
         }
       />
+      <FinancialNav />
 
       <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard

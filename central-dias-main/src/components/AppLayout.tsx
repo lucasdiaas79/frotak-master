@@ -1,4 +1,4 @@
-﻿import * as React from "react";
+import * as React from "react";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Bell,
@@ -122,17 +122,22 @@ const ADMIN_NAV: NavItem[] = [{ to: "/usuarios", label: "Usuários", icon: Users
 
 const FINANCIAL_NAV: NavItem[] = [
   { to: "/financeiro", label: "Visão Geral", icon: Landmark },
-  { to: "/financeiro/receber", label: "Contas a Receber", icon: WalletCards },
-  { to: "/financeiro/pagar", label: "Contas a Pagar", icon: ReceiptText },
   { to: "/financeiro/fluxo-caixa", label: "Fluxo de Caixa", icon: WalletCards },
   { to: "/financeiro/dre", label: "DRE Gerencial", icon: BarChart3 },
-  { to: "/lucros-despesas", label: "Rentabilidade da Frota", icon: TrendingUp },
+  {
+    to: "/financeiro/rentabilidade",
+    label: "Rentabilidade",
+    icon: TrendingUp,
+    activePaths: ["/lucros-despesas"],
+  },
+  { to: "/financeiro/receber", label: "Contas a Receber", icon: WalletCards },
+  { to: "/financeiro/pagar", label: "Contas a Pagar", icon: ReceiptText },
   { to: "/financeiro/contas", label: "Bancos e Caixas", icon: Building2 },
   { to: "/financeiro/salarios", label: "Salários", icon: ReceiptText },
   { to: "/financeiro/recorrencias", label: "Despesas Recorrentes", icon: Repeat2 },
   { to: "/financeiro/plano-contas", label: "Plano de Contas", icon: ListChecks },
   { to: "/financeiro/centros-custo", label: "Centros de Custo", icon: FolderKanban },
-  { to: "/financeiro/integracoes", label: "Integrações", icon: RefreshCw },
+  { to: "/financeiro/integracoes", label: "Configurações", icon: RefreshCw },
 ];
 
 function financialNavFor(access: FinancialAccess | null) {
@@ -172,6 +177,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/financeiro/pagar": "Contas a Pagar",
   "/financeiro/fluxo-caixa": "Fluxo de Caixa",
   "/financeiro/dre": "DRE Gerencial",
+  "/financeiro/rentabilidade": "Rentabilidade",
   "/financeiro/contas": "Bancos e Caixas",
   "/financeiro/salarios": "Salários",
   "/financeiro/recorrencias": "Despesas Recorrentes",
@@ -202,6 +208,7 @@ const ROUTE_GROUPS: Record<string, string> = {
   "/financeiro/pagar": "Financeiro",
   "/financeiro/fluxo-caixa": "Financeiro",
   "/financeiro/dre": "Financeiro",
+  "/financeiro/rentabilidade": "Financeiro",
   "/financeiro/salarios": "Financeiro",
   "/financeiro/recorrencias": "Financeiro",
   "/financeiro/contas": "Financeiro",

@@ -331,6 +331,69 @@
   .data-table tbody tr:last-child td {
     border-bottom: 0;
   }
+  .financial-shell {
+    min-width: 0;
+    padding-bottom: 32px;
+  }
+  .financial-shell .premium-card {
+    border-radius: 12px;
+    box-shadow:
+      0 10px 34px oklch(0.12 0.02 160 / 0.06),
+      inset 0 1px 0 oklch(1 0 0 / 0.18);
+  }
+  .financial-shell .premium-card:hover {
+    transform: none;
+    box-shadow:
+      0 14px 42px oklch(0.12 0.02 160 / 0.09),
+      0 0 0 1px color-mix(in oklch, var(--color-primary) 10%, transparent),
+      inset 0 1px 0 oklch(1 0 0 / 0.2);
+  }
+  .financial-nav {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklch, var(--color-primary) 42%, transparent) transparent;
+  }
+  .financial-kpi {
+    min-width: 0;
+    border-radius: 12px;
+    background: linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--color-card) 94%, transparent),
+      color-mix(in oklch, var(--color-surface) 72%, transparent)
+    );
+  }
+  .financial-kpi-value {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+    line-height: 1.04;
+    overflow-wrap: anywhere;
+  }
+  .financial-filter-bar {
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: color-mix(in oklch, var(--color-card) 86%, transparent);
+    box-shadow: 0 10px 30px oklch(0.12 0.02 160 / 0.05);
+  }
+  .financial-table-head {
+    background: color-mix(in oklch, var(--color-surface-2) 76%, transparent);
+    color: var(--color-muted-foreground);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .financial-row {
+    transition:
+      background 160ms ease,
+      border-color 160ms ease;
+  }
+  .financial-row:hover {
+    background: color-mix(in oklch, var(--color-primary) 6%, transparent);
+  }
+  .financial-empty {
+    border: 1px dashed color-mix(in oklch, var(--color-border) 82%, transparent);
+    border-radius: 12px;
+    background: color-mix(in oklch, var(--color-surface) 46%, transparent);
+  }
   .kpi-num {
     font-family: var(--font-sans);
     font-size: 28px;
@@ -428,6 +491,10 @@
 
     .kpi-num {
       font-size: 24px;
+    }
+
+    .financial-shell {
+      padding-bottom: 112px;
     }
   }
 }

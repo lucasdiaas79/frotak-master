@@ -28,6 +28,7 @@ import { Route as CarretasRouteImport } from './routes/carretas'
 import { Route as AbastecimentosRouteImport } from './routes/abastecimentos'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FinanceiroSalariosRouteImport } from './routes/financeiro.salarios'
+import { Route as FinanceiroRentabilidadeRouteImport } from './routes/financeiro.rentabilidade'
 import { Route as FinanceiroRecorrenciasRouteImport } from './routes/financeiro.recorrencias'
 import { Route as FinanceiroReceberRouteImport } from './routes/financeiro.receber'
 import { Route as FinanceiroPlanoContasRouteImport } from './routes/financeiro.plano-contas'
@@ -134,6 +135,11 @@ const FinanceiroSalariosRoute = FinanceiroSalariosRouteImport.update({
   path: '/salarios',
   getParentRoute: () => FinanceiroRoute,
 } as any)
+const FinanceiroRentabilidadeRoute = FinanceiroRentabilidadeRouteImport.update({
+  id: '/rentabilidade',
+  path: '/rentabilidade',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
 const FinanceiroRecorrenciasRoute = FinanceiroRecorrenciasRouteImport.update({
   id: '/recorrencias',
   path: '/recorrencias',
@@ -213,6 +219,7 @@ export interface FileRoutesByFullPath {
   '/financeiro/plano-contas': typeof FinanceiroPlanoContasRoute
   '/financeiro/receber': typeof FinanceiroReceberRoute
   '/financeiro/recorrencias': typeof FinanceiroRecorrenciasRoute
+  '/financeiro/rentabilidade': typeof FinanceiroRentabilidadeRoute
   '/financeiro/salarios': typeof FinanceiroSalariosRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
 }
@@ -244,6 +251,7 @@ export interface FileRoutesByTo {
   '/financeiro/plano-contas': typeof FinanceiroPlanoContasRoute
   '/financeiro/receber': typeof FinanceiroReceberRoute
   '/financeiro/recorrencias': typeof FinanceiroRecorrenciasRoute
+  '/financeiro/rentabilidade': typeof FinanceiroRentabilidadeRoute
   '/financeiro/salarios': typeof FinanceiroSalariosRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
 }
@@ -276,6 +284,7 @@ export interface FileRoutesById {
   '/financeiro/plano-contas': typeof FinanceiroPlanoContasRoute
   '/financeiro/receber': typeof FinanceiroReceberRoute
   '/financeiro/recorrencias': typeof FinanceiroRecorrenciasRoute
+  '/financeiro/rentabilidade': typeof FinanceiroRentabilidadeRoute
   '/financeiro/salarios': typeof FinanceiroSalariosRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
 }
@@ -309,6 +318,7 @@ export interface FileRouteTypes {
     | '/financeiro/plano-contas'
     | '/financeiro/receber'
     | '/financeiro/recorrencias'
+    | '/financeiro/rentabilidade'
     | '/financeiro/salarios'
     | '/api/sascar/sync'
   fileRoutesByTo: FileRoutesByTo
@@ -340,6 +350,7 @@ export interface FileRouteTypes {
     | '/financeiro/plano-contas'
     | '/financeiro/receber'
     | '/financeiro/recorrencias'
+    | '/financeiro/rentabilidade'
     | '/financeiro/salarios'
     | '/api/sascar/sync'
   id:
@@ -371,6 +382,7 @@ export interface FileRouteTypes {
     | '/financeiro/plano-contas'
     | '/financeiro/receber'
     | '/financeiro/recorrencias'
+    | '/financeiro/rentabilidade'
     | '/financeiro/salarios'
     | '/api/sascar/sync'
   fileRoutesById: FileRoutesById
@@ -532,6 +544,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceiroSalariosRouteImport
       parentRoute: typeof FinanceiroRoute
     }
+    '/financeiro/rentabilidade': {
+      id: '/financeiro/rentabilidade'
+      path: '/rentabilidade'
+      fullPath: '/financeiro/rentabilidade'
+      preLoaderRoute: typeof FinanceiroRentabilidadeRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
     '/financeiro/recorrencias': {
       id: '/financeiro/recorrencias'
       path: '/recorrencias'
@@ -615,6 +634,7 @@ interface FinanceiroRouteChildren {
   FinanceiroPlanoContasRoute: typeof FinanceiroPlanoContasRoute
   FinanceiroReceberRoute: typeof FinanceiroReceberRoute
   FinanceiroRecorrenciasRoute: typeof FinanceiroRecorrenciasRoute
+  FinanceiroRentabilidadeRoute: typeof FinanceiroRentabilidadeRoute
   FinanceiroSalariosRoute: typeof FinanceiroSalariosRoute
 }
 
@@ -628,6 +648,7 @@ const FinanceiroRouteChildren: FinanceiroRouteChildren = {
   FinanceiroPlanoContasRoute: FinanceiroPlanoContasRoute,
   FinanceiroReceberRoute: FinanceiroReceberRoute,
   FinanceiroRecorrenciasRoute: FinanceiroRecorrenciasRoute,
+  FinanceiroRentabilidadeRoute: FinanceiroRentabilidadeRoute,
   FinanceiroSalariosRoute: FinanceiroSalariosRoute,
 }
 
