@@ -445,6 +445,186 @@ export interface PayrollItemInput {
   employeeAdvanceId?: string;
 }
 
+export interface FinancialReportPeriod {
+  workspaceId: string;
+  startDate: string;
+  endDate: string;
+  costCenterId?: string | null;
+}
+
+export interface DreGroupRow {
+  dre_group: DreGroup | "unclassified";
+  label: string;
+  sort_order: number;
+  document_count: number;
+  signed_amount: number;
+  movement_amount: number;
+}
+
+export interface DreTotals {
+  gross_revenue: number;
+  revenue_deductions: number;
+  variable_costs: number;
+  operating_expenses: number;
+  depreciation_amortization: number;
+  financial_result: number;
+  income_tax: number;
+  other_result: number;
+  unclassified_result: number;
+  unclassified_amount: number;
+  unallocated_amount: number;
+  managerial_result: number;
+  represented_total: number;
+  document_count: number;
+  netRevenue: number;
+  grossResult: number;
+  operatingResult: number;
+  managerialMargin: number | null;
+}
+
+export interface DreSummary {
+  startDate: string;
+  endDate: string;
+  groups: DreGroupRow[];
+  totals: DreTotals;
+  reconciliation: {
+    eligibleTotal: number;
+    representedTotal: number;
+    difference: number;
+    ok: boolean;
+  };
+  previous: {
+    gross_revenue: number;
+    variable_costs: number;
+    operating_expenses: number;
+    managerial_result: number;
+  };
+}
+
+export interface DreDetailAccount {
+  chart_account_id: string | null;
+  code: string;
+  name: string;
+  dre_group: DreGroup | "unclassified";
+  signed_amount: number;
+  movement_amount: number;
+  document_count: number;
+}
+
+export interface DreDetailDocument {
+  document_id: string;
+  visible_document_id: string | null;
+  competence_date: string;
+  direction: FinancialDocumentDirection;
+  description: string;
+  document_number: string | null;
+  partner_name: string | null;
+  source_type: string | null;
+  source_event: string | null;
+  signed_amount: number;
+  movement_amount: number;
+  has_unallocated: boolean;
+  is_unclassified: boolean;
+}
+
+export interface DreDetail {
+  accounts: DreDetailAccount[];
+  documents: DreDetailDocument[];
+}
+
+export interface CashFlowSummary {
+  startDate: string;
+  endDate: string;
+  openingBalance: number;
+  realized: {
+    inflows: number;
+    outflows: number;
+    net_change: number;
+    settlement_count: number;
+    closingBalance: number;
+  };
+  forecast: {
+    expected_inflows: number;
+    expected_outflows: number;
+    expected_net: number;
+    overdue_amount: number;
+    overdue_count: number;
+  };
+  projection: {
+    inflows_7d: number;
+    outflows_7d: number;
+    net_7d: number;
+    inflows_30d: number;
+    outflows_30d: number;
+    net_30d: number;
+  };
+  accounts: Array<{
+    id: string;
+    name: string;
+    account_type: FinancialAccount["accountType"];
+    opening_balance: number;
+    opening_balance_date: string;
+    current_balance: number;
+  }>;
+}
+
+export interface CashFlowEntry {
+  entry_id: string;
+  document_id: string;
+  installment_id: string;
+  settlement_id: string | null;
+  entry_date: string;
+  status: "settlement" | "reversal" | "forecast" | "overdue";
+  direction: FinancialDocumentDirection;
+  amount: number;
+  signed_amount: number;
+  description: string;
+  document_number: string | null;
+  source_type: string | null;
+  source_event: string | null;
+  partner_name: string | null;
+  chart_account_code: string | null;
+  chart_account_name: string | null;
+  financial_account_name: string | null;
+}
+
+export interface FinancialDashboard {
+  startDate: string;
+  endDate: string;
+  dre: DreSummary;
+  cashFlow: CashFlowSummary;
+  positions: {
+    receivable_open: number;
+    payable_open: number;
+    receivable_overdue: number;
+    payable_overdue: number;
+    due_next_7d: number;
+  };
+  evolution: Array<{
+    month: string;
+    revenue: number;
+    costs_expenses: number;
+    result: number;
+  }>;
+  topCosts: Array<{
+    id: string;
+    name: string;
+    code: string;
+    amount: number;
+  }>;
+  alerts: Array<{
+    type: string;
+    label: string;
+    amount?: number;
+    count?: number;
+    severity: "warning" | "danger";
+  }>;
+  unclassified: {
+    amount: number;
+    document_count: number;
+  };
+}
+
 export type ProfitabilitySort =
   | "most_profitable"
   | "lowest_profit"

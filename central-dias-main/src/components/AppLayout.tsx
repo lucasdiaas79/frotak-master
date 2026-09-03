@@ -2,6 +2,7 @@
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Bell,
+  BarChart3,
   Bot,
   Building2,
   ChevronRight,
@@ -121,9 +122,11 @@ const ADMIN_NAV: NavItem[] = [{ to: "/usuarios", label: "Usuários", icon: Users
 
 const FINANCIAL_NAV: NavItem[] = [
   { to: "/financeiro", label: "Visão Geral", icon: Landmark },
-  { to: "/lucros-despesas", label: "Rentabilidade da Frota", icon: TrendingUp },
   { to: "/financeiro/receber", label: "Contas a Receber", icon: WalletCards },
   { to: "/financeiro/pagar", label: "Contas a Pagar", icon: ReceiptText },
+  { to: "/financeiro/fluxo-caixa", label: "Fluxo de Caixa", icon: WalletCards },
+  { to: "/financeiro/dre", label: "DRE Gerencial", icon: BarChart3 },
+  { to: "/lucros-despesas", label: "Rentabilidade da Frota", icon: TrendingUp },
   { to: "/financeiro/contas", label: "Bancos e Caixas", icon: Building2 },
   { to: "/financeiro/salarios", label: "Salários", icon: ReceiptText },
   { to: "/financeiro/recorrencias", label: "Despesas Recorrentes", icon: Repeat2 },
@@ -135,9 +138,15 @@ const FINANCIAL_NAV: NavItem[] = [
 function financialNavFor(access: FinancialAccess | null) {
   return FINANCIAL_NAV.filter(
     (item) =>
-      item.to !== "/financeiro/salarios" ||
       access?.isOwner ||
-      access?.permissions.includes("financial.payroll.view"),
+      (item.to !== "/financeiro/salarios" &&
+        item.to !== "/financeiro/dre" &&
+        item.to !== "/financeiro/fluxo-caixa") ||
+      (item.to === "/financeiro/salarios" &&
+        access?.permissions.includes("financial.payroll.view")) ||
+      (item.to === "/financeiro/dre" && access?.permissions.includes("financial.dre.view")) ||
+      (item.to === "/financeiro/fluxo-caixa" &&
+        access?.permissions.includes("financial.cashflow.view")),
   );
 }
 
@@ -161,6 +170,8 @@ const ROUTE_TITLES: Record<string, string> = {
   "/financeiro": "Visão Geral Financeira",
   "/financeiro/receber": "Contas a Receber",
   "/financeiro/pagar": "Contas a Pagar",
+  "/financeiro/fluxo-caixa": "Fluxo de Caixa",
+  "/financeiro/dre": "DRE Gerencial",
   "/financeiro/contas": "Bancos e Caixas",
   "/financeiro/salarios": "Salários",
   "/financeiro/recorrencias": "Despesas Recorrentes",
@@ -189,6 +200,8 @@ const ROUTE_GROUPS: Record<string, string> = {
   "/financeiro": "Financeiro",
   "/financeiro/receber": "Financeiro",
   "/financeiro/pagar": "Financeiro",
+  "/financeiro/fluxo-caixa": "Financeiro",
+  "/financeiro/dre": "Financeiro",
   "/financeiro/salarios": "Financeiro",
   "/financeiro/recorrencias": "Financeiro",
   "/financeiro/contas": "Financeiro",

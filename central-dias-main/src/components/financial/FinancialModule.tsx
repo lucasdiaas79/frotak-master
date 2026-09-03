@@ -4,10 +4,13 @@ import {
   ArrowUpRight,
   BadgeDollarSign,
   Banknote,
+  BarChart3,
   Building2,
   CalendarClock,
   ChevronRight,
   CircleDollarSign,
+  Download,
+  Eye,
   Fuel,
   Landmark,
   LoaderCircle,
@@ -22,12 +25,23 @@ import {
   Settings2,
   ShieldAlert,
   Tags,
+  TrendingDown,
+  TrendingUp,
   Truck,
   WalletCards,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip as ChartTooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -105,15 +119,28 @@ import {
   savePayrollItem,
   voidPayrollEntry,
 } from "@/lib/financial/payroll";
+import {
+  getCashFlowEntries,
+  getCashFlowSummary,
+  getDreDetail,
+  getDreSummary,
+  getFinancialDashboard,
+} from "@/lib/financial/reports";
 import type {
   BusinessPartner,
+  CashFlowEntry,
+  CashFlowSummary,
   CanonicalFreight,
   ChartAccount,
   CostCenter,
+  DreDetail,
+  DreGroupRow,
+  DreSummary,
   EmployeeAdvance,
   EmployeeFinancialProfile,
   FinancialAccess,
   FinancialAccount,
+  FinancialDashboard,
   FinancialDocumentDetails,
   FinancialDocumentDirection,
   FinancialDocumentInput,
@@ -142,6 +169,9 @@ const financeNav = [
   ["/financeiro", "Visão Geral", BadgeDollarSign],
   ["/financeiro/receber", "Contas a Receber", ArrowDownLeft],
   ["/financeiro/pagar", "Contas a Pagar", ArrowUpRight],
+  ["/financeiro/fluxo-caixa", "Fluxo de Caixa", WalletCards],
+  ["/financeiro/dre", "DRE Gerencial", BarChart3],
+  ["/lucros-despesas", "Rentabilidade da Frota", TrendingUp],
   ["/financeiro/contas", "Bancos e Caixas", Landmark],
   ["/financeiro/salarios", "Salarios", ReceiptText],
   ["/financeiro/recorrencias", "Despesas Recorrentes", Repeat2],
@@ -155,9 +185,13 @@ function FinancialNav() {
   const { access } = useFinancialAccess();
   const items = financeNav.filter(
     ([to]) =>
-      to !== "/financeiro/salarios" ||
       access?.isOwner ||
-      access?.permissions.includes("financial.payroll.view"),
+      (to !== "/financeiro/salarios" &&
+        to !== "/financeiro/dre" &&
+        to !== "/financeiro/fluxo-caixa") ||
+      (to === "/financeiro/salarios" && access?.permissions.includes("financial.payroll.view")) ||
+      (to === "/financeiro/dre" && access?.permissions.includes("financial.dre.view")) ||
+      (to === "/financeiro/fluxo-caixa" && access?.permissions.includes("financial.cashflow.view")),
   );
   return (
     <nav className="mx-3 flex gap-1 overflow-x-auto rounded-lg border border-border bg-card p-1 md:mx-0">
@@ -272,10 +306,10 @@ function effectiveSettlements(document: FinancialDocumentDetails) {
 }
 
 export function FinancialOverviewPage() {
-  return <FinancialBoundary>{() => <OverviewContent />}</FinancialBoundary>;
+  return <FinancialBoundary>{(access) => <OverviewContent access={access} />}</FinancialBoundary>;
 }
 
-function OverviewContent() {
+function LegacyOverviewContent() {
   const [documents, setDocuments] = useState<FinancialDocumentDetails[]>([]);
   const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
   useEffect(() => {
@@ -375,6 +409,867 @@ function Upcoming({ title, documents }: { title: string; documents: FinancialDoc
         )}
       </div>
     </section>
+  );
+}
+
+type PeriodMode = "month" | "quarter" | "year" | "custom";
+
+function periodBounds(mode: PeriodMode) {
+  const now = new Date(`${today()}T12:00:00`);
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  if (mode === "year") return [`${year}-01-01`, `${year}-12-31`];
+  if (mode === "quarter") {
+    const quarterStart = Math.floor(month / 3) * 3;
+    const start = new Date(year, quarterStart, 1);
+    const end = new Date(year, quarterStart + 3, 0);
+    return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)];
+  }
+  const start = new Date(year, month, 1);
+  const end = new Date(year, month + 1, 0);
+  return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)];
+}
+
+function marginLabel(value: number | null) {
+  if (value === null || Number.isNaN(value)) return "N/A";
+  return `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
+}
+
+function signedMoney(value: number) {
+  return `${value >= 0 ? "+" : "-"} ${money.format(Math.abs(value))}`;
+}
+
+function exportCsv(filename: string, rows: Array<Record<string, string | number | null>>) {
+  if (!rows.length) {
+    toast.info("Nao ha dados para exportar.");
+    return;
+  }
+  const headers = Object.keys(rows[0]);
+  const csv = [
+    headers.join(";"),
+    ...rows.map((row) =>
+      headers.map((header) => `"${String(row[header] ?? "").replaceAll('"', '""')}"`).join(";"),
+    ),
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function ReportPeriodControls({
+  mode,
+  start,
+  end,
+  onMode,
+  onStart,
+  onEnd,
+}: {
+  mode: PeriodMode;
+  start: string;
+  end: string;
+  onMode: (mode: PeriodMode) => void;
+  onStart: (date: string) => void;
+  onEnd: (date: string) => void;
+}) {
+  return (
+    <div className="grid gap-2 px-3 sm:grid-cols-4 md:px-0">
+      <Field label="Periodo">
+        <Select
+          value={mode}
+          onValueChange={(value) => {
+            const nextMode = value as PeriodMode;
+            onMode(nextMode);
+            if (nextMode !== "custom") {
+              const [nextStart, nextEnd] = periodBounds(nextMode);
+              onStart(nextStart);
+              onEnd(nextEnd);
+            }
+          }}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="month">Mes atual</SelectItem>
+            <SelectItem value="quarter">Trimestre atual</SelectItem>
+            <SelectItem value="year">Ano atual</SelectItem>
+            <SelectItem value="custom">Personalizado</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      <Field label="Inicio">
+        <Input type="date" value={start} onChange={(event) => onStart(event.target.value)} />
+      </Field>
+      <Field label="Fim">
+        <Input type="date" value={end} onChange={(event) => onEnd(event.target.value)} />
+      </Field>
+    </div>
+  );
+}
+
+function LoadingReport() {
+  return (
+    <div className="mx-3 flex min-h-[300px] items-center justify-center rounded-lg border border-border bg-card text-sm text-muted-foreground md:mx-0">
+      <LoaderCircle className="mr-2 size-4 animate-spin" />
+      Carregando relatorio...
+    </div>
+  );
+}
+
+function EmptyReport({ text }: { text: string }) {
+  return <p className="py-8 text-center text-sm text-muted-foreground">{text}</p>;
+}
+
+function RestrictedReport({ permission }: { permission: string }) {
+  return (
+    <div className="premium-card mx-3 flex min-h-[260px] items-center justify-center p-8 text-center md:mx-0">
+      <div>
+        <ShieldAlert className="mx-auto mb-3 size-8 text-muted-foreground" />
+        <h2 className="text-lg font-bold">Relatorio restrito</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Solicite a permissao {permission} ao owner.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function MiniMetric({
+  label,
+  value,
+  tone,
+  signed,
+}: {
+  label: string;
+  value: number;
+  tone?: "success" | "danger";
+  signed?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+      <span className="text-xs font-bold text-muted-foreground">{label}</span>
+      <strong
+        className={cn(
+          "text-sm",
+          tone === "success" && "text-primary",
+          tone === "danger" && "text-destructive",
+        )}
+      >
+        {signed ? signedMoney(value) : money.format(value)}
+      </strong>
+    </div>
+  );
+}
+
+function OverviewContent({ access }: { access: FinancialAccess }) {
+  const [mode, setMode] = useState<PeriodMode>("month");
+  const [start, setStart] = useState(() => periodBounds("month")[0]);
+  const [end, setEnd] = useState(() => periodBounds("month")[1]);
+  const [dashboard, setDashboard] = useState<FinancialDashboard | null>(null);
+  const [loading, setLoading] = useState(true);
+  const canDashboard = hasFinancialPermission(access, "financial.dashboard.view");
+  useEffect(() => {
+    if (!canDashboard) return;
+    setLoading(true);
+    getFinancialDashboard({ workspaceId: access.workspaceId, startDate: start, endDate: end })
+      .then(setDashboard)
+      .catch(() => toast.error("Nao foi possivel carregar o dashboard financeiro."))
+      .finally(() => setLoading(false));
+  }, [access.workspaceId, canDashboard, start, end]);
+
+  if (!canDashboard) {
+    return (
+      <div className="space-y-3 pb-6">
+        <PageHeader title="Dashboard Financeiro Executivo" subtitle="Situacao financeira real." />
+        <FinancialNav />
+        <RestrictedReport permission="financial.dashboard.view" />
+      </div>
+    );
+  }
+
+  const totals = dashboard?.dre.totals;
+  const positions = dashboard?.positions;
+  const cash = dashboard?.cashFlow;
+  return (
+    <div className="space-y-3 pb-6">
+      <PageHeader
+        title="Dashboard Financeiro Executivo"
+        subtitle="Visao executiva com competencia, caixa e posicao atual separados."
+      />
+      <FinancialNav />
+      <ReportPeriodControls
+        mode={mode}
+        start={start}
+        end={end}
+        onMode={setMode}
+        onStart={setStart}
+        onEnd={setEnd}
+      />
+      {loading || !dashboard || !totals || !positions || !cash ? (
+        <LoadingReport />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 px-3 md:grid-cols-4 xl:grid-cols-7 md:px-0">
+            <Stat label="Saldo disponivel" value={cash.realized.closingBalance} icon={Landmark} />
+            <Stat label="Receitas periodo" value={totals.gross_revenue} icon={ArrowDownLeft} />
+            <Stat
+              label="Custos + despesas"
+              value={Math.abs(totals.variable_costs + totals.operating_expenses)}
+              icon={ArrowUpRight}
+            />
+            <Stat
+              label="Resultado"
+              value={totals.managerial_result}
+              icon={totals.managerial_result < 0 ? TrendingDown : TrendingUp}
+              tone={totals.managerial_result < 0 ? "danger" : "success"}
+            />
+            <Stat label="Margem" value={marginLabel(totals.managerialMargin)} icon={BarChart3} />
+            <Stat label="A receber" value={positions.receivable_open} icon={WalletCards} />
+            <Stat label="A pagar" value={positions.payable_open} icon={ReceiptText} />
+          </div>
+          <div className="grid grid-cols-2 gap-3 px-3 md:grid-cols-5 md:px-0">
+            <Stat
+              label="Receber vencido"
+              value={positions.receivable_overdue}
+              icon={CalendarClock}
+              tone={positions.receivable_overdue > 0 ? "danger" : "default"}
+            />
+            <Stat
+              label="Pagar vencido"
+              value={positions.payable_overdue}
+              icon={ShieldAlert}
+              tone={positions.payable_overdue > 0 ? "danger" : "default"}
+            />
+            <Stat label="Vence em 7 dias" value={positions.due_next_7d} icon={CalendarClock} />
+            <Stat
+              label="Entradas 30 dias"
+              value={cash.projection.inflows_30d}
+              icon={ArrowDownLeft}
+            />
+            <Stat label="Saidas 30 dias" value={cash.projection.outflows_30d} icon={ArrowUpRight} />
+          </div>
+          <div className="grid gap-3 px-3 xl:grid-cols-[1.4fr_1fr] md:px-0">
+            <section className="premium-card p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-extrabold">Evolucao mensal por competencia</h2>
+                <Badge variant="outline">12 meses</Badge>
+              </div>
+              <div className="mt-4 h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={dashboard.evolution}>
+                    <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis
+                      tick={{ fontSize: 11 }}
+                      tickFormatter={(value) => `${Number(value) / 1000}k`}
+                    />
+                    <ChartTooltip formatter={(value) => money.format(Number(value))} />
+                    <Line
+                      type="monotone"
+                      dataKey="revenue"
+                      name="Receita"
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="costs_expenses"
+                      name="Custos/Despesas"
+                      stroke="#f97316"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="result"
+                      name="Resultado"
+                      stroke="#2563eb"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+            <section className="premium-card p-4">
+              <h2 className="text-sm font-extrabold">Fluxo realizado no periodo</h2>
+              <div className="mt-4 grid gap-3">
+                <MiniMetric label="Saldo inicial" value={cash.openingBalance} />
+                <MiniMetric
+                  label="Entradas realizadas"
+                  value={cash.realized.inflows}
+                  tone="success"
+                />
+                <MiniMetric label="Saidas realizadas" value={cash.realized.outflows} />
+                <MiniMetric label="Variacao de caixa" value={cash.realized.net_change} signed />
+              </div>
+            </section>
+          </div>
+          <div className="grid gap-3 px-3 xl:grid-cols-2 md:px-0">
+            <section className="premium-card p-4">
+              <h2 className="text-sm font-extrabold">Top categorias de custo</h2>
+              <div className="mt-3 divide-y divide-border">
+                {dashboard.topCosts.length ? (
+                  dashboard.topCosts.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between gap-3 py-3">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-bold">{item.name}</div>
+                        <div className="text-xs text-muted-foreground">{item.code}</div>
+                      </div>
+                      <strong className="text-sm">{money.format(item.amount)}</strong>
+                    </div>
+                  ))
+                ) : (
+                  <EmptyReport text="Nenhum custo no periodo." />
+                )}
+              </div>
+            </section>
+            <section className="premium-card p-4">
+              <h2 className="text-sm font-extrabold">Alertas executivos</h2>
+              <div className="mt-3 grid gap-2">
+                {dashboard.alerts.length ? (
+                  dashboard.alerts.map((alert) => (
+                    <div
+                      key={alert.type}
+                      className={cn(
+                        "flex items-center justify-between gap-3 rounded-lg border p-3 text-sm",
+                        alert.severity === "danger"
+                          ? "border-destructive/30 bg-destructive/8"
+                          : "border-amber-500/30 bg-amber-500/8",
+                      )}
+                    >
+                      <span className="font-bold">{alert.label}</span>
+                      <span className="shrink-0 font-black">
+                        {alert.amount !== undefined ? money.format(alert.amount) : alert.count}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <EmptyReport text="Nenhum alerta critico encontrado." />
+                )}
+              </div>
+            </section>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function FinancialDrePage() {
+  return <FinancialBoundary>{(access) => <DreContent access={access} />}</FinancialBoundary>;
+}
+
+function DreContent({ access }: { access: FinancialAccess }) {
+  const [mode, setMode] = useState<PeriodMode>("month");
+  const [start, setStart] = useState(() => periodBounds("month")[0]);
+  const [end, setEnd] = useState(() => periodBounds("month")[1]);
+  const [costCenterId, setCostCenterId] = useState("all");
+  const [centers, setCenters] = useState<CostCenter[]>([]);
+  const [summary, setSummary] = useState<DreSummary | null>(null);
+  const [detail, setDetail] = useState<DreDetail | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const canDre = hasFinancialPermission(access, "financial.dre.view");
+  const payload = useMemo(
+    () => ({
+      workspaceId: access.workspaceId,
+      startDate: start,
+      endDate: end,
+      costCenterId: costCenterId === "all" ? null : costCenterId,
+    }),
+    [access.workspaceId, costCenterId, end, start],
+  );
+  const loadSummary = useCallback(async () => {
+    if (!canDre) return;
+    setLoading(true);
+    const [nextSummary, nextCenters] = await Promise.all([
+      getDreSummary(payload),
+      listFinancialCostCenters(),
+    ]);
+    setSummary(nextSummary);
+    setCenters(nextCenters);
+    setDetail(null);
+    setSelectedGroup(null);
+    setSelectedAccount(null);
+    setLoading(false);
+  }, [canDre, payload]);
+  useEffect(() => {
+    loadSummary().catch(() => {
+      setLoading(false);
+      toast.error("Nao foi possivel carregar a DRE gerencial.");
+    });
+  }, [loadSummary]);
+  const openGroup = async (group: DreGroupRow) => {
+    setSelectedGroup(group.dre_group);
+    setSelectedAccount(null);
+    setDetail(await getDreDetail({ ...payload, dreGroup: group.dre_group }));
+  };
+  const openAccount = async (account: string | null) => {
+    setSelectedAccount(account);
+    setDetail(
+      await getDreDetail({
+        ...payload,
+        dreGroup: selectedGroup,
+        chartAccountId: account,
+      }),
+    );
+  };
+
+  if (!canDre) {
+    return (
+      <div className="space-y-3 pb-6">
+        <PageHeader title="DRE Gerencial" subtitle="Visao gerencial por regime de competencia." />
+        <FinancialNav />
+        <RestrictedReport permission="financial.dre.view" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 pb-6">
+      <PageHeader
+        title="DRE Gerencial"
+        subtitle="Visao gerencial por regime de competencia."
+        actions={
+          summary ? (
+            <Button
+              variant="outline"
+              onClick={() =>
+                exportCsv(
+                  `dre-${start}-${end}.csv`,
+                  summary.groups.map((group) => ({
+                    grupo: group.label,
+                    valor_assinado: group.signed_amount,
+                    movimento: group.movement_amount,
+                    documentos: group.document_count,
+                  })),
+                )
+              }
+            >
+              <Download className="size-4" />
+              CSV
+            </Button>
+          ) : undefined
+        }
+      />
+      <FinancialNav />
+      <ReportPeriodControls
+        mode={mode}
+        start={start}
+        end={end}
+        onMode={setMode}
+        onStart={setStart}
+        onEnd={setEnd}
+      />
+      <div className="px-3 md:px-0">
+        <Field label="Centro de custo" className="max-w-sm">
+          <Select value={costCenterId} onValueChange={setCostCenterId}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Consolidado</SelectItem>
+              {centers.map((center) => (
+                <SelectItem key={center.id} value={center.id}>
+                  {center.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      </div>
+      {loading || !summary ? (
+        <LoadingReport />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 px-3 md:grid-cols-5 md:px-0">
+            <Stat label="Receita bruta" value={summary.totals.gross_revenue} icon={ArrowDownLeft} />
+            <Stat
+              label="Custos operacionais"
+              value={Math.abs(summary.totals.variable_costs)}
+              icon={Fuel}
+            />
+            <Stat
+              label="Despesas"
+              value={Math.abs(summary.totals.operating_expenses)}
+              icon={ReceiptText}
+            />
+            <Stat
+              label="Resultado gerencial"
+              value={summary.totals.managerial_result}
+              icon={summary.totals.managerial_result < 0 ? TrendingDown : TrendingUp}
+              tone={summary.totals.managerial_result < 0 ? "danger" : "success"}
+            />
+            <Stat
+              label="Margem"
+              value={marginLabel(summary.totals.managerialMargin)}
+              icon={BarChart3}
+            />
+          </div>
+          <div className="grid gap-3 px-3 lg:grid-cols-[1fr_1.2fr] md:px-0">
+            <section className="premium-card p-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-extrabold">Estrutura da DRE</h2>
+                <Badge variant={summary.reconciliation.ok ? "outline" : "destructive"}>
+                  {summary.reconciliation.ok ? "Reconciliado" : "Diferenca"}
+                </Badge>
+              </div>
+              <div className="mt-3 divide-y divide-border">
+                {summary.groups.map((group) => (
+                  <button
+                    key={group.dre_group}
+                    type="button"
+                    onClick={() => openGroup(group).catch(() => toast.error("Falha no drilldown."))}
+                    className="flex w-full items-center justify-between gap-3 py-3 text-left"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-bold">{group.label}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {group.document_count} documentos
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <strong
+                        className={cn("text-sm", group.signed_amount < 0 && "text-destructive")}
+                      >
+                        {signedMoney(group.signed_amount)}
+                      </strong>
+                      <ChevronRight className="size-4 text-muted-foreground" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {summary.totals.unclassified_amount > 0 && (
+                <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/8 p-3 text-sm font-bold">
+                  {money.format(summary.totals.unclassified_amount)} pendentes de classificacao.
+                </div>
+              )}
+              {summary.totals.unallocated_amount > 0 && (
+                <div className="mt-2 rounded-lg border border-border p-3 text-sm text-muted-foreground">
+                  Residuo nao alocado: {money.format(summary.totals.unallocated_amount)}.
+                </div>
+              )}
+            </section>
+            <section className="premium-card p-4">
+              <h2 className="text-sm font-extrabold">Drilldown</h2>
+              {!detail ? (
+                <EmptyReport text="Selecione um grupo da DRE." />
+              ) : selectedAccount ? (
+                <div className="mt-3 divide-y divide-border">
+                  {detail.documents.map((document) => (
+                    <div key={document.document_id} className="py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-bold">{document.description}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {date.format(new Date(`${document.competence_date}T12:00:00`))} ·{" "}
+                            {document.partner_name || "Sem parceiro"} ·{" "}
+                            {document.source_type || "manual"}
+                          </div>
+                        </div>
+                        <strong
+                          className={cn(
+                            "text-sm",
+                            document.signed_amount < 0 && "text-destructive",
+                          )}
+                        >
+                          {signedMoney(document.signed_amount)}
+                        </strong>
+                      </div>
+                      {document.visible_document_id === null && (
+                        <Badge className="mt-2" variant="outline">
+                          folha restrita
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 divide-y divide-border">
+                  {detail.accounts.map((account) => (
+                    <button
+                      key={account.chart_account_id || "unclassified"}
+                      type="button"
+                      onClick={() =>
+                        openAccount(account.chart_account_id).catch(() =>
+                          toast.error("Falha no detalhe."),
+                        )
+                      }
+                      className="flex w-full items-center justify-between gap-3 py-3 text-left"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-bold">{account.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {account.code} · {account.document_count} documentos
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <strong
+                          className={cn("text-sm", account.signed_amount < 0 && "text-destructive")}
+                        >
+                          {signedMoney(account.signed_amount)}
+                        </strong>
+                        <Eye className="size-4 text-muted-foreground" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function FinancialCashFlowPage() {
+  return <FinancialBoundary>{(access) => <CashFlowContent access={access} />}</FinancialBoundary>;
+}
+
+function CashFlowContent({ access }: { access: FinancialAccess }) {
+  const [mode, setMode] = useState<PeriodMode>("month");
+  const [start, setStart] = useState(() => periodBounds("month")[0]);
+  const [end, setEnd] = useState(() => periodBounds("month")[1]);
+  const [view, setView] = useState<"realized" | "forecast">("realized");
+  const [direction, setDirection] = useState("all");
+  const [accountId, setAccountId] = useState("all");
+  const [summary, setSummary] = useState<CashFlowSummary | null>(null);
+  const [entries, setEntries] = useState<CashFlowEntry[]>([]);
+  const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
+  const [loading, setLoading] = useState(true);
+  const canCashFlow = hasFinancialPermission(access, "financial.cashflow.view");
+  const payload = useMemo(
+    () => ({
+      workspaceId: access.workspaceId,
+      startDate: start,
+      endDate: end,
+      financialAccountId: accountId === "all" ? null : accountId,
+    }),
+    [access.workspaceId, accountId, end, start],
+  );
+  const load = useCallback(async () => {
+    if (!canCashFlow) return;
+    setLoading(true);
+    const [nextSummary, nextEntries, nextAccounts] = await Promise.all([
+      getCashFlowSummary(payload),
+      getCashFlowEntries({
+        ...payload,
+        mode: view,
+        direction: direction === "all" ? null : (direction as "receivable" | "payable"),
+      }),
+      listFinancialAccounts(),
+    ]);
+    setSummary(nextSummary);
+    setEntries(nextEntries);
+    setAccounts(nextAccounts);
+    setLoading(false);
+  }, [canCashFlow, direction, payload, view]);
+  useEffect(() => {
+    load().catch(() => {
+      setLoading(false);
+      toast.error("Nao foi possivel carregar o fluxo de caixa.");
+    });
+  }, [load]);
+
+  if (!canCashFlow) {
+    return (
+      <div className="space-y-3 pb-6">
+        <PageHeader
+          title="Fluxo de Caixa"
+          subtitle="Regime de caixa por baixas e previsao por vencimentos."
+        />
+        <FinancialNav />
+        <RestrictedReport permission="financial.cashflow.view" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 pb-6">
+      <PageHeader
+        title="Fluxo de Caixa"
+        subtitle="Realizado por settlement_date e previsto por due_date."
+        actions={
+          <Button
+            variant="outline"
+            onClick={() =>
+              exportCsv(
+                `fluxo-caixa-${view}-${start}-${end}.csv`,
+                entries.map((entry) => ({
+                  data: entry.entry_date,
+                  tipo: entry.direction === "receivable" ? "entrada" : "saida",
+                  status: entry.status,
+                  descricao: entry.description,
+                  parceiro: entry.partner_name,
+                  conta_financeira: entry.financial_account_name,
+                  categoria: entry.chart_account_name,
+                  valor: entry.signed_amount,
+                })),
+              )
+            }
+          >
+            <Download className="size-4" />
+            CSV
+          </Button>
+        }
+      />
+      <FinancialNav />
+      <ReportPeriodControls
+        mode={mode}
+        start={start}
+        end={end}
+        onMode={setMode}
+        onStart={setStart}
+        onEnd={setEnd}
+      />
+      <div className="grid gap-2 px-3 sm:grid-cols-3 md:px-0">
+        <Field label="Visao">
+          <Select value={view} onValueChange={(value) => setView(value as "realized" | "forecast")}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="realized">Realizado</SelectItem>
+              <SelectItem value="forecast">Previsto</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Direcao">
+          <Select value={direction} onValueChange={setDirection}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Entradas e saidas</SelectItem>
+              <SelectItem value="receivable">Entradas</SelectItem>
+              <SelectItem value="payable">Saidas</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Conta financeira">
+          <Select value={accountId} onValueChange={setAccountId}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Consolidado</SelectItem>
+              {accounts.map((account) => (
+                <SelectItem key={account.id} value={account.id}>
+                  {account.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      </div>
+      {loading || !summary ? (
+        <LoadingReport />
+      ) : (
+        <>
+          <div className="grid grid-cols-2 gap-3 px-3 md:grid-cols-4 xl:grid-cols-7 md:px-0">
+            <Stat label="Saldo inicial" value={summary.openingBalance} icon={Landmark} />
+            <Stat
+              label="Entradas"
+              value={summary.realized.inflows}
+              icon={ArrowDownLeft}
+              tone="success"
+            />
+            <Stat label="Saidas" value={summary.realized.outflows} icon={ArrowUpRight} />
+            <Stat label="Saldo final" value={summary.realized.closingBalance} icon={Banknote} />
+            <Stat
+              label="Previsto entrada"
+              value={summary.forecast.expected_inflows}
+              icon={CalendarClock}
+            />
+            <Stat
+              label="Previsto saida"
+              value={summary.forecast.expected_outflows}
+              icon={ReceiptText}
+            />
+            <Stat
+              label="Vencido"
+              value={summary.forecast.overdue_amount}
+              icon={ShieldAlert}
+              tone={summary.forecast.overdue_amount > 0 ? "danger" : "default"}
+            />
+          </div>
+          <div className="grid gap-3 px-3 xl:grid-cols-[1fr_1.4fr] md:px-0">
+            <section className="premium-card p-4">
+              <h2 className="text-sm font-extrabold">Projecao simples</h2>
+              <div className="mt-4 grid gap-3">
+                <MiniMetric
+                  label="Entradas 7 dias"
+                  value={summary.projection.inflows_7d}
+                  tone="success"
+                />
+                <MiniMetric label="Saidas 7 dias" value={summary.projection.outflows_7d} />
+                <MiniMetric
+                  label="Saldo projetado 7 dias"
+                  value={summary.realized.closingBalance + summary.projection.net_7d}
+                  signed
+                />
+                <MiniMetric
+                  label="Entradas 30 dias"
+                  value={summary.projection.inflows_30d}
+                  tone="success"
+                />
+                <MiniMetric label="Saidas 30 dias" value={summary.projection.outflows_30d} />
+                <MiniMetric
+                  label="Saldo projetado 30 dias"
+                  value={summary.realized.closingBalance + summary.projection.net_30d}
+                  signed
+                />
+              </div>
+            </section>
+            <section className="premium-card p-4">
+              <h2 className="text-sm font-extrabold">
+                {view === "realized" ? "Baixas realizadas" : "Titulos previstos"}
+              </h2>
+              <div className="mt-3 divide-y divide-border">
+                {entries.length ? (
+                  entries.map((entry) => (
+                    <div key={entry.entry_id} className="py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-bold">{entry.description}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {date.format(new Date(`${entry.entry_date}T12:00:00`))} ·{" "}
+                            {entry.partner_name || "Sem parceiro"} ·{" "}
+                            {entry.financial_account_name ||
+                              entry.chart_account_name ||
+                              "Sem categoria"}
+                          </div>
+                        </div>
+                        <strong
+                          className={cn("text-sm", entry.signed_amount < 0 && "text-destructive")}
+                        >
+                          {signedMoney(entry.signed_amount)}
+                        </strong>
+                      </div>
+                      {entry.status === "overdue" && (
+                        <Badge className="mt-2" variant="destructive">
+                          vencido
+                        </Badge>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <EmptyReport text="Nenhum lancamento no periodo." />
+                )}
+              </div>
+            </section>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

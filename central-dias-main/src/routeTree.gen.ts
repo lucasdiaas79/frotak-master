@@ -33,6 +33,8 @@ import { Route as FinanceiroReceberRouteImport } from './routes/financeiro.receb
 import { Route as FinanceiroPlanoContasRouteImport } from './routes/financeiro.plano-contas'
 import { Route as FinanceiroPagarRouteImport } from './routes/financeiro.pagar'
 import { Route as FinanceiroIntegracoesRouteImport } from './routes/financeiro.integracoes'
+import { Route as FinanceiroFluxoCaixaRouteImport } from './routes/financeiro.fluxo-caixa'
+import { Route as FinanceiroDreRouteImport } from './routes/financeiro.dre'
 import { Route as FinanceiroContasRouteImport } from './routes/financeiro.contas'
 import { Route as FinanceiroCentrosCustoRouteImport } from './routes/financeiro.centros-custo'
 import { Route as ApiSascarSyncRouteImport } from './routes/api/sascar/sync'
@@ -157,6 +159,16 @@ const FinanceiroIntegracoesRoute = FinanceiroIntegracoesRouteImport.update({
   path: '/integracoes',
   getParentRoute: () => FinanceiroRoute,
 } as any)
+const FinanceiroFluxoCaixaRoute = FinanceiroFluxoCaixaRouteImport.update({
+  id: '/fluxo-caixa',
+  path: '/fluxo-caixa',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
+const FinanceiroDreRoute = FinanceiroDreRouteImport.update({
+  id: '/dre',
+  path: '/dre',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
 const FinanceiroContasRoute = FinanceiroContasRouteImport.update({
   id: '/contas',
   path: '/contas',
@@ -194,6 +206,8 @@ export interface FileRoutesByFullPath {
   '/vinculacao': typeof VinculacaoRoute
   '/financeiro/centros-custo': typeof FinanceiroCentrosCustoRoute
   '/financeiro/contas': typeof FinanceiroContasRoute
+  '/financeiro/dre': typeof FinanceiroDreRoute
+  '/financeiro/fluxo-caixa': typeof FinanceiroFluxoCaixaRoute
   '/financeiro/integracoes': typeof FinanceiroIntegracoesRoute
   '/financeiro/pagar': typeof FinanceiroPagarRoute
   '/financeiro/plano-contas': typeof FinanceiroPlanoContasRoute
@@ -223,6 +237,8 @@ export interface FileRoutesByTo {
   '/vinculacao': typeof VinculacaoRoute
   '/financeiro/centros-custo': typeof FinanceiroCentrosCustoRoute
   '/financeiro/contas': typeof FinanceiroContasRoute
+  '/financeiro/dre': typeof FinanceiroDreRoute
+  '/financeiro/fluxo-caixa': typeof FinanceiroFluxoCaixaRoute
   '/financeiro/integracoes': typeof FinanceiroIntegracoesRoute
   '/financeiro/pagar': typeof FinanceiroPagarRoute
   '/financeiro/plano-contas': typeof FinanceiroPlanoContasRoute
@@ -253,6 +269,8 @@ export interface FileRoutesById {
   '/vinculacao': typeof VinculacaoRoute
   '/financeiro/centros-custo': typeof FinanceiroCentrosCustoRoute
   '/financeiro/contas': typeof FinanceiroContasRoute
+  '/financeiro/dre': typeof FinanceiroDreRoute
+  '/financeiro/fluxo-caixa': typeof FinanceiroFluxoCaixaRoute
   '/financeiro/integracoes': typeof FinanceiroIntegracoesRoute
   '/financeiro/pagar': typeof FinanceiroPagarRoute
   '/financeiro/plano-contas': typeof FinanceiroPlanoContasRoute
@@ -284,6 +302,8 @@ export interface FileRouteTypes {
     | '/vinculacao'
     | '/financeiro/centros-custo'
     | '/financeiro/contas'
+    | '/financeiro/dre'
+    | '/financeiro/fluxo-caixa'
     | '/financeiro/integracoes'
     | '/financeiro/pagar'
     | '/financeiro/plano-contas'
@@ -313,6 +333,8 @@ export interface FileRouteTypes {
     | '/vinculacao'
     | '/financeiro/centros-custo'
     | '/financeiro/contas'
+    | '/financeiro/dre'
+    | '/financeiro/fluxo-caixa'
     | '/financeiro/integracoes'
     | '/financeiro/pagar'
     | '/financeiro/plano-contas'
@@ -342,6 +364,8 @@ export interface FileRouteTypes {
     | '/vinculacao'
     | '/financeiro/centros-custo'
     | '/financeiro/contas'
+    | '/financeiro/dre'
+    | '/financeiro/fluxo-caixa'
     | '/financeiro/integracoes'
     | '/financeiro/pagar'
     | '/financeiro/plano-contas'
@@ -543,6 +567,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceiroIntegracoesRouteImport
       parentRoute: typeof FinanceiroRoute
     }
+    '/financeiro/fluxo-caixa': {
+      id: '/financeiro/fluxo-caixa'
+      path: '/fluxo-caixa'
+      fullPath: '/financeiro/fluxo-caixa'
+      preLoaderRoute: typeof FinanceiroFluxoCaixaRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
+    '/financeiro/dre': {
+      id: '/financeiro/dre'
+      path: '/dre'
+      fullPath: '/financeiro/dre'
+      preLoaderRoute: typeof FinanceiroDreRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
     '/financeiro/contas': {
       id: '/financeiro/contas'
       path: '/contas'
@@ -570,6 +608,8 @@ declare module '@tanstack/react-router' {
 interface FinanceiroRouteChildren {
   FinanceiroCentrosCustoRoute: typeof FinanceiroCentrosCustoRoute
   FinanceiroContasRoute: typeof FinanceiroContasRoute
+  FinanceiroDreRoute: typeof FinanceiroDreRoute
+  FinanceiroFluxoCaixaRoute: typeof FinanceiroFluxoCaixaRoute
   FinanceiroIntegracoesRoute: typeof FinanceiroIntegracoesRoute
   FinanceiroPagarRoute: typeof FinanceiroPagarRoute
   FinanceiroPlanoContasRoute: typeof FinanceiroPlanoContasRoute
@@ -581,6 +621,8 @@ interface FinanceiroRouteChildren {
 const FinanceiroRouteChildren: FinanceiroRouteChildren = {
   FinanceiroCentrosCustoRoute: FinanceiroCentrosCustoRoute,
   FinanceiroContasRoute: FinanceiroContasRoute,
+  FinanceiroDreRoute: FinanceiroDreRoute,
+  FinanceiroFluxoCaixaRoute: FinanceiroFluxoCaixaRoute,
   FinanceiroIntegracoesRoute: FinanceiroIntegracoesRoute,
   FinanceiroPagarRoute: FinanceiroPagarRoute,
   FinanceiroPlanoContasRoute: FinanceiroPlanoContasRoute,
