@@ -33,6 +33,7 @@ function mapRule(row: Record<string, unknown>): FinancialRecurringRule {
     chartAccountId: String(row.chart_account_id),
     chartAccountName: row.chart_account_name ? String(row.chart_account_name) : null,
     amount: numberValue(row.amount),
+    frequency: row.frequency ? (row.frequency as FinancialRecurringRule["frequency"]) : "MONTHLY",
     dueDay: numberValue(row.due_day),
     startMonth: String(row.start_month),
     endMonth: row.end_month ? String(row.end_month) : null,

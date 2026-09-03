@@ -260,6 +260,7 @@ export interface FinancialIntegrationProcessResult {
 }
 
 export type FinancialRecurringKind = "salary" | "recurring_expense" | "fixed_cost";
+export type FinancialRecurringFrequency = "MONTHLY" | "WEEKLY" | "YEARLY";
 export type FinancialRecurringStatus = "active" | "paused" | "ended";
 
 export interface FinancialRecurringRule {
@@ -280,6 +281,7 @@ export interface FinancialRecurringRule {
   chartAccountId: string;
   chartAccountName: string | null;
   amount: number;
+  frequency: FinancialRecurringFrequency;
   dueDay: number;
   startMonth: string;
   endMonth: string | null;
@@ -304,6 +306,7 @@ export interface FinancialRecurringRuleInput {
   costCenterId: string;
   chartAccountId: string;
   amount: number;
+  frequency: FinancialRecurringFrequency;
   dueDay: number;
   startMonth: string;
   endMonth?: string;
@@ -316,6 +319,130 @@ export interface FinancialRecurringGenerationResult {
   generated: number;
   skipped: number;
   documentIds: string[];
+}
+
+export type PayrollEntryStatus = "draft" | "calculated" | "approved" | "posted" | "paid" | "voided";
+
+export type PayrollItemType =
+  | "SALARY_BASE"
+  | "COMMISSION"
+  | "OVERTIME"
+  | "DAILY_ALLOWANCE"
+  | "BONUS"
+  | "ADDITIONAL"
+  | "BENEFIT"
+  | "OTHER_EARNING"
+  | "ADVANCE"
+  | "DISCOUNT"
+  | "OTHER_DEDUCTION";
+
+export interface EmployeeFinancialProfile {
+  id: string;
+  tenantId: string;
+  workspaceId: string;
+  displayName: string;
+  driverId: string | null;
+  profileId: string | null;
+  businessPartnerId: string | null;
+  jobTitle: string | null;
+  baseSalary: number;
+  defaultCostCenterId: string;
+  defaultChartAccountId: string;
+  defaultPayDay: number;
+  admissionDate: string | null;
+  active: boolean;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmployeeFinancialProfileInput {
+  id?: string;
+  workspaceId: string;
+  displayName: string;
+  driverId?: string;
+  profileId?: string;
+  businessPartnerId?: string;
+  jobTitle?: string;
+  baseSalary: number;
+  defaultCostCenterId: string;
+  defaultChartAccountId: string;
+  defaultPayDay: number;
+  admissionDate?: string;
+  active: boolean;
+  notes?: string;
+}
+
+export interface PayrollItem {
+  id: string;
+  itemType: PayrollItemType;
+  direction: "earning" | "deduction";
+  description: string;
+  amount: number;
+  employeeAdvanceId: string | null;
+  sourceType: string | null;
+  sourceId: string | null;
+  sourceEvent: string | null;
+  createdAt: string;
+}
+
+export interface PayrollEntry {
+  id: string;
+  tenantId: string;
+  workspaceId: string;
+  periodId: string;
+  employeeProfileId: string;
+  employeeNameSnapshot: string;
+  employeeDisplayName: string;
+  jobTitleSnapshot: string | null;
+  baseSalarySnapshot: number;
+  costCenterId: string;
+  costCenterName: string | null;
+  chartAccountId: string;
+  chartAccountName: string | null;
+  dueDate: string;
+  competenceMonth: string;
+  status: PayrollEntryStatus;
+  grossAmount: number;
+  deductionAmount: number;
+  netAmount: number;
+  financialDocumentId: string | null;
+  financialDocumentStatus: FinancialDocumentStatus | null;
+  items: PayrollItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmployeeAdvance {
+  id: string;
+  employeeProfileId: string;
+  employeeDisplayName: string;
+  financialDocumentId: string | null;
+  amount: number;
+  paidOn: string;
+  description: string;
+  status: "available" | "applied" | "voided";
+  appliedPayrollItemId: string | null;
+  notes: string | null;
+}
+
+export interface PayrollEntryInput {
+  workspaceId: string;
+  employeeProfileId: string;
+  competenceMonth: string;
+  dueDate?: string;
+  dueDay?: number;
+  costCenterId?: string;
+  chartAccountId?: string;
+}
+
+export interface PayrollItemInput {
+  id?: string;
+  payrollEntryId: string;
+  itemType: PayrollItemType;
+  description: string;
+  amount: number;
+  employeeAdvanceId?: string;
 }
 
 export type ProfitabilitySort =

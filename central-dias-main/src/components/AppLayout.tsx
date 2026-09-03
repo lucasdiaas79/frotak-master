@@ -124,12 +124,22 @@ const FINANCIAL_NAV: NavItem[] = [
   { to: "/lucros-despesas", label: "Rentabilidade da Frota", icon: TrendingUp },
   { to: "/financeiro/receber", label: "Contas a Receber", icon: WalletCards },
   { to: "/financeiro/pagar", label: "Contas a Pagar", icon: ReceiptText },
-  { to: "/financeiro/recorrencias", label: "Salários e Recorrências", icon: Repeat2 },
   { to: "/financeiro/contas", label: "Bancos e Caixas", icon: Building2 },
+  { to: "/financeiro/salarios", label: "Salários", icon: ReceiptText },
+  { to: "/financeiro/recorrencias", label: "Despesas Recorrentes", icon: Repeat2 },
   { to: "/financeiro/plano-contas", label: "Plano de Contas", icon: ListChecks },
   { to: "/financeiro/centros-custo", label: "Centros de Custo", icon: FolderKanban },
   { to: "/financeiro/integracoes", label: "Integrações", icon: RefreshCw },
 ];
+
+function financialNavFor(access: FinancialAccess | null) {
+  return FINANCIAL_NAV.filter(
+    (item) =>
+      item.to !== "/financeiro/salarios" ||
+      access?.isOwner ||
+      access?.permissions.includes("financial.payroll.view"),
+  );
+}
 
 const ROUTE_TITLES: Record<string, string> = {
   "/": "Dashboard Operacional",
@@ -151,8 +161,9 @@ const ROUTE_TITLES: Record<string, string> = {
   "/financeiro": "Visão Geral Financeira",
   "/financeiro/receber": "Contas a Receber",
   "/financeiro/pagar": "Contas a Pagar",
-  "/financeiro/recorrencias": "Salários e Recorrências",
   "/financeiro/contas": "Bancos e Caixas",
+  "/financeiro/salarios": "Salários",
+  "/financeiro/recorrencias": "Despesas Recorrentes",
   "/financeiro/plano-contas": "Plano de Contas",
   "/financeiro/centros-custo": "Centros de Custo",
   "/financeiro/integracoes": "Integrações Financeiras",
@@ -178,6 +189,7 @@ const ROUTE_GROUPS: Record<string, string> = {
   "/financeiro": "Financeiro",
   "/financeiro/receber": "Financeiro",
   "/financeiro/pagar": "Financeiro",
+  "/financeiro/salarios": "Financeiro",
   "/financeiro/recorrencias": "Financeiro",
   "/financeiro/contas": "Financeiro",
   "/financeiro/plano-contas": "Financeiro",
@@ -488,6 +500,7 @@ function SidebarBody({
 }) {
   const initials = getInitials(profile);
   const profileLabel = profile?.name || profile?.email || "Operador Logístico";
+  const financialItems = financialNavFor(financialAccess);
 
   return (
     <div className="glass relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-[28px] border-sidebar-border bg-sidebar/80 text-sidebar-foreground shadow-[var(--shadow-strong)]">
@@ -558,7 +571,7 @@ function SidebarBody({
         {financialAccess?.canView && (
           <>
             <div className="mx-5 my-2 h-px bg-sidebar-border/80" />
-            <NavSection title="Financeiro" items={FINANCIAL_NAV} collapsed={collapsed} compact />
+            <NavSection title="Financeiro" items={financialItems} collapsed={collapsed} compact />
           </>
         )}
         {profile?.isOwner && (
@@ -852,6 +865,7 @@ export function AppLayout() {
     await signOut();
     window.location.href = getMasterLoginUrl();
   }
+  const financialItems = financialNavFor(financialAccess);
 
   return (
     <div className="relative flex h-[100dvh] w-full overflow-hidden bg-background md:p-4">
@@ -960,7 +974,7 @@ export function AppLayout() {
             {financialAccess?.canView && (
               <MobileMenuSection
                 title="Financeiro"
-                items={FINANCIAL_NAV}
+                items={financialItems}
                 currentPath={loc.pathname}
                 onNavigate={() => setMobileMenuOpen(false)}
               />

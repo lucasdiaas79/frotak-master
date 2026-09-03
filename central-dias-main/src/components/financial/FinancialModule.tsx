@@ -91,16 +91,33 @@ import {
   saveFinancialRecurringRule,
   setFinancialRecurringRuleStatus,
 } from "@/lib/financial/phase5";
+import {
+  approvePayrollEntry,
+  calculatePayrollEntry,
+  createEmployeeAdvance,
+  createPayrollEntry,
+  deletePayrollItem,
+  listEmployeeAdvances,
+  listEmployeeFinancialProfiles,
+  listPayrollEntries,
+  postPayrollEntry,
+  saveEmployeeFinancialProfile,
+  savePayrollItem,
+  voidPayrollEntry,
+} from "@/lib/financial/payroll";
 import type {
   BusinessPartner,
   CanonicalFreight,
   ChartAccount,
   CostCenter,
+  EmployeeAdvance,
+  EmployeeFinancialProfile,
   FinancialAccess,
   FinancialAccount,
   FinancialDocumentDetails,
   FinancialDocumentDirection,
   FinancialDocumentInput,
+  FinancialRecurringFrequency,
   FinancialInstallment,
   FinancialIntegrationJob,
   FinancialIntegrationSettings,
@@ -108,6 +125,10 @@ import type {
   FinancialRecurringRule,
   FinancialRecurringRuleInput,
   FinancialSettlement,
+  PayrollEntry,
+  PayrollEntryStatus,
+  PayrollItem,
+  PayrollItemType,
 } from "@/lib/financial/types";
 import { useFleet } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -121,8 +142,9 @@ const financeNav = [
   ["/financeiro", "Visão Geral", BadgeDollarSign],
   ["/financeiro/receber", "Contas a Receber", ArrowDownLeft],
   ["/financeiro/pagar", "Contas a Pagar", ArrowUpRight],
-  ["/financeiro/recorrencias", "Salarios e Recorrencias", Repeat2],
   ["/financeiro/contas", "Bancos e Caixas", Landmark],
+  ["/financeiro/salarios", "Salarios", ReceiptText],
+  ["/financeiro/recorrencias", "Despesas Recorrentes", Repeat2],
   ["/financeiro/plano-contas", "Plano de Contas", Tags],
   ["/financeiro/centros-custo", "Centros de Custo", Building2],
   ["/financeiro/integracoes", "Integrações", RefreshCw],
@@ -130,9 +152,16 @@ const financeNav = [
 
 function FinancialNav() {
   const location = useLocation();
+  const { access } = useFinancialAccess();
+  const items = financeNav.filter(
+    ([to]) =>
+      to !== "/financeiro/salarios" ||
+      access?.isOwner ||
+      access?.permissions.includes("financial.payroll.view"),
+  );
   return (
     <nav className="mx-3 flex gap-1 overflow-x-auto rounded-lg border border-border bg-card p-1 md:mx-0">
-      {financeNav.map(([to, label, Icon]) => {
+      {items.map(([to, label, Icon]) => {
         const active = location.pathname === to;
         return (
           <Link
@@ -352,6 +381,7 @@ function Upcoming({ title, documents }: { title: string; documents: FinancialDoc
 type TitleFilters = {
   search: string;
   status: string;
+  origin: string;
   partner: string;
   start: string;
   end: string;
@@ -363,6 +393,7 @@ type TitleFilters = {
 const initialFilters = (): TitleFilters => ({
   search: "",
   status: "all",
+  origin: "all",
   partner: "all",
   start: monthStart(),
   end: today(),
@@ -439,6 +470,7 @@ function TitlesContent({
               .toLowerCase()
               .includes(filters.search.toLowerCase())) &&
           (filters.status === "all" || visualStatus(d) === filters.status) &&
+          (filters.origin === "all" || documentOrigin(d.sourceType) === filters.origin) &&
           (filters.partner === "all" || d.partnerId === filters.partner) &&
           (filters.category === "all" || d.chartAccountId === filters.category) &&
           (filters.center === "all" || d.costCenterId === filters.center) &&
@@ -648,6 +680,24 @@ const statusLabels: Record<string, string> = {
   voided: "Cancelado",
 };
 
+const originLabels: Record<string, string> = {
+  manual: "Manual",
+  fuel: "Abastecimento",
+  payroll: "Folha",
+  recurring: "Recorrencia",
+  freight: "Frete",
+  other: "Outras",
+};
+
+function documentOrigin(sourceType: string | null) {
+  if (!sourceType) return "manual";
+  if (sourceType === "payroll" || sourceType === "payroll_advance") return "payroll";
+  if (sourceType === "recurring_rule") return "recurring";
+  if (sourceType === "fuel_record") return "fuel";
+  if (sourceType === "freight" || sourceType === "freight_expense") return "freight";
+  return "other";
+}
+
 function statusLabel(state: string, direction: FinancialDocumentDirection) {
   if (state === "partial") {
     return direction === "receivable" ? "Parcialmente recebido" : "Parcialmente pago";
@@ -701,6 +751,12 @@ function FilterPanel({
         onChange={(v) => set("status", v)}
         all="Todos os status"
         items={Object.entries(statusLabels)}
+      />
+      <SimpleSelect
+        value={filters.origin}
+        onChange={(v) => set("origin", v)}
+        all="Todas as origens"
+        items={Object.entries(originLabels)}
       />
       <SimpleSelect
         value={filters.category}
@@ -784,9 +840,10 @@ function TitleList({
 }) {
   return (
     <section className="premium-card mx-3 overflow-hidden md:mx-0">
-      <div className="hidden grid-cols-[1.6fr_1fr_1fr_1fr_1fr_auto] gap-3 border-b border-border bg-muted/35 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground md:grid">
+      <div className="hidden grid-cols-[1.4fr_1fr_0.8fr_1fr_1fr_1fr_auto] gap-3 border-b border-border bg-muted/35 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground md:grid">
         <span>Título</span>
         <span>Parceiro</span>
+        <span>Origem</span>
         <span>Vencimento</span>
         <span>Valor</span>
         <span>Situação</span>
@@ -845,7 +902,7 @@ function TitleRow({
     (d.status === "draft" && canEdit) ||
     (canReverse && activeSettlements.length > 0);
   return (
-    <div className="relative grid gap-3 border-b border-border p-4 pr-16 last:border-0 md:grid-cols-[1.6fr_1fr_1fr_1fr_1fr_auto] md:items-center md:pr-4">
+    <div className="relative grid gap-3 border-b border-border p-4 pr-16 last:border-0 md:grid-cols-[1.4fr_1fr_0.8fr_1fr_1fr_1fr_auto] md:items-center md:pr-4">
       <div>
         <div className="text-sm font-extrabold">{d.description}</div>
         <div className="text-xs text-muted-foreground">
@@ -855,6 +912,9 @@ function TitleRow({
       <div className="text-sm">
         <span className="md:hidden text-xs text-muted-foreground">Parceiro · </span>
         {d.partnerName || "Não informado"}
+      </div>
+      <div>
+        <Badge variant="outline">{originLabels[documentOrigin(d.sourceType)]}</Badge>
       </div>
       <div className="text-sm">
         <span className="md:hidden text-xs text-muted-foreground">Vencimento · </span>
@@ -1562,6 +1622,12 @@ const recurringStatusLabel: Record<FinancialRecurringRule["status"], string> = {
   ended: "Encerrada",
 };
 
+const recurringFrequencyLabel: Record<FinancialRecurringFrequency, string> = {
+  MONTHLY: "Mensal",
+  WEEKLY: "Semanal",
+  YEARLY: "Anual",
+};
+
 function currentCompetenceMonth() {
   return today().slice(0, 7);
 }
@@ -1587,6 +1653,7 @@ function emptyRecurringForm(access: FinancialAccess) {
     costCenterId: "",
     chartAccountId: "",
     amount: "",
+    frequency: "MONTHLY" as FinancialRecurringFrequency,
     dueDay: "5",
     startMonth: currentCompetenceMonth(),
     endMonth: "",
@@ -1670,6 +1737,7 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
       costCenterId: rule.costCenterId,
       chartAccountId: rule.chartAccountId,
       amount: String(rule.amount),
+      frequency: rule.frequency,
       dueDay: String(rule.dueDay),
       startMonth: denormalizeMonth(rule.startMonth),
       endMonth: denormalizeMonth(rule.endMonth),
@@ -1693,6 +1761,7 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
       costCenterId: form.costCenterId,
       chartAccountId: form.chartAccountId,
       amount: Number(form.amount),
+      frequency: form.frequency,
       dueDay: Number(form.dueDay),
       startMonth: normalizeMonth(form.startMonth),
       endMonth: form.endMonth ? normalizeMonth(form.endMonth) : undefined,
@@ -1733,8 +1802,8 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
   return (
     <div className="space-y-3 pb-6">
       <PageHeader
-        title="Salarios e Recorrencias"
-        subtitle="Custos mensais gerando titulos canonicos por competencia"
+        title="Despesas Recorrentes"
+        subtitle="Custos periodicos gerando titulos canonicos por competencia"
         actions={
           canManage ? (
             <>
@@ -1744,7 +1813,7 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
               </Button>
               <Button onClick={openNew}>
                 <Plus className="size-4" />
-                Nova recorrencia
+                Nova despesa
               </Button>
             </>
           ) : undefined
@@ -1754,8 +1823,8 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
 
       <div className="grid grid-cols-2 gap-3 px-3 lg:grid-cols-4 md:px-0">
         <Stat label="Ativas" value={active.length} icon={Repeat2} />
-        <Stat label="Folha mensal" value={salaryTotal} icon={ReceiptText} />
-        <Stat label="Custo mensal" value={monthlyTotal} icon={WalletCards} tone="danger" />
+        <Stat label="Salario simples" value={salaryTotal} icon={ReceiptText} />
+        <Stat label="Custo ativo" value={monthlyTotal} icon={WalletCards} tone="danger" />
         <Stat label="A gerar" value={pendingGeneration} icon={CalendarClock} />
       </div>
 
@@ -1770,16 +1839,17 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
           </Field>
           <p className="text-xs text-muted-foreground">
             A geracao usa source_type, source_id e source_event para nao duplicar titulos do mesmo
-            mes.
+            periodo.
           </p>
         </div>
       </section>
 
       <section className="premium-card mx-3 overflow-hidden md:mx-0">
-        <div className="hidden grid-cols-[1.4fr_1fr_1fr_1fr_1fr_auto] gap-3 border-b border-border bg-muted/35 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground md:grid">
+        <div className="hidden grid-cols-[1.4fr_1fr_1fr_0.8fr_1fr_1fr_auto] gap-3 border-b border-border bg-muted/35 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground md:grid">
           <span>Regra</span>
           <span>Tipo</span>
           <span>Alocacao</span>
+          <span>Frequencia</span>
           <span>Vencimento</span>
           <span>Valor</span>
           <span>Acao</span>
@@ -1788,7 +1858,7 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
           rules.map((rule) => (
             <div
               key={rule.id}
-              className="grid gap-3 border-b border-border p-4 last:border-0 md:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_auto] md:items-center"
+              className="grid gap-3 border-b border-border p-4 last:border-0 md:grid-cols-[1.4fr_1fr_1fr_0.8fr_1fr_1fr_auto] md:items-center"
             >
               <div>
                 <div className="text-sm font-extrabold">{rule.name}</div>
@@ -1804,6 +1874,7 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
                   {rule.chartAccountName || "Sem categoria"}
                 </span>
               </div>
+              <div className="text-sm">{recurringFrequencyLabel[rule.frequency]}</div>
               <div className="text-sm">
                 Dia {rule.dueDay}
                 <span className="block text-xs text-muted-foreground">
@@ -1989,6 +2060,23 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
                 onChange={(event) => setForm({ ...form, amount: event.target.value })}
               />
             </Field>
+            <Field label="Frequencia">
+              <Select
+                value={form.frequency}
+                onValueChange={(value) =>
+                  setForm({ ...form, frequency: value as FinancialRecurringFrequency })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MONTHLY">Mensal</SelectItem>
+                  <SelectItem value="WEEKLY">Semanal</SelectItem>
+                  <SelectItem value="YEARLY">Anual</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
             <Field label="Dia vencimento">
               <Input
                 type="number"
@@ -2052,6 +2140,864 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
       </Dialog>
     </div>
   );
+}
+
+const payrollStatusLabel: Record<PayrollEntryStatus, string> = {
+  draft: "Rascunho",
+  calculated: "Calculada",
+  approved: "Aprovada",
+  posted: "Postada",
+  paid: "Paga",
+  voided: "Cancelada",
+};
+
+const payrollItemLabel: Record<PayrollItemType, string> = {
+  SALARY_BASE: "Salario base",
+  COMMISSION: "Comissao",
+  OVERTIME: "Hora extra",
+  DAILY_ALLOWANCE: "Diaria",
+  BONUS: "Bonificacao",
+  ADDITIONAL: "Adicional",
+  BENEFIT: "Beneficio",
+  OTHER_EARNING: "Outro provento",
+  ADVANCE: "Adiantamento",
+  DISCOUNT: "Desconto",
+  OTHER_DEDUCTION: "Outra deducao",
+};
+
+function nextPayrollDueDate(month: string) {
+  const [year, rawMonth] = month.split("-").map(Number);
+  const dateValue = new Date(year, rawMonth, 5, 12);
+  return dateValue.toISOString().slice(0, 10);
+}
+
+function emptyEmployeeForm(access: FinancialAccess, chart: ChartAccount[], centers: CostCenter[]) {
+  return {
+    id: "",
+    displayName: "",
+    driverId: "",
+    jobTitle: "",
+    baseSalary: "",
+    defaultCostCenterId:
+      centers.find((center) => center.code === "OPERACAO")?.id ||
+      centers.find((center) => center.active)?.id ||
+      "",
+    defaultChartAccountId:
+      chart.find((account) => account.code === "5.03")?.id ||
+      chart.find(
+        (account) => account.active && account.isPostable && account.accountType === "expense",
+      )?.id ||
+      "",
+    defaultPayDay: "5",
+    admissionDate: "",
+    active: "true",
+    notes: "",
+    workspaceId: access.workspaceId,
+  };
+}
+
+export function FinancialPayrollPage() {
+  return (
+    <FinancialBoundary>{(access) => <FinancialPayrollContent access={access} />}</FinancialBoundary>
+  );
+}
+
+function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
+  const [employees, setEmployees] = useState<EmployeeFinancialProfile[]>([]);
+  const [entries, setEntries] = useState<PayrollEntry[]>([]);
+  const [advances, setAdvances] = useState<EmployeeAdvance[]>([]);
+  const [chart, setChart] = useState<ChartAccount[]>([]);
+  const [centers, setCenters] = useState<CostCenter[]>([]);
+  const [competence, setCompetence] = useState(currentCompetenceMonth());
+  const [employeeFilter, setEmployeeFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [centerFilter, setCenterFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [employeeOpen, setEmployeeOpen] = useState(false);
+  const [entryOpen, setEntryOpen] = useState(false);
+  const [detail, setDetail] = useState<PayrollEntry | null>(null);
+  const [itemForm, setItemForm] = useState({
+    itemType: "COMMISSION" as PayrollItemType,
+    description: "",
+    amount: "",
+    employeeAdvanceId: "",
+  });
+  const [advanceOpen, setAdvanceOpen] = useState(false);
+  const [advanceForm, setAdvanceForm] = useState({
+    employeeProfileId: "",
+    amount: "",
+    paidOn: today(),
+    description: "Adiantamento salarial",
+    notes: "",
+  });
+  const [employeeForm, setEmployeeForm] = useState(() => emptyEmployeeForm(access, [], []));
+  const [entryForm, setEntryForm] = useState({
+    employeeProfileId: "",
+    competenceMonth: currentCompetenceMonth(),
+    dueDate: nextPayrollDueDate(currentCompetenceMonth()),
+  });
+  const [saving, setSaving] = useState(false);
+  const { drivers } = useFleet();
+  const canView = hasFinancialPermission(access, "financial.payroll.view");
+  const canManage = hasFinancialPermission(access, "financial.payroll.manage");
+  const canApprove = hasFinancialPermission(access, "financial.payroll.approve");
+  const canPost = hasFinancialPermission(access, "financial.payroll.post");
+  const canVoid = hasFinancialPermission(access, "financial.payroll.void");
+
+  const load = useCallback(async () => {
+    const [nextEmployees, nextEntries, nextAdvances, nextChart, nextCenters] = await Promise.all([
+      listEmployeeFinancialProfiles(),
+      listPayrollEntries(),
+      listEmployeeAdvances(),
+      listFinancialChart(),
+      listFinancialCostCenters(),
+    ]);
+    setEmployees(nextEmployees);
+    setEntries(nextEntries);
+    setAdvances(nextAdvances);
+    setChart(nextChart);
+    setCenters(nextCenters);
+  }, []);
+
+  useEffect(() => {
+    if (canView) load().catch(() => toast.error("Nao foi possivel carregar a folha."));
+  }, [canView, load]);
+
+  if (!canView) {
+    return (
+      <div className="space-y-3 pb-6">
+        <PageHeader title="Salarios" subtitle="Folha gerencial Frotak" />
+        <FinancialNav />
+        <section className="premium-card mx-3 p-8 text-center md:mx-0">
+          <ShieldAlert className="mx-auto mb-3 size-8 text-muted-foreground" />
+          <h2 className="text-lg font-bold">Acesso restrito</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Solicite a permissao financial.payroll.view ao owner.
+          </p>
+        </section>
+      </div>
+    );
+  }
+
+  const filtered = entries.filter((entry) => {
+    const job = entry.jobTitleSnapshot || "";
+    return (
+      entry.competenceMonth.slice(0, 7) === competence &&
+      (employeeFilter === "all" || entry.employeeProfileId === employeeFilter) &&
+      (roleFilter === "all" || job === roleFilter) &&
+      (centerFilter === "all" || entry.costCenterId === centerFilter) &&
+      (statusFilter === "all" || entry.status === statusFilter)
+    );
+  });
+  const gross = filtered.reduce((sum, entry) => sum + entry.grossAmount, 0);
+  const deductions = filtered.reduce((sum, entry) => sum + entry.deductionAmount, 0);
+  const net = filtered.reduce((sum, entry) => sum + entry.netAmount, 0);
+  const paid = filtered
+    .filter((entry) => entry.status === "paid")
+    .reduce((sum, entry) => sum + entry.netAmount, 0);
+  const payable = filtered
+    .filter((entry) => !["paid", "voided"].includes(entry.status))
+    .reduce((sum, entry) => sum + entry.netAmount, 0);
+  const roles = Array.from(new Set(employees.map((employee) => employee.jobTitle).filter(Boolean)));
+
+  const openEmployee = (employee?: EmployeeFinancialProfile) => {
+    if (employee) {
+      setEmployeeForm({
+        id: employee.id,
+        workspaceId: access.workspaceId,
+        displayName: employee.displayName,
+        driverId: employee.driverId || "",
+        jobTitle: employee.jobTitle || "",
+        baseSalary: String(employee.baseSalary),
+        defaultCostCenterId: employee.defaultCostCenterId,
+        defaultChartAccountId: employee.defaultChartAccountId,
+        defaultPayDay: String(employee.defaultPayDay),
+        admissionDate: employee.admissionDate || "",
+        active: String(employee.active),
+        notes: employee.notes || "",
+      });
+    } else {
+      setEmployeeForm(emptyEmployeeForm(access, chart, centers));
+    }
+    setEmployeeOpen(true);
+  };
+
+  const saveEmployee = async () => {
+    setSaving(true);
+    try {
+      await saveEmployeeFinancialProfile({
+        id: employeeForm.id || undefined,
+        workspaceId: access.workspaceId,
+        displayName: employeeForm.displayName,
+        driverId: employeeForm.driverId || undefined,
+        jobTitle: employeeForm.jobTitle || undefined,
+        baseSalary: Number(employeeForm.baseSalary),
+        defaultCostCenterId: employeeForm.defaultCostCenterId,
+        defaultChartAccountId: employeeForm.defaultChartAccountId,
+        defaultPayDay: Number(employeeForm.defaultPayDay),
+        admissionDate: employeeForm.admissionDate || undefined,
+        active: employeeForm.active === "true",
+        notes: employeeForm.notes || undefined,
+      });
+      toast.success("Funcionario salvo.");
+      setEmployeeOpen(false);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao salvar funcionario.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveEntry = async () => {
+    setSaving(true);
+    try {
+      await createPayrollEntry({
+        workspaceId: access.workspaceId,
+        employeeProfileId: entryForm.employeeProfileId,
+        competenceMonth: normalizeMonth(entryForm.competenceMonth),
+        dueDate: entryForm.dueDate,
+      });
+      toast.success("Funcionario adicionado a competencia.");
+      setEntryOpen(false);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao criar folha.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const runEntryAction = async (
+    entry: PayrollEntry,
+    action: "calculate" | "approve" | "post" | "void",
+  ) => {
+    try {
+      if (action === "calculate") await calculatePayrollEntry(entry.id);
+      if (action === "approve") await approvePayrollEntry(entry.id);
+      if (action === "post") await postPayrollEntry(entry.id);
+      if (action === "void") {
+        const reason = window.prompt("Motivo do cancelamento:");
+        if (!reason) return;
+        await voidPayrollEntry(entry.id, reason);
+      }
+      toast.success("Folha atualizada.");
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha na acao da folha.");
+    }
+  };
+
+  const addItem = async () => {
+    if (!detail) return;
+    setSaving(true);
+    try {
+      await savePayrollItem({
+        payrollEntryId: detail.id,
+        itemType: itemForm.itemType,
+        description: itemForm.description || payrollItemLabel[itemForm.itemType],
+        amount: Number(itemForm.amount),
+        employeeAdvanceId: itemForm.employeeAdvanceId || undefined,
+      });
+      setItemForm({ itemType: "COMMISSION", description: "", amount: "", employeeAdvanceId: "" });
+      await load();
+      const nextDetail =
+        (await listPayrollEntries()).find((entry) => entry.id === detail.id) ?? null;
+      setDetail(nextDetail);
+      toast.success("Item incluido.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao incluir item.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const createAdvance = async () => {
+    setSaving(true);
+    try {
+      await createEmployeeAdvance({
+        workspaceId: access.workspaceId,
+        employeeProfileId: advanceForm.employeeProfileId,
+        amount: Number(advanceForm.amount),
+        paidOn: advanceForm.paidOn,
+        description: advanceForm.description,
+        notes: advanceForm.notes || undefined,
+      });
+      toast.success("Adiantamento registrado em Contas a Pagar.");
+      setAdvanceOpen(false);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao criar adiantamento.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3 pb-6">
+      <PageHeader
+        title="Salarios"
+        subtitle="Folha gerencial por funcionario, competencia e contas a pagar"
+        actions={
+          canManage ? (
+            <>
+              <Button variant="outline" onClick={() => openEmployee()}>
+                <Plus className="size-4" />
+                Funcionario
+              </Button>
+              <Button variant="outline" onClick={() => setAdvanceOpen(true)}>
+                <WalletCards className="size-4" />
+                Adiantamento
+              </Button>
+              <Button
+                onClick={() => {
+                  setEntryForm({
+                    employeeProfileId: employees.find((employee) => employee.active)?.id || "",
+                    competenceMonth: competence,
+                    dueDate: nextPayrollDueDate(competence),
+                  });
+                  setEntryOpen(true);
+                }}
+              >
+                <Plus className="size-4" />
+                Adicionar a folha
+              </Button>
+            </>
+          ) : undefined
+        }
+      />
+      <FinancialNav />
+
+      <div className="grid grid-cols-2 gap-3 px-3 lg:grid-cols-5 md:px-0">
+        <Stat label="Folha bruta" value={gross} icon={ReceiptText} />
+        <Stat label="Descontos" value={deductions} icon={ArrowUpRight} tone="danger" />
+        <Stat label="Folha liquida" value={net} icon={CircleDollarSign} tone="success" />
+        <Stat label="Pago" value={paid} icon={Banknote} tone="success" />
+        <Stat label="A pagar" value={payable} icon={WalletCards} />
+      </div>
+
+      <section className="premium-card mx-3 p-4 md:mx-0">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <Input
+            type="month"
+            value={competence}
+            onChange={(event) => setCompetence(event.target.value)}
+          />
+          <SimpleSelect
+            value={employeeFilter}
+            onChange={setEmployeeFilter}
+            all="Todos os funcionarios"
+            items={employees.map((employee) => [employee.id, employee.displayName])}
+          />
+          <SimpleSelect
+            value={roleFilter}
+            onChange={setRoleFilter}
+            all="Todas as funcoes"
+            items={roles.map((role) => [role || "", role || "Sem funcao"])}
+          />
+          <SimpleSelect
+            value={centerFilter}
+            onChange={setCenterFilter}
+            all="Todos os centros"
+            items={centers.map((center) => [center.id, center.name])}
+          />
+          <SimpleSelect
+            value={statusFilter}
+            onChange={setStatusFilter}
+            all="Todos os status"
+            items={Object.entries(payrollStatusLabel)}
+          />
+        </div>
+      </section>
+
+      <section className="premium-card mx-3 overflow-hidden md:mx-0">
+        <div className="hidden grid-cols-[1.4fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3 border-b border-border bg-muted/35 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground md:grid">
+          <span>Funcionario</span>
+          <span>Funcao</span>
+          <span>Bruto</span>
+          <span>Descontos</span>
+          <span>Liquido</span>
+          <span>Status</span>
+          <span>Acao</span>
+        </div>
+        {filtered.length ? (
+          filtered.map((entry) => (
+            <div
+              key={entry.id}
+              className="grid gap-3 border-b border-border p-4 last:border-0 md:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_1fr_auto] md:items-center"
+            >
+              <div>
+                <div className="text-sm font-extrabold">{entry.employeeNameSnapshot}</div>
+                <div className="text-xs text-muted-foreground">
+                  Vence {date.format(new Date(`${entry.dueDate}T12:00:00`))}
+                </div>
+              </div>
+              <div className="text-sm">{entry.jobTitleSnapshot || "Sem funcao"}</div>
+              <strong className="text-sm">{money.format(entry.grossAmount)}</strong>
+              <strong className="text-sm text-destructive">
+                {money.format(entry.deductionAmount)}
+              </strong>
+              <strong className="text-sm text-primary">{money.format(entry.netAmount)}</strong>
+              <div>
+                <Badge variant={entry.status === "voided" ? "destructive" : "outline"}>
+                  {payrollStatusLabel[entry.status]}
+                </Badge>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="icon" variant="outline" aria-label="Acoes da folha">
+                    <MoreVertical className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setDetail(entry)}>
+                    <ReceiptText /> Abrir
+                  </DropdownMenuItem>
+                  {canManage && ["draft", "calculated"].includes(entry.status) && (
+                    <DropdownMenuItem onSelect={() => void runEntryAction(entry, "calculate")}>
+                      <RefreshCw /> Calcular
+                    </DropdownMenuItem>
+                  )}
+                  {canApprove && entry.status === "calculated" && (
+                    <DropdownMenuItem onSelect={() => void runEntryAction(entry, "approve")}>
+                      <ShieldAlert /> Aprovar
+                    </DropdownMenuItem>
+                  )}
+                  {canPost && entry.status === "approved" && (
+                    <DropdownMenuItem onSelect={() => void runEntryAction(entry, "post")}>
+                      <ArrowUpRight /> Postar
+                    </DropdownMenuItem>
+                  )}
+                  {entry.financialDocumentId && (
+                    <DropdownMenuItem asChild>
+                      <Link to="/financeiro/pagar">
+                        <WalletCards /> Ver titulo
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {canVoid && !["paid", "voided"].includes(entry.status) && (
+                    <DropdownMenuItem onSelect={() => void runEntryAction(entry, "void")}>
+                      <RotateCcw /> Cancelar
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ))
+        ) : (
+          <div className="p-12 text-center text-sm text-muted-foreground">
+            Nenhum funcionario nesta competencia.
+          </div>
+        )}
+      </section>
+
+      <Dialog open={employeeOpen} onOpenChange={setEmployeeOpen}>
+        <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {employeeForm.id ? "Editar funcionario" : "Funcionario financeiro"}
+            </DialogTitle>
+            <DialogDescription>
+              Vincule motorista quando existir ou cadastre uma referencia administrativa.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Nome" className="sm:col-span-2">
+              <Input
+                value={employeeForm.displayName}
+                onChange={(event) =>
+                  setEmployeeForm({ ...employeeForm, displayName: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Motorista">
+              <SimpleSelect
+                value={employeeForm.driverId || "all"}
+                onChange={(value) =>
+                  setEmployeeForm({ ...employeeForm, driverId: value === "all" ? "" : value })
+                }
+                all="Sem motorista"
+                items={drivers.map((driver) => [driver.id, driver.name])}
+              />
+            </Field>
+            <Field label="Funcao">
+              <Input
+                value={employeeForm.jobTitle}
+                onChange={(event) =>
+                  setEmployeeForm({ ...employeeForm, jobTitle: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Salario base">
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={employeeForm.baseSalary}
+                onChange={(event) =>
+                  setEmployeeForm({ ...employeeForm, baseSalary: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Dia de pagamento">
+              <Input
+                type="number"
+                min="1"
+                max="31"
+                value={employeeForm.defaultPayDay}
+                onChange={(event) =>
+                  setEmployeeForm({ ...employeeForm, defaultPayDay: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Conta contabil">
+              <SimpleSelect
+                value={employeeForm.defaultChartAccountId || "all"}
+                onChange={(value) =>
+                  setEmployeeForm({
+                    ...employeeForm,
+                    defaultChartAccountId: value === "all" ? "" : value,
+                  })
+                }
+                all="Selecionar conta"
+                items={chart
+                  .filter(
+                    (account) =>
+                      account.active && account.isPostable && account.accountType === "expense",
+                  )
+                  .map((account) => [account.id, `${account.code} - ${account.name}`])}
+              />
+            </Field>
+            <Field label="Centro de custo">
+              <SimpleSelect
+                value={employeeForm.defaultCostCenterId || "all"}
+                onChange={(value) =>
+                  setEmployeeForm({
+                    ...employeeForm,
+                    defaultCostCenterId: value === "all" ? "" : value,
+                  })
+                }
+                all="Selecionar centro"
+                items={centers
+                  .filter((center) => center.active)
+                  .map((center) => [center.id, center.name])}
+              />
+            </Field>
+            <Field label="Admissao">
+              <Input
+                type="date"
+                value={employeeForm.admissionDate}
+                onChange={(event) =>
+                  setEmployeeForm({ ...employeeForm, admissionDate: event.target.value })
+                }
+              />
+            </Field>
+            <Field label="Situacao">
+              <Select
+                value={employeeForm.active}
+                onValueChange={(value) => setEmployeeForm({ ...employeeForm, active: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="true">Ativo</SelectItem>
+                  <SelectItem value="false">Inativo</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Observacoes" className="sm:col-span-2">
+              <Textarea
+                value={employeeForm.notes}
+                onChange={(event) =>
+                  setEmployeeForm({ ...employeeForm, notes: event.target.value })
+                }
+              />
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={
+                saving ||
+                !employeeForm.displayName ||
+                !employeeForm.defaultChartAccountId ||
+                !employeeForm.defaultCostCenterId
+              }
+              onClick={() => void saveEmployee()}
+            >
+              {saving && <LoaderCircle className="size-4 animate-spin" />}
+              Salvar funcionario
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={entryOpen} onOpenChange={setEntryOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adicionar funcionario a folha</DialogTitle>
+            <DialogDescription>
+              O salario base atual sera gravado como snapshot da competencia.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <Field label="Funcionario">
+              <SimpleSelect
+                value={entryForm.employeeProfileId || "all"}
+                onChange={(value) =>
+                  setEntryForm({ ...entryForm, employeeProfileId: value === "all" ? "" : value })
+                }
+                all="Selecionar funcionario"
+                items={employees
+                  .filter((employee) => employee.active)
+                  .map((employee) => [employee.id, employee.displayName])}
+              />
+            </Field>
+            <Field label="Competencia">
+              <Input
+                type="month"
+                value={entryForm.competenceMonth}
+                onChange={(event) =>
+                  setEntryForm({
+                    ...entryForm,
+                    competenceMonth: event.target.value,
+                    dueDate: nextPayrollDueDate(event.target.value),
+                  })
+                }
+              />
+            </Field>
+            <Field label="Vencimento">
+              <Input
+                type="date"
+                value={entryForm.dueDate}
+                onChange={(event) => setEntryForm({ ...entryForm, dueDate: event.target.value })}
+              />
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={saving || !entryForm.employeeProfileId}
+              onClick={() => void saveEntry()}
+            >
+              {saving && <LoaderCircle className="size-4 animate-spin" />}
+              Criar fechamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={advanceOpen} onOpenChange={setAdvanceOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adiantamento salarial</DialogTitle>
+            <DialogDescription>
+              Registra um titulo financeiro proprio e deixa o valor disponivel para desconto.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <Field label="Funcionario">
+              <SimpleSelect
+                value={advanceForm.employeeProfileId || "all"}
+                onChange={(value) =>
+                  setAdvanceForm({
+                    ...advanceForm,
+                    employeeProfileId: value === "all" ? "" : value,
+                  })
+                }
+                all="Selecionar funcionario"
+                items={employees
+                  .filter((employee) => employee.active)
+                  .map((employee) => [employee.id, employee.displayName])}
+              />
+            </Field>
+            <Field label="Valor">
+              <Input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={advanceForm.amount}
+                onChange={(event) => setAdvanceForm({ ...advanceForm, amount: event.target.value })}
+              />
+            </Field>
+            <Field label="Data paga">
+              <Input
+                type="date"
+                value={advanceForm.paidOn}
+                onChange={(event) => setAdvanceForm({ ...advanceForm, paidOn: event.target.value })}
+              />
+            </Field>
+            <Field label="Descricao">
+              <Input
+                value={advanceForm.description}
+                onChange={(event) =>
+                  setAdvanceForm({ ...advanceForm, description: event.target.value })
+                }
+              />
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={saving || !advanceForm.employeeProfileId || Number(advanceForm.amount) <= 0}
+              onClick={() => void createAdvance()}
+            >
+              Registrar adiantamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(detail)} onOpenChange={(open) => !open && setDetail(null)}>
+        <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
+          {detail && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{detail.employeeNameSnapshot}</DialogTitle>
+                <DialogDescription>
+                  {detail.competenceMonth.slice(0, 7)} - {payrollStatusLabel[detail.status]}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid grid-cols-3 gap-3">
+                <Stat label="Bruto" value={detail.grossAmount} icon={ReceiptText} />
+                <Stat
+                  label="Descontos"
+                  value={detail.deductionAmount}
+                  icon={ArrowUpRight}
+                  tone="danger"
+                />
+                <Stat
+                  label="Liquido"
+                  value={detail.netAmount}
+                  icon={CircleDollarSign}
+                  tone="success"
+                />
+              </div>
+              <section className="rounded-lg border border-border">
+                {detail.items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3 border-b border-border p-3 last:border-0"
+                  >
+                    <Badge variant={item.direction === "deduction" ? "destructive" : "outline"}>
+                      {payrollItemLabel[item.itemType]}
+                    </Badge>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-bold">{item.description}</div>
+                    </div>
+                    <strong className="text-sm">{money.format(item.amount)}</strong>
+                    {canManage &&
+                      ["draft", "calculated"].includes(detail.status) &&
+                      item.itemType !== "SALARY_BASE" && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          title="Remover"
+                          onClick={async () => {
+                            await deletePayrollItem(item.id);
+                            await load();
+                            const nextDetail =
+                              (await listPayrollEntries()).find(
+                                (entry) => entry.id === detail.id,
+                              ) ?? null;
+                            setDetail(nextDetail);
+                          }}
+                        >
+                          <Trash2Icon />
+                        </Button>
+                      )}
+                  </div>
+                ))}
+              </section>
+              {canManage && ["draft", "calculated"].includes(detail.status) && (
+                <section className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-[180px_1fr_140px_auto]">
+                  <SimpleSelect
+                    value={itemForm.itemType}
+                    onChange={(value) =>
+                      setItemForm({
+                        ...itemForm,
+                        itemType: value as PayrollItemType,
+                        description: payrollItemLabel[value as PayrollItemType],
+                      })
+                    }
+                    all="Tipo"
+                    items={Object.entries(payrollItemLabel)}
+                  />
+                  {itemForm.itemType === "ADVANCE" ? (
+                    <SimpleSelect
+                      value={itemForm.employeeAdvanceId || "all"}
+                      onChange={(value) => {
+                        const advance = advances.find((item) => item.id === value);
+                        setItemForm({
+                          ...itemForm,
+                          employeeAdvanceId: value === "all" ? "" : value,
+                          amount: advance ? String(advance.amount) : itemForm.amount,
+                          description: advance?.description || "Adiantamento",
+                        });
+                      }}
+                      all="Selecionar adiantamento"
+                      items={advances
+                        .filter(
+                          (advance) =>
+                            advance.employeeProfileId === detail.employeeProfileId &&
+                            advance.status === "available",
+                        )
+                        .map((advance) => [
+                          advance.id,
+                          `${advance.description} - ${money.format(advance.amount)}`,
+                        ])}
+                    />
+                  ) : (
+                    <Input
+                      value={itemForm.description}
+                      onChange={(event) =>
+                        setItemForm({ ...itemForm, description: event.target.value })
+                      }
+                      placeholder="Descricao"
+                    />
+                  )}
+                  <Input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={itemForm.amount}
+                    onChange={(event) => setItemForm({ ...itemForm, amount: event.target.value })}
+                    placeholder="Valor"
+                  />
+                  <Button
+                    disabled={saving || Number(itemForm.amount) <= 0}
+                    onClick={() => void addItem()}
+                  >
+                    Adicionar
+                  </Button>
+                </section>
+              )}
+              <DialogFooter>
+                {canManage && ["draft", "calculated"].includes(detail.status) && (
+                  <Button
+                    variant="outline"
+                    onClick={() => void runEntryAction(detail, "calculate")}
+                  >
+                    Calcular
+                  </Button>
+                )}
+                {canApprove && detail.status === "calculated" && (
+                  <Button variant="outline" onClick={() => void runEntryAction(detail, "approve")}>
+                    Aprovar
+                  </Button>
+                )}
+                {canPost && detail.status === "approved" && (
+                  <Button onClick={() => void runEntryAction(detail, "post")}>Postar</Button>
+                )}
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function Trash2Icon() {
+  return <span className="text-sm font-black">x</span>;
 }
 
 function Field({
