@@ -1,7 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { FinancialOverviewPage } from "@/components/financial/FinancialModule";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/financeiro")({
   head: () => ({ meta: [{ title: "Financeiro - Frotak" }] }),
-  component: FinancialOverviewPage,
+  component: Outlet,
 });

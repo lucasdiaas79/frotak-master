@@ -427,6 +427,7 @@ function ReportPeriodControls({
   onMode,
   onStart,
   onEnd,
+  compact = false,
 }: {
   mode: PeriodMode;
   start: string;
@@ -434,9 +435,15 @@ function ReportPeriodControls({
   onMode: (mode: PeriodMode) => void;
   onStart: (date: string) => void;
   onEnd: (date: string) => void;
+  compact?: boolean;
 }) {
   return (
-    <div className="grid gap-2 px-3 sm:grid-cols-4 md:px-0">
+    <div
+      className={cn(
+        "grid gap-2 px-3 sm:grid-cols-4 md:px-0",
+        compact && "financial-period-bar px-0 sm:grid-cols-[1.05fr_1fr_1fr]",
+      )}
+    >
       <Field label="Periodo">
         <Select
           value={mode}
@@ -493,6 +500,158 @@ function EmptyReport({ text }: { text: string }) {
     <div className="financial-empty p-8 text-center text-sm text-muted-foreground">
       <Landmark className="mx-auto mb-3 size-7 text-muted-foreground" />
       {text}
+    </div>
+  );
+}
+
+function ExecutiveMetric({
+  label,
+  value,
+  icon: Icon,
+  tone = "default",
+  helper,
+}: {
+  label: string;
+  value: number | string;
+  icon: typeof Banknote;
+  tone?: "default" | "success" | "danger";
+  helper?: string;
+}) {
+  return (
+    <article
+      className={cn(
+        "financial-executive-metric",
+        tone === "success" && "financial-executive-metric-success",
+        tone === "danger" && "financial-executive-metric-danger",
+      )}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="financial-eyebrow">{label}</p>
+          {helper && <p className="mt-1 text-xs text-muted-foreground">{helper}</p>}
+        </div>
+        <span className="financial-icon-orb">
+          <Icon className="size-4" />
+        </span>
+      </div>
+      <strong className="financial-hero-value">
+        {typeof value === "number" ? money.format(value) : value}
+      </strong>
+    </article>
+  );
+}
+
+function SupportMetric({
+  label,
+  value,
+  icon: Icon,
+  tone = "default",
+}: {
+  label: string;
+  value: number | string;
+  icon: typeof Banknote;
+  tone?: "default" | "success" | "danger";
+}) {
+  return (
+    <article
+      className={cn(
+        "financial-support-metric",
+        tone === "success" && "text-primary",
+        tone === "danger" && "text-destructive",
+      )}
+    >
+      <Icon className="size-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0">
+        <p className="financial-eyebrow">{label}</p>
+        <strong className="financial-support-value">
+          {typeof value === "number" ? money.format(value) : value}
+        </strong>
+      </div>
+    </article>
+  );
+}
+
+function ObligationGroup({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{
+    label: string;
+    value: number | string;
+    icon: typeof Banknote;
+    tone?: "default" | "success" | "danger" | "warning";
+  }>;
+}) {
+  return (
+    <section className="financial-obligation-group">
+      <h3 className="financial-section-kicker">{title}</h3>
+      <div className="mt-3 grid gap-2">
+        {items.map((item) => {
+          const Icon = item.icon;
+          return (
+            <div key={item.label} className="financial-obligation-row">
+              <div className="flex min-w-0 items-center gap-2">
+                <Icon
+                  className={cn(
+                    "size-4 shrink-0 text-muted-foreground",
+                    item.tone === "success" && "text-primary",
+                    item.tone === "danger" && "text-destructive",
+                    item.tone === "warning" && "text-amber-500",
+                  )}
+                />
+                <span className="truncate text-xs font-bold text-muted-foreground">
+                  {item.label}
+                </span>
+              </div>
+              <strong
+                className={cn(
+                  "shrink-0 text-sm font-black",
+                  item.tone === "success" && "text-primary",
+                  item.tone === "danger" && "text-destructive",
+                  item.tone === "warning" && "text-amber-600",
+                )}
+              >
+                {typeof item.value === "number" ? money.format(item.value) : item.value}
+              </strong>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function ExecutiveCashMetric({
+  label,
+  value,
+  icon: Icon,
+  tone,
+  signed,
+}: {
+  label: string;
+  value: number;
+  icon: typeof Banknote;
+  tone?: "success" | "danger";
+  signed?: boolean;
+}) {
+  return (
+    <div className="financial-cash-row">
+      <span className="financial-cash-icon">
+        <Icon className="size-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-bold text-muted-foreground">{label}</p>
+        <strong
+          className={cn(
+            "financial-cash-value",
+            tone === "success" && "text-primary",
+            tone === "danger" && "text-destructive",
+          )}
+        >
+          {signed ? signedMoney(value) : money.format(value)}
+        </strong>
+      </div>
     </div>
   );
 }
@@ -582,7 +741,7 @@ function OverviewContent({ access }: { access: FinancialAccess }) {
           title="Financeiro"
           subtitle="Visao consolidada da saude financeira da operacao."
         />
-        <FinancialNav />
+        <FinancialNav compact />
         <RestrictedReport permission="financial.dashboard.view" />
       </div>
     );
@@ -592,76 +751,146 @@ function OverviewContent({ access }: { access: FinancialAccess }) {
   const positions = dashboard?.positions;
   const cash = dashboard?.cashFlow;
   return (
-    <div className="financial-shell space-y-4">
-      <PageHeader
-        title="Financeiro"
-        subtitle="Visao consolidada da saude financeira da operacao."
-      />
-      <FinancialNav />
-      <ReportPeriodControls
-        mode={mode}
-        start={start}
-        end={end}
-        onMode={setMode}
-        onStart={setStart}
-        onEnd={setEnd}
-      />
+    <div className="financial-shell financial-overview-shell">
+      <div className="financial-overview-top">
+        <div className="min-w-0">
+          <p className="financial-eyebrow">Cockpit financeiro</p>
+          <h1 className="mt-1 text-2xl font-black tracking-normal text-foreground md:text-3xl">
+            Financeiro
+          </h1>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            Visao consolidada da saude financeira da operacao.
+          </p>
+        </div>
+        <ReportPeriodControls
+          mode={mode}
+          start={start}
+          end={end}
+          onMode={setMode}
+          onStart={setStart}
+          onEnd={setEnd}
+          compact
+        />
+      </div>
+      <FinancialNav compact />
       {loading || !dashboard || !totals || !positions || !cash ? (
         <LoadingReport />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 px-3 md:grid-cols-4 xl:grid-cols-7 md:px-0">
-            <Stat
+          <section className="financial-hero-grid">
+            <ExecutiveMetric
               label="Saldo disponivel"
               value={cash.realized.closingBalance}
               icon={Landmark}
-              featured
+              helper="Caixa realizado no periodo"
             />
-            <Stat label="Receitas periodo" value={totals.gross_revenue} icon={ArrowDownLeft} />
-            <Stat
-              label="Custos + despesas"
-              value={Math.abs(totals.variable_costs + totals.operating_expenses)}
-              icon={ArrowUpRight}
-            />
-            <Stat
-              label="Resultado"
+            <ExecutiveMetric
+              label="Resultado do periodo"
               value={totals.managerial_result}
               icon={totals.managerial_result < 0 ? TrendingDown : TrendingUp}
               tone={totals.managerial_result < 0 ? "danger" : "success"}
-              featured
+              helper="Receitas menos custos e despesas"
             />
-            <Stat label="Margem" value={marginLabel(totals.managerialMargin)} icon={BarChart3} />
-            <Stat label="A receber" value={positions.receivable_open} icon={WalletCards} />
-            <Stat label="A pagar" value={positions.payable_open} icon={ReceiptText} />
-          </div>
-          <div className="grid grid-cols-2 gap-3 px-3 md:grid-cols-5 md:px-0">
-            <Stat
-              label="Receber vencido"
-              value={positions.receivable_overdue}
-              icon={CalendarClock}
-              tone={positions.receivable_overdue > 0 ? "danger" : "default"}
-            />
-            <Stat
-              label="Pagar vencido"
-              value={positions.payable_overdue}
-              icon={ShieldAlert}
-              tone={positions.payable_overdue > 0 ? "danger" : "default"}
-            />
-            <Stat label="Vence em 7 dias" value={positions.due_next_7d} icon={CalendarClock} />
-            <Stat
-              label="Entradas 30 dias"
-              value={cash.projection.inflows_30d}
-              icon={ArrowDownLeft}
-            />
-            <Stat label="Saidas 30 dias" value={cash.projection.outflows_30d} icon={ArrowUpRight} />
-          </div>
-          <div className="grid gap-3 px-3 xl:grid-cols-[1.4fr_1fr] md:px-0">
-            <section className="premium-card p-4">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-extrabold">Evolucao mensal por competencia</h2>
-                <Badge variant="outline">12 meses</Badge>
+            <div className="financial-support-stack">
+              <SupportMetric
+                label="Receitas do periodo"
+                value={totals.gross_revenue}
+                icon={ArrowDownLeft}
+                tone="success"
+              />
+              <SupportMetric
+                label="Custos + despesas"
+                value={Math.abs(totals.variable_costs + totals.operating_expenses)}
+                icon={ArrowUpRight}
+              />
+              <SupportMetric
+                label="Margem"
+                value={marginLabel(totals.managerialMargin)}
+                icon={BarChart3}
+                tone={totals.managerial_result < 0 ? "danger" : "success"}
+              />
+            </div>
+          </section>
+
+          <section className="financial-obligations">
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <div>
+                <p className="financial-eyebrow">Compromissos</p>
+                <h2 className="text-base font-black">Obrigacoes e alertas de caixa</h2>
               </div>
-              <div className="mt-4 h-72">
+            </div>
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              <ObligationGroup
+                title="Posicao"
+                items={[
+                  { label: "A receber", value: positions.receivable_open, icon: WalletCards },
+                  { label: "A pagar", value: positions.payable_open, icon: ReceiptText },
+                ]}
+              />
+              <ObligationGroup
+                title="Atencao"
+                items={[
+                  {
+                    label: "Receber vencido",
+                    value: positions.receivable_overdue,
+                    icon: CalendarClock,
+                    tone: positions.receivable_overdue > 0 ? "danger" : "default",
+                  },
+                  {
+                    label: "Pagar vencido",
+                    value: positions.payable_overdue,
+                    icon: ShieldAlert,
+                    tone: positions.payable_overdue > 0 ? "danger" : "default",
+                  },
+                  {
+                    label: "Vence em 7 dias",
+                    value: positions.due_next_7d,
+                    icon: CalendarClock,
+                    tone: positions.due_next_7d > 0 ? "warning" : "default",
+                  },
+                ]}
+              />
+              <ObligationGroup
+                title="Curto prazo"
+                items={[
+                  {
+                    label: "Entradas 30 dias",
+                    value: cash.projection.inflows_30d,
+                    icon: ArrowDownLeft,
+                    tone: "success",
+                  },
+                  {
+                    label: "Saidas 30 dias",
+                    value: cash.projection.outflows_30d,
+                    icon: ArrowUpRight,
+                  },
+                ]}
+              />
+            </div>
+          </section>
+
+          <div className="financial-analysis-grid">
+            <section className="financial-chart-panel">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="financial-eyebrow">Evolucao</p>
+                  <h2 className="text-base font-black">Evolucao mensal por competencia</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="hidden items-center gap-1 text-xs font-bold text-muted-foreground sm:flex">
+                    <span className="size-2 rounded-full bg-primary" />
+                    Receita
+                  </span>
+                  <span className="hidden items-center gap-1 text-xs font-bold text-muted-foreground sm:flex">
+                    <span className="size-2 rounded-full bg-[#f97316]" />
+                    Custos
+                  </span>
+                  <Badge variant="outline" className="rounded-lg">
+                    12 meses
+                  </Badge>
+                </div>
+              </div>
+              <div className="mt-5 h-[300px] md:h-[360px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={dashboard.evolution}>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
@@ -699,48 +928,88 @@ function OverviewContent({ access }: { access: FinancialAccess }) {
                 </ResponsiveContainer>
               </div>
             </section>
-            <section className="premium-card p-4">
-              <h2 className="text-sm font-extrabold">Fluxo realizado no periodo</h2>
-              <div className="mt-4 grid gap-3">
-                <MiniMetric label="Saldo inicial" value={cash.openingBalance} />
-                <MiniMetric
+            <section className="financial-cash-panel">
+              <div>
+                <p className="financial-eyebrow">Caixa realizado</p>
+                <h2 className="text-base font-black">Fluxo realizado no periodo</h2>
+              </div>
+              <div className="mt-5 grid gap-3">
+                <ExecutiveCashMetric
+                  label="Saldo inicial"
+                  value={cash.openingBalance}
+                  icon={Landmark}
+                />
+                <ExecutiveCashMetric
                   label="Entradas realizadas"
                   value={cash.realized.inflows}
+                  icon={ArrowDownLeft}
                   tone="success"
                 />
-                <MiniMetric label="Saidas realizadas" value={cash.realized.outflows} />
-                <MiniMetric label="Variacao de caixa" value={cash.realized.net_change} signed />
+                <ExecutiveCashMetric
+                  label="Saidas realizadas"
+                  value={cash.realized.outflows}
+                  icon={ArrowUpRight}
+                />
+                <ExecutiveCashMetric
+                  label="Variacao de caixa"
+                  value={cash.realized.net_change}
+                  icon={cash.realized.net_change < 0 ? TrendingDown : TrendingUp}
+                  tone={cash.realized.net_change < 0 ? "danger" : "success"}
+                  signed
+                />
               </div>
             </section>
           </div>
-          <div className="grid gap-3 px-3 xl:grid-cols-2 md:px-0">
-            <section className="premium-card p-4">
-              <h2 className="text-sm font-extrabold">Top categorias de custo</h2>
-              <div className="mt-3 divide-y divide-border">
+
+          <div className="financial-intel-grid">
+            <section className="financial-intel-panel">
+              <div>
+                <p className="financial-eyebrow">Custos</p>
+                <h2 className="text-base font-black">Top categorias de custo</h2>
+              </div>
+              <div className="mt-4 grid gap-3">
                 {dashboard.topCosts.length ? (
-                  dashboard.topCosts.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between gap-3 py-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-bold">{item.name}</div>
-                        <div className="text-xs text-muted-foreground">{item.code}</div>
+                  dashboard.topCosts.map((item, index) => {
+                    const maxAmount = Math.max(...dashboard.topCosts.map((cost) => cost.amount));
+                    const width =
+                      maxAmount > 0 ? `${Math.max(8, (item.amount / maxAmount) * 100)}%` : "8%";
+                    return (
+                      <div key={item.id} className="financial-cost-row">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="financial-rank">{index + 1}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-bold">{item.name}</div>
+                            <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface">
+                              <div className="h-full rounded-full bg-primary" style={{ width }} />
+                            </div>
+                            <div className="mt-1 text-[11px] font-bold text-muted-foreground">
+                              {item.code}
+                            </div>
+                          </div>
+                        </div>
+                        <strong className="shrink-0 text-sm font-black">
+                          {money.format(item.amount)}
+                        </strong>
                       </div>
-                      <strong className="text-sm">{money.format(item.amount)}</strong>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <EmptyReport text="Nenhum custo no periodo." />
                 )}
               </div>
             </section>
-            <section className="premium-card p-4">
-              <h2 className="text-sm font-extrabold">Alertas executivos</h2>
-              <div className="mt-3 grid gap-2">
+            <section className="financial-intel-panel">
+              <div>
+                <p className="financial-eyebrow">Inteligencia executiva</p>
+                <h2 className="text-base font-black">Alertas financeiros</h2>
+              </div>
+              <div className="mt-4 grid gap-2">
                 {dashboard.alerts.length ? (
                   dashboard.alerts.map((alert) => (
                     <div
                       key={alert.type}
                       className={cn(
-                        "flex items-center justify-between gap-3 rounded-lg border p-3 text-sm",
+                        "flex items-center justify-between gap-3 rounded-xl border p-3 text-sm",
                         alert.severity === "danger"
                           ? "border-destructive/30 bg-destructive/8"
                           : "border-amber-500/30 bg-amber-500/8",
@@ -753,7 +1022,7 @@ function OverviewContent({ access }: { access: FinancialAccess }) {
                     </div>
                   ))
                 ) : (
-                  <EmptyReport text="Nenhum alerta critico encontrado." />
+                  <EmptyReport text="Sem alertas criticos no periodo." />
                 )}
               </div>
             </section>

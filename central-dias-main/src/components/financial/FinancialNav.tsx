@@ -45,7 +45,7 @@ function canShowItem(to: string, access: FinancialAccess | null) {
   );
 }
 
-export function FinancialNav() {
+export function FinancialNav({ compact = false }: { compact?: boolean }) {
   const location = useLocation();
   const [access, setAccess] = useState<FinancialAccess | null>(null);
 
@@ -58,7 +58,14 @@ export function FinancialNav() {
   const items = financeNav.filter(([to]) => canShowItem(to, access));
 
   return (
-    <nav className="financial-nav mx-3 flex gap-1 overflow-x-auto rounded-xl border border-border bg-card/80 p-2 md:mx-0">
+    <nav
+      className={cn(
+        "financial-nav mx-3 flex gap-1 overflow-x-auto rounded-xl border md:mx-0",
+        compact
+          ? "border-border/70 bg-card/45 p-1.5 shadow-[inset_0_1px_0_oklch(1_0_0_/_0.1)]"
+          : "border-border bg-card/80 p-2",
+      )}
+    >
       {items.map(([to, label, Icon]) => {
         const active =
           location.pathname === to ||
@@ -68,9 +75,12 @@ export function FinancialNav() {
             key={to}
             to={to}
             className={cn(
-              "flex h-9 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-bold transition focus-visible:focus-ring",
+              "flex shrink-0 items-center rounded-lg font-bold transition focus-visible:focus-ring",
+              compact ? "h-8 gap-1.5 px-2.5 text-[11px]" : "h-9 gap-2 px-3 text-xs",
               active
-                ? "bg-primary text-primary-foreground"
+                ? compact
+                  ? "bg-primary/95 text-primary-foreground shadow-sm"
+                  : "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
