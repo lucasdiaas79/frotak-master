@@ -71,7 +71,6 @@ const OPERACIONAL: NavItem[] = [
   { to: "/frotak-ia", label: "Frotak IA", icon: Bot },
   { to: "/historicos", label: "Históricos", icon: History },
   { to: "/abastecimentos", label: "Abastecimentos", icon: Fuel },
-  { to: "/lucros-despesas", label: "Receitas e Despesas", icon: TrendingUp },
   { to: "/mapa", label: "Mapa da Frota", icon: MapIcon },
 ];
 
@@ -121,6 +120,7 @@ const ADMIN_NAV: NavItem[] = [{ to: "/usuarios", label: "Usuários", icon: Users
 
 const FINANCIAL_NAV: NavItem[] = [
   { to: "/financeiro", label: "Visão Geral", icon: Landmark },
+  { to: "/lucros-despesas", label: "Rentabilidade da Frota", icon: TrendingUp },
   { to: "/financeiro/receber", label: "Contas a Receber", icon: WalletCards },
   { to: "/financeiro/pagar", label: "Contas a Pagar", icon: ReceiptText },
   { to: "/financeiro/contas", label: "Bancos e Caixas", icon: Building2 },
@@ -135,7 +135,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/frotak-ia": "Frotak IA",
   "/historicos": "Históricos",
   "/abastecimentos": "Abastecimentos",
-  "/lucros-despesas": "Receitas e Despesas",
+  "/lucros-despesas": "Rentabilidade da Frota",
   "/mapa": "Mapa da Frota",
   "/vinculacao": "Despacho Operacional",
   "/veiculos": "Veículos",
@@ -161,7 +161,7 @@ const ROUTE_GROUPS: Record<string, string> = {
   "/frotak-ia": "Operacional",
   "/historicos": "Operacional",
   "/abastecimentos": "Operacional",
-  "/lucros-despesas": "Operacional",
+  "/lucros-despesas": "Financeiro",
   "/mapa": "Operacional",
   "/vinculacao": "Operacional",
   "/veiculos": "Cadastros",

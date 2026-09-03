@@ -258,3 +258,76 @@ export interface FinancialIntegrationProcessResult {
   needsReview: number;
   failed: number;
 }
+
+export type ProfitabilitySort =
+  | "most_profitable"
+  | "lowest_profit"
+  | "highest_revenue"
+  | "highest_cost";
+
+export type ProfitabilityView = "vehicles" | "freights" | "partners";
+
+export interface ProfitabilityFilters {
+  workspaceId: string;
+  startDate: string;
+  endDate: string;
+  vehicleId?: string | null;
+  billingPartnerId?: string | null;
+  senderId?: string | null;
+  recipientId?: string | null;
+  productId?: string | null;
+  implementModel?: string | null;
+  paymentType?: "CIF" | "FOB" | null;
+}
+
+export interface FleetProfitabilitySummary {
+  revenue: number;
+  costs: number;
+  result: number;
+  margin: number;
+  unallocatedCosts: number;
+}
+
+export interface VehicleProfitabilityRow {
+  vehicleId: string;
+  plate: string;
+  model: string | null;
+  driverName: string | null;
+  revenue: number;
+  costs: number;
+  result: number;
+  margin: number;
+  freightCount: number;
+  implementModels: string[];
+}
+
+export interface FreightProfitabilityRow {
+  freightId: string;
+  vehicleId: string | null;
+  plate: string;
+  driverName: string | null;
+  senderId: string | null;
+  senderName: string;
+  recipientId: string | null;
+  recipientName: string;
+  productId: string | null;
+  productName: string;
+  paymentType: "CIF" | "FOB" | null;
+  billingPartnerId: string | null;
+  billingPartnerName: string;
+  revenue: number;
+  costs: number;
+  result: number;
+  margin: number;
+  completedAt: string | null;
+}
+
+export interface PartnerProfitabilityRow {
+  partnerId: string | null;
+  partnerName: string;
+  revenue: number;
+  costs: number;
+  result: number;
+  margin: number;
+  freightCount: number;
+}
