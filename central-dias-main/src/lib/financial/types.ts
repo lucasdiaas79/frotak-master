@@ -134,3 +134,93 @@ export interface FinancialAllocation {
   amount: number;
   percentage: number | null;
 }
+
+export interface FinancialAccess {
+  workspaceId: string;
+  tenantId: string;
+  isOwner: boolean;
+  permissions: string[];
+  canView: boolean;
+}
+
+export interface FinancialAccount {
+  id: string;
+  tenantId: string;
+  workspaceId: string;
+  name: string;
+  accountType: "checking" | "savings" | "cash" | "wallet" | "other";
+  bankName: string | null;
+  agency: string | null;
+  accountNumber: string | null;
+  openingBalance: number;
+  openingBalanceDate: string;
+  currentBalance: number;
+  active: boolean;
+}
+
+export interface FinancialSettlement {
+  id: string;
+  documentId: string;
+  installmentId: string;
+  financialAccountId: string;
+  settlementType: "settlement" | "reversal";
+  originalSettlementId: string | null;
+  principalAmount: number;
+  interestAmount: number;
+  penaltyAmount: number;
+  discountAmount: number;
+  netAmount: number;
+  settledOn: string;
+  paymentMethod: string;
+  notes: string | null;
+  reversalReason: string | null;
+  createdAt: string;
+}
+
+export interface FinancialDocumentDetails extends FinancialDocument {
+  documentNumber: string | null;
+  notes: string | null;
+  partnerName: string | null;
+  accountName: string | null;
+  costCenterId: string | null;
+  vehicleId: string | null;
+  freightId: string | null;
+  productId: string | null;
+  installments: FinancialInstallment[];
+  settlements: FinancialSettlement[];
+}
+
+export interface FinancialDocumentInput {
+  id?: string;
+  workspaceId: string;
+  direction: FinancialDocumentDirection;
+  partnerId?: string;
+  documentType?: string;
+  documentNumber?: string;
+  description: string;
+  originalAmount: number;
+  competenceDate: string;
+  issueDate: string;
+  chartAccountId?: string;
+  costCenterId?: string;
+  vehicleId?: string;
+  freightId?: string;
+  productId?: string;
+  notes?: string;
+  status: "draft" | "posted";
+  installmentCount: number;
+  firstDueDate: string;
+  installments?: Array<{ amount: number; dueDate: string }>;
+}
+
+export interface SettlementInput {
+  installmentId: string;
+  financialAccountId: string;
+  amount: number;
+  interestAmount: number;
+  penaltyAmount: number;
+  discountAmount: number;
+  settledOn: string;
+  paymentMethod: string;
+  notes?: string;
+}

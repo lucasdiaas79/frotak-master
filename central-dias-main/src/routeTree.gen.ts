@@ -21,11 +21,17 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as HistoricosRouteImport } from './routes/historicos'
 import { Route as GestaoFrotaRouteImport } from './routes/gestao-frota'
 import { Route as FrotakIaRouteImport } from './routes/frotak-ia'
+import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as DestinatariosRouteImport } from './routes/destinatarios'
 import { Route as ClientesRouteImport } from './routes/clientes'
 import { Route as CarretasRouteImport } from './routes/carretas'
 import { Route as AbastecimentosRouteImport } from './routes/abastecimentos'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as FinanceiroReceberRouteImport } from './routes/financeiro.receber'
+import { Route as FinanceiroPlanoContasRouteImport } from './routes/financeiro.plano-contas'
+import { Route as FinanceiroPagarRouteImport } from './routes/financeiro.pagar'
+import { Route as FinanceiroContasRouteImport } from './routes/financeiro.contas'
+import { Route as FinanceiroCentrosCustoRouteImport } from './routes/financeiro.centros-custo'
 import { Route as ApiSascarSyncRouteImport } from './routes/api/sascar/sync'
 
 const VinculacaoRoute = VinculacaoRouteImport.update({
@@ -88,6 +94,11 @@ const FrotakIaRoute = FrotakIaRouteImport.update({
   path: '/frotak-ia',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FinanceiroRoute = FinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DestinatariosRoute = DestinatariosRouteImport.update({
   id: '/destinatarios',
   path: '/destinatarios',
@@ -113,6 +124,31 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FinanceiroReceberRoute = FinanceiroReceberRouteImport.update({
+  id: '/receber',
+  path: '/receber',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
+const FinanceiroPlanoContasRoute = FinanceiroPlanoContasRouteImport.update({
+  id: '/plano-contas',
+  path: '/plano-contas',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
+const FinanceiroPagarRoute = FinanceiroPagarRouteImport.update({
+  id: '/pagar',
+  path: '/pagar',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
+const FinanceiroContasRoute = FinanceiroContasRouteImport.update({
+  id: '/contas',
+  path: '/contas',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
+const FinanceiroCentrosCustoRoute = FinanceiroCentrosCustoRouteImport.update({
+  id: '/centros-custo',
+  path: '/centros-custo',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
 const ApiSascarSyncRoute = ApiSascarSyncRouteImport.update({
   id: '/api/sascar/sync',
   path: '/api/sascar/sync',
@@ -125,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/carretas': typeof CarretasRoute
   '/clientes': typeof ClientesRoute
   '/destinatarios': typeof DestinatariosRoute
+  '/financeiro': typeof FinanceiroRouteWithChildren
   '/frotak-ia': typeof FrotakIaRoute
   '/gestao-frota': typeof GestaoFrotaRoute
   '/historicos': typeof HistoricosRoute
@@ -137,6 +174,11 @@ export interface FileRoutesByFullPath {
   '/usuarios': typeof UsuariosRoute
   '/veiculos': typeof VeiculosRoute
   '/vinculacao': typeof VinculacaoRoute
+  '/financeiro/centros-custo': typeof FinanceiroCentrosCustoRoute
+  '/financeiro/contas': typeof FinanceiroContasRoute
+  '/financeiro/pagar': typeof FinanceiroPagarRoute
+  '/financeiro/plano-contas': typeof FinanceiroPlanoContasRoute
+  '/financeiro/receber': typeof FinanceiroReceberRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
 }
 export interface FileRoutesByTo {
@@ -145,6 +187,7 @@ export interface FileRoutesByTo {
   '/carretas': typeof CarretasRoute
   '/clientes': typeof ClientesRoute
   '/destinatarios': typeof DestinatariosRoute
+  '/financeiro': typeof FinanceiroRouteWithChildren
   '/frotak-ia': typeof FrotakIaRoute
   '/gestao-frota': typeof GestaoFrotaRoute
   '/historicos': typeof HistoricosRoute
@@ -157,6 +200,11 @@ export interface FileRoutesByTo {
   '/usuarios': typeof UsuariosRoute
   '/veiculos': typeof VeiculosRoute
   '/vinculacao': typeof VinculacaoRoute
+  '/financeiro/centros-custo': typeof FinanceiroCentrosCustoRoute
+  '/financeiro/contas': typeof FinanceiroContasRoute
+  '/financeiro/pagar': typeof FinanceiroPagarRoute
+  '/financeiro/plano-contas': typeof FinanceiroPlanoContasRoute
+  '/financeiro/receber': typeof FinanceiroReceberRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
 }
 export interface FileRoutesById {
@@ -166,6 +214,7 @@ export interface FileRoutesById {
   '/carretas': typeof CarretasRoute
   '/clientes': typeof ClientesRoute
   '/destinatarios': typeof DestinatariosRoute
+  '/financeiro': typeof FinanceiroRouteWithChildren
   '/frotak-ia': typeof FrotakIaRoute
   '/gestao-frota': typeof GestaoFrotaRoute
   '/historicos': typeof HistoricosRoute
@@ -178,6 +227,11 @@ export interface FileRoutesById {
   '/usuarios': typeof UsuariosRoute
   '/veiculos': typeof VeiculosRoute
   '/vinculacao': typeof VinculacaoRoute
+  '/financeiro/centros-custo': typeof FinanceiroCentrosCustoRoute
+  '/financeiro/contas': typeof FinanceiroContasRoute
+  '/financeiro/pagar': typeof FinanceiroPagarRoute
+  '/financeiro/plano-contas': typeof FinanceiroPlanoContasRoute
+  '/financeiro/receber': typeof FinanceiroReceberRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
 }
 export interface FileRouteTypes {
@@ -188,6 +242,7 @@ export interface FileRouteTypes {
     | '/carretas'
     | '/clientes'
     | '/destinatarios'
+    | '/financeiro'
     | '/frotak-ia'
     | '/gestao-frota'
     | '/historicos'
@@ -200,6 +255,11 @@ export interface FileRouteTypes {
     | '/usuarios'
     | '/veiculos'
     | '/vinculacao'
+    | '/financeiro/centros-custo'
+    | '/financeiro/contas'
+    | '/financeiro/pagar'
+    | '/financeiro/plano-contas'
+    | '/financeiro/receber'
     | '/api/sascar/sync'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -208,6 +268,7 @@ export interface FileRouteTypes {
     | '/carretas'
     | '/clientes'
     | '/destinatarios'
+    | '/financeiro'
     | '/frotak-ia'
     | '/gestao-frota'
     | '/historicos'
@@ -220,6 +281,11 @@ export interface FileRouteTypes {
     | '/usuarios'
     | '/veiculos'
     | '/vinculacao'
+    | '/financeiro/centros-custo'
+    | '/financeiro/contas'
+    | '/financeiro/pagar'
+    | '/financeiro/plano-contas'
+    | '/financeiro/receber'
     | '/api/sascar/sync'
   id:
     | '__root__'
@@ -228,6 +294,7 @@ export interface FileRouteTypes {
     | '/carretas'
     | '/clientes'
     | '/destinatarios'
+    | '/financeiro'
     | '/frotak-ia'
     | '/gestao-frota'
     | '/historicos'
@@ -240,6 +307,11 @@ export interface FileRouteTypes {
     | '/usuarios'
     | '/veiculos'
     | '/vinculacao'
+    | '/financeiro/centros-custo'
+    | '/financeiro/contas'
+    | '/financeiro/pagar'
+    | '/financeiro/plano-contas'
+    | '/financeiro/receber'
     | '/api/sascar/sync'
   fileRoutesById: FileRoutesById
 }
@@ -249,6 +321,7 @@ export interface RootRouteChildren {
   CarretasRoute: typeof CarretasRoute
   ClientesRoute: typeof ClientesRoute
   DestinatariosRoute: typeof DestinatariosRoute
+  FinanceiroRoute: typeof FinanceiroRouteWithChildren
   FrotakIaRoute: typeof FrotakIaRoute
   GestaoFrotaRoute: typeof GestaoFrotaRoute
   HistoricosRoute: typeof HistoricosRoute
@@ -350,6 +423,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FrotakIaRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/financeiro': {
+      id: '/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof FinanceiroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/destinatarios': {
       id: '/destinatarios'
       path: '/destinatarios'
@@ -385,6 +465,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/financeiro/receber': {
+      id: '/financeiro/receber'
+      path: '/receber'
+      fullPath: '/financeiro/receber'
+      preLoaderRoute: typeof FinanceiroReceberRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
+    '/financeiro/plano-contas': {
+      id: '/financeiro/plano-contas'
+      path: '/plano-contas'
+      fullPath: '/financeiro/plano-contas'
+      preLoaderRoute: typeof FinanceiroPlanoContasRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
+    '/financeiro/pagar': {
+      id: '/financeiro/pagar'
+      path: '/pagar'
+      fullPath: '/financeiro/pagar'
+      preLoaderRoute: typeof FinanceiroPagarRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
+    '/financeiro/contas': {
+      id: '/financeiro/contas'
+      path: '/contas'
+      fullPath: '/financeiro/contas'
+      preLoaderRoute: typeof FinanceiroContasRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
+    '/financeiro/centros-custo': {
+      id: '/financeiro/centros-custo'
+      path: '/centros-custo'
+      fullPath: '/financeiro/centros-custo'
+      preLoaderRoute: typeof FinanceiroCentrosCustoRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
     '/api/sascar/sync': {
       id: '/api/sascar/sync'
       path: '/api/sascar/sync'
@@ -395,12 +510,33 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface FinanceiroRouteChildren {
+  FinanceiroCentrosCustoRoute: typeof FinanceiroCentrosCustoRoute
+  FinanceiroContasRoute: typeof FinanceiroContasRoute
+  FinanceiroPagarRoute: typeof FinanceiroPagarRoute
+  FinanceiroPlanoContasRoute: typeof FinanceiroPlanoContasRoute
+  FinanceiroReceberRoute: typeof FinanceiroReceberRoute
+}
+
+const FinanceiroRouteChildren: FinanceiroRouteChildren = {
+  FinanceiroCentrosCustoRoute: FinanceiroCentrosCustoRoute,
+  FinanceiroContasRoute: FinanceiroContasRoute,
+  FinanceiroPagarRoute: FinanceiroPagarRoute,
+  FinanceiroPlanoContasRoute: FinanceiroPlanoContasRoute,
+  FinanceiroReceberRoute: FinanceiroReceberRoute,
+}
+
+const FinanceiroRouteWithChildren = FinanceiroRoute._addFileChildren(
+  FinanceiroRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AbastecimentosRoute: AbastecimentosRoute,
   CarretasRoute: CarretasRoute,
   ClientesRoute: ClientesRoute,
   DestinatariosRoute: DestinatariosRoute,
+  FinanceiroRoute: FinanceiroRouteWithChildren,
   FrotakIaRoute: FrotakIaRoute,
   GestaoFrotaRoute: GestaoFrotaRoute,
   HistoricosRoute: HistoricosRoute,

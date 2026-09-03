@@ -9,6 +9,7 @@ import {
   FolderKanban,
   Fuel,
   History,
+  Landmark,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -17,10 +18,12 @@ import {
   Package,
   PanelLeftClose,
   PanelLeftOpen,
+  ReceiptText,
   Search,
   TrendingUp,
   Truck,
   Users,
+  WalletCards,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -41,6 +44,8 @@ import {
 } from "@/lib/auth";
 import { useFleet } from "@/lib/store";
 import type { Profile } from "@/lib/types";
+import { getFinancialAccess } from "@/lib/financial/phase2";
+import type { FinancialAccess } from "@/lib/financial/types";
 import { vehicleTrailerLabel } from "@/lib/vehicle-trailers";
 import logoCentral from "@/assets/logo-central.png";
 import faviconCentral from "@/assets/favicon.png";
@@ -113,6 +118,15 @@ const MOBILE_NAV: NavItem[] = [
 
 const ADMIN_NAV: NavItem[] = [{ to: "/usuarios", label: "Usuários", icon: Users }];
 
+const FINANCIAL_NAV: NavItem[] = [
+  { to: "/financeiro", label: "Visão Geral", icon: Landmark },
+  { to: "/financeiro/receber", label: "Contas a Receber", icon: WalletCards },
+  { to: "/financeiro/pagar", label: "Contas a Pagar", icon: ReceiptText },
+  { to: "/financeiro/contas", label: "Bancos e Caixas", icon: Building2 },
+  { to: "/financeiro/plano-contas", label: "Plano de Contas", icon: ListChecks },
+  { to: "/financeiro/centros-custo", label: "Centros de Custo", icon: FolderKanban },
+];
+
 const ROUTE_TITLES: Record<string, string> = {
   "/": "Dashboard Operacional",
   "/gestao-frota": "Gestão de Frota",
@@ -130,6 +144,12 @@ const ROUTE_TITLES: Record<string, string> = {
   "/remetentes": "Cadastro de Clientes",
   "/destinatarios": "Cadastro de Clientes",
   "/usuarios": "Usuários",
+  "/financeiro": "Visão Geral Financeira",
+  "/financeiro/receber": "Contas a Receber",
+  "/financeiro/pagar": "Contas a Pagar",
+  "/financeiro/contas": "Bancos e Caixas",
+  "/financeiro/plano-contas": "Plano de Contas",
+  "/financeiro/centros-custo": "Centros de Custo",
 };
 
 const ROUTE_GROUPS: Record<string, string> = {
@@ -149,6 +169,12 @@ const ROUTE_GROUPS: Record<string, string> = {
   "/remetentes": "Cadastros",
   "/destinatarios": "Cadastros",
   "/usuarios": "Administração",
+  "/financeiro": "Financeiro",
+  "/financeiro/receber": "Financeiro",
+  "/financeiro/pagar": "Financeiro",
+  "/financeiro/contas": "Financeiro",
+  "/financeiro/plano-contas": "Financeiro",
+  "/financeiro/centros-custo": "Financeiro",
 };
 
 function getInitials(profile: Profile | null) {
@@ -444,11 +470,13 @@ function SidebarBody({
   onToggle,
   onLogout,
   profile,
+  financialAccess,
 }: {
   collapsed: boolean;
   onToggle: () => void;
   onLogout: () => void;
   profile: Profile | null;
+  financialAccess: FinancialAccess | null;
 }) {
   const initials = getInitials(profile);
   const profileLabel = profile?.name || profile?.email || "Operador Logístico";
@@ -519,6 +547,12 @@ function SidebarBody({
         <NavSection title="Operacional" items={OPERACIONAL} collapsed={collapsed} />
         <div className="mx-5 my-2 h-px bg-sidebar-border/80" />
         <CadastrosSection collapsed={collapsed} />
+        {financialAccess?.canView && (
+          <>
+            <div className="mx-5 my-2 h-px bg-sidebar-border/80" />
+            <NavSection title="Financeiro" items={FINANCIAL_NAV} collapsed={collapsed} compact />
+          </>
+        )}
         {profile?.isOwner && (
           <>
             <div className="mx-5 my-2 h-px bg-sidebar-border/80" />
@@ -729,6 +763,7 @@ export function AppLayout() {
   const subscribeRealtime = useFleet((s) => s.subscribeRealtime);
   const [checkingAuth, setCheckingAuth] = React.useState(true);
   const [profile, setProfile] = React.useState<Profile | null>(null);
+  const [financialAccess, setFinancialAccess] = React.useState<FinancialAccess | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -759,6 +794,11 @@ export function AppLayout() {
         const loadedProfile = await getProfile(user.id);
         if (!cancelled) {
           setProfile(loadedProfile);
+          try {
+            setFinancialAccess(await getFinancialAccess());
+          } catch {
+            setFinancialAccess(null);
+          }
           try {
             await loadAll();
           } catch (error) {
@@ -822,6 +862,7 @@ export function AppLayout() {
           onToggle={() => setCollapsed((c) => !c)}
           onLogout={handleLogout}
           profile={profile}
+          financialAccess={financialAccess}
         />
       </aside>
 
@@ -908,6 +949,14 @@ export function AppLayout() {
               currentPath={loc.pathname}
               onNavigate={() => setMobileMenuOpen(false)}
             />
+            {financialAccess?.canView && (
+              <MobileMenuSection
+                title="Financeiro"
+                items={FINANCIAL_NAV}
+                currentPath={loc.pathname}
+                onNavigate={() => setMobileMenuOpen(false)}
+              />
+            )}
             {profile?.isOwner && (
               <MobileMenuSection
                 title="Administração"
