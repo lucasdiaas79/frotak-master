@@ -90,6 +90,12 @@ import type {
   FreightTone,
 } from "@/lib/freight-workflow";
 import { useFleet } from "@/lib/store";
+import {
+  getFinancialAccess,
+  getFinancialIntegrationSettings,
+  listFinancialPartners,
+} from "@/lib/financial/phase2";
+import type { BusinessPartner, FinancialIntegrationSettings } from "@/lib/financial/types";
 import { vehicleTrailerIds, vehicleTrailerLabel } from "@/lib/vehicle-trailers";
 import {
   ALL_STATUSES,
@@ -186,6 +192,12 @@ interface AvailableDriverResource {
   cityLabel: string;
 }
 
+interface LegacyPartnerLink {
+  legacy_table: "senders" | "recipients";
+  legacy_id: string;
+  partner_id: string;
+}
+
 interface FreightFormState {
   vehicleId: string;
   driverId: string;
@@ -195,6 +207,8 @@ interface FreightFormState {
   productId: string;
   freightValue: string;
   freightPaymentType: FreightPaymentType | "";
+  paymentTermDays: string;
+  paymentTermTouched: boolean;
   observations: string;
 }
 
@@ -204,6 +218,8 @@ interface GroupFreightFormState {
   productId: string;
   freightValue: string;
   freightPaymentType: FreightPaymentType | "";
+  paymentTermDays: string;
+  paymentTermTouched: boolean;
   observations: string;
   vehicleIds: string[];
 }
@@ -217,6 +233,8 @@ const EMPTY_FORM: FreightFormState = {
   productId: "",
   freightValue: "",
   freightPaymentType: "",
+  paymentTermDays: "",
+  paymentTermTouched: false,
   observations: "",
 };
 
@@ -226,6 +244,8 @@ const EMPTY_GROUP_FORM: GroupFreightFormState = {
   productId: "",
   freightValue: "",
   freightPaymentType: "",
+  paymentTermDays: "",
+  paymentTermTouched: false,
   observations: "",
   vehicleIds: [],
 };
@@ -340,6 +360,13 @@ function parseFreightValue(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
+function parsePaymentTermDays(value: string) {
+  const cleaned = value.replace(/[^\d]/g, "").trim();
+  if (!cleaned) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null;
+}
+
 function trailerImplementModels(
   vehicle: Pick<Vehicle, "trailerId" | "trailerIds">,
   trailersById: Map<string, Trailer>,
@@ -394,6 +421,11 @@ function GestaoFrotaPage() {
   const [closeFreightDemand, setCloseFreightDemand] = useState<FreightDemand | null>(null);
   const [closeFreightReason, setCloseFreightReason] = useState("finalizado_pela_expedicao");
   const [closingFreight, setClosingFreight] = useState(false);
+  const [financialPartners, setFinancialPartners] = useState<BusinessPartner[]>([]);
+  const [financialSettings, setFinancialSettings] = useState<FinancialIntegrationSettings | null>(
+    null,
+  );
+  const [legacyPartnerLinks, setLegacyPartnerLinks] = useState<LegacyPartnerLink[]>([]);
 
   const driversById = useMemo(
     () => new Map(drivers.map((driver) => [driver.id, driver])),
@@ -415,6 +447,100 @@ function GestaoFrotaPage() {
     () => new Map(products.map((product) => [product.id, product])),
     [products],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPaymentTermDefaults() {
+      try {
+        const access = await getFinancialAccess();
+        const [partners, settings, links] = await Promise.all([
+          listFinancialPartners(),
+          getFinancialIntegrationSettings(access.workspaceId),
+          supabase
+            .from("legacy_partner_links")
+            .select("legacy_table, legacy_id, partner_id")
+            .in("legacy_table", ["senders", "recipients"]),
+        ]);
+        if (links.error) throw links.error;
+        if (cancelled) return;
+        setFinancialPartners(partners);
+        setFinancialSettings(settings);
+        setLegacyPartnerLinks((links.data ?? []) as LegacyPartnerLink[]);
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("[gestao-frota] payment term defaults unavailable", error);
+          setFinancialPartners([]);
+          setFinancialSettings(null);
+          setLegacyPartnerLinks([]);
+        }
+      }
+    }
+
+    void loadPaymentTermDefaults();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const resolveSuggestedPaymentTerm = useCallback(
+    (
+      paymentType: FreightPaymentType | "",
+      senderId: string,
+      recipientId: string,
+    ): number | null => {
+      if (!paymentType) return financialSettings?.defaultReceivableDueDays ?? null;
+      const legacyTable = paymentType === "CIF" ? "senders" : "recipients";
+      const legacyId = paymentType === "CIF" ? senderId : recipientId;
+      const link = legacyPartnerLinks.find(
+        (item) => item.legacy_table === legacyTable && item.legacy_id === legacyId,
+      );
+      const partner = link
+        ? financialPartners.find((item) => item.id === link.partner_id)
+        : undefined;
+      return (
+        partner?.defaultReceivableDueDays ?? financialSettings?.defaultReceivableDueDays ?? null
+      );
+    },
+    [financialPartners, financialSettings, legacyPartnerLinks],
+  );
+
+  const suggestedIndividualPaymentTerm = useMemo(
+    () => resolveSuggestedPaymentTerm(form.freightPaymentType, form.senderId, form.recipientId),
+    [form.freightPaymentType, form.senderId, form.recipientId, resolveSuggestedPaymentTerm],
+  );
+  const suggestedGroupPaymentTerm = useMemo(
+    () =>
+      resolveSuggestedPaymentTerm(
+        groupForm.freightPaymentType,
+        groupForm.senderId,
+        groupForm.recipientId,
+      ),
+    [
+      groupForm.freightPaymentType,
+      groupForm.senderId,
+      groupForm.recipientId,
+      resolveSuggestedPaymentTerm,
+    ],
+  );
+
+  useEffect(() => {
+    if (form.paymentTermTouched || suggestedIndividualPaymentTerm === null) return;
+    const value = String(suggestedIndividualPaymentTerm);
+    if (form.paymentTermDays === value) return;
+    setForm((current) =>
+      current.paymentTermTouched ? current : { ...current, paymentTermDays: value },
+    );
+  }, [form.paymentTermDays, form.paymentTermTouched, suggestedIndividualPaymentTerm]);
+
+  useEffect(() => {
+    if (groupForm.paymentTermTouched || suggestedGroupPaymentTerm === null) return;
+    const value = String(suggestedGroupPaymentTerm);
+    if (groupForm.paymentTermDays === value) return;
+    setGroupForm((current) =>
+      current.paymentTermTouched ? current : { ...current, paymentTermDays: value },
+    );
+  }, [groupForm.paymentTermDays, groupForm.paymentTermTouched, suggestedGroupPaymentTerm]);
   const implementModelOptions = useMemo(
     () =>
       uniqueNonEmpty(trailers.map((trailer) => trailer.implementModel)).sort((a, b) =>
@@ -711,6 +837,9 @@ function GestaoFrotaPage() {
         recipientId: seed?.recipientId ?? "",
         productId: seed?.productId ?? "",
         freightValue: seed?.freightValue ?? "",
+        freightPaymentType: seed?.freightPaymentType ?? "",
+        paymentTermDays: seed?.paymentTermDays ?? "",
+        paymentTermTouched: seed?.paymentTermTouched ?? false,
         observations: seed?.observations ?? "",
         vehicleIds: seed?.vehicleId ? [seed.vehicleId] : [],
       });
@@ -963,6 +1092,7 @@ function GestaoFrotaPage() {
         productId: form.productId,
         freightValue: parseFreightValue(form.freightValue),
         freightPaymentType: form.freightPaymentType,
+        paymentTermDays: parsePaymentTermDays(form.paymentTermDays),
         link,
         setVehicleStatus,
       });
@@ -1031,6 +1161,7 @@ function GestaoFrotaPage() {
           productId: groupForm.productId,
           freightValue: parseFreightValue(groupForm.freightValue),
           freightPaymentType: groupForm.freightPaymentType,
+          paymentTermDays: parsePaymentTermDays(groupForm.paymentTermDays),
           link,
           setVehicleStatus,
         });
@@ -1315,6 +1446,8 @@ function GestaoFrotaPage() {
             products={products}
             availableResources={availableDriverResources}
             activeDriverIds={activeDriverIds}
+            suggestedIndividualPaymentTerm={suggestedIndividualPaymentTerm}
+            suggestedGroupPaymentTerm={suggestedGroupPaymentTerm}
             onCreateIndividual={createFreight}
             onCreateGroup={createGroupFreight}
           />
@@ -2042,6 +2175,8 @@ function CreateFreightWorkspace({
   products,
   availableResources,
   activeDriverIds,
+  suggestedIndividualPaymentTerm,
+  suggestedGroupPaymentTerm,
   onCreateIndividual,
   onCreateGroup,
 }: {
@@ -2059,6 +2194,8 @@ function CreateFreightWorkspace({
   products: Product[];
   availableResources: AvailableDriverResource[];
   activeDriverIds: Set<string>;
+  suggestedIndividualPaymentTerm: number | null;
+  suggestedGroupPaymentTerm: number | null;
   onCreateIndividual: () => void;
   onCreateGroup: () => void;
 }) {
@@ -2094,6 +2231,7 @@ function CreateFreightWorkspace({
           recipients={recipients}
           products={products}
           activeDriverIds={activeDriverIds}
+          suggestedPaymentTerm={suggestedIndividualPaymentTerm}
           onCreate={onCreateIndividual}
         />
       ) : (
@@ -2104,6 +2242,7 @@ function CreateFreightWorkspace({
           recipients={recipients}
           products={products}
           availableResources={availableResources}
+          suggestedPaymentTerm={suggestedGroupPaymentTerm}
           onCreate={onCreateGroup}
         />
       )}
@@ -2118,6 +2257,7 @@ function GroupFreightWorkspace({
   recipients,
   products,
   availableResources,
+  suggestedPaymentTerm,
   onCreate,
 }: {
   form: GroupFreightFormState;
@@ -2126,6 +2266,7 @@ function GroupFreightWorkspace({
   recipients: Recipient[];
   products: Product[];
   availableResources: AvailableDriverResource[];
+  suggestedPaymentTerm: number | null;
   onCreate: () => void;
 }) {
   const [plateFilter, setPlateFilter] = useState("");
@@ -2233,6 +2374,14 @@ function GroupFreightWorkspace({
               onChange={(value) => setForm({ ...form, freightPaymentType: value })}
               senderName={sender?.name}
               recipientName={recipient?.name}
+              className="md:col-span-2"
+            />
+            <PaymentTermField
+              value={form.paymentTermDays}
+              suggestedDays={suggestedPaymentTerm}
+              onChange={(value) =>
+                setForm({ ...form, paymentTermDays: value, paymentTermTouched: true })
+              }
               className="md:col-span-2"
             />
             <Field label="Observações" className="md:col-span-2">
@@ -2383,6 +2532,7 @@ function DemandWorkspace({
   recipients,
   products,
   activeDriverIds,
+  suggestedPaymentTerm,
   onCreate,
   onAdvance,
   onFinalCommand,
@@ -2401,6 +2551,7 @@ function DemandWorkspace({
   recipients: Recipient[];
   products: Product[];
   activeDriverIds: Set<string>;
+  suggestedPaymentTerm?: number | null;
   onCreate?: () => void;
   onAdvance?: (demand: FreightDemand, explicitNext?: FreightStageId) => Promise<void>;
   onFinalCommand?: (demand: FreightDemand, command: FinalCommand) => Promise<void>;
@@ -2513,6 +2664,14 @@ function DemandWorkspace({
                 onChange={(value) => setForm({ ...currentForm, freightPaymentType: value })}
                 senderName={senders.find((item) => item.id === currentForm.senderId)?.name}
                 recipientName={recipients.find((item) => item.id === currentForm.recipientId)?.name}
+                className="md:col-span-2"
+              />
+              <PaymentTermField
+                value={currentForm.paymentTermDays}
+                suggestedDays={suggestedPaymentTerm ?? null}
+                onChange={(value) =>
+                  setForm({ ...currentForm, paymentTermDays: value, paymentTermTouched: true })
+                }
                 className="md:col-span-2"
               />
               <Field label="Observações" className="md:col-span-2">
@@ -3414,6 +3573,65 @@ function FreightPaymentSelector({
         </p>
       )}
     </div>
+  );
+}
+
+const PAYMENT_TERM_OPTIONS = [
+  { label: "À vista", value: "0" },
+  { label: "7 dias", value: "7" },
+  { label: "15 dias", value: "15" },
+  { label: "21 dias", value: "21" },
+  { label: "28 dias", value: "28" },
+  { label: "30 dias", value: "30" },
+  { label: "45 dias", value: "45" },
+  { label: "60 dias", value: "60" },
+] as const;
+
+function PaymentTermField({
+  value,
+  suggestedDays,
+  onChange,
+  className,
+}: {
+  value: string;
+  suggestedDays: number | null;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  return (
+    <Field label="Prazo de pagamento" className={className}>
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-2">
+          {PAYMENT_TERM_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className={cn(
+                "h-9 rounded-full border px-3 text-[12px] font-bold transition",
+                value === option.value
+                  ? "border-primary/55 bg-primary text-primary-foreground"
+                  : "border-border bg-surface-2/55 text-muted-foreground hover:border-primary/30 hover:text-foreground",
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <Input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Personalizado em dias"
+          inputMode="numeric"
+          className="h-11"
+        />
+        <p className="text-[11px] font-semibold text-muted-foreground">
+          {suggestedDays === null
+            ? "Sem padrão encontrado. O financeiro poderá revisar o vencimento depois."
+            : `Sugestão automática: ${suggestedDays === 0 ? "à vista" : `${suggestedDays} dias`}.`}
+        </p>
+      </div>
+    </Field>
   );
 }
 

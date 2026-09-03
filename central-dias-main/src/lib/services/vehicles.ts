@@ -66,6 +66,7 @@ export async function linkVehicle(input: {
   productId?: string;
   freightValue?: number;
   freightPaymentType?: FreightPaymentType;
+  paymentTermDays?: number | null;
 }): Promise<Vehicle> {
   const payload = {
     p_vehicle_id: input.vehicleId,
@@ -81,6 +82,7 @@ export async function linkVehicle(input: {
     ? await supabase.rpc("link_vehicle_operation", {
         ...payload,
         p_freight_payment_type: input.freightPaymentType,
+        p_payment_term_days: input.paymentTermDays ?? null,
       })
     : await supabase.rpc("link_vehicle_operation", payload);
   if (error) throw error;

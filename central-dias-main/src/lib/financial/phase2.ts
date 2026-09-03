@@ -186,6 +186,10 @@ export async function listFinancialPartners(): Promise<BusinessPartner[]> {
     taxIdType: row.tax_id_type,
     active: row.active,
     requiresReview: row.requires_review,
+    defaultReceivableDueDays:
+      row.default_receivable_due_days === null ? null : Number(row.default_receivable_due_days),
+    defaultPayableDueDays:
+      row.default_payable_due_days === null ? null : Number(row.default_payable_due_days),
     roles: byPartner.get(row.id) ?? [],
   }));
 }

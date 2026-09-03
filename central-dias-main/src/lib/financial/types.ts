@@ -15,6 +15,9 @@ export interface CanonicalFreight {
   recipientId: string | null;
   productId: string | null;
   freightValue: number | null;
+  freightPaymentType: "CIF" | "FOB" | null;
+  billingPartnerId: string | null;
+  paymentTermDays: number | null;
   currency: CurrencyCode;
   lifecycleStatus: FreightLifecycleStatus;
   operationalStatus: string | null;
@@ -38,6 +41,8 @@ export interface BusinessPartner {
   taxIdType: "cpf" | "cnpj" | "other" | null;
   active: boolean;
   requiresReview: boolean;
+  defaultReceivableDueDays: number | null;
+  defaultPayableDueDays: number | null;
   roles: BusinessPartnerRole[];
 }
 

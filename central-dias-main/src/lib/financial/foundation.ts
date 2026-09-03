@@ -28,6 +28,9 @@ export async function listCanonicalFreights(): Promise<CanonicalFreight[]> {
     recipientId: row.recipient_id,
     productId: row.product_id,
     freightValue: row.freight_value === null ? null : Number(row.freight_value),
+    freightPaymentType: row.freight_payment_type,
+    billingPartnerId: row.billing_partner_id,
+    paymentTermDays: row.payment_term_days === null ? null : Number(row.payment_term_days),
     currency: row.currency,
     lifecycleStatus: row.lifecycle_status,
     operationalStatus: row.operational_status,
@@ -67,6 +70,10 @@ export async function listBusinessPartners(): Promise<BusinessPartner[]> {
     taxIdType: row.tax_id_type,
     active: row.active,
     requiresReview: row.requires_review,
+    defaultReceivableDueDays:
+      row.default_receivable_due_days === null ? null : Number(row.default_receivable_due_days),
+    defaultPayableDueDays:
+      row.default_payable_due_days === null ? null : Number(row.default_payable_due_days),
     roles: rolesByPartner.get(row.id) ?? [],
   }));
 }

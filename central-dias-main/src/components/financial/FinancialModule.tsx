@@ -1324,6 +1324,8 @@ function PartnerDialog({
 }) {
   const [name, setName] = useState("");
   const [tax, setTax] = useState("");
+  const [receivableDays, setReceivableDays] = useState("");
+  const [payableDays, setPayableDays] = useState("");
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -1337,6 +1339,26 @@ function PartnerDialog({
         <Field label="CPF/CNPJ">
           <Input value={tax} onChange={(e) => setTax(e.target.value)} />
         </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Prazo padrão a receber">
+            <Input
+              type="number"
+              min="0"
+              value={receivableDays}
+              onChange={(event) => setReceivableDays(event.target.value)}
+              placeholder="Opcional"
+            />
+          </Field>
+          <Field label="Prazo padrão a pagar">
+            <Input
+              type="number"
+              min="0"
+              value={payableDays}
+              onChange={(event) => setPayableDays(event.target.value)}
+              placeholder="Opcional"
+            />
+          </Field>
+        </div>
         <DialogFooter>
           <Button
             disabled={!name}
@@ -1347,6 +1369,9 @@ function PartnerDialog({
                   tradeName: name,
                   taxId: tax,
                   role,
+                  defaultReceivableDueDays:
+                    receivableDays.trim() === "" ? null : Number(receivableDays),
+                  defaultPayableDueDays: payableDays.trim() === "" ? null : Number(payableDays),
                 });
                 toast.success("Parceiro cadastrado.");
                 onOpenChange(false);
@@ -2001,6 +2026,7 @@ const integrationSourceLabel = {
 } as const;
 
 const integrationReasonLabel: Record<string, string> = {
+  payment_terms_missing: "Condicao de pagamento nao definida",
   missing_workspace: "Workspace não identificado",
   missing_freight_value: "Valor do frete ausente",
   missing_customer: "Cliente não identificado",
@@ -2098,7 +2124,7 @@ function FinancialIntegrationsContent({ access }: { access: FinancialAccess }) {
       <section className="premium-card mx-3 p-4 md:mx-0">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-sm font-extrabold">Política padrão de vencimento</h2>
+            <h2 className="text-sm font-extrabold">Prazos padrão</h2>
             <p className="mt-1 text-xs text-muted-foreground">
               Sem prazo definido, novos lançamentos ficam em rascunho para revisão financeira.
             </p>

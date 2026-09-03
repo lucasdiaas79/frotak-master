@@ -93,6 +93,7 @@ export async function createFreightOperation(input: {
   productId: string;
   freightValue?: number;
   freightPaymentType: FreightPaymentType;
+  paymentTermDays?: number | null;
   link: (
     vehicleId: string,
     driverId?: string,
@@ -104,6 +105,7 @@ export async function createFreightOperation(input: {
       freightValue?: number;
       trailerIds?: string[];
       freightPaymentType?: FreightPaymentType;
+      paymentTermDays?: number | null;
     },
   ) => Promise<void>;
   setVehicleStatus: (
@@ -120,6 +122,7 @@ export async function createFreightOperation(input: {
       productId: input.productId,
       freightValue: input.freightValue,
       freightPaymentType: input.freightPaymentType,
+      paymentTermDays: input.paymentTermDays ?? null,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
