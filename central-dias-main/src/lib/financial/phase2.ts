@@ -9,6 +9,9 @@ import type {
   FinancialDocumentDetails,
   FinancialDocumentDirection,
   FinancialDocumentInput,
+  FinancialIntegrationJob,
+  FinancialIntegrationProcessResult,
+  FinancialIntegrationSettings,
   FinancialSettlement,
   SettlementInput,
 } from "./types";
@@ -236,4 +239,64 @@ export async function saveCostCenter(payload: Record<string, unknown>) {
   const { data, error } = await supabase.rpc("save_cost_center", { p_payload: payload });
   fail("Não foi possível salvar o centro de custo", error);
   return data as string;
+}
+
+export async function listFinancialIntegrationJobs(): Promise<FinancialIntegrationJob[]> {
+  const { data, error } = await supabase
+    .from("financial_integration_jobs")
+    .select("*")
+    .order("detected_at", { ascending: false });
+  fail("Não foi possível carregar as integrações financeiras", error);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    sourceType: row.source_type,
+    sourceId: row.source_id,
+    sourceEvent: row.source_event,
+    status: row.status,
+    financialDocumentId: row.financial_document_id,
+    attempts: row.attempts,
+    maxAttempts: row.max_attempts,
+    reviewReasons: row.review_reasons ?? [],
+    lastError: row.last_error,
+    detectedAt: row.detected_at,
+    processedAt: row.processed_at,
+  }));
+}
+
+export async function getFinancialIntegrationSettings(
+  workspaceId: string,
+): Promise<FinancialIntegrationSettings> {
+  const { data, error } = await supabase
+    .from("financial_integration_settings")
+    .select("workspace_id, default_receivable_due_days, default_payable_due_days")
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  fail("Não foi possível carregar a política de vencimento", error);
+  return {
+    workspaceId,
+    defaultReceivableDueDays: data?.default_receivable_due_days ?? null,
+    defaultPayableDueDays: data?.default_payable_due_days ?? null,
+  };
+}
+
+export async function saveFinancialIntegrationSettings(
+  settings: FinancialIntegrationSettings,
+): Promise<void> {
+  const { error } = await supabase.rpc("save_financial_integration_settings", {
+    p_workspace_id: settings.workspaceId,
+    p_default_receivable_due_days: settings.defaultReceivableDueDays,
+    p_default_payable_due_days: settings.defaultPayableDueDays,
+  });
+  fail("Não foi possível salvar a política de vencimento", error);
+}
+
+export async function processFinancialIntegrations(
+  jobId?: string,
+): Promise<FinancialIntegrationProcessResult> {
+  const { data, error } = await supabase.rpc("process_financial_integrations", {
+    p_limit: jobId ? 1 : 200,
+    p_job_id: jobId ?? null,
+  });
+  fail("Não foi possível processar as integrações financeiras", error);
+  return data as FinancialIntegrationProcessResult;
 }

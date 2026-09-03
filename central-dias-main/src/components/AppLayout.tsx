@@ -19,6 +19,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ReceiptText,
+  RefreshCw,
   Search,
   TrendingUp,
   Truck,
@@ -125,6 +126,7 @@ const FINANCIAL_NAV: NavItem[] = [
   { to: "/financeiro/contas", label: "Bancos e Caixas", icon: Building2 },
   { to: "/financeiro/plano-contas", label: "Plano de Contas", icon: ListChecks },
   { to: "/financeiro/centros-custo", label: "Centros de Custo", icon: FolderKanban },
+  { to: "/financeiro/integracoes", label: "Integrações", icon: RefreshCw },
 ];
 
 const ROUTE_TITLES: Record<string, string> = {
@@ -150,6 +152,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/financeiro/contas": "Bancos e Caixas",
   "/financeiro/plano-contas": "Plano de Contas",
   "/financeiro/centros-custo": "Centros de Custo",
+  "/financeiro/integracoes": "Integrações Financeiras",
 };
 
 const ROUTE_GROUPS: Record<string, string> = {
@@ -175,6 +178,7 @@ const ROUTE_GROUPS: Record<string, string> = {
   "/financeiro/contas": "Financeiro",
   "/financeiro/plano-contas": "Financeiro",
   "/financeiro/centros-custo": "Financeiro",
+  "/financeiro/integracoes": "Financeiro",
 };
 
 function getInitials(profile: Profile | null) {

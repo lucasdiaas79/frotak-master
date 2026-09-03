@@ -224,3 +224,32 @@ export interface SettlementInput {
   paymentMethod: string;
   notes?: string;
 }
+
+export type FinancialIntegrationStatus = "pending" | "processed" | "failed" | "needs_review";
+
+export interface FinancialIntegrationJob {
+  id: string;
+  sourceType: "freight" | "fuel_record" | "freight_expense";
+  sourceId: string;
+  sourceEvent: string;
+  status: FinancialIntegrationStatus;
+  financialDocumentId: string | null;
+  attempts: number;
+  maxAttempts: number;
+  reviewReasons: string[];
+  lastError: string | null;
+  detectedAt: string;
+  processedAt: string | null;
+}
+
+export interface FinancialIntegrationSettings {
+  workspaceId: string;
+  defaultReceivableDueDays: number | null;
+  defaultPayableDueDays: number | null;
+}
+
+export interface FinancialIntegrationProcessResult {
+  processed: number;
+  needsReview: number;
+  failed: number;
+}

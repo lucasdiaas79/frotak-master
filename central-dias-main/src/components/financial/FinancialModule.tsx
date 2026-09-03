@@ -14,9 +14,11 @@ import {
   Plus,
   Pencil,
   ReceiptText,
+  RefreshCw,
   RotateCcw,
   Search,
   Settings2,
+  ShieldAlert,
   Tags,
   WalletCards,
 } from "lucide-react";
@@ -67,12 +69,16 @@ import {
   listFinancialCostCenters,
   listFinancialDocuments,
   listFinancialPartners,
+  getFinancialIntegrationSettings,
+  listFinancialIntegrationJobs,
+  processFinancialIntegrations,
   reverseSettlement,
   saveBusinessPartner,
   saveChartAccount,
   saveCostCenter,
   saveFinancialAccount,
   saveFinancialDocument,
+  saveFinancialIntegrationSettings,
   settleInstallment,
   voidFinancialDocument,
 } from "@/lib/financial/phase2";
@@ -87,6 +93,8 @@ import type {
   FinancialDocumentDirection,
   FinancialDocumentInput,
   FinancialInstallment,
+  FinancialIntegrationJob,
+  FinancialIntegrationSettings,
   FinancialSettlement,
 } from "@/lib/financial/types";
 import { useFleet } from "@/lib/store";
@@ -104,6 +112,7 @@ const financeNav = [
   ["/financeiro/contas", "Bancos e Caixas", Landmark],
   ["/financeiro/plano-contas", "Plano de Contas", Tags],
   ["/financeiro/centros-custo", "Centros de Custo", Building2],
+  ["/financeiro/integracoes", "Integrações", RefreshCw],
 ] as const;
 
 function FinancialNav() {
@@ -1974,6 +1983,245 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+const integrationStatusLabel = {
+  pending: "Pendente",
+  processed: "Processado",
+  failed: "Com erro",
+  needs_review: "Revisão necessária",
+} as const;
+
+const integrationSourceLabel = {
+  freight: "Frete concluído",
+  fuel_record: "Abastecimento",
+  freight_expense: "Despesa de frete",
+} as const;
+
+const integrationReasonLabel: Record<string, string> = {
+  missing_workspace: "Workspace não identificado",
+  missing_freight_value: "Valor do frete ausente",
+  missing_customer: "Cliente não identificado",
+  missing_vehicle: "Veículo não identificado",
+  missing_supplier: "Fornecedor não identificado",
+  unknown_category: "Categoria sem classificação segura",
+  missing_chart_account: "Conta contábil não encontrada",
+  missing_due_policy: "Política de vencimento não definida",
+  invalid_amount: "Valor inválido",
+};
+
+export function FinancialIntegrationsPage() {
+  return (
+    <FinancialBoundary>
+      {(access) => <FinancialIntegrationsContent access={access} />}
+    </FinancialBoundary>
+  );
+}
+
+function FinancialIntegrationsContent({ access }: { access: FinancialAccess }) {
+  const [jobs, setJobs] = useState<FinancialIntegrationJob[]>([]);
+  const [settings, setSettings] = useState<FinancialIntegrationSettings>({
+    workspaceId: access.workspaceId,
+    defaultReceivableDueDays: null,
+    defaultPayableDueDays: null,
+  });
+  const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const canProcess = hasFinancialPermission(access, "financial.process_integrations");
+  const canConfigure = hasFinancialPermission(access, "financial.settings.manage");
+
+  const load = useCallback(async () => {
+    const [nextJobs, nextSettings] = await Promise.all([
+      listFinancialIntegrationJobs(),
+      getFinancialIntegrationSettings(access.workspaceId),
+    ]);
+    setJobs(nextJobs);
+    setSettings(nextSettings);
+  }, [access.workspaceId]);
+
+  useEffect(() => {
+    load()
+      .catch(() => toast.error("Não foi possível carregar as integrações financeiras."))
+      .finally(() => setLoading(false));
+  }, [load]);
+
+  const process = async (jobId?: string) => {
+    setProcessingId(jobId ?? "all");
+    try {
+      const result = await processFinancialIntegrations(jobId);
+      toast.success(
+        `${result.processed} processado(s), ${result.needsReview} para revisão e ${result.failed} com erro.`,
+      );
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao processar integrações.");
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const counts = useMemo(
+    () =>
+      jobs.reduce((result, job) => ({ ...result, [job.status]: result[job.status] + 1 }), {
+        pending: 0,
+        processed: 0,
+        failed: 0,
+        needs_review: 0,
+      }),
+    [jobs],
+  );
+
+  return (
+    <div className="space-y-3 pb-6">
+      <PageHeader
+        title="Integrações Financeiras"
+        subtitle="Conciliação segura entre fatos operacionais e lançamentos"
+        actions={
+          canProcess ? (
+            <Button onClick={() => void process()} disabled={processingId !== null}>
+              <RefreshCw className={cn("size-4", processingId === "all" && "animate-spin")} />
+              Processar pendências
+            </Button>
+          ) : undefined
+        }
+      />
+      <FinancialNav />
+      <div className="grid grid-cols-2 gap-3 px-3 lg:grid-cols-4 md:px-0">
+        <Stat label="Pendentes" value={counts.pending} icon={CalendarClock} />
+        <Stat label="Processados" value={counts.processed} icon={CircleDollarSign} tone="success" />
+        <Stat label="Com erro" value={counts.failed} icon={ShieldAlert} tone="danger" />
+        <Stat label="Para revisão" value={counts.needs_review} icon={Settings2} />
+      </div>
+
+      <section className="premium-card mx-3 p-4 md:mx-0">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="text-sm font-extrabold">Política padrão de vencimento</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Sem prazo definido, novos lançamentos ficam em rascunho para revisão financeira.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[150px_150px_auto]">
+            <Field label="Receber em dias">
+              <Input
+                type="number"
+                min="0"
+                disabled={!canConfigure}
+                value={settings.defaultReceivableDueDays ?? ""}
+                placeholder="Não definido"
+                onChange={(event) =>
+                  setSettings((current) => ({
+                    ...current,
+                    defaultReceivableDueDays:
+                      event.target.value === "" ? null : Number(event.target.value),
+                  }))
+                }
+              />
+            </Field>
+            <Field label="Pagar em dias">
+              <Input
+                type="number"
+                min="0"
+                disabled={!canConfigure}
+                value={settings.defaultPayableDueDays ?? ""}
+                placeholder="Não definido"
+                onChange={(event) =>
+                  setSettings((current) => ({
+                    ...current,
+                    defaultPayableDueDays:
+                      event.target.value === "" ? null : Number(event.target.value),
+                  }))
+                }
+              />
+            </Field>
+            {canConfigure && (
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  try {
+                    await saveFinancialIntegrationSettings(settings);
+                    toast.success("Política de vencimento atualizada.");
+                  } catch (error) {
+                    toast.error(
+                      error instanceof Error ? error.message : "Falha ao salvar política.",
+                    );
+                  }
+                }}
+              >
+                Salvar política
+              </Button>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="premium-card mx-3 overflow-hidden md:mx-0">
+        {loading ? (
+          <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin" /> Carregando integrações...
+          </div>
+        ) : jobs.length ? (
+          jobs.map((job) => (
+            <div
+              key={job.id}
+              className="flex flex-col gap-3 border-b border-border p-4 last:border-0 sm:flex-row sm:items-center"
+            >
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                {job.sourceType === "freight" ? (
+                  <Truck className="size-4" />
+                ) : job.sourceType === "fuel_record" ? (
+                  <Fuel className="size-4" />
+                ) : (
+                  <ReceiptText className="size-4" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <strong className="text-sm">{integrationSourceLabel[job.sourceType]}</strong>
+                  <Badge variant={job.status === "failed" ? "destructive" : "outline"}>
+                    {integrationStatusLabel[job.status]}
+                  </Badge>
+                </div>
+                <p className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+                  {job.sourceId}
+                </p>
+                {(job.reviewReasons.length > 0 || job.lastError) && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {job.reviewReasons
+                      .map((reason) => integrationReasonLabel[reason] ?? reason)
+                      .join(" · ") || "Falha no processamento. Consulte os registros técnicos."}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center justify-between gap-3 sm:justify-end">
+                <span className="text-xs text-muted-foreground">
+                  {date.format(new Date(job.detectedAt))} · tentativa {job.attempts}/
+                  {job.maxAttempts}
+                </span>
+                {canProcess && job.status !== "processed" && job.attempts < job.maxAttempts && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={processingId !== null}
+                    onClick={() => void process(job.id)}
+                  >
+                    <RefreshCw
+                      className={cn("size-3.5", processingId === job.id && "animate-spin")}
+                    />
+                    Tentar novamente
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))
+        ) : (
+          <p className="py-12 text-center text-sm text-muted-foreground">
+            Nenhum fato operacional aguardando integração.
+          </p>
+        )}
+      </section>
     </div>
   );
 }
