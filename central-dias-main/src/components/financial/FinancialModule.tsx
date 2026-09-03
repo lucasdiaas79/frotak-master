@@ -8,18 +8,21 @@ import {
   CalendarClock,
   ChevronRight,
   CircleDollarSign,
+  Fuel,
   Landmark,
   LoaderCircle,
   MoreVertical,
   Plus,
   Pencil,
   ReceiptText,
+  Repeat2,
   RefreshCw,
   RotateCcw,
   Search,
   Settings2,
   ShieldAlert,
   Tags,
+  Truck,
   WalletCards,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -82,6 +85,12 @@ import {
   settleInstallment,
   voidFinancialDocument,
 } from "@/lib/financial/phase2";
+import {
+  generateFinancialRecurringDocuments,
+  listFinancialRecurringRules,
+  saveFinancialRecurringRule,
+  setFinancialRecurringRuleStatus,
+} from "@/lib/financial/phase5";
 import type {
   BusinessPartner,
   CanonicalFreight,
@@ -95,6 +104,9 @@ import type {
   FinancialInstallment,
   FinancialIntegrationJob,
   FinancialIntegrationSettings,
+  FinancialRecurringKind,
+  FinancialRecurringRule,
+  FinancialRecurringRuleInput,
   FinancialSettlement,
 } from "@/lib/financial/types";
 import { useFleet } from "@/lib/store";
@@ -109,6 +121,7 @@ const financeNav = [
   ["/financeiro", "Visão Geral", BadgeDollarSign],
   ["/financeiro/receber", "Contas a Receber", ArrowDownLeft],
   ["/financeiro/pagar", "Contas a Pagar", ArrowUpRight],
+  ["/financeiro/recorrencias", "Salarios e Recorrencias", Repeat2],
   ["/financeiro/contas", "Bancos e Caixas", Landmark],
   ["/financeiro/plano-contas", "Plano de Contas", Tags],
   ["/financeiro/centros-custo", "Centros de Custo", Building2],
@@ -1534,6 +1547,510 @@ function SettlementDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+const recurringKindLabel: Record<FinancialRecurringKind, string> = {
+  salary: "Salario",
+  recurring_expense: "Despesa recorrente",
+  fixed_cost: "Custo fixo",
+};
+
+const recurringStatusLabel: Record<FinancialRecurringRule["status"], string> = {
+  active: "Ativa",
+  paused: "Pausada",
+  ended: "Encerrada",
+};
+
+function currentCompetenceMonth() {
+  return today().slice(0, 7);
+}
+
+function normalizeMonth(value: string) {
+  return value.length === 7 ? `${value}-01` : value;
+}
+
+function denormalizeMonth(value: string | null) {
+  return value ? value.slice(0, 7) : "";
+}
+
+function emptyRecurringForm(access: FinancialAccess) {
+  return {
+    id: "",
+    workspaceId: access.workspaceId,
+    kind: "recurring_expense" as FinancialRecurringKind,
+    name: "",
+    partnerId: "",
+    employeeName: "",
+    driverId: "",
+    vehicleId: "",
+    costCenterId: "",
+    chartAccountId: "",
+    amount: "",
+    dueDay: "5",
+    startMonth: currentCompetenceMonth(),
+    endMonth: "",
+    autoPost: "true",
+    status: "active" as FinancialRecurringRule["status"],
+    notes: "",
+  };
+}
+
+export function FinancialRecurringPage() {
+  return (
+    <FinancialBoundary>
+      {(access) => <FinancialRecurringContent access={access} />}
+    </FinancialBoundary>
+  );
+}
+
+function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
+  const [rules, setRules] = useState<FinancialRecurringRule[]>([]);
+  const [partners, setPartners] = useState<BusinessPartner[]>([]);
+  const [chart, setChart] = useState<ChartAccount[]>([]);
+  const [centers, setCenters] = useState<CostCenter[]>([]);
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [competenceMonth, setCompetenceMonth] = useState(currentCompetenceMonth());
+  const [form, setForm] = useState(() => emptyRecurringForm(access));
+  const { vehicles, drivers } = useFleet();
+  const canManage = hasFinancialPermission(access, "financial.manage_recurring");
+
+  const load = useCallback(async () => {
+    const [nextRules, nextPartners, nextChart, nextCenters] = await Promise.all([
+      listFinancialRecurringRules(),
+      listFinancialPartners(),
+      listFinancialChart(),
+      listFinancialCostCenters(),
+    ]);
+    setRules(nextRules);
+    setPartners(nextPartners);
+    setChart(nextChart);
+    setCenters(nextCenters);
+  }, []);
+
+  useEffect(() => {
+    load().catch(() => toast.error("Nao foi possivel carregar salarios e recorrencias."));
+  }, [load]);
+
+  const active = rules.filter((rule) => rule.status === "active");
+  const monthlyTotal = active.reduce((sum, rule) => sum + rule.amount, 0);
+  const salaryTotal = active
+    .filter((rule) => rule.kind === "salary")
+    .reduce((sum, rule) => sum + rule.amount, 0);
+  const pendingGeneration = active.filter(
+    (rule) => rule.lastGeneratedCompetence !== normalizeMonth(competenceMonth),
+  ).length;
+
+  const openNew = () => {
+    const next = emptyRecurringForm(access);
+    next.chartAccountId =
+      chart.find((account) => account.code === "5.03")?.id ||
+      chart.find((account) => account.code === "5.05")?.id ||
+      "";
+    next.costCenterId =
+      centers.find((center) => center.code === "ADMINISTRATIVO")?.id ||
+      centers.find((center) => center.code === "OPERACAO")?.id ||
+      "";
+    setForm(next);
+    setOpen(true);
+  };
+
+  const openEdit = (rule: FinancialRecurringRule) => {
+    setForm({
+      id: rule.id,
+      workspaceId: rule.workspaceId,
+      kind: rule.kind,
+      name: rule.name,
+      partnerId: rule.partnerId || "",
+      employeeName: rule.employeeName || "",
+      driverId: rule.driverId || "",
+      vehicleId: rule.vehicleId || "",
+      costCenterId: rule.costCenterId,
+      chartAccountId: rule.chartAccountId,
+      amount: String(rule.amount),
+      dueDay: String(rule.dueDay),
+      startMonth: denormalizeMonth(rule.startMonth),
+      endMonth: denormalizeMonth(rule.endMonth),
+      autoPost: String(rule.autoPost),
+      status: rule.status,
+      notes: rule.notes || "",
+    });
+    setOpen(true);
+  };
+
+  const submit = async () => {
+    const payload: FinancialRecurringRuleInput = {
+      id: form.id || undefined,
+      workspaceId: access.workspaceId,
+      kind: form.kind,
+      name: form.name,
+      partnerId: form.partnerId || undefined,
+      employeeName: form.employeeName || undefined,
+      driverId: form.driverId || undefined,
+      vehicleId: form.vehicleId || undefined,
+      costCenterId: form.costCenterId,
+      chartAccountId: form.chartAccountId,
+      amount: Number(form.amount),
+      dueDay: Number(form.dueDay),
+      startMonth: normalizeMonth(form.startMonth),
+      endMonth: form.endMonth ? normalizeMonth(form.endMonth) : undefined,
+      autoPost: form.autoPost === "true",
+      status: form.status,
+      notes: form.notes || undefined,
+    };
+    setSaving(true);
+    try {
+      await saveFinancialRecurringRule(payload);
+      toast.success("Recorrencia salva.");
+      setOpen(false);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao salvar recorrencia.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const generate = async (ruleId?: string) => {
+    setGenerating(true);
+    try {
+      const result = await generateFinancialRecurringDocuments(
+        access.workspaceId,
+        normalizeMonth(competenceMonth),
+        ruleId,
+      );
+      toast.success(`${result.generated} titulo(s) gerado(s), ${result.skipped} ja existiam.`);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Falha ao gerar titulos.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3 pb-6">
+      <PageHeader
+        title="Salarios e Recorrencias"
+        subtitle="Custos mensais gerando titulos canonicos por competencia"
+        actions={
+          canManage ? (
+            <>
+              <Button variant="outline" onClick={() => void generate()} disabled={generating}>
+                <RefreshCw className={cn("size-4", generating && "animate-spin")} />
+                Gerar competencia
+              </Button>
+              <Button onClick={openNew}>
+                <Plus className="size-4" />
+                Nova recorrencia
+              </Button>
+            </>
+          ) : undefined
+        }
+      />
+      <FinancialNav />
+
+      <div className="grid grid-cols-2 gap-3 px-3 lg:grid-cols-4 md:px-0">
+        <Stat label="Ativas" value={active.length} icon={Repeat2} />
+        <Stat label="Folha mensal" value={salaryTotal} icon={ReceiptText} />
+        <Stat label="Custo mensal" value={monthlyTotal} icon={WalletCards} tone="danger" />
+        <Stat label="A gerar" value={pendingGeneration} icon={CalendarClock} />
+      </div>
+
+      <section className="premium-card mx-3 p-4 md:mx-0">
+        <div className="grid gap-3 md:grid-cols-[220px_1fr] md:items-end">
+          <Field label="Competencia">
+            <Input
+              type="month"
+              value={competenceMonth}
+              onChange={(event) => setCompetenceMonth(event.target.value)}
+            />
+          </Field>
+          <p className="text-xs text-muted-foreground">
+            A geracao usa source_type, source_id e source_event para nao duplicar titulos do mesmo
+            mes.
+          </p>
+        </div>
+      </section>
+
+      <section className="premium-card mx-3 overflow-hidden md:mx-0">
+        <div className="hidden grid-cols-[1.4fr_1fr_1fr_1fr_1fr_auto] gap-3 border-b border-border bg-muted/35 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground md:grid">
+          <span>Regra</span>
+          <span>Tipo</span>
+          <span>Alocacao</span>
+          <span>Vencimento</span>
+          <span>Valor</span>
+          <span>Acao</span>
+        </div>
+        {rules.length ? (
+          rules.map((rule) => (
+            <div
+              key={rule.id}
+              className="grid gap-3 border-b border-border p-4 last:border-0 md:grid-cols-[1.4fr_1fr_1fr_1fr_1fr_auto] md:items-center"
+            >
+              <div>
+                <div className="text-sm font-extrabold">{rule.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {rule.partnerName || rule.employeeName || rule.driverName || "Sem favorecido"} -{" "}
+                  {recurringStatusLabel[rule.status]}
+                </div>
+              </div>
+              <div className="text-sm">{recurringKindLabel[rule.kind]}</div>
+              <div className="text-sm">
+                {rule.vehiclePlate || rule.costCenterName || "Nao alocado"}
+                <span className="block text-xs text-muted-foreground">
+                  {rule.chartAccountName || "Sem categoria"}
+                </span>
+              </div>
+              <div className="text-sm">
+                Dia {rule.dueDay}
+                <span className="block text-xs text-muted-foreground">
+                  desde {denormalizeMonth(rule.startMonth)}
+                </span>
+              </div>
+              <strong className="text-sm">{money.format(rule.amount)}</strong>
+              <div className="flex flex-wrap gap-2">
+                {canManage && (
+                  <>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      title="Editar"
+                      onClick={() => openEdit(rule)}
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      title="Gerar esta regra"
+                      disabled={generating || rule.status !== "active"}
+                      onClick={() => void generate(rule.id)}
+                    >
+                      <CalendarClock className="size-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={async () => {
+                        const nextStatus = rule.status === "active" ? "paused" : "active";
+                        await setFinancialRecurringRuleStatus(
+                          rule.id,
+                          access.workspaceId,
+                          nextStatus,
+                        );
+                        toast.success(
+                          nextStatus === "active" ? "Recorrencia ativada." : "Recorrencia pausada.",
+                        );
+                        await load();
+                      }}
+                    >
+                      {rule.status === "active" ? "Pausar" : "Ativar"}
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="p-12 text-center text-sm text-muted-foreground">
+            Nenhum salario ou custo recorrente cadastrado.
+          </div>
+        )}
+      </section>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{form.id ? "Editar recorrencia" : "Nova recorrencia"}</DialogTitle>
+            <DialogDescription>
+              A regra gera contas a pagar e alocacoes financeiras sem duplicar o resultado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Tipo">
+              <Select
+                value={form.kind}
+                onValueChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    kind: value as FinancialRecurringKind,
+                    chartAccountId:
+                      value === "salary"
+                        ? chart.find((account) => account.code === "5.03")?.id ||
+                          current.chartAccountId
+                        : current.chartAccountId,
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="salary">Salario</SelectItem>
+                  <SelectItem value="recurring_expense">Despesa recorrente</SelectItem>
+                  <SelectItem value="fixed_cost">Custo fixo</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Situacao">
+              <Select
+                value={form.status}
+                onValueChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    status: value as FinancialRecurringRule["status"],
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Ativa</SelectItem>
+                  <SelectItem value="paused">Pausada</SelectItem>
+                  <SelectItem value="ended">Encerrada</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Nome da regra" className="sm:col-span-2">
+              <Input
+                value={form.name}
+                onChange={(event) => setForm({ ...form, name: event.target.value })}
+              />
+            </Field>
+            <Field label="Fornecedor / favorecido">
+              <SimpleSelect
+                value={form.partnerId || "all"}
+                onChange={(value) => setForm({ ...form, partnerId: value === "all" ? "" : value })}
+                all="Sem parceiro"
+                items={partners
+                  .filter((partner) => partner.roles.includes("supplier"))
+                  .map((partner) => [partner.id, partner.tradeName])}
+              />
+            </Field>
+            <Field label="Funcionario / referencia">
+              <Input
+                value={form.employeeName}
+                onChange={(event) => setForm({ ...form, employeeName: event.target.value })}
+              />
+            </Field>
+            <Field label="Motorista">
+              <SimpleSelect
+                value={form.driverId || "all"}
+                onChange={(value) => setForm({ ...form, driverId: value === "all" ? "" : value })}
+                all="Sem motorista"
+                items={drivers.map((driver) => [driver.id, driver.name])}
+              />
+            </Field>
+            <Field label="Caminhao">
+              <SimpleSelect
+                value={form.vehicleId || "all"}
+                onChange={(value) => setForm({ ...form, vehicleId: value === "all" ? "" : value })}
+                all="Sem caminhao"
+                items={vehicles.map((vehicle) => [vehicle.id, vehicle.plate])}
+              />
+            </Field>
+            <Field label="Categoria">
+              <SimpleSelect
+                value={form.chartAccountId || "all"}
+                onChange={(value) =>
+                  setForm({ ...form, chartAccountId: value === "all" ? "" : value })
+                }
+                all="Selecionar categoria"
+                items={chart
+                  .filter(
+                    (account) =>
+                      account.active && account.isPostable && account.accountType === "expense",
+                  )
+                  .map((account) => [account.id, `${account.code} - ${account.name}`])}
+              />
+            </Field>
+            <Field label="Centro de custo">
+              <SimpleSelect
+                value={form.costCenterId || "all"}
+                onChange={(value) =>
+                  setForm({ ...form, costCenterId: value === "all" ? "" : value })
+                }
+                all="Selecionar centro"
+                items={centers
+                  .filter((center) => center.active)
+                  .map((center) => [center.id, center.name])}
+              />
+            </Field>
+            <Field label="Valor mensal">
+              <Input
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={form.amount}
+                onChange={(event) => setForm({ ...form, amount: event.target.value })}
+              />
+            </Field>
+            <Field label="Dia vencimento">
+              <Input
+                type="number"
+                min="1"
+                max="31"
+                value={form.dueDay}
+                onChange={(event) => setForm({ ...form, dueDay: event.target.value })}
+              />
+            </Field>
+            <Field label="Mes inicial">
+              <Input
+                type="month"
+                value={form.startMonth}
+                onChange={(event) => setForm({ ...form, startMonth: event.target.value })}
+              />
+            </Field>
+            <Field label="Mes final">
+              <Input
+                type="month"
+                value={form.endMonth}
+                onChange={(event) => setForm({ ...form, endMonth: event.target.value })}
+              />
+            </Field>
+            <Field label="Geracao">
+              <Select
+                value={form.autoPost}
+                onValueChange={(value) => setForm({ ...form, autoPost: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="true">Postar automaticamente</SelectItem>
+                  <SelectItem value="false">Gerar rascunho</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Observacoes" className="sm:col-span-2">
+              <Textarea
+                value={form.notes}
+                onChange={(event) => setForm({ ...form, notes: event.target.value })}
+              />
+            </Field>
+          </div>
+          <DialogFooter>
+            <Button
+              disabled={
+                saving ||
+                !form.name ||
+                !form.chartAccountId ||
+                !form.costCenterId ||
+                Number(form.amount) <= 0
+              }
+              onClick={() => void submit()}
+            >
+              {saving && <LoaderCircle className="size-4 animate-spin" />}
+              Salvar recorrencia
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 

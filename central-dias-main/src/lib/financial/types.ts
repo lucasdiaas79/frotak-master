@@ -259,6 +259,65 @@ export interface FinancialIntegrationProcessResult {
   failed: number;
 }
 
+export type FinancialRecurringKind = "salary" | "recurring_expense" | "fixed_cost";
+export type FinancialRecurringStatus = "active" | "paused" | "ended";
+
+export interface FinancialRecurringRule {
+  id: string;
+  tenantId: string;
+  workspaceId: string;
+  kind: FinancialRecurringKind;
+  name: string;
+  partnerId: string | null;
+  partnerName: string | null;
+  employeeName: string | null;
+  driverId: string | null;
+  driverName: string | null;
+  vehicleId: string | null;
+  vehiclePlate: string | null;
+  costCenterId: string;
+  costCenterName: string | null;
+  chartAccountId: string;
+  chartAccountName: string | null;
+  amount: number;
+  dueDay: number;
+  startMonth: string;
+  endMonth: string | null;
+  autoPost: boolean;
+  status: FinancialRecurringStatus;
+  notes: string | null;
+  generatedCount: number;
+  lastGeneratedCompetence: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FinancialRecurringRuleInput {
+  id?: string;
+  workspaceId: string;
+  kind: FinancialRecurringKind;
+  name: string;
+  partnerId?: string;
+  employeeName?: string;
+  driverId?: string;
+  vehicleId?: string;
+  costCenterId: string;
+  chartAccountId: string;
+  amount: number;
+  dueDay: number;
+  startMonth: string;
+  endMonth?: string;
+  autoPost: boolean;
+  status: FinancialRecurringStatus;
+  notes?: string;
+}
+
+export interface FinancialRecurringGenerationResult {
+  generated: number;
+  skipped: number;
+  documentIds: string[];
+}
+
 export type ProfitabilitySort =
   | "most_profitable"
   | "lowest_profit"
