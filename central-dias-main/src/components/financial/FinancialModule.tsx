@@ -10,6 +10,7 @@ import {
   CircleDollarSign,
   Landmark,
   LoaderCircle,
+  MoreVertical,
   Plus,
   Pencil,
   ReceiptText,
@@ -35,6 +36,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -811,8 +818,12 @@ function TitleRow({
   const state = visualStatus(d);
   const balance = d.installments.reduce((s, i) => s + i.balance, 0);
   const activeSettlements = effectiveSettlements(d);
+  const canAct =
+    Boolean(installment && canSettle && !["draft", "voided"].includes(d.status)) ||
+    (d.status === "draft" && canEdit) ||
+    (canReverse && activeSettlements.length > 0);
   return (
-    <div className="grid gap-3 border-b border-border p-4 last:border-0 md:grid-cols-[1.6fr_1fr_1fr_1fr_1fr_auto] md:items-center">
+    <div className="relative grid gap-3 border-b border-border p-4 pr-16 last:border-0 md:grid-cols-[1.6fr_1fr_1fr_1fr_1fr_auto] md:items-center md:pr-4">
       <div>
         <div className="text-sm font-extrabold">{d.description}</div>
         <div className="text-xs text-muted-foreground">
@@ -840,24 +851,17 @@ function TitleRow({
           {statusLabel(state, direction)}
         </Badge>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="hidden flex-wrap gap-2 md:flex">
         {installment && canSettle && !["draft", "voided"].includes(d.status) && (
           <Button size="sm" onClick={() => onSettle(d, installment)}>
             {direction === "receivable" ? "Receber" : "Pagar"}
           </Button>
         )}
-        {d.status === "draft" && (
+        {d.status === "draft" && canEdit && (
           <>
-            {canEdit && (
-              <Button
-                size="icon"
-                variant="outline"
-                title="Editar rascunho"
-                onClick={() => onEdit(d)}
-              >
-                <Pencil className="size-4" />
-              </Button>
-            )}
+            <Button size="icon" variant="outline" title="Editar rascunho" onClick={() => onEdit(d)}>
+              <Pencil className="size-4" />
+            </Button>
             <Button size="sm" variant="outline" onClick={() => onVoid(d)}>
               Cancelar
             </Button>
@@ -876,6 +880,41 @@ function TitleRow({
             </Button>
           ))}
       </div>
+      {canAct && (
+        <div className="absolute right-4 top-4 md:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="outline" aria-label="Ações do título">
+                <MoreVertical className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {installment && canSettle && !["draft", "voided"].includes(d.status) && (
+                <DropdownMenuItem onSelect={() => onSettle(d, installment)}>
+                  <CircleDollarSign />
+                  {direction === "receivable" ? "Receber" : "Pagar"}
+                </DropdownMenuItem>
+              )}
+              {d.status === "draft" && canEdit && (
+                <DropdownMenuItem onSelect={() => onEdit(d)}>
+                  <Pencil /> Editar rascunho
+                </DropdownMenuItem>
+              )}
+              {d.status === "draft" && canEdit && (
+                <DropdownMenuItem onSelect={() => onVoid(d)}>
+                  <ReceiptText /> Cancelar título
+                </DropdownMenuItem>
+              )}
+              {canReverse &&
+                activeSettlements.map((settlement) => (
+                  <DropdownMenuItem key={settlement.id} onSelect={() => onReverse(settlement)}>
+                    <RotateCcw /> Estornar baixa
+                  </DropdownMenuItem>
+                ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
     </div>
   );
 }
