@@ -61,6 +61,7 @@ interface FleetState {
       productId?: string;
       freightValue?: number;
       trailerIds?: string[];
+      freightPaymentType?: import("@/lib/types").FreightPaymentType;
     },
   ) => Promise<void>;
   addSender: (s: Omit<Sender, "id"> & { id?: string }) => Promise<void>;
@@ -429,6 +430,7 @@ export const useFleet = create<FleetState>((set, get) => ({
       recipientId: extras?.recipientId,
       productId: extras?.productId,
       freightValue: extras?.freightValue,
+      freightPaymentType: extras?.freightPaymentType,
     });
     await get().loadAll();
   },

@@ -1,5 +1,5 @@
 import { freightStageById, nextFreightStage, type FreightStageId } from "@/lib/freight-workflow";
-import type { Driver, VehicleFreightStage, VehicleStatus } from "@/lib/types";
+import type { Driver, FreightPaymentType, VehicleFreightStage, VehicleStatus } from "@/lib/types";
 
 type FinalCommand = "RETORNO_SOLICITADO" | "PRONTO_NOVO_FRETE";
 
@@ -92,6 +92,7 @@ export async function createFreightOperation(input: {
   recipientId: string;
   productId: string;
   freightValue?: number;
+  freightPaymentType: FreightPaymentType;
   link: (
     vehicleId: string,
     driverId?: string,
@@ -102,6 +103,7 @@ export async function createFreightOperation(input: {
       productId?: string;
       freightValue?: number;
       trailerIds?: string[];
+      freightPaymentType?: FreightPaymentType;
     },
   ) => Promise<void>;
   setVehicleStatus: (
@@ -110,12 +112,24 @@ export async function createFreightOperation(input: {
     freightStage?: VehicleFreightStage,
   ) => Promise<void>;
 }) {
-  await input.link(input.vehicleId, input.driverId, input.trailerId, {
-    trailerIds: input.trailerIds,
-    senderId: input.senderId,
-    recipientId: input.recipientId,
-    productId: input.productId,
-    freightValue: input.freightValue,
-  });
+  try {
+    await input.link(input.vehicleId, input.driverId, input.trailerId, {
+      trailerIds: input.trailerIds,
+      senderId: input.senderId,
+      recipientId: input.recipientId,
+      productId: input.productId,
+      freightValue: input.freightValue,
+      freightPaymentType: input.freightPaymentType,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("FREIGHT_PAYMENT_TYPE_REQUIRED")) {
+      throw new Error("Selecione se o frete é CIF ou FOB.");
+    }
+    if (message.includes("FREIGHT_BILLING_PARTNER_NOT_MAPPED")) {
+      throw new Error("Não foi possível identificar o pagador deste frete.");
+    }
+    throw error;
+  }
   await input.setVehicleStatus(input.vehicleId, "aguardando-motorista", "DISPONIVEL");
 }

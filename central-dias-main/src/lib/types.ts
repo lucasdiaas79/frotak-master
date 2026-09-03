@@ -32,6 +32,8 @@ export type VehicleFreightStage =
   | "ENTREGUE_AG_FINALIZACAO"
   | "ENTREGA_FINALIZADA";
 
+export type FreightPaymentType = "CIF" | "FOB";
+
 export interface Vehicle {
   id: string;
   currentFreightId?: string;

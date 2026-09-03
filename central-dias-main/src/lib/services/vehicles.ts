@@ -1,5 +1,11 @@
 import { supabase } from "@/lib/supabase";
-import type { FleetEventSource, Vehicle, VehicleFreightStage, VehicleStatus } from "@/lib/types";
+import type {
+  FleetEventSource,
+  FreightPaymentType,
+  Vehicle,
+  VehicleFreightStage,
+  VehicleStatus,
+} from "@/lib/types";
 import { vehicleFromRow, vehicleToRow } from "./mappers";
 
 export async function listVehicles(): Promise<Vehicle[]> {
@@ -59,8 +65,9 @@ export async function linkVehicle(input: {
   recipientId?: string;
   productId?: string;
   freightValue?: number;
+  freightPaymentType?: FreightPaymentType;
 }): Promise<Vehicle> {
-  const { data, error } = await supabase.rpc("link_vehicle_operation", {
+  const payload = {
     p_vehicle_id: input.vehicleId,
     p_driver_id: input.driverId ?? null,
     p_trailer_id: input.trailerId ?? null,
@@ -69,20 +76,13 @@ export async function linkVehicle(input: {
     p_recipient_id: input.recipientId ?? null,
     p_product_id: input.productId ?? null,
     p_freight_value: input.freightValue ?? null,
-  });
-  if (error && (error.code === "PGRST202" || error.code === "42883")) {
-    const retry = await supabase.rpc("link_vehicle_operation", {
-      p_vehicle_id: input.vehicleId,
-      p_driver_id: input.driverId ?? null,
-      p_trailer_id: input.trailerId ?? input.trailerIds?.[0] ?? null,
-      p_sender_id: input.senderId ?? null,
-      p_recipient_id: input.recipientId ?? null,
-      p_product_id: input.productId ?? null,
-      p_freight_value: input.freightValue ?? null,
-    });
-    if (retry.error) throw retry.error;
-    return vehicleFromRow(Array.isArray(retry.data) ? retry.data[0] : retry.data);
-  }
+  };
+  const { data, error } = input.freightPaymentType
+    ? await supabase.rpc("link_vehicle_operation", {
+        ...payload,
+        p_freight_payment_type: input.freightPaymentType,
+      })
+    : await supabase.rpc("link_vehicle_operation", payload);
   if (error) throw error;
   return vehicleFromRow(Array.isArray(data) ? data[0] : data);
 }

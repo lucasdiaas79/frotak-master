@@ -103,6 +103,7 @@ import {
 import type {
   Driver,
   FreightDocument,
+  FreightPaymentType,
   Product,
   Recipient,
   Sender,
@@ -193,6 +194,7 @@ interface FreightFormState {
   recipientId: string;
   productId: string;
   freightValue: string;
+  freightPaymentType: FreightPaymentType | "";
   observations: string;
 }
 
@@ -201,6 +203,7 @@ interface GroupFreightFormState {
   recipientId: string;
   productId: string;
   freightValue: string;
+  freightPaymentType: FreightPaymentType | "";
   observations: string;
   vehicleIds: string[];
 }
@@ -213,6 +216,7 @@ const EMPTY_FORM: FreightFormState = {
   recipientId: "",
   productId: "",
   freightValue: "",
+  freightPaymentType: "",
   observations: "",
 };
 
@@ -221,6 +225,7 @@ const EMPTY_GROUP_FORM: GroupFreightFormState = {
   recipientId: "",
   productId: "",
   freightValue: "",
+  freightPaymentType: "",
   observations: "",
   vehicleIds: [],
 };
@@ -931,6 +936,10 @@ function GestaoFrotaPage() {
       toast.error("Preencha os campos obrigatórios para criar o frete.");
       return;
     }
+    if (!form.freightPaymentType) {
+      toast.error("Selecione se o frete é CIF ou FOB.");
+      return;
+    }
     if (!isDriverAvailable(driver, form.vehicleId, activeDriverIds)) {
       toast.error("Motorista indisponível para novo frete.");
       return;
@@ -943,18 +952,24 @@ function GestaoFrotaPage() {
     const selectedVehicle = vehicles.find((vehicle) => vehicle.id === form.vehicleId);
     const trailerIds =
       selectedVehicle?.trailerIds?.[0] === form.trailerId ? selectedVehicle.trailerIds : undefined;
-    await createFreightOperation({
-      vehicleId: form.vehicleId,
-      driverId: form.driverId,
-      trailerId: form.trailerId || undefined,
-      trailerIds,
-      senderId: form.senderId,
-      recipientId: form.recipientId,
-      productId: form.productId,
-      freightValue: parseFreightValue(form.freightValue),
-      link,
-      setVehicleStatus,
-    });
+    try {
+      await createFreightOperation({
+        vehicleId: form.vehicleId,
+        driverId: form.driverId,
+        trailerId: form.trailerId || undefined,
+        trailerIds,
+        senderId: form.senderId,
+        recipientId: form.recipientId,
+        productId: form.productId,
+        freightValue: parseFreightValue(form.freightValue),
+        freightPaymentType: form.freightPaymentType,
+        link,
+        setVehicleStatus,
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível criar o frete.");
+      return;
+    }
     toast.success("Frete criado", { description: `${vehicle.plate} · ${driver.name}` });
     const intendedStage = intendedStageAfterCreation;
     closeDemandPanel(true);
@@ -974,6 +989,10 @@ function GestaoFrotaPage() {
   const createGroupFreight = async () => {
     if (!groupForm.senderId || !groupForm.recipientId || !groupForm.productId) {
       toast.error("Preencha origem, destino e produto para criar o frete em grupo.");
+      return;
+    }
+    if (!groupForm.freightPaymentType) {
+      toast.error("Selecione se o frete em grupo é CIF ou FOB.");
       return;
     }
     if (groupForm.vehicleIds.length === 0) {
@@ -1000,19 +1019,27 @@ function GestaoFrotaPage() {
       return;
     }
 
-    for (const resource of selectedResources) {
-      await createFreightOperation({
-        vehicleId: resource.vehicle.id,
-        driverId: resource.driver!.id,
-        trailerId: resource.vehicle.trailerId || undefined,
-        trailerIds: resource.vehicle.trailerIds,
-        senderId: groupForm.senderId,
-        recipientId: groupForm.recipientId,
-        productId: groupForm.productId,
-        freightValue: parseFreightValue(groupForm.freightValue),
-        link,
-        setVehicleStatus,
-      });
+    try {
+      for (const resource of selectedResources) {
+        await createFreightOperation({
+          vehicleId: resource.vehicle.id,
+          driverId: resource.driver!.id,
+          trailerId: resource.vehicle.trailerId || undefined,
+          trailerIds: resource.vehicle.trailerIds,
+          senderId: groupForm.senderId,
+          recipientId: groupForm.recipientId,
+          productId: groupForm.productId,
+          freightValue: parseFreightValue(groupForm.freightValue),
+          freightPaymentType: groupForm.freightPaymentType,
+          link,
+          setVehicleStatus,
+        });
+      }
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível criar o frete em grupo.",
+      );
+      return;
     }
 
     toast.success("Frete em grupo criado", {
@@ -2140,7 +2167,11 @@ function GroupFreightWorkspace({
   const product = products.find((item) => item.id === form.productId);
   const freightValue = parseFreightValue(form.freightValue);
   const validCreate =
-    !!form.senderId && !!form.recipientId && !!form.productId && form.vehicleIds.length > 0;
+    !!form.senderId &&
+    !!form.recipientId &&
+    !!form.productId &&
+    !!form.freightPaymentType &&
+    form.vehicleIds.length > 0;
 
   const toggleVehicle = (vehicleId: string) => {
     setForm({
@@ -2197,6 +2228,13 @@ function GroupFreightWorkspace({
                 className="h-11"
               />
             </Field>
+            <FreightPaymentSelector
+              value={form.freightPaymentType}
+              onChange={(value) => setForm({ ...form, freightPaymentType: value })}
+              senderName={sender?.name}
+              recipientName={recipient?.name}
+              className="md:col-span-2"
+            />
             <Field label="Observações" className="md:col-span-2">
               <Textarea
                 value={form.observations}
@@ -2382,6 +2420,7 @@ function DemandWorkspace({
     !!currentForm.senderId &&
     !!currentForm.recipientId &&
     !!currentForm.productId &&
+    !!currentForm.freightPaymentType &&
     isVehicleAvailableForFreight(selectedVehicle);
 
   const selectVehicle = (vehicleId: string) => {
@@ -2469,6 +2508,13 @@ function DemandWorkspace({
                   className="h-11"
                 />
               </Field>
+              <FreightPaymentSelector
+                value={currentForm.freightPaymentType}
+                onChange={(value) => setForm({ ...currentForm, freightPaymentType: value })}
+                senderName={senders.find((item) => item.id === currentForm.senderId)?.name}
+                recipientName={recipients.find((item) => item.id === currentForm.recipientId)?.name}
+                className="md:col-span-2"
+              />
               <Field label="Observações" className="md:col-span-2">
                 <Textarea
                   value={currentForm.observations}
@@ -3307,6 +3353,67 @@ function Block({
       </div>
       <div className="p-4">{children}</div>
     </section>
+  );
+}
+
+function FreightPaymentSelector({
+  value,
+  onChange,
+  senderName,
+  recipientName,
+  className,
+}: {
+  value: FreightPaymentType | "";
+  onChange: (value: FreightPaymentType) => void;
+  senderName?: string;
+  recipientName?: string;
+  className?: string;
+}) {
+  const payerName = value === "CIF" ? senderName : value === "FOB" ? recipientName : undefined;
+
+  return (
+    <div className={cn("space-y-2", className)}>
+      <div className="label-tiny">Responsabilidade pelo frete</div>
+      <div className="grid grid-cols-2 gap-2">
+        {(
+          [
+            ["CIF", "Embarcador paga"],
+            ["FOB", "Destinatário paga"],
+          ] as const
+        ).map(([option, description]) => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onChange(option)}
+            className={cn(
+              "min-h-16 rounded-2xl border px-3 py-2 text-left transition",
+              value === option
+                ? "border-primary/50 bg-primary/10 text-primary"
+                : "border-border bg-surface-2/55 text-foreground hover:border-primary/30",
+            )}
+          >
+            <span className="block text-[13px] font-black">{option}</span>
+            <span className="mt-0.5 block text-[11px] font-semibold text-muted-foreground">
+              {description}
+            </span>
+          </button>
+        ))}
+      </div>
+      {value ? (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-[12px]">
+          <span className="font-bold text-foreground">
+            {value} - {value === "CIF" ? "Embarcador paga" : "Destinatário paga"}
+          </span>
+          <span className="ml-2 text-muted-foreground">
+            Pagador: {payerName ?? "selecione a empresa"}
+          </span>
+        </div>
+      ) : (
+        <p className="text-[11px] font-semibold text-muted-foreground">
+          Selecione CIF ou FOB para identificar o pagador automaticamente.
+        </p>
+      )}
+    </div>
   );
 }
 
