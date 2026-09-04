@@ -905,6 +905,7 @@
   .financial-profitability-executive,
   .financial-profitability-ranking,
   .financial-profitability-analysis,
+  .financial-profitability-demo,
   .financial-profitability-warning,
   .financial-profitability-error {
     margin-inline: 12px;
@@ -1033,6 +1034,16 @@
         color-mix(in oklch, var(--color-primary) 5%, transparent)
       );
     padding: 13px 0;
+  }
+  .financial-profitability-demo {
+    width: fit-content;
+    border: 1px solid color-mix(in oklch, var(--color-primary) 24%, var(--color-border));
+    border-radius: 999px;
+    background: color-mix(in oklch, var(--color-primary) 8%, var(--color-card));
+    padding: 7px 12px;
+    color: color-mix(in oklch, var(--color-primary) 58%, var(--color-foreground));
+    font-size: 12px;
+    font-weight: 850;
   }
   .financial-profitability-result,
   .financial-profitability-margin,
@@ -1523,6 +1534,10 @@
   .dark .financial-profitability-table-wrap {
     background: oklch(0.155 0.006 255 / 0.9);
     border-color: oklch(1 0 0 / 0.12);
+  }
+  .dark .financial-profitability-demo {
+    background: color-mix(in oklch, var(--color-primary) 10%, oklch(0.15 0.006 255));
+    color: oklch(0.82 0.12 151);
   }
   .dark .financial-profitability-rank-card {
     background:
@@ -2461,6 +2476,7 @@
     .financial-profitability-executive,
     .financial-profitability-ranking,
     .financial-profitability-analysis,
+    .financial-profitability-demo,
     .financial-profitability-warning,
     .financial-profitability-error,
     .financial-payables-summary,
@@ -2723,6 +2739,7 @@
     .financial-profitability-executive,
     .financial-profitability-ranking,
     .financial-profitability-analysis,
+    .financial-profitability-demo,
     .financial-profitability-warning,
     .financial-profitability-error,
     .financial-payables-summary,

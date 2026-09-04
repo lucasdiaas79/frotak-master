@@ -105,6 +105,103 @@ function cleanFilter(value: string) {
   return value === ALL ? null : value;
 }
 
+const demoVehiclesProfit: VehicleProfitabilityRow[] = [
+  ["TRK0Z00", "Volvo FH 540", 128000, 128000, 0, 0, 10, "Sider"],
+  ["ABC1D23", "Scania R450", 108000, 70600, 37400, 34.6, 9, "Basculante"],
+  ["ROD7A12", "DAF XF", 97000, 69300, 27700, 28.6, 8, "Graneleiro"],
+  ["FRT2B44", "Mercedes Actros", 86000, 67200, 18800, 21.9, 7, "Bau"],
+  ["CAM5C77", "Volvo VM", 72000, 61600, 10400, 14.4, 6, "Tanque"],
+  ["ECO9D31", "Scania P360", 65500, 59000, 6500, 9.9, 5, "Sider"],
+  ["XYZ9A99", "Volvo FH", 132000, 127800, 4200, 3.2, 12, "Sider"],
+  ["LIN3E18", "Iveco Hi-Way", 58500, 56160, 2340, 4, 4, "Prancha"],
+  ["MIN8F62", "VW Constellation", 41000, 40180, 820, 2, 3, "Bau"],
+  ["NEG4T11", "DAF XF", 52000, 57600, -5600, -10.8, 4, "Graneleiro"],
+].map(([plate, model, revenue, costs, result, margin, freightCount, implementModel], index) => ({
+  vehicleId: `demo-vehicle-${index + 1}`,
+  plate: String(plate),
+  model: String(model),
+  driverName: `Motorista Demo ${index + 1}`,
+  revenue: Number(revenue),
+  costs: Number(costs),
+  result: Number(result),
+  margin: Number(margin),
+  freightCount: Number(freightCount),
+  implementModels: [String(implementModel)],
+}));
+
+const demoFreightsProfit: FreightProfitabilityRow[] = demoVehiclesProfit.map((vehicle, index) => ({
+  freightId: `demo-freight-${index + 1}`,
+  vehicleId: vehicle.vehicleId,
+  plate: vehicle.plate,
+  driverName: vehicle.driverName,
+  senderId: "demo-sender-1",
+  senderName: index % 2 ? "Base Oeste" : "Usina Norte",
+  recipientId: "demo-recipient-1",
+  recipientName: index % 2 ? "CD Leste" : "Porto Sul",
+  productId: "demo-product-1",
+  productName: index % 2 ? "Milho" : "Açúcar",
+  paymentType: index % 3 === 0 ? "FOB" : "CIF",
+  billingPartnerId: index === 0 ? "demo-partner-neutral" : index === 9 ? "demo-partner-risk" : "demo-partner-strong",
+  billingPartnerName: index === 0 ? "Cliente Neutro" : index === 9 ? "Cliente Risco" : "Cliente Forte",
+  revenue: Math.round(vehicle.revenue * 0.55),
+  costs: Math.round(vehicle.costs * 0.55),
+  result: Math.round(vehicle.result * 0.55),
+  margin: vehicle.margin,
+  completedAt: `2026-09-${String(index + 1).padStart(2, "0")}`,
+}));
+
+const demoPartnersProfit: PartnerProfitabilityRow[] = [
+  {
+    partnerId: "demo-partner-strong",
+    partnerName: "Cliente Forte",
+    revenue: 545000,
+    costs: 407200,
+    result: 137800,
+    margin: 25.3,
+    freightCount: 42,
+  },
+  {
+    partnerId: "demo-partner-neutral",
+    partnerName: "Cliente Neutro",
+    revenue: 128000,
+    costs: 128000,
+    result: 0,
+    margin: 0,
+    freightCount: 10,
+  },
+  {
+    partnerId: "demo-partner-risk",
+    partnerName: "Cliente Risco",
+    revenue: 52000,
+    costs: 57600,
+    result: -5600,
+    margin: -10.8,
+    freightCount: 4,
+  },
+];
+
+const demoPartners: BusinessPartner[] = demoPartnersProfit.map((partner) => ({
+  id: partner.partnerId ?? partner.partnerName,
+  tenantId: "demo-tenant",
+  legalName: partner.partnerName,
+  tradeName: partner.partnerName,
+  taxId: null,
+  taxIdType: null,
+  active: true,
+  requiresReview: false,
+  defaultReceivableDueDays: null,
+  defaultPayableDueDays: null,
+  roles: ["customer"],
+}));
+
+const demoSummary: FleetProfitabilitySummary = {
+  revenue: demoVehiclesProfit.reduce((total, row) => total + row.revenue, 0),
+  costs: demoVehiclesProfit.reduce((total, row) => total + row.costs, 0),
+  result: demoVehiclesProfit.reduce((total, row) => total + row.result, 0),
+  margin: 16.4,
+  unallocatedCosts: 4200,
+};
+
 function csvEscape(value: string | number | null | undefined) {
   const text = String(value ?? "");
   return `"${text.replaceAll('"', '""')}"`;
@@ -447,6 +544,9 @@ export function FleetProfitabilityPage() {
   const [rankingSort, setRankingSort] = useState<ProfitabilitySort>("most_profitable");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const demoMode =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("demo") === "1";
 
   const vehicles = useFleet((state) => state.vehicles);
   const senders = useFleet((state) => state.senders);
@@ -488,6 +588,15 @@ export function FleetProfitabilityPage() {
     setLoading(true);
     setError(null);
     try {
+      if (demoMode) {
+        setSummary(demoSummary);
+        setVehiclesProfit(demoVehiclesProfit);
+        setFreightsProfit(demoFreightsProfit);
+        setPartnersProfit(demoPartnersProfit);
+        setPartners(demoPartners);
+        return;
+      }
+
       const access = await getFinancialAccess();
       const nextFilters = profitabilityFilters(access.workspaceId);
       const [summaryData, vehicleRows, freightRows, partnerRows, partnerRowsRaw] =
@@ -510,7 +619,7 @@ export function FleetProfitabilityPage() {
     } finally {
       setLoading(false);
     }
-  }, [loadAll, profitabilityFilters, sort]);
+  }, [demoMode, loadAll, profitabilityFilters, sort]);
 
   useEffect(() => {
     void loadData();
@@ -664,6 +773,12 @@ export function FleetProfitabilityPage() {
       <FinancialNav />
 
       <DimensionSelector view={view} setView={setView} />
+
+      {demoMode && (
+        <div className="financial-profitability-demo">
+          Modo demonstração visual: dados fictícios exibidos somente nesta URL.
+        </div>
+      )}
 
       <section className="financial-profitability-filters">
         <div className="financial-profitability-filter-head">
