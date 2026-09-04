@@ -1037,6 +1037,216 @@ export function FinancialDrePage() {
   return <FinancialBoundary>{(access) => <DreContent access={access} />}</FinancialBoundary>;
 }
 
+function dreValueTone(value: number) {
+  if (value > 0) return "positive";
+  if (value < 0) return "negative";
+  return "neutral";
+}
+
+function DreExecutiveSummary({ summary }: { summary: DreSummary }) {
+  return (
+    <section className="financial-dre-summary">
+      <article className="financial-dre-result-card">
+        <p className="financial-eyebrow">Resultado Gerencial</p>
+        <strong
+          className={cn(
+            "financial-dre-result-value",
+            summary.totals.managerial_result < 0 && "text-destructive",
+          )}
+        >
+          {money.format(summary.totals.managerial_result)}
+        </strong>
+      </article>
+      <article className="financial-dre-margin-card">
+        <p className="financial-eyebrow">Margem</p>
+        <strong>{marginLabel(summary.totals.managerialMargin)}</strong>
+      </article>
+      <div className="financial-dre-secondary-metrics">
+        <MiniMetric label="Receita bruta" value={summary.totals.gross_revenue} tone="success" />
+        <MiniMetric label="Custos" value={Math.abs(summary.totals.variable_costs)} />
+        <MiniMetric label="Despesas" value={Math.abs(summary.totals.operating_expenses)} />
+      </div>
+    </section>
+  );
+}
+
+function DreStatement({
+  summary,
+  selectedGroup,
+  onGroup,
+}: {
+  summary: DreSummary;
+  selectedGroup: string | null;
+  onGroup: (group: DreGroupRow) => void;
+}) {
+  const groups = [...summary.groups].sort((a, b) => a.sort_order - b.sort_order);
+  const hasRevenueGroup = groups.some((group) =>
+    ["gross_revenue", "revenue_deduction"].includes(group.dre_group),
+  );
+  const hasCostGroup = groups.some((group) => group.dre_group === "variable_cost");
+  const hasOperatingGroup = groups.some((group) =>
+    ["operating_expense", "depreciation_amortization"].includes(group.dre_group),
+  );
+
+  return (
+    <section className="financial-dre-statement">
+      <div className="financial-dre-statement-head">
+        <div>
+          <p className="financial-section-kicker">Demonstrativo</p>
+          <h2>DRE Gerencial</h2>
+        </div>
+        <Badge variant={summary.reconciliation.ok ? "outline" : "destructive"}>
+          {summary.reconciliation.ok ? "Reconciliado" : "Diferença"}
+        </Badge>
+      </div>
+      <div className="financial-dre-sheet">
+        {groups.map((group) => (
+          <button
+            key={group.dre_group}
+            type="button"
+            onClick={() => onGroup(group)}
+            className={cn(
+              "financial-dre-row",
+              selectedGroup === group.dre_group && "financial-dre-row-selected",
+            )}
+          >
+            <div className="financial-dre-row-label">
+              <span>{group.label}</span>
+              <small>{group.document_count} documentos</small>
+            </div>
+            <div className="financial-dre-row-value">
+              <strong
+                className={cn(
+                  dreValueTone(group.signed_amount) === "positive" && "text-primary",
+                  dreValueTone(group.signed_amount) === "negative" && "text-destructive",
+                )}
+              >
+                {signedMoney(group.signed_amount)}
+              </strong>
+              <ChevronRight className="size-4" />
+            </div>
+          </button>
+        ))}
+        {hasRevenueGroup && (
+          <div className="financial-dre-row financial-dre-subtotal">
+            <div className="financial-dre-row-label">
+              <span>Receita líquida</span>
+            </div>
+            <strong>{money.format(summary.totals.netRevenue)}</strong>
+          </div>
+        )}
+        {hasCostGroup && (
+          <div className="financial-dre-row financial-dre-subtotal">
+            <div className="financial-dre-row-label">
+              <span>Resultado bruto</span>
+            </div>
+            <strong>{money.format(summary.totals.grossResult)}</strong>
+          </div>
+        )}
+        {hasOperatingGroup && (
+          <div className="financial-dre-row financial-dre-subtotal">
+            <div className="financial-dre-row-label">
+              <span>Resultado operacional</span>
+            </div>
+            <strong>{money.format(summary.totals.operatingResult)}</strong>
+          </div>
+        )}
+        <div className="financial-dre-row financial-dre-final">
+          <div className="financial-dre-row-label">
+            <span>Resultado gerencial</span>
+            <small>Margem {marginLabel(summary.totals.managerialMargin)}</small>
+          </div>
+          <strong
+            className={cn(
+              summary.totals.managerial_result < 0 ? "text-destructive" : "text-primary",
+            )}
+          >
+            {money.format(summary.totals.managerial_result)}
+          </strong>
+        </div>
+      </div>
+      {(summary.totals.unclassified_amount > 0 || summary.totals.unallocated_amount > 0) && (
+        <div className="financial-dre-notes">
+          {summary.totals.unclassified_amount > 0 && (
+            <span>
+              {money.format(summary.totals.unclassified_amount)} pendentes de classificação.
+            </span>
+          )}
+          {summary.totals.unallocated_amount > 0 && (
+            <span>Resíduo não alocado: {money.format(summary.totals.unallocated_amount)}.</span>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DreDetailPanel({
+  detail,
+  selectedAccount,
+  onAccount,
+}: {
+  detail: DreDetail | null;
+  selectedAccount: string | null;
+  onAccount: (account: string | null) => void;
+}) {
+  return (
+    <aside className="financial-dre-detail">
+      <div>
+        <p className="financial-section-kicker">Drilldown</p>
+        <h2>Detalhamento</h2>
+      </div>
+      {!detail ? (
+        <div className="financial-dre-detail-empty">Selecione uma linha da DRE.</div>
+      ) : selectedAccount ? (
+        <div className="financial-dre-detail-list">
+          {detail.documents.map((document) => (
+            <div key={document.document_id} className="financial-dre-document">
+              <div className="min-w-0">
+                <strong>{document.description}</strong>
+                <span>
+                  {date.format(new Date(`${document.competence_date}T12:00:00`))} ·{" "}
+                  {document.partner_name || "Sem parceiro"} · {document.source_type || "manual"}
+                </span>
+              </div>
+              <strong className={cn(document.signed_amount < 0 && "text-destructive")}>
+                {signedMoney(document.signed_amount)}
+              </strong>
+              {document.visible_document_id === null && (
+                <Badge variant="outline">folha restrita</Badge>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="financial-dre-detail-list">
+          {detail.accounts.map((account) => (
+            <button
+              key={account.chart_account_id || "unclassified"}
+              type="button"
+              onClick={() => onAccount(account.chart_account_id)}
+              className="financial-dre-account"
+            >
+              <div className="min-w-0">
+                <strong>{account.name}</strong>
+                <span>
+                  {account.code} · {account.document_count} documentos
+                </span>
+              </div>
+              <div className="financial-dre-account-value">
+                <strong className={cn(account.signed_amount < 0 && "text-destructive")}>
+                  {signedMoney(account.signed_amount)}
+                </strong>
+                <Eye className="size-4" />
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </aside>
+  );
+}
+
 function DreContent({ access }: { access: FinancialAccess }) {
   const [mode, setMode] = useState<PeriodMode>("month");
   const [start, setStart] = useState(() => periodBounds("month")[0]);
@@ -1097,7 +1307,7 @@ function DreContent({ access }: { access: FinancialAccess }) {
   if (!canDre) {
     return (
       <div className="financial-shell space-y-4">
-        <PageHeader title="DRE Gerencial" subtitle="Visao gerencial por regime de competencia." />
+        <PageHeader title="DRE Gerencial" subtitle="Visão gerencial por regime de competência" />
         <FinancialNav />
         <RestrictedReport permission="financial.dre.view" />
       </div>
@@ -1105,14 +1315,15 @@ function DreContent({ access }: { access: FinancialAccess }) {
   }
 
   return (
-    <div className="financial-shell space-y-4">
+    <div className="financial-shell financial-dre-shell space-y-4">
       <PageHeader
         title="DRE Gerencial"
-        subtitle="Visao gerencial por regime de competencia."
+        subtitle="Visão gerencial por regime de competência"
         actions={
           summary ? (
             <Button
               variant="outline"
+              size="sm"
               onClick={() =>
                 exportCsv(
                   `dre-${start}-${end}.csv`,
@@ -1132,16 +1343,17 @@ function DreContent({ access }: { access: FinancialAccess }) {
         }
       />
       <FinancialNav />
-      <ReportPeriodControls
-        mode={mode}
-        start={start}
-        end={end}
-        onMode={setMode}
-        onStart={setStart}
-        onEnd={setEnd}
-      />
-      <div className="px-3 md:px-0">
-        <Field label="Centro de custo" className="max-w-sm">
+      <section className="financial-dre-control-bar">
+        <ReportPeriodControls
+          mode={mode}
+          start={start}
+          end={end}
+          onMode={setMode}
+          onStart={setStart}
+          onEnd={setEnd}
+          compact
+        />
+        <Field label="Centro de custo">
           <Select value={costCenterId} onValueChange={setCostCenterId}>
             <SelectTrigger>
               <SelectValue />
@@ -1156,152 +1368,31 @@ function DreContent({ access }: { access: FinancialAccess }) {
             </SelectContent>
           </Select>
         </Field>
-      </div>
+      </section>
       {loading || !summary ? (
         <LoadingReport />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 px-3 md:grid-cols-5 md:px-0">
-            <Stat label="Receita bruta" value={summary.totals.gross_revenue} icon={ArrowDownLeft} />
-            <Stat
-              label="Custos operacionais"
-              value={Math.abs(summary.totals.variable_costs)}
-              icon={Fuel}
+          <DreExecutiveSummary summary={summary} />
+          <div className="financial-dre-layout">
+            <DreStatement
+              summary={summary}
+              selectedGroup={selectedGroup}
+              onGroup={(group) => openGroup(group).catch(() => toast.error("Falha no drilldown."))}
             />
-            <Stat
-              label="Despesas"
-              value={Math.abs(summary.totals.operating_expenses)}
-              icon={ReceiptText}
+            <DreDetailPanel
+              detail={detail}
+              selectedAccount={selectedAccount}
+              onAccount={(account) =>
+                openAccount(account).catch(() => toast.error("Falha no detalhe."))
+              }
             />
-            <Stat
-              label="Resultado gerencial"
-              value={summary.totals.managerial_result}
-              icon={summary.totals.managerial_result < 0 ? TrendingDown : TrendingUp}
-              tone={summary.totals.managerial_result < 0 ? "danger" : "success"}
-            />
-            <Stat
-              label="Margem"
-              value={marginLabel(summary.totals.managerialMargin)}
-              icon={BarChart3}
-            />
-          </div>
-          <div className="grid gap-3 px-3 lg:grid-cols-[1fr_1.2fr] md:px-0">
-            <section className="premium-card p-4">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-sm font-extrabold">Estrutura da DRE</h2>
-                <Badge variant={summary.reconciliation.ok ? "outline" : "destructive"}>
-                  {summary.reconciliation.ok ? "Reconciliado" : "Diferenca"}
-                </Badge>
-              </div>
-              <div className="mt-3 divide-y divide-border">
-                {summary.groups.map((group) => (
-                  <button
-                    key={group.dre_group}
-                    type="button"
-                    onClick={() => openGroup(group).catch(() => toast.error("Falha no drilldown."))}
-                    className="flex w-full items-center justify-between gap-3 py-3 text-left"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-bold">{group.label}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {group.document_count} documentos
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <strong
-                        className={cn("text-sm", group.signed_amount < 0 && "text-destructive")}
-                      >
-                        {signedMoney(group.signed_amount)}
-                      </strong>
-                      <ChevronRight className="size-4 text-muted-foreground" />
-                    </div>
-                  </button>
-                ))}
-              </div>
-              {summary.totals.unclassified_amount > 0 && (
-                <div className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/8 p-3 text-sm font-bold">
-                  {money.format(summary.totals.unclassified_amount)} pendentes de classificacao.
-                </div>
-              )}
-              {summary.totals.unallocated_amount > 0 && (
-                <div className="mt-2 rounded-lg border border-border p-3 text-sm text-muted-foreground">
-                  Residuo nao alocado: {money.format(summary.totals.unallocated_amount)}.
-                </div>
-              )}
-            </section>
-            <section className="premium-card p-4">
-              <h2 className="text-sm font-extrabold">Drilldown</h2>
-              {!detail ? (
-                <EmptyReport text="Selecione um grupo da DRE." />
-              ) : selectedAccount ? (
-                <div className="mt-3 divide-y divide-border">
-                  {detail.documents.map((document) => (
-                    <div key={document.document_id} className="py-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-bold">{document.description}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {date.format(new Date(`${document.competence_date}T12:00:00`))} ·{" "}
-                            {document.partner_name || "Sem parceiro"} ·{" "}
-                            {document.source_type || "manual"}
-                          </div>
-                        </div>
-                        <strong
-                          className={cn(
-                            "text-sm",
-                            document.signed_amount < 0 && "text-destructive",
-                          )}
-                        >
-                          {signedMoney(document.signed_amount)}
-                        </strong>
-                      </div>
-                      {document.visible_document_id === null && (
-                        <Badge className="mt-2" variant="outline">
-                          folha restrita
-                        </Badge>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="mt-3 divide-y divide-border">
-                  {detail.accounts.map((account) => (
-                    <button
-                      key={account.chart_account_id || "unclassified"}
-                      type="button"
-                      onClick={() =>
-                        openAccount(account.chart_account_id).catch(() =>
-                          toast.error("Falha no detalhe."),
-                        )
-                      }
-                      className="flex w-full items-center justify-between gap-3 py-3 text-left"
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-bold">{account.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {account.code} · {account.document_count} documentos
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <strong
-                          className={cn("text-sm", account.signed_amount < 0 && "text-destructive")}
-                        >
-                          {signedMoney(account.signed_amount)}
-                        </strong>
-                        <Eye className="size-4 text-muted-foreground" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section>
           </div>
         </>
       )}
     </div>
   );
 }
-
 export function FinancialCashFlowPage() {
   return <FinancialBoundary>{(access) => <CashFlowContent access={access} />}</FinancialBoundary>;
 }

@@ -601,6 +601,249 @@
     border-radius: 12px;
     background: color-mix(in oklch, var(--color-surface) 46%, transparent);
   }
+  .financial-dre-shell {
+    display: grid;
+    gap: 14px;
+  }
+  .financial-dre-control-bar,
+  .financial-dre-summary,
+  .financial-dre-layout {
+    margin-inline: 12px;
+  }
+  .financial-dre-control-bar {
+    display: grid;
+    gap: 10px;
+    align-items: end;
+    border: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
+    border-radius: 14px;
+    background: color-mix(in oklch, var(--color-card) 62%, transparent);
+    padding: 10px;
+    box-shadow:
+      0 12px 32px oklch(0.1 0.012 255 / 0.06),
+      inset 0 1px 0 oklch(1 0 0 / 0.12);
+  }
+  .financial-dre-control-bar .financial-period-bar {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+  }
+  .financial-dre-summary {
+    display: grid;
+    min-width: 0;
+    gap: 12px;
+    border: 1px solid color-mix(in oklch, var(--color-border) 64%, transparent);
+    border-radius: 16px;
+    background:
+      linear-gradient(
+        135deg,
+        color-mix(in oklch, var(--color-card) 94%, transparent),
+        color-mix(in oklch, var(--color-surface) 72%, transparent)
+      ),
+      color-mix(in oklch, var(--color-card) 84%, transparent);
+    padding: 14px;
+    box-shadow:
+      0 18px 44px oklch(0.1 0.012 255 / 0.09),
+      inset 0 1px 0 oklch(1 0 0 / 0.16);
+  }
+  .financial-dre-result-card,
+  .financial-dre-margin-card {
+    min-width: 0;
+    border: 1px solid color-mix(in oklch, var(--color-border) 66%, transparent);
+    border-radius: 14px;
+    background: color-mix(in oklch, var(--color-surface) 58%, transparent);
+    padding: 16px;
+  }
+  .financial-dre-result-card {
+    border-color: color-mix(in oklch, var(--color-primary) 42%, var(--color-border));
+    background: color-mix(in oklch, var(--color-primary) 9%, var(--color-card));
+  }
+  .financial-dre-result-value,
+  .financial-dre-margin-card strong {
+    display: block;
+    margin-top: 12px;
+    overflow-wrap: anywhere;
+    color: var(--color-primary);
+    font-size: 32px;
+    font-weight: 950;
+    line-height: 1;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .financial-dre-margin-card strong {
+    color: var(--color-foreground);
+  }
+  .financial-dre-secondary-metrics {
+    display: grid;
+    gap: 8px;
+  }
+  .financial-dre-layout {
+    display: grid;
+    gap: 12px;
+    align-items: start;
+  }
+  .financial-dre-statement,
+  .financial-dre-detail {
+    min-width: 0;
+    border: 1px solid color-mix(in oklch, var(--color-border) 68%, transparent);
+    border-radius: 14px;
+    background: color-mix(in oklch, var(--color-card) 72%, transparent);
+    box-shadow:
+      0 12px 34px oklch(0.1 0.012 255 / 0.08),
+      inset 0 1px 0 oklch(1 0 0 / 0.12);
+  }
+  .financial-dre-statement {
+    padding: 18px;
+  }
+  .financial-dre-detail {
+    padding: 16px;
+  }
+  .financial-dre-statement-head {
+    display: flex;
+    min-width: 0;
+    align-items: start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .financial-dre-statement-head h2,
+  .financial-dre-detail h2 {
+    margin-top: 3px;
+    font-size: 18px;
+    font-weight: 950;
+    letter-spacing: 0;
+  }
+  .financial-dre-sheet {
+    margin-top: 16px;
+    border-top: 2px solid color-mix(in oklch, var(--color-foreground) 16%, transparent);
+  }
+  .financial-dre-row {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(112px, auto);
+    align-items: center;
+    gap: 16px;
+    border: 0;
+    border-bottom: 1px solid color-mix(in oklch, var(--color-border) 74%, transparent);
+    background: transparent;
+    padding: 14px 0;
+    text-align: left;
+  }
+  .financial-dre-row:hover {
+    background: color-mix(in oklch, var(--color-primary) 5%, transparent);
+  }
+  .financial-dre-row-selected {
+    box-shadow: inset 3px 0 0 var(--color-primary);
+    padding-left: 10px;
+  }
+  .financial-dre-row-label {
+    min-width: 0;
+  }
+  .financial-dre-row-label span {
+    display: block;
+    overflow-wrap: anywhere;
+    font-size: 14px;
+    font-weight: 900;
+  }
+  .financial-dre-row-label small {
+    display: block;
+    margin-top: 3px;
+    color: var(--color-muted-foreground);
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .financial-dre-row-value,
+  .financial-dre-account-value {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: end;
+    gap: 8px;
+    color: var(--color-muted-foreground);
+  }
+  .financial-dre-row-value strong,
+  .financial-dre-row > strong {
+    overflow-wrap: anywhere;
+    color: var(--color-foreground);
+    font-size: 14px;
+    font-weight: 950;
+    font-variant-numeric: tabular-nums;
+  }
+  .financial-dre-subtotal {
+    border-top: 2px solid color-mix(in oklch, var(--color-foreground) 12%, transparent);
+    background: color-mix(in oklch, var(--color-surface) 48%, transparent);
+    padding-inline: 10px;
+  }
+  .financial-dre-final {
+    border-top: 2px solid color-mix(in oklch, var(--color-primary) 42%, var(--color-border));
+    border-bottom: 0;
+    background: color-mix(in oklch, var(--color-primary) 8%, var(--color-card));
+    padding: 18px 10px;
+  }
+  .financial-dre-final .financial-dre-row-label span,
+  .financial-dre-final > strong {
+    font-size: 19px;
+  }
+  .financial-dre-notes {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+    border-radius: 12px;
+    background: color-mix(in oklch, var(--color-surface) 52%, transparent);
+    padding: 12px;
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .financial-dre-detail-empty {
+    margin-top: 14px;
+    border: 1px dashed color-mix(in oklch, var(--color-border) 78%, transparent);
+    border-radius: 12px;
+    background: color-mix(in oklch, var(--color-surface) 44%, transparent);
+    padding: 18px;
+    text-align: center;
+    color: var(--color-muted-foreground);
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .financial-dre-detail-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .financial-dre-account,
+  .financial-dre-document {
+    display: grid;
+    min-width: 0;
+    gap: 10px;
+    border: 0;
+    border-radius: 12px;
+    background: color-mix(in oklch, var(--color-surface) 50%, transparent);
+    padding: 12px;
+    text-align: left;
+  }
+  .financial-dre-account {
+    grid-template-columns: minmax(0, 1fr) minmax(112px, auto);
+    align-items: center;
+  }
+  .financial-dre-account:hover {
+    background: color-mix(in oklch, var(--color-primary) 6%, transparent);
+  }
+  .financial-dre-account strong,
+  .financial-dre-document strong {
+    display: block;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    font-weight: 900;
+  }
+  .financial-dre-account span,
+  .financial-dre-document span {
+    display: block;
+    margin-top: 3px;
+    color: var(--color-muted-foreground);
+    font-size: 11px;
+    font-weight: 700;
+  }
   .financial-cashflow-shell {
     display: grid;
     gap: 14px;
@@ -833,6 +1076,11 @@
       margin-inline: 0;
       padding-inline: 0;
     }
+    .financial-dre-control-bar,
+    .financial-dre-summary,
+    .financial-dre-layout {
+      margin-inline: 0;
+    }
     .financial-overview-top {
       grid-template-columns: minmax(0, 1fr) minmax(430px, 520px);
       align-items: end;
@@ -848,6 +1096,20 @@
     }
     .financial-intel-grid {
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+    .financial-dre-control-bar {
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 0.36fr);
+      padding: 12px;
+    }
+    .financial-dre-summary {
+      grid-template-columns: minmax(0, 1.35fr) minmax(190px, 0.45fr) minmax(260px, 0.75fr);
+      align-items: stretch;
+    }
+    .financial-dre-secondary-metrics {
+      align-content: stretch;
+    }
+    .financial-dre-layout {
+      grid-template-columns: minmax(0, 1.95fr) minmax(320px, 0.85fr);
     }
     .financial-cashflow-control-bar,
     .financial-cashflow-equation,
@@ -895,6 +1157,15 @@
     .financial-chart-panel {
       padding: 18px;
     }
+    .financial-dre-result-value {
+      font-size: 42px;
+    }
+    .financial-dre-margin-card strong {
+      font-size: 36px;
+    }
+    .financial-dre-statement {
+      padding: 22px;
+    }
     .financial-cashflow-step-featured .financial-cashflow-step-value,
     .financial-cashflow-projection strong {
       font-size: 33px;
@@ -913,6 +1184,27 @@
     .financial-analysis-grid,
     .financial-intel-grid {
       margin-inline: 12px;
+    }
+    .financial-dre-control-bar .financial-period-bar {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+    .financial-dre-summary,
+    .financial-dre-layout {
+      margin-inline: 12px;
+    }
+    .financial-dre-row {
+      grid-template-columns: minmax(0, 1fr) minmax(98px, auto);
+      gap: 10px;
+    }
+    .financial-dre-row-value strong,
+    .financial-dre-row > strong {
+      font-size: 13px;
+    }
+    .financial-dre-account {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .financial-dre-account-value {
+      justify-content: space-between;
     }
     .financial-cashflow-control-bar .financial-period-bar {
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
