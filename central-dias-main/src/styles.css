@@ -1579,6 +1579,215 @@
   .dark .financial-profitability-table th {
     background: oklch(0.18 0.006 255 / 0.98);
   }
+  .fuel-ranking-panel {
+    display: grid;
+    gap: 14px;
+    overflow: hidden;
+    border: 1px solid color-mix(in oklch, var(--color-border) 70%, transparent);
+    border-radius: 16px;
+    background:
+      linear-gradient(135deg, color-mix(in oklch, var(--color-card) 88%, transparent), color-mix(in oklch, var(--color-primary) 6%, var(--color-surface))),
+      var(--color-card);
+    padding: 16px;
+    box-shadow:
+      0 18px 42px oklch(0.1 0.012 255 / 0.08),
+      inset 0 1px 0 oklch(1 0 0 / 0.16);
+  }
+  .fuel-ranking-head {
+    display: grid;
+    gap: 12px;
+  }
+  .fuel-ranking-head p {
+    color: var(--color-muted-foreground);
+    font-size: 11px;
+    font-weight: 950;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .fuel-ranking-head h2 {
+    margin-top: 2px;
+    font-size: 22px;
+    font-weight: 950;
+    letter-spacing: 0;
+  }
+  .fuel-ranking-head span {
+    display: block;
+    margin-top: 4px;
+    color: var(--color-muted-foreground);
+    font-size: 13px;
+    font-weight: 750;
+  }
+  .fuel-ranking-controls {
+    display: grid;
+    gap: 8px;
+  }
+  .fuel-ranking-controls button[role="combobox"] {
+    height: 38px;
+    border-radius: 12px;
+    background: color-mix(in oklch, var(--color-surface) 70%, transparent);
+    font-weight: 800;
+  }
+  .fuel-ranking-grid {
+    display: grid;
+    gap: 10px;
+  }
+  .fuel-ranking-card {
+    display: grid;
+    min-width: 0;
+    gap: 12px;
+    border: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
+    border-radius: 12px;
+    background: color-mix(in oklch, var(--color-card) 78%, transparent);
+    padding: 14px;
+    text-align: left;
+    box-shadow:
+      0 12px 28px oklch(0.1 0.012 255 / 0.06),
+      inset 0 1px 0 oklch(1 0 0 / 0.14);
+    transition:
+      border-color 160ms ease,
+      transform 160ms ease,
+      box-shadow 160ms ease;
+  }
+  .fuel-ranking-card:hover {
+    border-color: color-mix(in oklch, var(--color-primary) 45%, var(--color-border));
+    box-shadow:
+      0 18px 36px oklch(0.1 0.012 255 / 0.12),
+      inset 0 1px 0 oklch(1 0 0 / 0.16);
+    transform: translateY(-1px);
+  }
+  .fuel-ranking-card-top,
+  .fuel-ranking-card-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--color-muted-foreground);
+    font-size: 11px;
+    font-weight: 900;
+  }
+  .fuel-ranking-card-top svg {
+    color: var(--color-primary);
+  }
+  .fuel-ranking-card > strong {
+    overflow-wrap: anywhere;
+    color: var(--color-foreground);
+    font-size: 24px;
+    font-weight: 950;
+    line-height: 1;
+  }
+  .fuel-ranking-kpi {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--color-primary);
+    font-size: 20px;
+    font-weight: 950;
+    font-variant-numeric: tabular-nums;
+  }
+  .fuel-ranking-kpi svg {
+    flex: 0 0 auto;
+  }
+  .fuel-ranking-meta {
+    display: grid;
+    gap: 2px;
+    border-left: 2px solid color-mix(in oklch, var(--color-primary) 58%, var(--color-border));
+    padding-left: 10px;
+  }
+  .fuel-ranking-meta span {
+    color: var(--color-muted-foreground);
+    font-size: 10px;
+    font-weight: 950;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .fuel-ranking-meta b {
+    color: var(--color-foreground);
+    font-size: 13px;
+    font-weight: 900;
+  }
+  .fuel-ranking-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .fuel-ranking-footer a {
+    min-height: 36px;
+    border: 1px solid color-mix(in oklch, var(--color-primary) 38%, var(--color-border));
+    border-radius: 999px;
+    padding: 8px 14px;
+    color: var(--color-primary);
+    font-weight: 950;
+    text-decoration: none;
+  }
+  .fuel-ranking-empty {
+    border: 1px dashed color-mix(in oklch, var(--color-border) 78%, transparent);
+    border-radius: 12px;
+    background: color-mix(in oklch, var(--color-surface) 42%, transparent);
+    padding: 16px;
+    color: var(--color-muted-foreground);
+    font-size: 13px;
+    font-weight: 800;
+  }
+  .fuel-modal-summary {
+    display: grid;
+    gap: 10px;
+  }
+  .fuel-modal-list {
+    display: grid;
+    max-height: min(52vh, 520px);
+    overflow: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: color-mix(in oklch, var(--color-surface) 55%, transparent);
+  }
+  .fuel-modal-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--color-border);
+    padding: 12px;
+    text-align: left;
+  }
+  .fuel-modal-row:last-child {
+    border-bottom: 0;
+  }
+  .fuel-modal-row:hover {
+    background: color-mix(in oklch, var(--color-primary) 7%, transparent);
+  }
+  .fuel-modal-row strong,
+  .fuel-modal-row span {
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 850;
+  }
+  .fuel-modal-row div span {
+    display: block;
+    margin-top: 2px;
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .dark .fuel-ranking-panel {
+    background:
+      linear-gradient(135deg, oklch(0.16 0.006 255 / 0.96), color-mix(in oklch, var(--color-primary) 8%, oklch(0.12 0.006 255))),
+      oklch(0.14 0.006 255);
+    border-color: oklch(1 0 0 / 0.12);
+  }
+  .dark .fuel-ranking-card,
+  .dark .fuel-modal-list {
+    background: oklch(0.18 0.006 255 / 0.86);
+    border-color: oklch(1 0 0 / 0.12);
+  }
+  .dark .fuel-ranking-controls button[role="combobox"],
+  .dark .fuel-ranking-empty {
+    background: oklch(0.15 0.006 255 / 0.92);
+  }
   .financial-payables-shell {
     display: grid;
     gap: 16px;
@@ -2582,6 +2791,19 @@
     .financial-profitability-modal-tools {
       grid-template-columns: minmax(0, 1fr) minmax(240px, 0.34fr);
     }
+    .fuel-ranking-head {
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 0.45fr);
+      align-items: end;
+    }
+    .fuel-ranking-controls {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    }
+    .fuel-ranking-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .fuel-modal-summary {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
     .financial-profitability-detail-head {
       grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
       align-items: end;
@@ -2692,6 +2914,9 @@
     .financial-profitability-top-grid {
       grid-template-columns: repeat(5, minmax(0, 1fr));
     }
+    .fuel-ranking-grid {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
     .financial-profitability-result strong {
       font-size: 46px;
     }
@@ -2765,6 +2990,22 @@
     .financial-profitability-dimensions button {
       padding: 9px 6px;
       font-size: 10px;
+    }
+    .fuel-ranking-panel {
+      padding: 14px;
+    }
+    .fuel-ranking-head h2 {
+      font-size: 20px;
+    }
+    .fuel-ranking-card > strong {
+      font-size: 22px;
+    }
+    .fuel-modal-row {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .fuel-modal-row > span,
+    .fuel-modal-row > svg {
+      justify-self: start;
     }
     .financial-profitability-result strong {
       font-size: 34px;

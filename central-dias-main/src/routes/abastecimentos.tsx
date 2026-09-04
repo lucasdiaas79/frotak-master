@@ -1,15 +1,19 @@
 import JSZip from "jszip";
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  BarChart3,
   CheckSquare,
+  ChevronRight,
   Download,
   FileText,
   Filter,
   Fuel,
   Gauge,
+  MapPinned,
   Trash2,
   Search,
   Square,
+  Trophy,
   Truck,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -34,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { deleteFuelRecords, listFuelRecords } from "@/lib/services/fuel-records";
+import { useFleet } from "@/lib/store";
 import { FUEL_TYPE_LABEL, type FuelRecord, type FuelType } from "@/lib/types";
 import { toast } from "sonner";
 
@@ -71,6 +76,55 @@ function sanitizeFileName(value: string) {
   return value.replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim();
 }
 
+type FuelRankMode = "diesel_s10" | "arla" | "diesel_arla";
+
+type VehicleFuelSummary = {
+  plate: string;
+  vehicleId?: string;
+  implementModel: string;
+  stationCount: number;
+  recordCount: number;
+  dieselLiters: number;
+  arlaLiters: number;
+  totalAmount: number;
+  kmPerLiter: number | null;
+  latestAt: string;
+  records: FuelRecord[];
+};
+
+function formatKmPerLiter(value: number | null) {
+  if (value === null) return "Sem Km/L";
+  return `${new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)} km/L`;
+}
+
+function matchesRankMode(record: FuelRecord, mode: FuelRankMode) {
+  if (mode === "diesel_arla") return true;
+  return record.fuelType === mode;
+}
+
+function calculateKmPerLiter(records: FuelRecord[]) {
+  const dieselRecords = records
+    .filter((record) => record.fuelType === "diesel_s10" && record.liters > 0 && record.odometer > 0)
+    .sort((a, b) => a.odometer - b.odometer || new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime());
+
+  let distance = 0;
+  let liters = 0;
+  for (let index = 1; index < dieselRecords.length; index += 1) {
+    const previous = dieselRecords[index - 1];
+    const current = dieselRecords[index];
+    const delta = current.odometer - previous.odometer;
+    if (delta <= 0) continue;
+    distance += delta;
+    liters += current.liters;
+  }
+
+  if (distance <= 0 || liters <= 0) return null;
+  return distance / liters;
+}
+
 async function fetchFileBuffer(url: string) {
   const response = await fetch(url);
   if (!response.ok) throw new Error("Falha ao baixar documento");
@@ -97,13 +151,21 @@ function AbastecimentosPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [selectedRecord, setSelectedRecord] = useState<FuelRecord | null>(null);
+  const [selectedVehicleSummary, setSelectedVehicleSummary] = useState<VehicleFuelSummary | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [rankMode, setRankMode] = useState<FuelRankMode>("diesel_arla");
+  const [stationFilter, setStationFilter] = useState("all");
+
+  const vehicles = useFleet((state) => state.vehicles);
+  const trailers = useFleet((state) => state.trailers);
+  const loadFleet = useFleet((state) => state.loadAll);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
+    void loadFleet().catch(() => undefined);
     listFuelRecords()
       .then((items) => {
         if (active) setRecords(items);
@@ -118,7 +180,7 @@ function AbastecimentosPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [loadFleet]);
 
   const filtered = useMemo(() => {
     const plate = plateFilter.trim().toUpperCase();
@@ -137,6 +199,86 @@ function AbastecimentosPage() {
       return matchesPlate && matchesFuel && matchesFrom && matchesTo;
     });
   }, [records, plateFilter, fuelTypeFilter, dateFrom, dateTo]);
+
+  const stations = useMemo(
+    () =>
+      Array.from(new Set(filtered.map((record) => record.station).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [filtered],
+  );
+
+  const vehicleMetaByPlate = useMemo(() => {
+    const byTrailerId = new Map(trailers.map((trailer) => [trailer.id, trailer]));
+    return new Map(
+      vehicles.map((vehicle) => {
+        const linkedTrailers = (vehicle.trailerIds?.length ? vehicle.trailerIds : vehicle.trailerId ? [vehicle.trailerId] : [])
+          .map((id) => byTrailerId.get(id))
+          .filter(Boolean);
+        const implementModel =
+          linkedTrailers
+            .map((trailer) => trailer?.implementModel || trailer?.model || trailer?.type)
+            .filter(Boolean)
+            .join(" + ") || "Não informado";
+        return [
+          vehicle.plate.toUpperCase(),
+          {
+            vehicleId: vehicle.id,
+            implementModel,
+          },
+        ];
+      }),
+    );
+  }, [trailers, vehicles]);
+
+  const rankingScope = useMemo(
+    () =>
+      filtered.filter((record) => {
+        const matchesFuel = matchesRankMode(record, rankMode);
+        const matchesStation = stationFilter === "all" || record.station === stationFilter;
+        return matchesFuel && matchesStation;
+      }),
+    [filtered, rankMode, stationFilter],
+  );
+
+  const vehicleRanking = useMemo(() => {
+    const byPlate = new Map<string, FuelRecord[]>();
+    for (const record of rankingScope) {
+      const plate = record.vehiclePlate.toUpperCase();
+      byPlate.set(plate, [...(byPlate.get(plate) ?? []), record]);
+    }
+
+    return Array.from(byPlate.entries())
+      .map(([plate, items]): VehicleFuelSummary => {
+        const meta = vehicleMetaByPlate.get(plate);
+        const stations = new Set(items.map((item) => item.station).filter(Boolean));
+        return {
+          plate,
+          vehicleId: meta?.vehicleId ?? items.find((item) => item.vehicleId)?.vehicleId,
+          implementModel: meta?.implementModel ?? "Não informado",
+          stationCount: stations.size,
+          recordCount: items.length,
+          dieselLiters: items
+            .filter((item) => item.fuelType === "diesel_s10")
+            .reduce((total, item) => total + item.liters, 0),
+          arlaLiters: items.filter((item) => item.fuelType === "arla").reduce((total, item) => total + item.liters, 0),
+          totalAmount: items.reduce((total, item) => total + item.amount, 0),
+          kmPerLiter: calculateKmPerLiter(items),
+          latestAt: items
+            .map((item) => item.recordedAt)
+            .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0],
+          records: items.sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()),
+        };
+      })
+      .sort((a, b) => {
+        if (a.kmPerLiter !== null && b.kmPerLiter !== null) return b.kmPerLiter - a.kmPerLiter;
+        if (a.kmPerLiter !== null) return -1;
+        if (b.kmPerLiter !== null) return 1;
+        return b.recordCount - a.recordCount;
+      });
+  }, [rankingScope, vehicleMetaByPlate]);
+
+  const topVehicleRanking = vehicleRanking.slice(0, 10);
 
   const selectedCount = selectedIds.length;
   const allFilteredSelected = filtered.length > 0 && filtered.every((record) => selectedIds.includes(record.id));
@@ -208,12 +350,12 @@ function AbastecimentosPage() {
             folder.file(`${fileName}.txt`, "Falha ao baixar documento.");
           }
         } else if (record.invoiceFileName) {
-          folder.file(`${sanitizeFileName(record.invoiceFileName)}.txt`, "Documento indisponivel para download.");
+          folder.file(`${sanitizeFileName(record.invoiceFileName)}.txt`, "Documento indisponível para download.");
         }
       }
 
       const blob = await zip.generateAsync({ type: "blob" });
-      downloadBlob(blob, `Abastecimentos ${formatDateInput(new Date().toISOString()) || "exportacao"}.zip`);
+      downloadBlob(blob, `Abastecimentos ${formatDateInput(new Date().toISOString()) || "exportação"}.zip`);
     } finally {
       setExporting(false);
     }
@@ -262,13 +404,13 @@ function AbastecimentosPage() {
               <SelectTrigger className="h-10">
                 <span className="flex items-center gap-2">
                   <Filter className="size-4" />
-                  <SelectValue placeholder="Combustivel" />
+                  <SelectValue placeholder="Combustível" />
                 </span>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Diesel + Arla</SelectItem>
-                <SelectItem value="diesel_s10">So Diesel S10</SelectItem>
-                <SelectItem value="arla">So Arla</SelectItem>
+                <SelectItem value="diesel_s10">Só Diesel S10</SelectItem>
+                <SelectItem value="arla">Só Arla</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -286,13 +428,13 @@ function AbastecimentosPage() {
       <Card>
         <CardContent className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-5">
           <div className="space-y-1 text-sm">
-            <span className="invisible text-muted-foreground">Acao</span>
+            <span className="invisible text-muted-foreground">Ação</span>
             <Button variant="outline" className="h-10 w-full" onClick={clearFilters}>
               Limpar filtros
             </Button>
           </div>
           <div className="space-y-1 text-sm">
-            <span className="invisible text-muted-foreground">Acao</span>
+            <span className="invisible text-muted-foreground">Ação</span>
             <button
               type="button"
               onClick={() => toggleSelectAll(!allFilteredSelected)}
@@ -306,14 +448,14 @@ function AbastecimentosPage() {
             </button>
           </div>
           <div className="space-y-1 text-sm">
-            <span className="invisible text-muted-foreground">Acao</span>
+            <span className="invisible text-muted-foreground">Ação</span>
             <Button className="h-10 w-full" onClick={exportSelected} disabled={selectedCount === 0 || exporting}>
               <Download className="size-4" />
               {exporting ? "Exportando..." : `Exportar (${selectedCount})`}
             </Button>
           </div>
           <div className="space-y-1 text-sm">
-            <span className="invisible text-muted-foreground">Acao</span>
+            <span className="invisible text-muted-foreground">Ação</span>
             <Button
               variant="destructive"
               className="h-10 w-full"
@@ -325,7 +467,7 @@ function AbastecimentosPage() {
             </Button>
           </div>
           <div className="space-y-1 text-sm">
-            <span className="invisible text-muted-foreground">Acao</span>
+            <span className="invisible text-muted-foreground">Ação</span>
             <div className="flex h-10 items-center justify-between rounded-2xl border border-border bg-surface/60 px-4 text-sm">
               <span className="font-medium">Registros</span>
               <span className="text-muted-foreground">{filtered.length}</span>
@@ -333,6 +475,67 @@ function AbastecimentosPage() {
           </div>
         </CardContent>
       </Card>
+
+      <section className="fuel-ranking-panel">
+        <div className="fuel-ranking-head">
+          <div>
+            <p>Ranking de eficiência</p>
+            <h2>Top 10 caminhões por Km/L</h2>
+            <span>Ordenado do melhor para o pior com base nos abastecimentos filtrados.</span>
+          </div>
+          <div className="fuel-ranking-controls">
+            <Select value={rankMode} onValueChange={(value) => setRankMode(value as FuelRankMode)}>
+              <SelectTrigger>
+                <Filter className="size-4" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="diesel_arla">Diesel + Arla</SelectItem>
+                <SelectItem value="diesel_s10">Diesel</SelectItem>
+                <SelectItem value="arla">Arla</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={stationFilter} onValueChange={setStationFilter}>
+              <SelectTrigger>
+                <MapPinned className="size-4" />
+                <SelectValue placeholder="Posto de gasolina" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os postos</SelectItem>
+                {stations.map((station) => (
+                  <SelectItem key={station} value={station}>
+                    {station}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="fuel-ranking-empty">Calculando ranking de abastecimentos...</div>
+        ) : topVehicleRanking.length ? (
+          <div className="fuel-ranking-grid">
+            {topVehicleRanking.map((item, index) => (
+              <FuelRankingCard
+                key={item.plate}
+                item={item}
+                index={index}
+                onClick={() => setSelectedVehicleSummary(item)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="fuel-ranking-empty">
+            Nenhum caminhão com abastecimentos para os filtros selecionados.
+          </div>
+        )}
+
+        <div className="fuel-ranking-footer">
+          <span>{vehicleRanking.length} caminhão(ões) analisado(s)</span>
+          <a href="#lista-abastecimentos">Ver todos</a>
+        </div>
+      </section>
 
       {loading ? (
         <Card>
@@ -349,7 +552,7 @@ function AbastecimentosPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-border bg-surface/70">
+        <div id="lista-abastecimentos" className="overflow-hidden rounded-2xl border border-border bg-surface/70">
           {filtered.map((record) => {
             const checked = selectedIds.includes(record.id);
             return (
@@ -377,7 +580,7 @@ function AbastecimentosPage() {
                     </div>
                     <h2 className="truncate text-sm font-semibold text-foreground">{record.station}</h2>
                     <p className="truncate text-[12.5px] text-muted-foreground">
-                      {record.driverName ?? "Motorista nao informado"} · {formatDate(record.recordedAt)}
+                      {record.driverName ?? "Motorista não informado"} · {formatDate(record.recordedAt)}
                     </p>
                   </div>
                   <div className="shrink-0 text-[12.5px] text-muted-foreground md:text-right">
@@ -417,12 +620,12 @@ function AbastecimentosPage() {
                 </div>
 
                 <div className="grid gap-3 text-sm md:grid-cols-3">
-                  <FuelDetail label="Motorista" value={selectedRecord.driverName ?? "Nao informado"} />
+                  <FuelDetail label="Motorista" value={selectedRecord.driverName ?? "Não informado"} />
                   <FuelDetail label="Posto" value={selectedRecord.station} />
                   <FuelDetail label="Data" value={formatDate(selectedRecord.recordedAt)} />
                   <FuelDetail label="Litragem" value={`${formatNumber(selectedRecord.liters)} L`} />
                   <FuelDetail label="Valor" value={moneyFormatter.format(selectedRecord.amount)} />
-                  <FuelDetail label="Odometro" value={formatNumber(selectedRecord.odometer)} />
+                  <FuelDetail label="Odômetro" value={formatNumber(selectedRecord.odometer)} />
                 </div>
 
                 {selectedRecord.notes ? (
@@ -456,7 +659,87 @@ function AbastecimentosPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={!!selectedVehicleSummary}
+        onOpenChange={(open) => !open && setSelectedVehicleSummary(null)}
+      >
+        <DialogContent className="max-w-5xl overflow-y-auto">
+          {selectedVehicleSummary ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Abastecimentos {selectedVehicleSummary.plate}</DialogTitle>
+                <DialogDescription>
+                  Histórico da placa dentro dos filtros atuais do ranking.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="fuel-modal-summary">
+                <FuelDetail label="Km/L" value={formatKmPerLiter(selectedVehicleSummary.kmPerLiter)} />
+                <FuelDetail label="Implemento" value={selectedVehicleSummary.implementModel} />
+                <FuelDetail label="Diesel" value={`${formatNumber(selectedVehicleSummary.dieselLiters)} L`} />
+                <FuelDetail label="Arla" value={`${formatNumber(selectedVehicleSummary.arlaLiters)} L`} />
+                <FuelDetail label="Total" value={moneyFormatter.format(selectedVehicleSummary.totalAmount)} />
+              </div>
+
+              <div className="fuel-modal-list">
+                {selectedVehicleSummary.records.map((record) => (
+                  <button
+                    key={record.id}
+                    type="button"
+                    onClick={() => setSelectedRecord(record)}
+                    className="fuel-modal-row"
+                  >
+                    <div>
+                      <strong>{record.station}</strong>
+                      <span>{formatDate(record.recordedAt)}</span>
+                    </div>
+                    <Badge variant={record.fuelType === "diesel_s10" ? "default" : "outline"}>
+                      {FUEL_TYPE_LABEL[record.fuelType]}
+                    </Badge>
+                    <span>{formatNumber(record.liters)} L</span>
+                    <span>{moneyFormatter.format(record.amount)}</span>
+                    <ChevronRight className="size-4" />
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function FuelRankingCard({
+  item,
+  index,
+  onClick,
+}: {
+  item: VehicleFuelSummary;
+  index: number;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className="fuel-ranking-card" onClick={onClick}>
+      <div className="fuel-ranking-card-top">
+        <span>#{String(index + 1).padStart(2, "0")}</span>
+        {index < 3 ? <Trophy className="size-4" /> : <Truck className="size-4" />}
+      </div>
+      <strong>{item.plate}</strong>
+      <div className="fuel-ranking-kpi">
+        <Gauge className="size-4" />
+        <span>{formatKmPerLiter(item.kmPerLiter)}</span>
+      </div>
+      <div className="fuel-ranking-meta">
+        <span>Modelo implemento</span>
+        <b>{item.implementModel}</b>
+      </div>
+      <div className="fuel-ranking-card-foot">
+        <span>{item.recordCount} registro(s)</span>
+        <span>{item.stationCount} posto(s)</span>
+      </div>
+    </button>
   );
 }
 

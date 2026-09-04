@@ -148,10 +148,10 @@ function financialNavFor(access: FinancialAccess | null) {
         item.to !== "/financeiro/dre" &&
         item.to !== "/financeiro/fluxo-caixa") ||
       (item.to === "/financeiro/salarios" &&
-        access?.permissions.includes("financial.payroll.view")) ||
-      (item.to === "/financeiro/dre" && access?.permissions.includes("financial.dre.view")) ||
+        access?.permissions?.includes("financial.payroll.view")) ||
+      (item.to === "/financeiro/dre" && access?.permissions?.includes("financial.dre.view")) ||
       (item.to === "/financeiro/fluxo-caixa" &&
-        access?.permissions.includes("financial.cashflow.view")),
+        access?.permissions?.includes("financial.cashflow.view")),
   );
 }
 
