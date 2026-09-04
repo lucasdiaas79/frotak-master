@@ -912,19 +912,21 @@
   .financial-profitability-dimensions {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
+    gap: 5px;
     border: 1px solid color-mix(in oklch, var(--color-border) 70%, transparent);
     border-radius: 12px;
-    background: color-mix(in oklch, var(--color-card) 78%, transparent);
-    padding: 6px;
+    background:
+      linear-gradient(180deg, color-mix(in oklch, var(--color-card) 86%, transparent), color-mix(in oklch, var(--color-surface) 58%, transparent));
+    padding: 5px;
     box-shadow:
       0 10px 28px oklch(0.1 0.012 255 / 0.06),
       inset 0 1px 0 oklch(1 0 0 / 0.12);
   }
   .financial-profitability-dimensions button {
+    position: relative;
     min-width: 0;
-    border-radius: 8px;
-    padding: 10px 8px;
+    border-radius: 9px;
+    padding: 9px 8px;
     color: var(--color-muted-foreground);
     font-size: 11px;
     font-weight: 950;
@@ -940,17 +942,30 @@
     color: var(--color-foreground);
   }
   .financial-profitability-dimensions button.is-active {
-    background: var(--color-foreground);
+    background:
+      linear-gradient(180deg, color-mix(in oklch, var(--color-foreground) 96%, var(--color-primary)), var(--color-foreground));
     color: var(--color-card);
-    box-shadow: 0 10px 26px oklch(0.1 0.012 255 / 0.13);
+    box-shadow:
+      0 10px 24px oklch(0.1 0.012 255 / 0.14),
+      inset 0 -2px 0 color-mix(in oklch, var(--color-primary) 88%, white);
+  }
+  .financial-profitability-dimensions button.is-active::after {
+    position: absolute;
+    right: 10px;
+    bottom: 6px;
+    left: 10px;
+    height: 2px;
+    border-radius: 999px;
+    background: var(--color-primary);
+    content: "";
   }
   .financial-profitability-filters {
     display: grid;
-    gap: 12px;
+    gap: 8px;
     border: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
     border-radius: 10px;
     background: color-mix(in oklch, var(--color-card) 62%, transparent);
-    padding: 12px;
+    padding: 10px 12px;
     box-shadow:
       0 12px 32px oklch(0.1 0.012 255 / 0.06),
       inset 0 1px 0 oklch(1 0 0 / 0.12);
@@ -966,19 +981,27 @@
   .financial-profitability-ranking-head h2,
   .financial-profitability-attention h2,
   .financial-profitability-compare h2 {
-    margin-top: 3px;
-    font-size: 18px;
+    margin-top: 1px;
+    font-size: 17px;
     font-weight: 950;
     letter-spacing: 0;
   }
   .financial-profitability-filter-primary,
   .financial-profitability-filter-secondary {
     display: grid;
-    gap: 10px;
+    gap: 8px;
+  }
+  .financial-profitability-filters label {
+    gap: 4px;
+  }
+  .financial-profitability-filters input,
+  .financial-profitability-filters button[role="combobox"] {
+    height: 36px;
+    min-height: 36px;
   }
   .financial-profitability-more-filters {
     display: grid;
-    gap: 10px;
+    gap: 8px;
   }
   .financial-profitability-more-filters summary {
     width: fit-content;
@@ -986,7 +1009,7 @@
     border-radius: 999px;
     border: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
     background: color-mix(in oklch, var(--color-surface) 50%, transparent);
-    padding: 8px 12px;
+    padding: 7px 11px;
     color: var(--color-muted-foreground);
     font-size: 12px;
     font-weight: 900;
@@ -1009,7 +1032,7 @@
         color-mix(in oklch, var(--color-foreground) 7%, transparent),
         color-mix(in oklch, var(--color-primary) 5%, transparent)
       );
-    padding: 14px 0;
+    padding: 13px 0;
   }
   .financial-profitability-result,
   .financial-profitability-margin,
@@ -1048,15 +1071,35 @@
     display: grid;
     align-content: center;
     gap: 4px;
-    border-left: 3px solid color-mix(in oklch, var(--color-primary) 70%, var(--color-border));
+    border-left: 3px solid currentColor;
     background: color-mix(in oklch, var(--color-card) 72%, transparent);
     padding: 13px 14px;
+    color: var(--color-muted-foreground);
+  }
+  .financial-profitability-margin.is-positive {
+    color: var(--color-primary);
+  }
+  .financial-profitability-margin.is-neutral {
+    color: var(--color-muted-foreground);
+  }
+  .financial-profitability-margin.is-negative {
+    color: oklch(0.64 0.18 18);
+    background: color-mix(in oklch, var(--color-destructive) 6%, var(--color-card));
   }
   .financial-profitability-margin strong {
     font-size: 26px;
     font-weight: 950;
     line-height: 1;
     font-variant-numeric: tabular-nums;
+  }
+  .financial-profitability-margin strong.financial-profitability-positive {
+    color: var(--color-primary);
+  }
+  .financial-profitability-margin strong.financial-profitability-neutral {
+    color: var(--color-muted-foreground);
+  }
+  .financial-profitability-margin strong.financial-profitability-negative {
+    color: oklch(0.64 0.18 18);
   }
   .financial-profitability-executive-line {
     display: grid;
@@ -1068,8 +1111,9 @@
     align-items: center;
     gap: 8px;
     border-radius: 8px;
-    background: color-mix(in oklch, var(--color-surface) 54%, transparent);
-    padding: 10px 12px;
+    border: 1px solid color-mix(in oklch, var(--color-border) 46%, transparent);
+    background: color-mix(in oklch, var(--color-surface) 70%, transparent);
+    padding: 11px 13px;
   }
   .financial-profitability-mini svg {
     color: var(--color-primary);
@@ -1077,7 +1121,8 @@
   .financial-profitability-mini strong {
     justify-self: end;
     overflow-wrap: anywhere;
-    font-size: 14px;
+    color: var(--color-foreground);
+    font-size: 15px;
     font-weight: 950;
     text-align: right;
     font-variant-numeric: tabular-nums;
@@ -1209,17 +1254,23 @@
   .financial-profitability-negative {
     color: color-mix(in oklch, var(--color-destructive) 82%, var(--color-foreground)) !important;
   }
+  .financial-profitability-positive {
+    color: var(--color-primary) !important;
+  }
+  .financial-profitability-neutral {
+    color: var(--color-muted-foreground) !important;
+  }
   .financial-profitability-warning,
   .financial-profitability-error {
     border-radius: 8px;
-    padding: 13px 14px;
-    font-size: 13px;
+    padding: 9px 12px;
+    font-size: 12px;
     font-weight: 800;
   }
   .financial-profitability-warning {
-    border: 1px solid color-mix(in oklch, var(--color-warning) 32%, var(--color-border));
-    background: color-mix(in oklch, var(--color-warning) 10%, var(--color-card));
-    color: color-mix(in oklch, var(--color-warning) 55%, var(--color-foreground));
+    border: 1px solid color-mix(in oklch, var(--color-border) 82%, transparent);
+    background: color-mix(in oklch, var(--color-warning) 5%, var(--color-card));
+    color: color-mix(in oklch, var(--color-warning) 34%, var(--color-foreground));
   }
   .financial-profitability-error {
     border: 1px solid color-mix(in oklch, var(--color-destructive) 28%, var(--color-border));
@@ -1483,6 +1534,15 @@
       linear-gradient(180deg, oklch(0.215 0.006 255 / 0.94), oklch(0.15 0.006 255 / 0.96));
     border-color: color-mix(in oklch, var(--color-primary) 38%, var(--color-border));
   }
+  .dark .financial-profitability-dimensions button.is-active {
+    background:
+      linear-gradient(180deg, oklch(0.205 0.012 255 / 0.98), oklch(0.115 0.009 255 / 0.98));
+    color: oklch(0.96 0.012 150);
+    box-shadow:
+      0 12px 28px oklch(0.05 0.01 255 / 0.28),
+      inset 0 -2px 0 var(--color-primary),
+      inset 0 1px 0 oklch(1 0 0 / 0.1);
+  }
   .dark .financial-profitability-executive {
     background:
       linear-gradient(
@@ -1497,6 +1557,9 @@
   .dark .financial-profitability-equation > div,
   .dark .financial-profitability-empty {
     background: oklch(0.18 0.006 255 / 0.86);
+  }
+  .dark .financial-profitability-margin.is-negative {
+    background: color-mix(in oklch, var(--color-destructive) 10%, oklch(0.18 0.006 255));
   }
   .dark .financial-profitability-table th {
     background: oklch(0.18 0.006 255 / 0.98);

@@ -233,11 +233,13 @@ function partnerItem(row: PartnerProfitabilityRow): RankingItem {
 
 function marginTone(value: number) {
   if (value < 0) return "negative";
-  if (value < 5) return "warning";
+  if (value === 0) return "neutral";
   return "positive";
 }
 
 function ExecutiveStrip({ summary }: { summary: FleetProfitabilitySummary }) {
+  const tone = marginTone(summary.margin);
+
   return (
     <section className="financial-profitability-executive">
       <div className="financial-profitability-result">
@@ -247,11 +249,9 @@ function ExecutiveStrip({ summary }: { summary: FleetProfitabilitySummary }) {
         </strong>
         <small>Faturar mais não é lucrar mais</small>
       </div>
-      <div className="financial-profitability-margin">
+      <div className={cn("financial-profitability-margin", `is-${tone}`)}>
         <span>Margem</span>
-        <strong className={`financial-profitability-${marginTone(summary.margin)}`}>
-          {percent(summary.margin)}
-        </strong>
+        <strong className={`financial-profitability-${tone}`}>{percent(summary.margin)}</strong>
       </div>
       <div className="financial-profitability-executive-line">
         <MetricMini label="Faturamento" value={money(summary.revenue)} icon={ArrowUp} />
@@ -352,7 +352,12 @@ function RankingCard({
         </strong>
       </div>
       <div className="financial-profitability-rank-metrics">
-        <span>Margem <strong>{percent(item.margin)}</strong></span>
+        <span>
+          Margem{" "}
+          <strong className={`financial-profitability-${marginTone(item.margin)}`}>
+            {percent(item.margin)}
+          </strong>
+        </span>
         <span>Receita <strong>{money(item.revenue)}</strong></span>
         <span>Custos <strong>{money(item.costs)}</strong></span>
       </div>
