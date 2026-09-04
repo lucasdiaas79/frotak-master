@@ -1,11 +1,9 @@
 ﻿import {
   ArrowDown,
   ArrowUp,
-  CalendarDays,
   Download,
   FilterX,
   Landmark,
-  Percent,
   RefreshCw,
   RouteIcon,
   Search,
@@ -31,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getFinancialAccess, listFinancialPartners } from "@/lib/financial/phase2";
 import {
   getFleetProfitabilitySummary,
@@ -67,8 +64,8 @@ type UiFilters = {
 };
 
 const sortLabels: Record<ProfitabilitySort, string> = {
-  most_profitable: "Mais rentaveis",
-  lowest_profit: "Menos rentaveis",
+  most_profitable: "Mais rentáveis",
+  lowest_profit: "Menos rentáveis",
   highest_revenue: "Maior faturamento",
   highest_cost: "Maior custo",
 };
@@ -124,41 +121,160 @@ function downloadCsv(filename: string, rows: Array<Array<string | number | null 
   URL.revokeObjectURL(url);
 }
 
-function MetricCard({
+type RankingItem =
+  | {
+      dimension: "vehicles";
+      id: string;
+      title: string;
+      subtitle: string;
+      meta: string;
+      revenue: number;
+      costs: number;
+      result: number;
+      margin: number;
+      freightCount: number;
+      raw: VehicleProfitabilityRow;
+    }
+  | {
+      dimension: "freights";
+      id: string;
+      title: string;
+      subtitle: string;
+      meta: string;
+      revenue: number;
+      costs: number;
+      result: number;
+      margin: number;
+      freightCount: number;
+      raw: FreightProfitabilityRow;
+    }
+  | {
+      dimension: "partners";
+      id: string;
+      title: string;
+      subtitle: string;
+      meta: string;
+      revenue: number;
+      costs: number;
+      result: number;
+      margin: number;
+      freightCount: number;
+      raw: PartnerProfitabilityRow;
+    };
+
+const viewLabels: Record<ProfitabilityView, string> = {
+  vehicles: "Por Caminhão",
+  freights: "Por Frete",
+  partners: "Por Cliente",
+};
+
+const viewSingularLabels: Record<ProfitabilityView, string> = {
+  vehicles: "caminhão",
+  freights: "frete",
+  partners: "cliente",
+};
+
+function sortRankingItems(items: RankingItem[], sort: ProfitabilitySort) {
+  return [...items].sort((a, b) => {
+    if (sort === "lowest_profit") return a.result - b.result;
+    if (sort === "highest_revenue") return b.revenue - a.revenue;
+    if (sort === "highest_cost") return b.costs - a.costs;
+    return b.result - a.result;
+  });
+}
+
+function vehicleItem(row: VehicleProfitabilityRow): RankingItem {
+  return {
+    dimension: "vehicles",
+    id: row.vehicleId,
+    title: row.plate,
+    subtitle: row.model || row.driverName || "Caminhão",
+    meta: `${row.freightCount} frete(s) · ${row.implementModels.join(", ") || "Sem implemento"}`,
+    revenue: row.revenue,
+    costs: row.costs,
+    result: row.result,
+    margin: row.margin,
+    freightCount: row.freightCount,
+    raw: row,
+  };
+}
+
+function freightItem(row: FreightProfitabilityRow): RankingItem {
+  return {
+    dimension: "freights",
+    id: row.freightId,
+    title: row.plate,
+    subtitle: `${row.senderName} -> ${row.recipientName}`,
+    meta: `${row.billingPartnerName} · ${row.paymentType || "Sem CIF/FOB"} · ${dateLabel(row.completedAt)}`,
+    revenue: row.revenue,
+    costs: row.costs,
+    result: row.result,
+    margin: row.margin,
+    freightCount: 1,
+    raw: row,
+  };
+}
+
+function partnerItem(row: PartnerProfitabilityRow): RankingItem {
+  return {
+    dimension: "partners",
+    id: row.partnerId ?? row.partnerName,
+    title: row.partnerName,
+    subtitle: `${row.freightCount} frete(s) no período`,
+    meta: "Cliente pagador",
+    revenue: row.revenue,
+    costs: row.costs,
+    result: row.result,
+    margin: row.margin,
+    freightCount: row.freightCount,
+    raw: row,
+  };
+}
+
+function marginTone(value: number) {
+  if (value < 0) return "negative";
+  if (value < 5) return "warning";
+  return "positive";
+}
+
+function ExecutiveStrip({ summary }: { summary: FleetProfitabilitySummary }) {
+  return (
+    <section className="financial-profitability-executive">
+      <div className="financial-profitability-result">
+        <span>Resultado</span>
+        <strong className={summary.result < 0 ? "financial-profitability-negative" : undefined}>
+          {money(summary.result)}
+        </strong>
+        <small>Faturar mais não é lucrar mais</small>
+      </div>
+      <div className="financial-profitability-margin">
+        <span>Margem</span>
+        <strong className={`financial-profitability-${marginTone(summary.margin)}`}>
+          {percent(summary.margin)}
+        </strong>
+      </div>
+      <div className="financial-profitability-executive-line">
+        <MetricMini label="Faturamento" value={money(summary.revenue)} icon={ArrowUp} />
+        <MetricMini label="Custos + despesas" value={money(summary.costs)} icon={ArrowDown} />
+      </div>
+    </section>
+  );
+}
+
+function MetricMini({
   label,
   value,
-  helper,
   icon: Icon,
-  tone = "neutral",
 }: {
   label: string;
   value: string;
-  helper: string;
   icon: typeof TrendingUp;
-  tone?: "positive" | "negative" | "neutral";
 }) {
   return (
-    <div
-      className={cn(
-        "premium-card flex min-h-[118px] flex-col justify-between p-4",
-        tone === "positive" && "border-primary/30 bg-primary/5",
-        tone === "negative" && "border-destructive/30 bg-destructive/5",
-      )}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-          {label}
-        </p>
-        <span className="grid size-10 place-items-center rounded-2xl border border-border bg-surface">
-          <Icon className="size-4 text-primary" />
-        </span>
-      </div>
-      <div>
-        <strong className="block text-2xl font-extrabold text-foreground md:text-3xl">
-          {value}
-        </strong>
-        <span className="text-xs text-muted-foreground">{helper}</span>
-      </div>
+    <div className="financial-profitability-mini">
+      <Icon className="size-4" />
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
@@ -174,80 +290,92 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function VehicleCard({
-  row,
+function DimensionSelector({
+  view,
+  setView,
+}: {
+  view: ProfitabilityView;
+  setView: (view: ProfitabilityView) => void;
+}) {
+  return (
+    <section className="financial-profitability-dimensions" aria-label="Dimensão de rentabilidade">
+      {(["vehicles", "freights", "partners"] as ProfitabilityView[]).map((value) => (
+        <button
+          key={value}
+          type="button"
+          className={cn(value === view && "is-active")}
+          onClick={() => setView(value)}
+        >
+          {viewLabels[value]}
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function RankingCard({
+  item,
   index,
+  maxResult,
   onClick,
 }: {
-  row: VehicleProfitabilityRow;
+  item: RankingItem;
   index: number;
+  maxResult: number;
   onClick: () => void;
 }) {
-  const isNegative = row.result < 0;
+  const isNegative = item.result < 0;
+  const barWidth = maxResult > 0 ? Math.max(6, Math.min(100, (Math.abs(item.result) / maxResult) * 100)) : 0;
   return (
     <button
       type="button"
       onClick={onClick}
-      className="premium-card group flex min-h-[176px] w-full flex-col justify-between p-4 text-left transition hover:-translate-y-0.5 hover:border-primary/45"
+      className={cn(
+        "financial-profitability-rank-card",
+        index < 3 && "financial-profitability-rank-featured",
+        isNegative && "financial-profitability-rank-negative",
+      )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <span className="mb-2 inline-flex items-center rounded-full border border-border px-2 py-1 text-[10px] font-bold text-muted-foreground">
-            TOP {index + 1}
-          </span>
-          <h3 className="truncate text-xl font-extrabold text-foreground">{row.plate}</h3>
-          <p className="truncate text-xs font-semibold text-muted-foreground">
-            {row.driverName || "Motorista nao informado"}
-          </p>
-        </div>
-        <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
-          <Truck className="size-5" />
-        </span>
+      <div className="financial-profitability-rank-top">
+        <span>#{String(index + 1).padStart(2, "0")}</span>
+        {item.dimension === "vehicles" ? <Truck className="size-4" /> : item.dimension === "freights" ? <RouteIcon className="size-4" /> : <Landmark className="size-4" />}
       </div>
-      <div className="grid grid-cols-2 gap-3 text-sm">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-            Faturamento
-          </p>
-          <strong>{money(row.revenue)}</strong>
-        </div>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-            Custos
-          </p>
-          <strong>{money(row.costs)}</strong>
-        </div>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-            Resultado
-          </p>
-          <strong className={isNegative ? "text-destructive" : "text-primary"}>
-            {money(row.result)}
-          </strong>
-        </div>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-            Margem
-          </p>
-          <strong>{percent(row.margin)}</strong>
-        </div>
+      <div className="financial-profitability-rank-title">
+        <strong>{item.title}</strong>
+        <span>{item.subtitle}</span>
+        <small>{item.meta}</small>
       </div>
-      <div className="flex items-center justify-between gap-3 border-t border-border pt-3 text-xs text-muted-foreground">
-        <span className="truncate">{row.implementModels.join(", ") || row.model || "-"}</span>
-        <span>{row.freightCount} frete(s)</span>
+      <div className="financial-profitability-rank-result">
+        <span>Resultado</span>
+        <strong className={isNegative ? "financial-profitability-negative" : undefined}>
+          {money(item.result)}
+        </strong>
+      </div>
+      <div className="financial-profitability-rank-metrics">
+        <span>Margem <strong>{percent(item.margin)}</strong></span>
+        <span>Receita <strong>{money(item.revenue)}</strong></span>
+        <span>Custos <strong>{money(item.costs)}</strong></span>
+      </div>
+      <div className="financial-profitability-bar" aria-hidden="true">
+        <span style={{ width: `${barWidth}%` }} />
       </div>
     </button>
   );
 }
 
-function FreightList({ rows }: { rows: FreightProfitabilityRow[] }) {
+function FreightList({ rows, onSelect }: { rows: FreightProfitabilityRow[]; onSelect?: (item: RankingItem) => void }) {
   if (!rows.length) {
-    return <EmptyState text="Nenhum frete concluido encontrado para os filtros atuais." />;
+    return <EmptyState />;
   }
   return (
     <div className="grid gap-2">
       {rows.map((row) => (
-        <div key={row.freightId} className="rounded-2xl border border-border bg-surface/60 p-3">
+        <button
+          key={row.freightId}
+          type="button"
+          onClick={() => onSelect?.(freightItem(row))}
+          className="financial-profitability-freight-row"
+        >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <strong className="text-sm text-foreground">{row.plate}</strong>
             <span className="text-xs text-muted-foreground">{dateLabel(row.completedAt)}</span>
@@ -263,16 +391,21 @@ function FreightList({ rows }: { rows: FreightProfitabilityRow[] }) {
               Resultado: {money(row.result)}
             </span>
           </div>
-        </div>
+        </button>
       ))}
     </div>
   );
 }
 
-function EmptyState({ text }: { text: string }) {
+function EmptyState({
+  text = "Nenhum dado de rentabilidade para o período selecionado.",
+}: {
+  text?: string;
+}) {
   return (
-    <div className="rounded-2xl border border-dashed border-border bg-surface/40 p-8 text-center text-sm text-muted-foreground">
-      {text}
+    <div className="financial-profitability-empty">
+      <strong>{text}</strong>
+      <span>Conclua fretes e registre receitas/despesas para formar a análise.</span>
     </div>
   );
 }
@@ -303,7 +436,10 @@ export function FleetProfitabilityPage() {
   const [freightsProfit, setFreightsProfit] = useState<FreightProfitabilityRow[]>([]);
   const [partnersProfit, setPartnersProfit] = useState<PartnerProfitabilityRow[]>([]);
   const [partners, setPartners] = useState<BusinessPartner[]>([]);
-  const [selectedVehicle, setSelectedVehicle] = useState<VehicleProfitabilityRow | null>(null);
+  const [selectedItem, setSelectedItem] = useState<RankingItem | null>(null);
+  const [rankingOpen, setRankingOpen] = useState(false);
+  const [rankingSearch, setRankingSearch] = useState("");
+  const [rankingSort, setRankingSort] = useState<ProfitabilitySort>("most_profitable");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -375,14 +511,45 @@ export function FleetProfitabilityPage() {
     void loadData();
   }, [loadData]);
 
-  const selectedVehicleFreights = useMemo(
-    () => freightsProfit.filter((freight) => freight.vehicleId === selectedVehicle?.vehicleId),
-    [freightsProfit, selectedVehicle],
-  );
+  const activeRanking = useMemo(() => {
+    if (view === "freights") return freightsProfit.map(freightItem);
+    if (view === "partners") return partnersProfit.map(partnerItem);
+    return vehiclesProfit.map(vehicleItem);
+  }, [freightsProfit, partnersProfit, vehiclesProfit, view]);
 
-  const selectedRevenue = selectedVehicleFreights.reduce((total, row) => total + row.revenue, 0);
-  const selectedCosts = selectedVehicleFreights.reduce((total, row) => total + row.costs, 0);
-  const selectedResult = selectedRevenue - selectedCosts;
+  const rankedItems = useMemo(() => sortRankingItems(activeRanking, sort), [activeRanking, sort]);
+  const topItems = rankedItems.slice(0, 10);
+  const maxResult = Math.max(0, ...topItems.map((item) => Math.abs(item.result)));
+  const attentionItems = useMemo(
+    () =>
+      [...activeRanking]
+        .sort((a, b) => {
+          if (a.result < 0 || b.result < 0) return a.result - b.result;
+          return a.margin - b.margin;
+        })
+        .slice(0, 5),
+    [activeRanking],
+  );
+  const rankingItems = useMemo(() => {
+    const searched = rankingSearch.trim().toLocaleLowerCase("pt-BR");
+    const rows = searched
+      ? activeRanking.filter((item) =>
+          `${item.title} ${item.subtitle} ${item.meta}`.toLocaleLowerCase("pt-BR").includes(searched),
+        )
+      : activeRanking;
+    return sortRankingItems(rows, rankingSort);
+  }, [activeRanking, rankingSearch, rankingSort]);
+
+  const selectedFreights = useMemo(() => {
+    if (!selectedItem) return [];
+    if (selectedItem.dimension === "vehicles") {
+      return freightsProfit.filter((freight) => freight.vehicleId === selectedItem.raw.vehicleId);
+    }
+    if (selectedItem.dimension === "partners") {
+      return freightsProfit.filter((freight) => freight.billingPartnerId === selectedItem.raw.partnerId);
+    }
+    return [selectedItem.raw];
+  }, [freightsProfit, selectedItem]);
 
   const updateFilter = (key: keyof UiFilters, value: string) => {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -472,15 +639,15 @@ export function FleetProfitabilityPage() {
   };
 
   return (
-    <div className="financial-shell flex min-h-0 flex-col gap-4 pb-8">
+    <div className="financial-shell financial-profitability-shell">
       <PageHeader
-        title="Rentabilidade da Frota"
-        subtitle="Financeiro operacional por caminhao, frete e cliente"
+        title="Rentabilidade"
+        subtitle="Resultado real da operação por caminhão, frete e cliente"
         actions={
           <>
             <Button variant="outline" size="sm" onClick={exportReport}>
               <Download className="size-4" />
-              Exportar Relatorio
+              Exportar Relatório
             </Button>
             <Button variant="outline" size="sm" onClick={() => void loadData()} disabled={loading}>
               <RefreshCw className={cn("size-4", loading && "animate-spin")} />
@@ -491,58 +658,28 @@ export function FleetProfitabilityPage() {
       />
       <FinancialNav />
 
-      <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Faturamento"
-          value={money(summary.revenue)}
-          helper="Receitas por competencia"
-          icon={ArrowUp}
-          tone="positive"
-        />
-        <MetricCard
-          label="Custos"
-          value={money(summary.costs)}
-          helper="Custos alocados a frete/caminhao"
-          icon={ArrowDown}
-          tone={summary.costs > 0 ? "negative" : "neutral"}
-        />
-        <MetricCard
-          label="Resultado"
-          value={money(summary.result)}
-          helper="Faturamento menos custos"
-          icon={TrendingUp}
-          tone={summary.result < 0 ? "negative" : "positive"}
-        />
-        <MetricCard
-          label="Margem"
-          value={percent(summary.margin)}
-          helper="Resultado sobre faturamento"
-          icon={Percent}
-        />
-      </section>
+      <DimensionSelector view={view} setView={setView} />
 
-      <section className="premium-card p-4">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <section className="financial-profitability-filters">
+        <div className="financial-profitability-filter-head">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-              Filtros de rentabilidade
-            </p>
-            <h2 className="text-lg font-extrabold text-foreground">Periodo e operacao</h2>
+            <p className="financial-section-kicker">Filtros</p>
+            <h2>Período e operação</h2>
           </div>
           <Button variant="ghost" size="sm" onClick={clearFilters}>
             <FilterX className="size-4" />
             Limpar
           </Button>
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Field label="Periodo inicial">
+        <div className="financial-profitability-filter-primary">
+          <Field label="Período inicial">
             <Input
               type="date"
               value={filters.startDate}
               onChange={(event) => updateFilter("startDate", event.target.value)}
             />
           </Field>
-          <Field label="Periodo final">
+          <Field label="Período final">
             <Input
               type="date"
               value={filters.endDate}
@@ -585,95 +722,234 @@ export function FleetProfitabilityPage() {
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Origem">
+        </div>
+        <details className="financial-profitability-more-filters">
+          <summary>Mais filtros</summary>
+          <div className="financial-profitability-filter-secondary">
+            <Field label="Origem">
+              <Select
+                value={filters.senderId}
+                onValueChange={(value) => updateFilter("senderId", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas as origens" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Todas as origens</SelectItem>
+                  {senders.map((sender) => (
+                    <SelectItem key={sender.id} value={sender.id}>
+                      {sender.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Destino">
+              <Select
+                value={filters.recipientId}
+                onValueChange={(value) => updateFilter("recipientId", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os destinos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Todos os destinos</SelectItem>
+                  {recipients.map((recipient) => (
+                    <SelectItem key={recipient.id} value={recipient.id}>
+                      {recipient.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Produto">
+              <Select
+                value={filters.productId}
+                onValueChange={(value) => updateFilter("productId", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os produtos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Todos os produtos</SelectItem>
+                  {products.map((product) => (
+                    <SelectItem key={product.id} value={product.id}>
+                      {product.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Modelo implemento">
+              <Select
+                value={filters.implementModel}
+                onValueChange={(value) => updateFilter("implementModel", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os modelos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Todos os modelos</SelectItem>
+                  {implementModels.map((model) => (
+                    <SelectItem key={model} value={model}>
+                      {model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="CIF / FOB">
+              <Select
+                value={filters.paymentType}
+                onValueChange={(value) => updateFilter("paymentType", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>Todos</SelectItem>
+                  <SelectItem value="CIF">CIF</SelectItem>
+                  <SelectItem value="FOB">FOB</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Ordenação">
+              <Select value={sort} onValueChange={(value) => setSort(value as ProfitabilitySort)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(sortLabels).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          </div>
+        </details>
+      </section>
+
+      <ExecutiveStrip summary={summary} />
+
+      {summary.unallocatedCosts > 0 && (
+        <div className="financial-profitability-warning">
+          Custos não alocados: {money(summary.unallocatedCosts)}. Eles não foram distribuídos entre
+          caminhões porque não possuem vínculo confiável com veículo ou frete.
+        </div>
+      )}
+
+      {error && (
+        <div className="financial-profitability-error">{error}</div>
+      )}
+
+      <section className="financial-profitability-ranking">
+        <div className="financial-profitability-ranking-head">
+          <div>
+            <p className="financial-section-kicker">{viewLabels[view]}</p>
+            <h2>Top 10 mais rentáveis</h2>
+            <span>
+              Resultado e margem comandam o ranking no período {filters.startDate} a{" "}
+              {filters.endDate}.
+            </span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setRankingSort(sort);
+              setRankingSearch("");
+              setRankingOpen(true);
+            }}
+          >
+            Ver todos
+          </Button>
+        </div>
+        {loading ? (
+          <EmptyState text={`Carregando rentabilidade ${viewSingularLabels[view]}...`} />
+        ) : topItems.length ? (
+          <div className="financial-profitability-top-grid">
+            {topItems.map((item, index) => (
+              <RankingCard
+                key={`${item.dimension}-${item.id}`}
+                item={item}
+                index={index}
+                maxResult={maxResult}
+                onClick={() => setSelectedItem(item)}
+              />
+            ))}
+          </div>
+        ) : (
+          <EmptyState />
+        )}
+      </section>
+
+      <section className="financial-profitability-analysis">
+        <div className="financial-profitability-attention">
+          <div>
+            <p className="financial-section-kicker">Análise</p>
+            <h2>Pontos de atenção</h2>
+          </div>
+          {attentionItems.length ? (
+            <div className="financial-profitability-attention-list">
+              {attentionItems.map((item, index) => (
+                <button
+                  key={`${item.dimension}-attention-${item.id}`}
+                  type="button"
+                  onClick={() => setSelectedItem(item)}
+                  className={cn(
+                    "financial-profitability-attention-row",
+                    item.result < 0 && "is-negative",
+                  )}
+                >
+                  <span>{index + 1}</span>
+                  <strong>{item.title}</strong>
+                  <small>{percent(item.margin)}</small>
+                  <b>{money(item.result)}</b>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <EmptyState text="Nenhum ponto de atenção no período selecionado." />
+          )}
+        </div>
+        <div className="financial-profitability-compare">
+          <p className="financial-section-kicker">Comparação</p>
+          <h2>Resultado acima de faturamento</h2>
+          <p>
+            A leitura prioriza lucro e margem. Receita aparece como contexto operacional, não como
+            sinônimo de performance.
+          </p>
+          <div>
+            <MetricMini label="Itens analisados" value={String(activeRanking.length)} icon={RouteIcon} />
+            <MetricMini label="Prejuízos" value={String(activeRanking.filter((item) => item.result < 0).length)} icon={ArrowDown} />
+          </div>
+        </div>
+      </section>
+
+      <Dialog open={rankingOpen} onOpenChange={setRankingOpen}>
+        <DialogContent className="max-w-6xl">
+          <DialogHeader>
+            <DialogTitle>Ranking completo - {viewLabels[view]}</DialogTitle>
+            <DialogDescription>
+              Mesma dimensão, período e filtros atuais. Ordenação feita com os dados já carregados.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="financial-profitability-modal-tools">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Buscar no ranking"
+                value={rankingSearch}
+                onChange={(event) => setRankingSearch(event.target.value)}
+              />
+            </div>
             <Select
-              value={filters.senderId}
-              onValueChange={(value) => updateFilter("senderId", value)}
+              value={rankingSort}
+              onValueChange={(value) => setRankingSort(value as ProfitabilitySort)}
             >
-              <SelectTrigger>
-                <SelectValue placeholder="Todas as origens" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todas as origens</SelectItem>
-                {senders.map((sender) => (
-                  <SelectItem key={sender.id} value={sender.id}>
-                    {sender.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Destino">
-            <Select
-              value={filters.recipientId}
-              onValueChange={(value) => updateFilter("recipientId", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Todos os destinos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todos os destinos</SelectItem>
-                {recipients.map((recipient) => (
-                  <SelectItem key={recipient.id} value={recipient.id}>
-                    {recipient.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Produto">
-            <Select
-              value={filters.productId}
-              onValueChange={(value) => updateFilter("productId", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Todos os produtos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todos os produtos</SelectItem>
-                {products.map((product) => (
-                  <SelectItem key={product.id} value={product.id}>
-                    {product.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Modelo implemento">
-            <Select
-              value={filters.implementModel}
-              onValueChange={(value) => updateFilter("implementModel", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Todos os modelos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todos os modelos</SelectItem>
-                {implementModels.map((model) => (
-                  <SelectItem key={model} value={model}>
-                    {model}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="CIF / FOB">
-            <Select
-              value={filters.paymentType}
-              onValueChange={(value) => updateFilter("paymentType", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>Todos</SelectItem>
-                <SelectItem value="CIF">CIF</SelectItem>
-                <SelectItem value="FOB">FOB</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Ordenacao">
-            <Select value={sort} onValueChange={(value) => setSort(value as ProfitabilitySort)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -685,232 +961,113 @@ export function FleetProfitabilityPage() {
                 ))}
               </SelectContent>
             </Select>
-          </Field>
-        </div>
-      </section>
-
-      {summary.unallocatedCosts > 0 && (
-        <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 p-4 text-sm text-amber-200">
-          Custos nao alocados: {money(summary.unallocatedCosts)}. Eles nao foram distribuidos entre
-          caminhoes porque nao possuem vinculo confiavel com veiculo ou frete.
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
-      <Tabs value={view} onValueChange={(value) => setView(value as ProfitabilityView)}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <TabsList>
-            <TabsTrigger value="vehicles">Por caminhao</TabsTrigger>
-            <TabsTrigger value="freights">Por frete</TabsTrigger>
-            <TabsTrigger value="partners">Por cliente</TabsTrigger>
-          </TabsList>
-          <p className="text-xs text-muted-foreground">
-            Regime de competencia: {filters.startDate} a {filters.endDate}
-          </p>
-        </div>
-
-        <TabsContent value="vehicles" className="mt-4">
-          {loading ? (
-            <EmptyState text="Carregando rentabilidade por caminhao..." />
-          ) : vehiclesProfit.length ? (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-              {vehiclesProfit.slice(0, 10).map((row, index) => (
-                <VehicleCard
-                  key={row.vehicleId}
-                  row={row}
-                  index={index}
-                  onClick={() => setSelectedVehicle(row)}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyState text="Nenhum caminhao com movimentacao financeira no periodo." />
-          )}
-        </TabsContent>
-
-        <TabsContent value="freights" className="mt-4">
-          <div className="premium-card overflow-hidden">
-            <div className="border-b border-border p-4">
-              <h2 className="text-lg font-extrabold text-foreground">Rentabilidade por frete</h2>
-              <p className="text-xs text-muted-foreground">
-                Apenas fretes concluidos com documentos financeiros validos.
-              </p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] text-sm">
-                <thead className="bg-surface/80 text-left text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3">Placa</th>
-                    <th className="px-4 py-3">Rota</th>
-                    <th className="px-4 py-3">Produto</th>
-                    <th className="px-4 py-3">CIF/FOB</th>
-                    <th className="px-4 py-3 text-right">Receita</th>
-                    <th className="px-4 py-3 text-right">Custos</th>
-                    <th className="px-4 py-3 text-right">Resultado</th>
-                    <th className="px-4 py-3 text-right">Margem</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {freightsProfit.map((row) => (
-                    <tr key={row.freightId} className="border-t border-border">
-                      <td className="px-4 py-3 font-bold">{row.plate}</td>
-                      <td className="px-4 py-3">
-                        {row.senderName} {"->"} {row.recipientName}
-                        <span className="block text-xs text-muted-foreground">
-                          {dateLabel(row.completedAt)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">{row.productName}</td>
-                      <td className="px-4 py-3">
-                        {row.paymentType || "-"} / {row.billingPartnerName}
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold">{money(row.revenue)}</td>
-                      <td className="px-4 py-3 text-right font-bold">{money(row.costs)}</td>
-                      <td
-                        className={cn(
-                          "px-4 py-3 text-right font-bold",
-                          row.result < 0 ? "text-destructive" : "text-primary",
-                        )}
-                      >
-                        {money(row.result)}
-                      </td>
-                      <td className="px-4 py-3 text-right font-bold">{percent(row.margin)}</td>
-                    </tr>
-                  ))}
-                  {!freightsProfit.length && (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
-                        Nenhum frete encontrado.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
           </div>
-        </TabsContent>
+          <div className="financial-profitability-table-wrap">
+            <table className="financial-profitability-table">
+              <thead>
+                <tr>
+                  <th>Posição</th>
+                  <th>Entidade</th>
+                  <th>Faturamento</th>
+                  <th>Custos/despesas</th>
+                  <th>Resultado</th>
+                  <th>Margem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rankingItems.map((item, index) => (
+                  <tr
+                    key={`${item.dimension}-full-${item.id}`}
+                    onClick={() => setSelectedItem(item)}
+                  >
+                    <td>#{String(index + 1).padStart(2, "0")}</td>
+                    <td>
+                      <strong>{item.title}</strong>
+                      <span>{item.subtitle}</span>
+                    </td>
+                    <td>{money(item.revenue)}</td>
+                    <td>{money(item.costs)}</td>
+                    <td className={item.result < 0 ? "financial-profitability-negative" : ""}>
+                      {money(item.result)}
+                    </td>
+                    <td>{percent(item.margin)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!rankingItems.length && <EmptyState />}
+          </div>
+        </DialogContent>
+      </Dialog>
 
-        <TabsContent value="partners" className="mt-4">
-          {partnersProfit.length ? (
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {partnersProfit.map((row, index) => (
-                <div key={row.partnerId ?? `partner-${index}`} className="premium-card p-4">
-                  <div className="mb-4 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <span className="mb-2 inline-flex items-center rounded-full border border-border px-2 py-1 text-[10px] font-bold text-muted-foreground">
-                        #{index + 1}
-                      </span>
-                      <h3 className="truncate text-lg font-extrabold text-foreground">
-                        {row.partnerName}
-                      </h3>
-                      <p className="text-xs text-muted-foreground">{row.freightCount} frete(s)</p>
-                    </div>
-                    <Landmark className="size-5 text-primary" />
-                  </div>
-                  <div className="grid gap-2 text-sm">
-                    <span>Receita: {money(row.revenue)}</span>
-                    <span>Custos: {money(row.costs)}</span>
-                    <strong className={row.result < 0 ? "text-destructive" : "text-primary"}>
-                      Resultado: {money(row.result)}
-                    </strong>
-                    <span>Margem: {percent(row.margin)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState text="Nenhum cliente pagador encontrado para os filtros atuais." />
-          )}
-        </TabsContent>
-      </Tabs>
-
-      <Dialog
-        open={Boolean(selectedVehicle)}
-        onOpenChange={(open) => !open && setSelectedVehicle(null)}
-      >
+      <Dialog open={Boolean(selectedItem)} onOpenChange={(open) => !open && setSelectedItem(null)}>
         <DialogContent className="max-w-5xl">
           <DialogHeader>
-            <DialogTitle>{selectedVehicle?.plate ?? "Caminhao"}</DialogTitle>
+            <DialogTitle>{selectedItem?.title ?? "Rentabilidade"}</DialogTitle>
             <DialogDescription>
-              Rentabilidade por competencia do periodo filtrado na tela.
+              Detalhamento da rentabilidade no período selecionado.
             </DialogDescription>
           </DialogHeader>
-          {selectedVehicle && (
-            <Tabs defaultValue="summary">
-              <TabsList className="mb-4">
-                <TabsTrigger value="summary">Resumo</TabsTrigger>
-                <TabsTrigger value="freights">Fretes</TabsTrigger>
-                <TabsTrigger value="revenue">Receitas</TabsTrigger>
-                <TabsTrigger value="costs">Custos</TabsTrigger>
-              </TabsList>
-              <TabsContent value="summary">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-                  <MetricCard
-                    label="Receita"
-                    value={money(selectedRevenue)}
-                    helper="Fretes concluidos"
-                    icon={ArrowUp}
-                  />
-                  <MetricCard
-                    label="Custos"
-                    value={money(selectedCosts)}
-                    helper="Custos alocados"
-                    icon={ArrowDown}
-                  />
-                  <MetricCard
-                    label="Resultado"
-                    value={money(selectedResult)}
-                    helper="Receita menos custos"
-                    icon={TrendingUp}
-                    tone={selectedResult < 0 ? "negative" : "positive"}
-                  />
-                  <MetricCard
-                    label="Margem"
-                    value={percent(selectedVehicle.margin)}
-                    helper={`${selectedVehicle.freightCount} frete(s)`}
-                    icon={Percent}
-                  />
+          {selectedItem && (
+            <div className="financial-profitability-detail">
+              <section className="financial-profitability-detail-head">
+                <div>
+                  <p className="financial-section-kicker">Detalhamento da rentabilidade</p>
+                  <h2>{selectedItem.title}</h2>
+                  <span>{selectedItem.subtitle}</span>
                 </div>
-              </TabsContent>
-              <TabsContent value="freights">
-                <FreightList rows={selectedVehicleFreights} />
-              </TabsContent>
-              <TabsContent value="revenue">
-                <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <div className="rounded-2xl border border-border p-3">
-                    <Search className="mb-2 size-4 text-primary" />
-                    <p className="text-xs text-muted-foreground">
-                      Origem, destino e produto seguem os filtros da tela.
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-border p-3">
-                    <RouteIcon className="mb-2 size-4 text-primary" />
-                    <p className="text-xs text-muted-foreground">
-                      Total de receitas: <strong>{money(selectedRevenue)}</strong>
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-border p-3">
-                    <CalendarDays className="mb-2 size-4 text-primary" />
-                    <p className="text-xs text-muted-foreground">
-                      Competencia: {filters.startDate} a {filters.endDate}
-                    </p>
+                <div>
+                  <span>Resultado</span>
+                  <strong
+                    className={selectedItem.result < 0 ? "financial-profitability-negative" : ""}
+                  >
+                    {money(selectedItem.result)}
+                  </strong>
+                  <small>Margem {percent(selectedItem.margin)}</small>
+                </div>
+              </section>
+              <section className="financial-profitability-equation">
+                <div>
+                  <span>Receitas</span>
+                  <strong>{money(selectedItem.revenue)}</strong>
+                </div>
+                <b>-</b>
+                <div>
+                  <span>Custos + despesas</span>
+                  <strong>{money(selectedItem.costs)}</strong>
+                </div>
+                <b>=</b>
+                <div className="is-result">
+                  <span>Resultado</span>
+                  <strong
+                    className={selectedItem.result < 0 ? "financial-profitability-negative" : ""}
+                  >
+                    {money(selectedItem.result)}
+                  </strong>
+                  <small>{percent(selectedItem.margin)}</small>
+                </div>
+              </section>
+              <section className="financial-profitability-breakdown">
+                <div>
+                  <h3>Receitas</h3>
+                  <div className="financial-profitability-breakdown-row">
+                    <span>Total de receitas atribuído pela fonte canônica</span>
+                    <strong>{money(selectedItem.revenue)}</strong>
                   </div>
                 </div>
-                <FreightList rows={selectedVehicleFreights.filter((row) => row.revenue > 0)} />
-              </TabsContent>
-              <TabsContent value="costs">
-                <div className="mb-3 rounded-2xl border border-border p-3 text-sm text-muted-foreground">
-                  Total de custos alocados ao caminhao no periodo:{" "}
-                  <strong>{money(selectedCosts)}</strong>
+                <div>
+                  <h3>Custos e despesas</h3>
+                  <div className="financial-profitability-breakdown-row">
+                    <span>Total de custos/despesas atribuído pela fonte canônica</span>
+                    <strong>{money(selectedItem.costs)}</strong>
+                  </div>
                 </div>
-                <FreightList rows={selectedVehicleFreights.filter((row) => row.costs > 0)} />
-              </TabsContent>
-            </Tabs>
+              </section>
+              <section className="financial-profitability-related">
+                <h3>Fretes relacionados</h3>
+                <FreightList rows={selectedFreights} onSelect={setSelectedItem} />
+              </section>
+            </div>
           )}
         </DialogContent>
       </Dialog>

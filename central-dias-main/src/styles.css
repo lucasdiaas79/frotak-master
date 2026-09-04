@@ -895,6 +895,612 @@
     font-size: 13px;
     font-weight: 700;
   }
+  .financial-profitability-shell {
+    display: grid;
+    gap: 16px;
+    padding-bottom: 32px;
+  }
+  .financial-profitability-dimensions,
+  .financial-profitability-filters,
+  .financial-profitability-executive,
+  .financial-profitability-ranking,
+  .financial-profitability-analysis,
+  .financial-profitability-warning,
+  .financial-profitability-error {
+    margin-inline: 12px;
+  }
+  .financial-profitability-dimensions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    border: 1px solid color-mix(in oklch, var(--color-border) 70%, transparent);
+    border-radius: 12px;
+    background: color-mix(in oklch, var(--color-card) 78%, transparent);
+    padding: 6px;
+    box-shadow:
+      0 10px 28px oklch(0.1 0.012 255 / 0.06),
+      inset 0 1px 0 oklch(1 0 0 / 0.12);
+  }
+  .financial-profitability-dimensions button {
+    min-width: 0;
+    border-radius: 8px;
+    padding: 10px 8px;
+    color: var(--color-muted-foreground);
+    font-size: 11px;
+    font-weight: 950;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transition:
+      background 160ms ease,
+      color 160ms ease,
+      transform 160ms ease;
+  }
+  .financial-profitability-dimensions button:hover {
+    background: color-mix(in oklch, var(--color-primary) 8%, transparent);
+    color: var(--color-foreground);
+  }
+  .financial-profitability-dimensions button.is-active {
+    background: var(--color-foreground);
+    color: var(--color-card);
+    box-shadow: 0 10px 26px oklch(0.1 0.012 255 / 0.13);
+  }
+  .financial-profitability-filters {
+    display: grid;
+    gap: 12px;
+    border: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
+    border-radius: 10px;
+    background: color-mix(in oklch, var(--color-card) 62%, transparent);
+    padding: 12px;
+    box-shadow:
+      0 12px 32px oklch(0.1 0.012 255 / 0.06),
+      inset 0 1px 0 oklch(1 0 0 / 0.12);
+  }
+  .financial-profitability-filter-head {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .financial-profitability-filter-head h2,
+  .financial-profitability-ranking-head h2,
+  .financial-profitability-attention h2,
+  .financial-profitability-compare h2 {
+    margin-top: 3px;
+    font-size: 18px;
+    font-weight: 950;
+    letter-spacing: 0;
+  }
+  .financial-profitability-filter-primary,
+  .financial-profitability-filter-secondary {
+    display: grid;
+    gap: 10px;
+  }
+  .financial-profitability-more-filters {
+    display: grid;
+    gap: 10px;
+  }
+  .financial-profitability-more-filters summary {
+    width: fit-content;
+    cursor: pointer;
+    border-radius: 999px;
+    border: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
+    background: color-mix(in oklch, var(--color-surface) 50%, transparent);
+    padding: 8px 12px;
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 900;
+    list-style: none;
+  }
+  .financial-profitability-more-filters summary::-webkit-details-marker {
+    display: none;
+  }
+  .financial-profitability-more-filters[open] summary {
+    color: var(--color-foreground);
+  }
+  .financial-profitability-executive {
+    display: grid;
+    gap: 10px;
+    border-bottom: 1px solid color-mix(in oklch, var(--color-border) 76%, transparent);
+    border-top: 1px solid color-mix(in oklch, var(--color-border) 76%, transparent);
+    background:
+      linear-gradient(
+        90deg,
+        color-mix(in oklch, var(--color-foreground) 7%, transparent),
+        color-mix(in oklch, var(--color-primary) 5%, transparent)
+      );
+    padding: 14px 0;
+  }
+  .financial-profitability-result,
+  .financial-profitability-margin,
+  .financial-profitability-mini {
+    min-width: 0;
+  }
+  .financial-profitability-result span,
+  .financial-profitability-margin span,
+  .financial-profitability-mini span,
+  .financial-profitability-rank-result span,
+  .financial-profitability-equation span {
+    color: var(--color-muted-foreground);
+    font-size: 11px;
+    font-weight: 950;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .financial-profitability-result strong {
+    display: block;
+    margin-top: 5px;
+    overflow-wrap: anywhere;
+    color: var(--color-primary);
+    font-size: 38px;
+    font-weight: 950;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .financial-profitability-result small {
+    display: block;
+    margin-top: 6px;
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 850;
+  }
+  .financial-profitability-margin {
+    display: grid;
+    align-content: center;
+    gap: 4px;
+    border-left: 3px solid color-mix(in oklch, var(--color-primary) 70%, var(--color-border));
+    background: color-mix(in oklch, var(--color-card) 72%, transparent);
+    padding: 13px 14px;
+  }
+  .financial-profitability-margin strong {
+    font-size: 26px;
+    font-weight: 950;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .financial-profitability-executive-line {
+    display: grid;
+    gap: 8px;
+  }
+  .financial-profitability-mini {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) minmax(110px, auto);
+    align-items: center;
+    gap: 8px;
+    border-radius: 8px;
+    background: color-mix(in oklch, var(--color-surface) 54%, transparent);
+    padding: 10px 12px;
+  }
+  .financial-profitability-mini svg {
+    color: var(--color-primary);
+  }
+  .financial-profitability-mini strong {
+    justify-self: end;
+    overflow-wrap: anywhere;
+    font-size: 14px;
+    font-weight: 950;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .financial-profitability-ranking {
+    display: grid;
+    gap: 14px;
+  }
+  .financial-profitability-ranking-head {
+    display: flex;
+    min-width: 0;
+    align-items: end;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .financial-profitability-ranking-head span {
+    display: block;
+    margin-top: 5px;
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 750;
+  }
+  .financial-profitability-top-grid {
+    display: grid;
+    gap: 10px;
+  }
+  .financial-profitability-rank-card {
+    display: grid;
+    min-width: 0;
+    gap: 12px;
+    border: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
+    border-radius: 8px;
+    background: color-mix(in oklch, var(--color-card) 74%, transparent);
+    padding: 14px;
+    text-align: left;
+    box-shadow:
+      0 12px 30px oklch(0.1 0.012 255 / 0.06),
+      inset 0 1px 0 oklch(1 0 0 / 0.12);
+    transition:
+      border-color 160ms ease,
+      transform 160ms ease,
+      background 160ms ease;
+  }
+  .financial-profitability-rank-card:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in oklch, var(--color-primary) 42%, var(--color-border));
+    background: color-mix(in oklch, var(--color-card) 86%, transparent);
+  }
+  .financial-profitability-rank-featured {
+    border-color: color-mix(in oklch, var(--color-primary) 22%, var(--color-border));
+  }
+  .financial-profitability-rank-negative {
+    border-left: 3px solid color-mix(in oklch, var(--color-destructive) 72%, var(--color-border));
+  }
+  .financial-profitability-rank-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--color-muted-foreground);
+    font-size: 11px;
+    font-weight: 950;
+  }
+  .financial-profitability-rank-title strong {
+    display: block;
+    overflow-wrap: anywhere;
+    color: var(--color-foreground);
+    font-size: 19px;
+    font-weight: 950;
+    line-height: 1.05;
+  }
+  .financial-profitability-rank-title span,
+  .financial-profitability-rank-title small {
+    display: block;
+    margin-top: 5px;
+    overflow-wrap: anywhere;
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .financial-profitability-rank-title small {
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .financial-profitability-rank-result strong {
+    display: block;
+    margin-top: 4px;
+    overflow-wrap: anywhere;
+    color: var(--color-primary);
+    font-size: 24px;
+    font-weight: 950;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .financial-profitability-rank-metrics {
+    display: grid;
+    gap: 5px;
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .financial-profitability-rank-metrics span {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .financial-profitability-rank-metrics strong {
+    color: var(--color-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  .financial-profitability-bar {
+    height: 7px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: color-mix(in oklch, var(--color-muted-foreground) 13%, transparent);
+  }
+  .financial-profitability-bar span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(
+      90deg,
+      color-mix(in oklch, var(--color-primary) 68%, var(--color-foreground)),
+      var(--color-primary)
+    );
+  }
+  .financial-profitability-negative {
+    color: color-mix(in oklch, var(--color-destructive) 82%, var(--color-foreground)) !important;
+  }
+  .financial-profitability-warning,
+  .financial-profitability-error {
+    border-radius: 8px;
+    padding: 13px 14px;
+    font-size: 13px;
+    font-weight: 800;
+  }
+  .financial-profitability-warning {
+    border: 1px solid color-mix(in oklch, var(--color-warning) 32%, var(--color-border));
+    background: color-mix(in oklch, var(--color-warning) 10%, var(--color-card));
+    color: color-mix(in oklch, var(--color-warning) 55%, var(--color-foreground));
+  }
+  .financial-profitability-error {
+    border: 1px solid color-mix(in oklch, var(--color-destructive) 28%, var(--color-border));
+    background: color-mix(in oklch, var(--color-destructive) 8%, var(--color-card));
+    color: color-mix(in oklch, var(--color-destructive) 82%, var(--color-foreground));
+  }
+  .financial-profitability-analysis {
+    display: grid;
+    gap: 12px;
+  }
+  .financial-profitability-attention,
+  .financial-profitability-compare {
+    min-width: 0;
+    border: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
+    border-radius: 8px;
+    background: color-mix(in oklch, var(--color-card) 70%, transparent);
+    padding: 14px;
+  }
+  .financial-profitability-attention-list {
+    margin-top: 12px;
+    display: grid;
+    gap: 7px;
+  }
+  .financial-profitability-attention-row {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: 24px minmax(0, 1fr) minmax(62px, auto) minmax(104px, auto);
+    align-items: center;
+    gap: 10px;
+    border-left: 3px solid color-mix(in oklch, var(--color-warning) 72%, var(--color-border));
+    border-radius: 8px;
+    background: color-mix(in oklch, var(--color-surface) 46%, transparent);
+    padding: 10px;
+    text-align: left;
+  }
+  .financial-profitability-attention-row.is-negative {
+    border-left-color: color-mix(in oklch, var(--color-destructive) 72%, var(--color-border));
+  }
+  .financial-profitability-attention-row span {
+    color: var(--color-muted-foreground);
+    font-size: 11px;
+    font-weight: 950;
+  }
+  .financial-profitability-attention-row strong,
+  .financial-profitability-attention-row b {
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    font-weight: 950;
+  }
+  .financial-profitability-attention-row small {
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .financial-profitability-compare {
+    display: grid;
+    align-content: start;
+    gap: 12px;
+  }
+  .financial-profitability-compare p {
+    color: var(--color-muted-foreground);
+    font-size: 13px;
+    font-weight: 750;
+  }
+  .financial-profitability-compare > div {
+    display: grid;
+    gap: 8px;
+  }
+  .financial-profitability-modal-tools {
+    display: grid;
+    gap: 10px;
+  }
+  .financial-profitability-table-wrap {
+    max-height: min(62vh, 620px);
+    overflow: auto;
+    border: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
+    border-radius: 8px;
+  }
+  .financial-profitability-table {
+    width: 100%;
+    min-width: 760px;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .financial-profitability-table th {
+    position: sticky;
+    top: 0;
+    background: color-mix(in oklch, var(--color-surface-2) 92%, var(--color-card));
+    color: var(--color-muted-foreground);
+    font-size: 10px;
+    font-weight: 950;
+    letter-spacing: 0.08em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+  .financial-profitability-table th,
+  .financial-profitability-table td {
+    border-bottom: 1px solid color-mix(in oklch, var(--color-border) 68%, transparent);
+    padding: 11px 12px;
+  }
+  .financial-profitability-table tbody tr {
+    cursor: pointer;
+  }
+  .financial-profitability-table tbody tr:hover {
+    background: color-mix(in oklch, var(--color-primary) 7%, transparent);
+  }
+  .financial-profitability-table td {
+    font-weight: 850;
+    font-variant-numeric: tabular-nums;
+  }
+  .financial-profitability-table td strong,
+  .financial-profitability-table td span {
+    display: block;
+  }
+  .financial-profitability-table td span {
+    margin-top: 3px;
+    color: var(--color-muted-foreground);
+    font-size: 11px;
+    font-weight: 750;
+  }
+  .financial-profitability-detail {
+    display: grid;
+    gap: 14px;
+  }
+  .financial-profitability-detail-head {
+    display: grid;
+    gap: 12px;
+    border-radius: 8px;
+    background: var(--color-foreground);
+    padding: 16px;
+    color: var(--color-card);
+  }
+  .financial-profitability-detail-head .financial-section-kicker,
+  .financial-profitability-detail-head span,
+  .financial-profitability-detail-head small {
+    color: color-mix(in oklch, var(--color-card) 78%, transparent);
+  }
+  .financial-profitability-detail-head h2 {
+    margin-top: 4px;
+    overflow-wrap: anywhere;
+    font-size: 24px;
+    font-weight: 950;
+  }
+  .financial-profitability-detail-head strong {
+    display: block;
+    margin-top: 4px;
+    color: var(--color-primary);
+    font-size: 28px;
+    font-weight: 950;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .financial-profitability-equation {
+    display: grid;
+    gap: 8px;
+    align-items: center;
+  }
+  .financial-profitability-equation > div {
+    min-width: 0;
+    border: 1px solid color-mix(in oklch, var(--color-border) 70%, transparent);
+    border-radius: 8px;
+    background: color-mix(in oklch, var(--color-card) 72%, transparent);
+    padding: 12px;
+  }
+  .financial-profitability-equation > b {
+    justify-self: center;
+    color: var(--color-muted-foreground);
+    font-size: 18px;
+  }
+  .financial-profitability-equation strong {
+    display: block;
+    margin-top: 4px;
+    overflow-wrap: anywhere;
+    font-size: 20px;
+    font-weight: 950;
+    font-variant-numeric: tabular-nums;
+  }
+  .financial-profitability-equation .is-result {
+    border-color: color-mix(in oklch, var(--color-primary) 28%, var(--color-border));
+  }
+  .financial-profitability-breakdown {
+    display: grid;
+    gap: 10px;
+  }
+  .financial-profitability-breakdown > div,
+  .financial-profitability-related {
+    min-width: 0;
+    border: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
+    border-radius: 8px;
+    background: color-mix(in oklch, var(--color-card) 64%, transparent);
+    padding: 13px;
+  }
+  .financial-profitability-breakdown h3,
+  .financial-profitability-related h3 {
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 950;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .financial-profitability-breakdown-row {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--color-muted-foreground);
+    font-size: 13px;
+    font-weight: 800;
+  }
+  .financial-profitability-breakdown-row strong {
+    color: var(--color-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  .financial-profitability-freight-row {
+    display: block;
+    min-width: 0;
+    width: 100%;
+    border: 1px solid color-mix(in oklch, var(--color-border) 70%, transparent);
+    border-radius: 8px;
+    background: color-mix(in oklch, var(--color-surface) 42%, transparent);
+    padding: 12px;
+    text-align: left;
+  }
+  .financial-profitability-empty {
+    display: grid;
+    justify-items: start;
+    gap: 5px;
+    border: 1px dashed color-mix(in oklch, var(--color-border) 78%, transparent);
+    border-radius: 8px;
+    background: color-mix(in oklch, var(--color-surface) 40%, transparent);
+    padding: 18px;
+  }
+  .financial-profitability-empty strong {
+    font-size: 14px;
+    font-weight: 950;
+  }
+  .financial-profitability-empty span {
+    color: var(--color-muted-foreground);
+    font-size: 13px;
+    font-weight: 750;
+  }
+  .dark .financial-profitability-dimensions,
+  .dark .financial-profitability-filters,
+  .dark .financial-profitability-ranking,
+  .dark .financial-profitability-attention,
+  .dark .financial-profitability-compare,
+  .dark .financial-profitability-breakdown > div,
+  .dark .financial-profitability-related,
+  .dark .financial-profitability-table-wrap {
+    background: oklch(0.155 0.006 255 / 0.9);
+    border-color: oklch(1 0 0 / 0.12);
+  }
+  .dark .financial-profitability-rank-card {
+    background:
+      linear-gradient(180deg, oklch(0.19 0.006 255 / 0.92), oklch(0.135 0.006 255 / 0.94));
+    border-color: oklch(1 0 0 / 0.12);
+  }
+  .dark .financial-profitability-rank-card:hover {
+    background:
+      linear-gradient(180deg, oklch(0.215 0.006 255 / 0.94), oklch(0.15 0.006 255 / 0.96));
+    border-color: color-mix(in oklch, var(--color-primary) 38%, var(--color-border));
+  }
+  .dark .financial-profitability-executive {
+    background:
+      linear-gradient(
+        90deg,
+        oklch(0.125 0.006 255 / 0.98),
+        color-mix(in oklch, var(--color-primary) 8%, oklch(0.12 0.006 255))
+      );
+  }
+  .dark .financial-profitability-margin,
+  .dark .financial-profitability-mini,
+  .dark .financial-profitability-freight-row,
+  .dark .financial-profitability-equation > div,
+  .dark .financial-profitability-empty {
+    background: oklch(0.18 0.006 255 / 0.86);
+  }
+  .dark .financial-profitability-table th {
+    background: oklch(0.18 0.006 255 / 0.98);
+  }
   .financial-payables-shell {
     display: grid;
     gap: 16px;
@@ -1787,6 +2393,13 @@
     .financial-receivables-priority,
     .financial-receivables-filters,
     .financial-receivables-list,
+    .financial-profitability-dimensions,
+    .financial-profitability-filters,
+    .financial-profitability-executive,
+    .financial-profitability-ranking,
+    .financial-profitability-analysis,
+    .financial-profitability-warning,
+    .financial-profitability-error,
     .financial-payables-summary,
     .financial-payables-pressure,
     .financial-payables-filters,
@@ -1857,6 +2470,48 @@
     }
     .financial-receivables-value-cell {
       text-align: right;
+    }
+    .financial-profitability-dimensions {
+      display: inline-grid;
+      width: min(620px, 100%);
+      justify-self: start;
+    }
+    .financial-profitability-filter-primary {
+      grid-template-columns:
+        minmax(138px, 0.56fr) minmax(138px, 0.56fr) minmax(150px, 0.65fr)
+        minmax(210px, 1fr);
+    }
+    .financial-profitability-filter-secondary {
+      grid-template-columns:
+        minmax(150px, 0.75fr) minmax(150px, 0.75fr) minmax(150px, 0.75fr)
+        minmax(170px, 0.85fr) minmax(120px, 0.52fr) minmax(150px, 0.65fr);
+    }
+    .financial-profitability-executive {
+      grid-template-columns: minmax(0, 1.15fr) minmax(190px, 0.38fr) minmax(320px, 0.78fr);
+      align-items: stretch;
+    }
+    .financial-profitability-executive-line {
+      align-content: stretch;
+    }
+    .financial-profitability-top-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .financial-profitability-analysis {
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.65fr);
+      align-items: start;
+    }
+    .financial-profitability-modal-tools {
+      grid-template-columns: minmax(0, 1fr) minmax(240px, 0.34fr);
+    }
+    .financial-profitability-detail-head {
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 0.42fr);
+      align-items: end;
+    }
+    .financial-profitability-equation {
+      grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr) 24px minmax(0, 1.18fr);
+    }
+    .financial-profitability-breakdown {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     }
     .financial-payables-summary {
       grid-template-columns: minmax(0, 1fr) minmax(300px, 0.5fr);
@@ -1955,6 +2610,15 @@
     .financial-receivables-mini-metric strong {
       font-size: 18px;
     }
+    .financial-profitability-top-grid {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+    .financial-profitability-result strong {
+      font-size: 46px;
+    }
+    .financial-profitability-rank-result strong {
+      font-size: 26px;
+    }
     .financial-payables-main-metric strong {
       font-size: 44px;
     }
@@ -1991,6 +2655,13 @@
     .financial-receivables-summary,
     .financial-receivables-priority,
     .financial-receivables-list,
+    .financial-profitability-dimensions,
+    .financial-profitability-filters,
+    .financial-profitability-executive,
+    .financial-profitability-ranking,
+    .financial-profitability-analysis,
+    .financial-profitability-warning,
+    .financial-profitability-error,
     .financial-payables-summary,
     .financial-payables-pressure,
     .financial-payables-list {
@@ -2010,6 +2681,29 @@
     .financial-receivables-filters {
       margin-inline: 0;
       padding-inline: 0;
+    }
+    .financial-profitability-dimensions button {
+      padding: 9px 6px;
+      font-size: 10px;
+    }
+    .financial-profitability-result strong {
+      font-size: 34px;
+    }
+    .financial-profitability-attention-row {
+      grid-template-columns: 22px minmax(0, 1fr) minmax(58px, auto);
+    }
+    .financial-profitability-attention-row b {
+      grid-column: 2 / -1;
+    }
+    .financial-profitability-table {
+      min-width: 700px;
+    }
+    .financial-profitability-equation {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .financial-profitability-equation > b {
+      justify-self: start;
+      padding-left: 12px;
     }
     .financial-payables-main-metric strong {
       font-size: 32px;
