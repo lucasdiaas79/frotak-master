@@ -2063,14 +2063,8 @@ function TitlesContent({
             openBalance={openBalance}
             overdue={overdue}
             settledPeriod={settledPeriod}
-            upcoming={upcoming}
           />
-          <PayablesPressure
-            overdueCount={overdueTitles.length}
-            overdueAmount={overdue}
-            upcomingCount={upcomingTitles.length}
-            upcomingAmount={upcoming}
-          />
+          <PayablesPressure documents={documents} />
           <div className="hidden md:block">
             <PayablesFilterPanel
               filters={filters}
@@ -2624,16 +2618,78 @@ function payableDueState(document: FinancialDocumentDetails) {
   return { label: "Programado", tone: "muted" as const };
 }
 
+function daysUntil(dueDate: string) {
+  const base = new Date(`${today()}T12:00:00`);
+  const due = new Date(`${dueDate}T12:00:00`);
+  return Math.floor((due.getTime() - base.getTime()) / 86_400_000);
+}
+
+function payableBucketForDays(days: number) {
+  if (days < 0) return "overdue";
+  if (days === 0) return "today";
+  if (days <= 7) return "week";
+  if (days <= 15) return "halfMonth";
+  if (days <= 30) return "month";
+  return "later";
+}
+
+const payablePressureBuckets = [
+  { key: "overdue", label: "Vencido", tone: "danger" },
+  { key: "week", label: "Até 7 dias", tone: "warning" },
+  { key: "halfMonth", label: "8-15 dias", tone: "neutral" },
+  { key: "month", label: "16-30 dias", tone: "neutral" },
+  { key: "later", label: "Após 30 dias", tone: "muted" },
+] as const;
+
+const payableAgendaGroups = [
+  { key: "overdue", label: "Vencidos" },
+  { key: "today", label: "Vencem hoje" },
+  { key: "week", label: "Próximos 7 dias" },
+  { key: "later", label: "Mais adiante" },
+  { key: "closed", label: "Concluídos ou sem vencimento" },
+] as const;
+
+function summarizePayablePressure(documents: FinancialDocumentDetails[]) {
+  const summary = payablePressureBuckets.reduce(
+    (acc, bucket) => ({
+      ...acc,
+      [bucket.key]: { amount: 0, count: 0 },
+    }),
+    {} as Record<(typeof payablePressureBuckets)[number]["key"], { amount: number; count: number }>,
+  );
+
+  for (const document of documents) {
+    for (const installment of document.installments) {
+      if (installment.balance <= 0 || !installment.dueDate) continue;
+      const bucket = payableBucketForDays(daysUntil(installment.dueDate));
+      const key = bucket === "today" ? "week" : bucket;
+      summary[key].amount += installment.balance;
+      summary[key].count += 1;
+    }
+  }
+
+  return summary;
+}
+
+function payableAgendaGroup(document: FinancialDocumentDetails) {
+  const installment = firstOpenInstallment(document);
+  const state = visualStatus(document);
+  if (!installment || state === "settled" || state === "voided") return "closed";
+  const bucket = payableBucketForDays(daysUntil(installment.dueDate));
+  if (bucket === "today") return "today";
+  if (bucket === "overdue") return "overdue";
+  if (bucket === "week") return "week";
+  return "later";
+}
+
 function PayablesSummary({
   openBalance,
   overdue,
   settledPeriod,
-  upcoming,
 }: {
   openBalance: number;
   overdue: number;
   settledPeriod: number;
-  upcoming: number;
 }) {
   return (
     <section className="financial-payables-summary">
@@ -2645,7 +2701,6 @@ function PayablesSummary({
       <div className="financial-payables-secondary-board">
         <PayableMiniMetric label="Vencido" value={overdue} tone="danger" />
         <PayableMiniMetric label="Pago no período" value={settledPeriod} tone="success" />
-        <PayableMiniMetric label="Próximos 7 dias" value={upcoming} tone="future" />
       </div>
     </section>
   );
@@ -2668,38 +2723,49 @@ function PayableMiniMetric({
   );
 }
 
-function PayablesPressure({
-  overdueCount,
-  overdueAmount,
-  upcomingCount,
-  upcomingAmount,
-}: {
-  overdueCount: number;
-  overdueAmount: number;
-  upcomingCount: number;
-  upcomingAmount: number;
-}) {
+function PayablesPressure({ documents }: { documents: FinancialDocumentDetails[] }) {
+  const pressure = summarizePayablePressure(documents);
+  const week = pressure.week;
+  const overdue = pressure.overdue;
   return (
     <section className="financial-payables-pressure">
-      <div>
-        <p className="financial-section-kicker">Compromissos Próximos</p>
+      <div className="financial-payables-pressure-title">
+        <p className="financial-section-kicker">Agenda Financeira</p>
         <h2>Pressão de caixa</h2>
+        <span>Distribuição por vencimento dos compromissos em aberto.</span>
       </div>
+      <article className="financial-payables-week-focus">
+        <span>Comprometido nos próximos 7 dias</span>
+        <strong>{money.format(week.amount)}</strong>
+        <small>
+          {week.count} {week.count === 1 ? "parcela" : "parcelas"} exigem programação imediata
+        </small>
+      </article>
+      <article className="financial-payables-overdue-alert">
+        <ShieldAlert className="size-4" />
+        <span>Vencido</span>
+        <strong>{money.format(overdue.amount)}</strong>
+        <small>
+          {overdue.count} {overdue.count === 1 ? "parcela" : "parcelas"}
+        </small>
+      </article>
       <div className="financial-payables-pressure-track">
-        <div className="financial-payables-pressure-item financial-payables-pressure-urgent">
-          <CalendarClock className="size-4" />
-          <span>Vencidos</span>
-          <strong>
-            {overdueCount} títulos · {money.format(overdueAmount)}
-          </strong>
-        </div>
-        <div className="financial-payables-pressure-item">
-          <ArrowUpRight className="size-4" />
-          <span>Próximos 7 dias</span>
-          <strong>
-            {upcomingCount} títulos · {money.format(upcomingAmount)}
-          </strong>
-        </div>
+        {payablePressureBuckets.map((bucket) => (
+          <div
+            key={bucket.key}
+            className={cn(
+              "financial-payables-pressure-item",
+              `financial-payables-pressure-${bucket.tone}`,
+            )}
+          >
+            <span>{bucket.label}</span>
+            <strong>{money.format(pressure[bucket.key].amount)}</strong>
+            <small>
+              {pressure[bucket.key].count}{" "}
+              {pressure[bucket.key].count === 1 ? "parcela" : "parcelas"}
+            </small>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -2828,12 +2894,30 @@ function PayablesTitleList({
   onVoid: (d: FinancialDocumentDetails) => void;
   onEdit: (d: FinancialDocumentDetails) => void;
 }) {
+  const supplierCounts = documents.reduce<Record<string, number>>((acc, document) => {
+    const key = document.partnerName || "Fornecedor não informado";
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+  const orderedDocuments = [...documents].sort((a, b) => {
+    const aInstallment = firstOpenInstallment(a);
+    const bInstallment = firstOpenInstallment(b);
+    if (!aInstallment && !bInstallment) return 0;
+    if (!aInstallment) return 1;
+    if (!bInstallment) return -1;
+    return aInstallment.dueDate.localeCompare(bInstallment.dueDate);
+  });
+  const grouped = payableAgendaGroups.map((group) => ({
+    ...group,
+    documents: orderedDocuments.filter((document) => payableAgendaGroup(document) === group.key),
+  }));
+
   return (
     <section className="financial-payables-list">
       <div className="financial-payables-list-head">
         <div>
           <p className="financial-section-kicker">Obrigações</p>
-          <h2>Carteira de compromissos</h2>
+          <h2>Agenda de pagamentos</h2>
         </div>
         <span>{documents.length} encontrados</span>
       </div>
@@ -2845,26 +2929,42 @@ function PayablesTitleList({
         <span>Ação</span>
       </div>
       {documents.length ? (
-        documents.map((document) => (
-          <PayablesTitleRow
-            key={document.id}
-            document={document}
-            canSettle={canSettle}
-            canReverse={canReverse}
-            canEdit={canEdit}
-            onSettle={onSettle}
-            onReverse={onReverse}
-            onVoid={onVoid}
-            onEdit={onEdit}
-          />
-        ))
+        grouped
+          .filter((group) => group.documents.length > 0)
+          .map((group) => (
+            <div key={group.key} className="financial-payables-agenda-group">
+              <div className="financial-payables-agenda-label">
+                <CalendarClock className="size-3.5" />
+                <span>{group.label}</span>
+                <small>{group.documents.length}</small>
+              </div>
+              {group.documents.map((document) => (
+                <PayablesTitleRow
+                  key={document.id}
+                  document={document}
+                  supplierCount={supplierCounts[document.partnerName || "Fornecedor não informado"]}
+                  canSettle={canSettle}
+                  canReverse={canReverse}
+                  canEdit={canEdit}
+                  onSettle={onSettle}
+                  onReverse={onReverse}
+                  onVoid={onVoid}
+                  onEdit={onEdit}
+                />
+              ))}
+            </div>
+          ))
       ) : (
         <div className="financial-payables-empty">
-          <strong>Nenhuma obrigação encontrada</strong>
+          <strong>
+            {filtersActive
+              ? "Nenhuma obrigação encontrada para os filtros atuais"
+              : "Nenhuma obrigação em aberto"}
+          </strong>
           <span>
             {filtersActive
-              ? "Nenhum título encontrado para os filtros atuais."
-              : "Cadastre um novo título para começar."}
+              ? "Ajuste período, fornecedor, status ou valor para ampliar a agenda."
+              : "Cadastre um novo título para iniciar a programação de pagamentos."}
           </span>
           {!filtersActive && canCreate && (
             <Button size="sm" variant="outline" onClick={onNew}>
@@ -2880,6 +2980,7 @@ function PayablesTitleList({
 
 function PayablesTitleRow({
   document,
+  supplierCount,
   canSettle,
   canReverse,
   canEdit,
@@ -2889,6 +2990,7 @@ function PayablesTitleRow({
   onEdit,
 }: {
   document: FinancialDocumentDetails;
+  supplierCount: number;
   canSettle: boolean;
   canReverse: boolean;
   canEdit: boolean;
@@ -2915,6 +3017,7 @@ function PayablesTitleRow({
         <small>
           {document.documentNumber || "Sem número"} ·{" "}
           {originLabels[documentOrigin(document.sourceType)]}
+          {supplierCount > 1 ? ` · ${supplierCount} títulos na lista` : ""}
         </small>
       </div>
       <div className="financial-payables-due-cell">
