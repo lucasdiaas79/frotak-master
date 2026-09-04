@@ -295,7 +295,12 @@ function LegacyOverviewContent() {
     .flatMap((d) => d.installments)
     .filter((i) => i.balance > 0 && i.dueDate < today());
   return (
-    <div className={cn("financial-shell space-y-4", receiving && "financial-receivables-shell")}>
+    <div
+      className={cn(
+        "financial-shell space-y-4",
+        receiving ? "financial-receivables-shell" : "financial-payables-shell",
+      )}
+    >
       <PageHeader title="Financeiro" subtitle="Controle real de contas, vencimentos e caixa" />
       <FinancialNav />
       <div className="grid grid-cols-2 gap-3 px-3 md:grid-cols-3 lg:grid-cols-6 md:px-0">
@@ -1932,13 +1937,18 @@ function TitlesContent({
     receiving ? "financial.receive" : "financial.pay",
   );
   return (
-    <div className={cn("financial-shell space-y-4", receiving && "financial-receivables-shell")}>
+    <div
+      className={cn(
+        "financial-shell space-y-4",
+        receiving ? "financial-receivables-shell" : "financial-payables-shell",
+      )}
+    >
       <PageHeader
         title={receiving ? "Contas a Receber" : "Contas a Pagar"}
         subtitle={
           receiving
             ? "Clientes, vencimentos e recebimentos do período"
-            : "Fornecedores, vencimentos e pagamentos do periodo"
+            : "Fornecedores, vencimentos e pagamentos do período"
         }
         actions={
           canCreate ? (
@@ -2049,23 +2059,20 @@ function TitlesContent({
         </>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 px-3 lg:grid-cols-4 md:px-0">
-            <Stat
-              label={receiving ? "A receber" : "A pagar"}
-              value={openBalance}
-              icon={WalletCards}
-            />
-            <Stat label="Vencido" value={overdue} icon={CalendarClock} tone="danger" />
-            <Stat
-              label={receiving ? "Recebido no período" : "Pago no período"}
-              value={settledPeriod}
-              icon={CircleDollarSign}
-              tone="success"
-            />
-            <Stat label="Próximos 7 dias" value={upcoming} icon={CalendarClock} />
-          </div>
+          <PayablesSummary
+            openBalance={openBalance}
+            overdue={overdue}
+            settledPeriod={settledPeriod}
+            upcoming={upcoming}
+          />
+          <PayablesPressure
+            overdueCount={overdueTitles.length}
+            overdueAmount={overdue}
+            upcomingCount={upcomingTitles.length}
+            upcomingAmount={upcoming}
+          />
           <div className="hidden md:block">
-            <FilterPanel
+            <PayablesFilterPanel
               filters={filters}
               setFilters={setFilters}
               partners={allowedPartners}
@@ -2085,10 +2092,10 @@ function TitlesContent({
                 <SheetHeader className="text-left">
                   <SheetTitle>Filtrar títulos</SheetTitle>
                   <SheetDescription>
-                    Refine a consulta por período, parceiro e situação.
+                    Refine a consulta por período, fornecedor e situação.
                   </SheetDescription>
                 </SheetHeader>
-                <FilterPanel
+                <PayablesFilterPanel
                   embedded
                   filters={filters}
                   setFilters={setFilters}
@@ -2102,12 +2109,17 @@ function TitlesContent({
               </SheetContent>
             </Sheet>
           </div>
-          <TitleList
+          <PayablesTitleList
             documents={filtered}
-            direction={direction}
             canSettle={canSettle}
             canReverse={hasFinancialPermission(access, "financial.reverse_settlement")}
             canEdit={hasFinancialPermission(access, "financial.edit_draft")}
+            filtersActive={filtersActive}
+            canCreate={canCreate}
+            onNew={() => {
+              setEditingDocument(null);
+              setFormOpen(true);
+            }}
             onEdit={(document) => {
               setEditingDocument(document);
               setFormOpen(true);
@@ -2570,6 +2582,403 @@ function ReceivablesTitleRow({
                 <DropdownMenuItem onSelect={() => onSettle(document, installment)}>
                   <CircleDollarSign />
                   Receber
+                </DropdownMenuItem>
+              )}
+              {document.status === "draft" && canEdit && (
+                <DropdownMenuItem onSelect={() => onEdit(document)}>
+                  <Pencil /> Editar rascunho
+                </DropdownMenuItem>
+              )}
+              {document.status === "draft" && canEdit && (
+                <DropdownMenuItem onSelect={() => onVoid(document)}>
+                  <ReceiptText /> Cancelar título
+                </DropdownMenuItem>
+              )}
+              {canReverse &&
+                activeSettlements.map((settlement) => (
+                  <DropdownMenuItem key={settlement.id} onSelect={() => onReverse(settlement)}>
+                    <RotateCcw /> Estornar baixa
+                  </DropdownMenuItem>
+                ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function payableDueState(document: FinancialDocumentDetails) {
+  const installment = firstOpenInstallment(document);
+  const state = visualStatus(document);
+  if (state === "settled") return { label: "Pago", tone: "success" as const };
+  if (state === "voided") return { label: "Cancelado", tone: "muted" as const };
+  if (!installment) return { label: "Sem vencimento", tone: "muted" as const };
+  if (installment.dueDate < today()) return { label: "Vencido", tone: "danger" as const };
+  if (installment.dueDate === today()) return { label: "Vence hoje", tone: "warning" as const };
+  const limit = new Date();
+  limit.setDate(limit.getDate() + 7);
+  if (installment.dueDate <= limit.toISOString().slice(0, 10)) {
+    return { label: "Compromisso 7 dias", tone: "warning" as const };
+  }
+  return { label: "Programado", tone: "muted" as const };
+}
+
+function PayablesSummary({
+  openBalance,
+  overdue,
+  settledPeriod,
+  upcoming,
+}: {
+  openBalance: number;
+  overdue: number;
+  settledPeriod: number;
+  upcoming: number;
+}) {
+  return (
+    <section className="financial-payables-summary">
+      <article className="financial-payables-main-metric">
+        <p className="financial-eyebrow">A Pagar</p>
+        <strong>{money.format(openBalance)}</strong>
+        <span>Compromissos financeiros em aberto</span>
+      </article>
+      <div className="financial-payables-secondary-board">
+        <PayableMiniMetric label="Vencido" value={overdue} tone="danger" />
+        <PayableMiniMetric label="Pago no período" value={settledPeriod} tone="success" />
+        <PayableMiniMetric label="Próximos 7 dias" value={upcoming} tone="future" />
+      </div>
+    </section>
+  );
+}
+
+function PayableMiniMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "danger" | "success" | "future";
+}) {
+  return (
+    <article className={cn("financial-payables-mini-metric", `financial-payables-${tone}`)}>
+      <span>{label}</span>
+      <strong>{money.format(value)}</strong>
+    </article>
+  );
+}
+
+function PayablesPressure({
+  overdueCount,
+  overdueAmount,
+  upcomingCount,
+  upcomingAmount,
+}: {
+  overdueCount: number;
+  overdueAmount: number;
+  upcomingCount: number;
+  upcomingAmount: number;
+}) {
+  return (
+    <section className="financial-payables-pressure">
+      <div>
+        <p className="financial-section-kicker">Compromissos Próximos</p>
+        <h2>Pressão de caixa</h2>
+      </div>
+      <div className="financial-payables-pressure-track">
+        <div className="financial-payables-pressure-item financial-payables-pressure-urgent">
+          <CalendarClock className="size-4" />
+          <span>Vencidos</span>
+          <strong>
+            {overdueCount} títulos · {money.format(overdueAmount)}
+          </strong>
+        </div>
+        <div className="financial-payables-pressure-item">
+          <ArrowUpRight className="size-4" />
+          <span>Próximos 7 dias</span>
+          <strong>
+            {upcomingCount} títulos · {money.format(upcomingAmount)}
+          </strong>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function PayablesFilterPanel({
+  embedded = false,
+  filters,
+  setFilters,
+  partners,
+  chart,
+  centers,
+}: {
+  embedded?: boolean;
+  filters: TitleFilters;
+  setFilters: (f: TitleFilters) => void;
+  partners: BusinessPartner[];
+  chart: ChartAccount[];
+  centers: CostCenter[];
+}) {
+  const set = (key: keyof TitleFilters, value: string) => setFilters({ ...filters, [key]: value });
+  return (
+    <section
+      className={cn(
+        "financial-payables-filters",
+        embedded && "financial-payables-filters-embedded",
+      )}
+    >
+      <div className="financial-payables-filter-main">
+        <div className="relative">
+          <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder="Buscar título, documento ou fornecedor"
+            value={filters.search}
+            onChange={(event) => set("search", event.target.value)}
+          />
+        </div>
+        <Input
+          type="date"
+          value={filters.start}
+          onChange={(event) => set("start", event.target.value)}
+        />
+        <Input
+          type="date"
+          value={filters.end}
+          onChange={(event) => set("end", event.target.value)}
+        />
+        <SimpleSelect
+          value={filters.status}
+          onChange={(value) => set("status", value)}
+          all="Todos os status"
+          items={Object.entries(statusLabels)}
+        />
+        <SimpleSelect
+          value={filters.partner}
+          onChange={(value) => set("partner", value)}
+          all="Todos os fornecedores"
+          items={partners.map((partner) => [partner.id, partner.tradeName])}
+        />
+      </div>
+      <div className="financial-payables-filter-secondary">
+        <SimpleSelect
+          value={filters.origin}
+          onChange={(value) => set("origin", value)}
+          all="Todas as origens"
+          items={Object.entries(originLabels)}
+        />
+        <SimpleSelect
+          value={filters.category}
+          onChange={(value) => set("category", value)}
+          all="Todas as categorias"
+          items={chart
+            .filter((account) => account.isPostable)
+            .map((account) => [account.id, `${account.code} · ${account.name}`])}
+        />
+        <SimpleSelect
+          value={filters.center}
+          onChange={(value) => set("center", value)}
+          all="Todos os centros"
+          items={centers.map((center) => [center.id, center.name])}
+        />
+        <Input
+          type="number"
+          placeholder="Valor mínimo"
+          value={filters.min}
+          onChange={(event) => set("min", event.target.value)}
+        />
+        <Input
+          type="number"
+          placeholder="Valor máximo"
+          value={filters.max}
+          onChange={(event) => set("max", event.target.value)}
+        />
+        <Button variant="outline" onClick={() => setFilters(initialFilters())}>
+          <Settings2 className="size-4" />
+          Limpar
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function PayablesTitleList({
+  documents,
+  canSettle,
+  canReverse,
+  canEdit,
+  filtersActive,
+  canCreate,
+  onNew,
+  onSettle,
+  onReverse,
+  onVoid,
+  onEdit,
+}: {
+  documents: FinancialDocumentDetails[];
+  canSettle: boolean;
+  canReverse: boolean;
+  canEdit: boolean;
+  filtersActive: boolean;
+  canCreate: boolean;
+  onNew: () => void;
+  onSettle: (d: FinancialDocumentDetails, i: FinancialInstallment) => void;
+  onReverse: (s: FinancialSettlement) => void;
+  onVoid: (d: FinancialDocumentDetails) => void;
+  onEdit: (d: FinancialDocumentDetails) => void;
+}) {
+  return (
+    <section className="financial-payables-list">
+      <div className="financial-payables-list-head">
+        <div>
+          <p className="financial-section-kicker">Obrigações</p>
+          <h2>Carteira de compromissos</h2>
+        </div>
+        <span>{documents.length} encontrados</span>
+      </div>
+      <div className="hidden financial-payables-table-head md:grid">
+        <span>Fornecedor e título</span>
+        <span>Vencimento</span>
+        <span>Valor</span>
+        <span>Situação</span>
+        <span>Ação</span>
+      </div>
+      {documents.length ? (
+        documents.map((document) => (
+          <PayablesTitleRow
+            key={document.id}
+            document={document}
+            canSettle={canSettle}
+            canReverse={canReverse}
+            canEdit={canEdit}
+            onSettle={onSettle}
+            onReverse={onReverse}
+            onVoid={onVoid}
+            onEdit={onEdit}
+          />
+        ))
+      ) : (
+        <div className="financial-payables-empty">
+          <strong>Nenhuma obrigação encontrada</strong>
+          <span>
+            {filtersActive
+              ? "Nenhum título encontrado para os filtros atuais."
+              : "Cadastre um novo título para começar."}
+          </span>
+          {!filtersActive && canCreate && (
+            <Button size="sm" variant="outline" onClick={onNew}>
+              <Plus className="size-4" />
+              Novo título
+            </Button>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PayablesTitleRow({
+  document,
+  canSettle,
+  canReverse,
+  canEdit,
+  onSettle,
+  onReverse,
+  onVoid,
+  onEdit,
+}: {
+  document: FinancialDocumentDetails;
+  canSettle: boolean;
+  canReverse: boolean;
+  canEdit: boolean;
+  onSettle: (d: FinancialDocumentDetails, i: FinancialInstallment) => void;
+  onReverse: (s: FinancialSettlement) => void;
+  onVoid: (d: FinancialDocumentDetails) => void;
+  onEdit: (d: FinancialDocumentDetails) => void;
+}) {
+  const installment = firstOpenInstallment(document);
+  const state = visualStatus(document);
+  const balance = documentBalance(document);
+  const activeSettlements = effectiveSettlements(document);
+  const dueState = payableDueState(document);
+  const canAct =
+    Boolean(installment && canSettle && !["draft", "voided"].includes(document.status)) ||
+    (document.status === "draft" && canEdit) ||
+    (canReverse && activeSettlements.length > 0);
+
+  return (
+    <article className="financial-payables-row">
+      <div className="financial-payables-partner-cell">
+        <strong>{document.partnerName || "Fornecedor não informado"}</strong>
+        <span>{document.description}</span>
+        <small>
+          {document.documentNumber || "Sem número"} ·{" "}
+          {originLabels[documentOrigin(document.sourceType)]}
+        </small>
+      </div>
+      <div className="financial-payables-due-cell">
+        <FinancialStatusBadge state={dueState.tone}>{dueState.label}</FinancialStatusBadge>
+        <span>{installment ? date.format(new Date(`${installment.dueDate}T12:00:00`)) : "-"}</span>
+      </div>
+      <div className="financial-payables-value-cell">
+        <strong>{money.format(balance)}</strong>
+        <span>de {money.format(document.originalAmount)}</span>
+      </div>
+      <div>
+        <FinancialStatusBadge
+          state={state === "overdue" ? "danger" : state === "settled" ? "success" : "muted"}
+        >
+          {statusLabel(state, "payable")}
+        </FinancialStatusBadge>
+      </div>
+      <div className="hidden financial-payables-actions md:flex">
+        {installment && canSettle && !["draft", "voided"].includes(document.status) && (
+          <Button size="sm" onClick={() => onSettle(document, installment)}>
+            Pagar
+          </Button>
+        )}
+        {document.status === "draft" && canEdit && (
+          <>
+            <Button
+              size="icon"
+              variant="outline"
+              title="Editar rascunho"
+              onClick={() => onEdit(document)}
+            >
+              <Pencil className="size-4" />
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => onVoid(document)}>
+              Cancelar
+            </Button>
+          </>
+        )}
+        {canReverse &&
+          activeSettlements.map((settlement) => (
+            <Button
+              key={settlement.id}
+              size="icon"
+              variant="ghost"
+              title="Estornar baixa"
+              onClick={() => onReverse(settlement)}
+            >
+              <RotateCcw className="size-4" />
+            </Button>
+          ))}
+      </div>
+      {canAct && (
+        <div className="financial-payables-mobile-action md:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon" variant="outline" aria-label="Ações do título">
+                <MoreVertical className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {installment && canSettle && !["draft", "voided"].includes(document.status) && (
+                <DropdownMenuItem onSelect={() => onSettle(document, installment)}>
+                  <CircleDollarSign />
+                  Pagar
                 </DropdownMenuItem>
               )}
               {document.status === "draft" && canEdit && (

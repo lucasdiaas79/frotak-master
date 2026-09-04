@@ -895,6 +895,311 @@
     font-size: 13px;
     font-weight: 700;
   }
+  .financial-payables-shell {
+    display: grid;
+    gap: 14px;
+  }
+  .financial-payables-summary,
+  .financial-payables-pressure,
+  .financial-payables-filters,
+  .financial-payables-list {
+    margin-inline: 12px;
+  }
+  .financial-payables-summary {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+  }
+  .financial-payables-main-metric {
+    min-width: 0;
+    border: 1px solid color-mix(in oklch, var(--color-border) 60%, var(--color-foreground));
+    border-radius: 16px;
+    background:
+      linear-gradient(
+        145deg,
+        color-mix(in oklch, var(--color-foreground) 6%, var(--color-card)),
+        color-mix(in oklch, var(--color-surface) 76%, transparent)
+      ),
+      color-mix(in oklch, var(--color-card) 86%, transparent);
+    padding: 18px;
+    box-shadow:
+      0 18px 44px oklch(0.1 0.012 255 / 0.09),
+      inset 0 1px 0 oklch(1 0 0 / 0.14);
+  }
+  .financial-payables-main-metric strong {
+    display: block;
+    margin-top: 14px;
+    overflow-wrap: anywhere;
+    color: var(--color-foreground);
+    font-size: 34px;
+    font-weight: 950;
+    line-height: 1;
+    letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .financial-payables-main-metric span {
+    display: block;
+    margin-top: 10px;
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .financial-payables-secondary-board {
+    display: grid;
+    gap: 8px;
+    min-width: 0;
+    border: 1px solid color-mix(in oklch, var(--color-border) 68%, transparent);
+    border-radius: 16px;
+    background: color-mix(in oklch, var(--color-card) 70%, transparent);
+    padding: 10px;
+    box-shadow:
+      0 12px 34px oklch(0.1 0.012 255 / 0.07),
+      inset 0 1px 0 oklch(1 0 0 / 0.12);
+  }
+  .financial-payables-mini-metric {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) minmax(110px, auto);
+    align-items: center;
+    gap: 12px;
+    border-radius: 12px;
+    background: color-mix(in oklch, var(--color-surface) 54%, transparent);
+    padding: 13px 14px;
+  }
+  .financial-payables-mini-metric span {
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .financial-payables-mini-metric strong {
+    overflow-wrap: anywhere;
+    font-size: 16px;
+    font-weight: 950;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .financial-payables-danger {
+    background: color-mix(in oklch, var(--color-destructive) 7%, var(--color-card));
+  }
+  .financial-payables-danger strong {
+    color: color-mix(in oklch, var(--color-destructive) 82%, var(--color-foreground));
+  }
+  .financial-payables-success strong {
+    color: var(--color-primary);
+  }
+  .financial-payables-future strong {
+    color: var(--color-foreground);
+  }
+  .financial-payables-pressure {
+    display: grid;
+    gap: 14px;
+    min-width: 0;
+    border: 1px solid color-mix(in oklch, var(--color-border) 68%, transparent);
+    border-radius: 14px;
+    background:
+      linear-gradient(
+        90deg,
+        color-mix(in oklch, var(--color-surface-2) 70%, transparent),
+        color-mix(in oklch, var(--color-card) 76%, transparent)
+      ),
+      color-mix(in oklch, var(--color-card) 72%, transparent);
+    padding: 15px;
+    box-shadow:
+      0 12px 34px oklch(0.1 0.012 255 / 0.07),
+      inset 0 1px 0 oklch(1 0 0 / 0.12);
+  }
+  .financial-payables-pressure h2,
+  .financial-payables-list-head h2 {
+    margin-top: 3px;
+    font-size: 18px;
+    font-weight: 950;
+    letter-spacing: 0;
+  }
+  .financial-payables-pressure-track {
+    display: grid;
+    gap: 8px;
+  }
+  .financial-payables-pressure-item {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: 26px minmax(0, 0.8fr) minmax(0, 1.2fr);
+    align-items: center;
+    gap: 8px;
+    border-left: 3px solid color-mix(in oklch, var(--color-muted-foreground) 34%, transparent);
+    border-radius: 12px;
+    background: color-mix(in oklch, var(--color-surface) 52%, transparent);
+    padding: 11px 12px;
+  }
+  .financial-payables-pressure-urgent {
+    border-left-color: color-mix(in oklch, var(--color-destructive) 72%, var(--color-border));
+  }
+  .financial-payables-pressure-item svg {
+    color: color-mix(in oklch, var(--color-muted-foreground) 78%, var(--color-foreground));
+  }
+  .financial-payables-pressure-urgent svg {
+    color: color-mix(in oklch, var(--color-destructive) 70%, var(--color-foreground));
+  }
+  .financial-payables-pressure-item span {
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 900;
+  }
+  .financial-payables-pressure-item strong {
+    justify-self: end;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+    font-weight: 950;
+    text-align: right;
+  }
+  .financial-payables-filters {
+    display: grid;
+    gap: 9px;
+    border: 1px solid color-mix(in oklch, var(--color-border) 70%, transparent);
+    border-radius: 14px;
+    background: color-mix(in oklch, var(--color-card) 64%, transparent);
+    padding: 11px;
+    box-shadow:
+      0 10px 28px oklch(0.1 0.012 255 / 0.06),
+      inset 0 1px 0 oklch(1 0 0 / 0.12);
+  }
+  .financial-payables-filters-embedded {
+    margin-inline: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    padding: 14px 0 0;
+  }
+  .financial-payables-filter-main,
+  .financial-payables-filter-secondary {
+    display: grid;
+    gap: 9px;
+  }
+  .financial-payables-list {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid color-mix(in oklch, var(--color-border) 68%, transparent);
+    border-radius: 14px;
+    background: color-mix(in oklch, var(--color-card) 72%, transparent);
+    box-shadow:
+      0 14px 38px oklch(0.1 0.012 255 / 0.08),
+      inset 0 1px 0 oklch(1 0 0 / 0.12);
+  }
+  .financial-payables-list-head {
+    display: flex;
+    min-width: 0;
+    align-items: start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px;
+  }
+  .financial-payables-list-head > span {
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .financial-payables-table-head {
+    grid-template-columns:
+      minmax(0, 1.5fr) minmax(144px, 0.78fr) minmax(132px, 0.62fr) minmax(116px, 0.55fr)
+      minmax(112px, auto);
+    gap: 14px;
+    border-top: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
+    border-bottom: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
+    background: color-mix(in oklch, var(--color-surface-2) 76%, transparent);
+    padding: 10px 16px;
+    color: var(--color-muted-foreground);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .financial-payables-row {
+    position: relative;
+    display: grid;
+    min-width: 0;
+    gap: 12px;
+    border-top: 1px solid color-mix(in oklch, var(--color-border) 68%, transparent);
+    padding: 15px 66px 15px 16px;
+    transition:
+      background 160ms ease,
+      border-color 160ms ease;
+  }
+  .financial-payables-row:hover {
+    background: color-mix(in oklch, var(--color-muted-foreground) 6%, transparent);
+  }
+  .financial-payables-partner-cell,
+  .financial-payables-due-cell,
+  .financial-payables-value-cell {
+    min-width: 0;
+  }
+  .financial-payables-partner-cell strong {
+    display: block;
+    overflow-wrap: anywhere;
+    font-size: 14px;
+    font-weight: 950;
+  }
+  .financial-payables-partner-cell span {
+    display: block;
+    margin-top: 3px;
+    overflow-wrap: anywhere;
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 800;
+  }
+  .financial-payables-partner-cell small {
+    display: block;
+    margin-top: 5px;
+    color: var(--color-muted-foreground);
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .financial-payables-due-cell {
+    display: grid;
+    justify-items: start;
+    gap: 6px;
+  }
+  .financial-payables-due-cell span,
+  .financial-payables-value-cell span {
+    color: var(--color-muted-foreground);
+    font-size: 11px;
+    font-weight: 800;
+  }
+  .financial-payables-value-cell strong {
+    display: block;
+    overflow-wrap: anywhere;
+    color: var(--color-foreground);
+    font-size: 16px;
+    font-weight: 950;
+    font-variant-numeric: tabular-nums;
+  }
+  .financial-payables-actions {
+    align-items: center;
+    justify-content: end;
+    gap: 8px;
+  }
+  .financial-payables-mobile-action {
+    position: absolute;
+    right: 14px;
+    top: 14px;
+  }
+  .financial-payables-empty {
+    display: grid;
+    justify-items: start;
+    gap: 6px;
+    margin: 0 16px 16px;
+    border: 1px dashed color-mix(in oklch, var(--color-border) 78%, transparent);
+    border-radius: 12px;
+    background: color-mix(in oklch, var(--color-surface) 46%, transparent);
+    padding: 16px;
+  }
+  .financial-payables-empty strong {
+    font-size: 14px;
+    font-weight: 950;
+  }
+  .financial-payables-empty span {
+    color: var(--color-muted-foreground);
+    font-size: 13px;
+    font-weight: 700;
+  }
   .financial-dre-shell {
     display: grid;
     gap: 14px;
@@ -1376,7 +1681,11 @@
     .financial-receivables-summary,
     .financial-receivables-priority,
     .financial-receivables-filters,
-    .financial-receivables-list {
+    .financial-receivables-list,
+    .financial-payables-summary,
+    .financial-payables-pressure,
+    .financial-payables-filters,
+    .financial-payables-list {
       margin-inline: 0;
     }
     .financial-overview-top {
@@ -1444,6 +1753,41 @@
     .financial-receivables-value-cell {
       text-align: right;
     }
+    .financial-payables-summary {
+      grid-template-columns: minmax(0, 0.98fr) minmax(370px, 1fr);
+      align-items: stretch;
+    }
+    .financial-payables-secondary-board {
+      align-content: stretch;
+    }
+    .financial-payables-pressure {
+      grid-template-columns: minmax(210px, 0.36fr) minmax(0, 1fr);
+      align-items: center;
+    }
+    .financial-payables-pressure-track {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+    .financial-payables-filter-main {
+      grid-template-columns:
+        minmax(240px, 1.4fr) minmax(132px, 0.55fr) minmax(132px, 0.55fr) minmax(150px, 0.65fr)
+        minmax(190px, 0.9fr);
+    }
+    .financial-payables-filter-secondary {
+      grid-template-columns:
+        minmax(140px, 0.7fr) minmax(190px, 1fr) minmax(170px, 0.9fr) minmax(112px, 0.55fr)
+        minmax(112px, 0.55fr) auto;
+    }
+    .financial-payables-row {
+      grid-template-columns:
+        minmax(0, 1.5fr) minmax(144px, 0.78fr) minmax(132px, 0.62fr) minmax(116px, 0.55fr)
+        minmax(112px, auto);
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+    }
+    .financial-payables-value-cell {
+      text-align: right;
+    }
     .financial-cashflow-control-bar,
     .financial-cashflow-equation,
     .financial-cashflow-forecast,
@@ -1505,6 +1849,12 @@
     .financial-receivables-mini-metric strong {
       font-size: 18px;
     }
+    .financial-payables-main-metric strong {
+      font-size: 44px;
+    }
+    .financial-payables-mini-metric strong {
+      font-size: 18px;
+    }
     .financial-cashflow-step-featured .financial-cashflow-step-value,
     .financial-cashflow-projection strong {
       font-size: 33px;
@@ -1531,7 +1881,10 @@
     .financial-dre-layout,
     .financial-receivables-summary,
     .financial-receivables-priority,
-    .financial-receivables-list {
+    .financial-receivables-list,
+    .financial-payables-summary,
+    .financial-payables-pressure,
+    .financial-payables-list {
       margin-inline: 12px;
     }
     .financial-receivables-main-metric strong {
@@ -1546,6 +1899,21 @@
       text-align: left;
     }
     .financial-receivables-filters {
+      margin-inline: 0;
+      padding-inline: 0;
+    }
+    .financial-payables-main-metric strong {
+      font-size: 32px;
+    }
+    .financial-payables-pressure-item {
+      grid-template-columns: 26px minmax(0, 1fr);
+    }
+    .financial-payables-pressure-item strong {
+      grid-column: 2;
+      justify-self: start;
+      text-align: left;
+    }
+    .financial-payables-filters {
       margin-inline: 0;
       padding-inline: 0;
     }
