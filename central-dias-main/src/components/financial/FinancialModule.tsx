@@ -1306,6 +1306,191 @@ export function FinancialCashFlowPage() {
   return <FinancialBoundary>{(access) => <CashFlowContent access={access} />}</FinancialBoundary>;
 }
 
+const cashFlowStatusLabel: Record<CashFlowEntry["status"], string> = {
+  settlement: "Realizado",
+  reversal: "Estorno",
+  forecast: "Previsto",
+  overdue: "Vencido",
+};
+
+type CashFlowDayGroup = {
+  date: string;
+  inflows: number;
+  outflows: number;
+  net: number;
+  count: number;
+};
+
+function CashFlowMovementStep({
+  label,
+  value,
+  tone = "default",
+  featured = false,
+}: {
+  label: string;
+  value: number;
+  tone?: "default" | "success" | "outflow";
+  featured?: boolean;
+}) {
+  return (
+    <article
+      className={cn(
+        "financial-cashflow-step",
+        tone === "success" && "financial-cashflow-step-success",
+        tone === "outflow" && "financial-cashflow-step-outflow",
+        featured && "financial-cashflow-step-featured",
+      )}
+    >
+      <span className="financial-eyebrow">{label}</span>
+      <strong className="financial-cashflow-step-value">
+        {tone === "success"
+          ? signedMoney(value)
+          : tone === "outflow"
+            ? `- ${money.format(value)}`
+            : money.format(value)}
+      </strong>
+    </article>
+  );
+}
+
+function CashFlowForecastPanel({ summary }: { summary: CashFlowSummary }) {
+  const projected7 = summary.realized.closingBalance + summary.projection.net_7d;
+  const projected30 = summary.realized.closingBalance + summary.projection.net_30d;
+  return (
+    <section className="financial-cashflow-forecast">
+      <div className="flex min-w-0 items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="financial-section-kicker">Previsão de Caixa</p>
+          <h2 className="mt-1 text-lg font-black">Próximos compromissos</h2>
+        </div>
+        <CalendarClock className="size-5 shrink-0 text-primary" />
+      </div>
+      <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1.25fr]">
+        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+          <MiniMetric
+            label="Entradas previstas"
+            value={summary.forecast.expected_inflows}
+            tone="success"
+          />
+          <MiniMetric label="Saídas previstas" value={summary.forecast.expected_outflows} />
+          <MiniMetric
+            label="Vencido"
+            value={summary.forecast.overdue_amount}
+            tone={summary.forecast.overdue_amount > 0 ? "danger" : undefined}
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <article className="financial-cashflow-projection">
+            <span className="financial-eyebrow">Saldo projetado 7 dias</span>
+            <strong>{money.format(projected7)}</strong>
+          </article>
+          <article className="financial-cashflow-projection financial-cashflow-projection-strong">
+            <span className="financial-eyebrow">Saldo projetado 30 dias</span>
+            <strong>{money.format(projected30)}</strong>
+          </article>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CashFlowTimeline({
+  groups,
+  maxMovement,
+}: {
+  groups: CashFlowDayGroup[];
+  maxMovement: number;
+}) {
+  return (
+    <section className="financial-cashflow-temporal">
+      <div className="flex min-w-0 items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="financial-section-kicker">Visão Temporal</p>
+          <h2 className="mt-1 text-lg font-black">Evolução do período</h2>
+        </div>
+        <TrendingUp className="size-5 shrink-0 text-primary" />
+      </div>
+      <div className="mt-4 grid gap-3">
+        {groups.length ? (
+          groups.map((group) => (
+            <div key={group.date} className="financial-cashflow-day">
+              <div className="financial-cashflow-day-head">
+                <div>
+                  <strong>{date.format(new Date(`${group.date}T12:00:00`))}</strong>
+                  <span>
+                    {group.count} movimentação{group.count === 1 ? "" : "ões"}
+                  </span>
+                </div>
+                <strong className={cn(group.net < 0 && "text-destructive")}>
+                  {signedMoney(group.net)}
+                </strong>
+              </div>
+              <div className="financial-cashflow-bars" aria-hidden="true">
+                <span
+                  className="financial-cashflow-bar financial-cashflow-bar-in"
+                  style={{ width: `${Math.max(3, (group.inflows / maxMovement) * 100)}%` }}
+                />
+                <span
+                  className="financial-cashflow-bar financial-cashflow-bar-out"
+                  style={{ width: `${Math.max(3, (group.outflows / maxMovement) * 100)}%` }}
+                />
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="financial-cashflow-empty">
+            Nenhuma movimentação temporal para os filtros selecionados.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
+  return (
+    <section className="financial-cashflow-movements">
+      <div className="flex min-w-0 items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="financial-section-kicker">Operacional</p>
+          <h2 className="mt-1 text-lg font-black">Movimentações do período</h2>
+        </div>
+        <ReceiptText className="size-5 shrink-0 text-primary" />
+      </div>
+      <div className="mt-3 divide-y divide-border/70">
+        {entries.length ? (
+          entries.map((entry) => (
+            <div key={entry.entry_id} className="financial-cashflow-movement-row">
+              <div className="financial-cashflow-date-chip">
+                {date.format(new Date(`${entry.entry_date}T12:00:00`))}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-black">{entry.description}</div>
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  {entry.document_number && <span>Doc. {entry.document_number}</span>}
+                  <span>{entry.financial_account_name || "Sem conta financeira"}</span>
+                  <span>{entry.chart_account_name || "Sem categoria"}</span>
+                  <Badge variant={entry.status === "overdue" ? "destructive" : "secondary"}>
+                    {cashFlowStatusLabel[entry.status]}
+                  </Badge>
+                </div>
+              </div>
+              <div className="financial-cashflow-row-value">
+                <span>{entry.direction === "receivable" ? "Entrada" : "Saída"}</span>
+                <strong className={cn(entry.signed_amount < 0 && "text-destructive")}>
+                  {signedMoney(entry.signed_amount)}
+                </strong>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="financial-cashflow-empty">Nenhum lançamento no período.</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function CashFlowContent({ access }: { access: FinancialAccess }) {
   const [mode, setMode] = useState<PeriodMode>("month");
   const [start, setStart] = useState(() => periodBounds("month")[0]);
@@ -1350,6 +1535,36 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
       toast.error("Nao foi possivel carregar o fluxo de caixa.");
     });
   }, [load]);
+  const chronologicalEntries = useMemo(
+    () => [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date)),
+    [entries],
+  );
+  const temporalGroups = useMemo(() => {
+    const groups = new Map<string, CashFlowDayGroup>();
+    chronologicalEntries.forEach((entry) => {
+      const current = groups.get(entry.entry_date) ?? {
+        date: entry.entry_date,
+        inflows: 0,
+        outflows: 0,
+        net: 0,
+        count: 0,
+      };
+      if (entry.direction === "receivable") current.inflows += entry.amount;
+      if (entry.direction === "payable") current.outflows += entry.amount;
+      current.net += entry.signed_amount;
+      current.count += 1;
+      groups.set(entry.entry_date, current);
+    });
+    return Array.from(groups.values());
+  }, [chronologicalEntries]);
+  const maxTemporalMovement = useMemo(
+    () =>
+      Math.max(
+        1,
+        ...temporalGroups.flatMap((group) => [Math.abs(group.inflows), Math.abs(group.outflows)]),
+      ),
+    [temporalGroups],
+  );
 
   if (!canCashFlow) {
     return (
@@ -1365,13 +1580,14 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
   }
 
   return (
-    <div className="financial-shell space-y-4">
+    <div className="financial-shell financial-cashflow-shell space-y-4">
       <PageHeader
         title="Fluxo de Caixa"
-        subtitle="Movimentacoes realizadas e compromissos previstos."
+        subtitle="Movimentações realizadas e compromissos previstos"
         actions={
           <Button
             variant="outline"
+            size="sm"
             onClick={() =>
               exportCsv(
                 `fluxo-caixa-${view}-${start}-${end}.csv`,
@@ -1394,150 +1610,85 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
         }
       />
       <FinancialNav />
-      <ReportPeriodControls
-        mode={mode}
-        start={start}
-        end={end}
-        onMode={setMode}
-        onStart={setStart}
-        onEnd={setEnd}
-      />
-      <div className="grid gap-2 px-3 sm:grid-cols-3 md:px-0">
-        <Field label="Visao">
-          <Select value={view} onValueChange={(value) => setView(value as "realized" | "forecast")}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="realized">Realizado</SelectItem>
-              <SelectItem value="forecast">Previsto</SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Direcao">
-          <Select value={direction} onValueChange={setDirection}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Entradas e saidas</SelectItem>
-              <SelectItem value="receivable">Entradas</SelectItem>
-              <SelectItem value="payable">Saidas</SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Conta financeira">
-          <Select value={accountId} onValueChange={setAccountId}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Consolidado</SelectItem>
-              {accounts.map((account) => (
-                <SelectItem key={account.id} value={account.id}>
-                  {account.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-      </div>
+      <section className="financial-cashflow-control-bar">
+        <ReportPeriodControls
+          mode={mode}
+          start={start}
+          end={end}
+          onMode={setMode}
+          onStart={setStart}
+          onEnd={setEnd}
+          compact
+        />
+        <div className="financial-cashflow-filter-grid">
+          <Field label="Visão">
+            <Select
+              value={view}
+              onValueChange={(value) => setView(value as "realized" | "forecast")}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="realized">Realizado</SelectItem>
+                <SelectItem value="forecast">Previsto</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Direção">
+            <Select value={direction} onValueChange={setDirection}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Entradas e saídas</SelectItem>
+                <SelectItem value="receivable">Entradas</SelectItem>
+                <SelectItem value="payable">Saídas</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Conta financeira">
+            <Select value={accountId} onValueChange={setAccountId}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Consolidado</SelectItem>
+                {accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+      </section>
       {loading || !summary ? (
         <LoadingReport />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 px-3 md:grid-cols-4 xl:grid-cols-7 md:px-0">
-            <Stat label="Saldo inicial" value={summary.openingBalance} icon={Landmark} />
-            <Stat
+          <section className="financial-cashflow-equation">
+            <CashFlowMovementStep label="Saldo inicial" value={summary.openingBalance} />
+            <ChevronRight className="financial-cashflow-arrow" />
+            <CashFlowMovementStep
               label="Entradas"
               value={summary.realized.inflows}
-              icon={ArrowDownLeft}
               tone="success"
             />
-            <Stat label="Saidas" value={summary.realized.outflows} icon={ArrowUpRight} />
-            <Stat label="Saldo final" value={summary.realized.closingBalance} icon={Banknote} />
-            <Stat
-              label="Previsto entrada"
-              value={summary.forecast.expected_inflows}
-              icon={CalendarClock}
+            <ChevronRight className="financial-cashflow-arrow" />
+            <CashFlowMovementStep label="Saídas" value={summary.realized.outflows} tone="outflow" />
+            <ChevronRight className="financial-cashflow-arrow" />
+            <CashFlowMovementStep
+              label="Saldo final"
+              value={summary.realized.closingBalance}
+              featured
             />
-            <Stat
-              label="Previsto saida"
-              value={summary.forecast.expected_outflows}
-              icon={ReceiptText}
-            />
-            <Stat
-              label="Vencido"
-              value={summary.forecast.overdue_amount}
-              icon={ShieldAlert}
-              tone={summary.forecast.overdue_amount > 0 ? "danger" : "default"}
-            />
-          </div>
-          <div className="grid gap-3 px-3 xl:grid-cols-[1fr_1.4fr] md:px-0">
-            <section className="premium-card p-4">
-              <h2 className="text-sm font-extrabold">Projecao simples</h2>
-              <div className="mt-4 grid gap-3">
-                <MiniMetric
-                  label="Entradas 7 dias"
-                  value={summary.projection.inflows_7d}
-                  tone="success"
-                />
-                <MiniMetric label="Saidas 7 dias" value={summary.projection.outflows_7d} />
-                <MiniMetric
-                  label="Saldo projetado 7 dias"
-                  value={summary.realized.closingBalance + summary.projection.net_7d}
-                  signed
-                />
-                <MiniMetric
-                  label="Entradas 30 dias"
-                  value={summary.projection.inflows_30d}
-                  tone="success"
-                />
-                <MiniMetric label="Saidas 30 dias" value={summary.projection.outflows_30d} />
-                <MiniMetric
-                  label="Saldo projetado 30 dias"
-                  value={summary.realized.closingBalance + summary.projection.net_30d}
-                  signed
-                />
-              </div>
-            </section>
-            <section className="premium-card p-4">
-              <h2 className="text-sm font-extrabold">
-                {view === "realized" ? "Baixas realizadas" : "Titulos previstos"}
-              </h2>
-              <div className="mt-3 divide-y divide-border">
-                {entries.length ? (
-                  entries.map((entry) => (
-                    <div key={entry.entry_id} className="py-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-bold">{entry.description}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {date.format(new Date(`${entry.entry_date}T12:00:00`))} ·{" "}
-                            {entry.partner_name || "Sem parceiro"} ·{" "}
-                            {entry.financial_account_name ||
-                              entry.chart_account_name ||
-                              "Sem categoria"}
-                          </div>
-                        </div>
-                        <strong
-                          className={cn("text-sm", entry.signed_amount < 0 && "text-destructive")}
-                        >
-                          {signedMoney(entry.signed_amount)}
-                        </strong>
-                      </div>
-                      {entry.status === "overdue" && (
-                        <Badge className="mt-2" variant="destructive">
-                          vencido
-                        </Badge>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <EmptyReport text="Nenhum lancamento no periodo." />
-                )}
-              </div>
-            </section>
+          </section>
+          <CashFlowForecastPanel summary={summary} />
+          <div className="financial-cashflow-main-grid">
+            <CashFlowTimeline groups={temporalGroups} maxMovement={maxTemporalMovement} />
+            <CashFlowMovementList entries={chronologicalEntries} />
           </div>
         </>
       )}
