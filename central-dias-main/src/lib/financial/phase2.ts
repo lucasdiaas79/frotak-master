@@ -36,7 +36,7 @@ export async function listFinancialDocuments(
   let query = supabase
     .from("financial_documents")
     .select(
-      "*, business_partners(trade_name), chart_of_accounts(name), financial_installments!financial_installments_document_id_fkey(*), financial_allocations!financial_allocations_document_id_fkey(*), financial_settlements!financial_settlements_document_id_fkey(*)",
+      "*, business_partners!financial_documents_partner_id_fkey(trade_name), chart_of_accounts!financial_documents_chart_account_id_fkey(name), financial_installments!financial_installments_document_id_fkey(*), financial_allocations!financial_allocations_document_id_fkey(*), financial_settlements!financial_settlements_document_id_fkey(*)",
     )
     .order("created_at", { ascending: false });
   if (direction) query = query.eq("direction", direction);

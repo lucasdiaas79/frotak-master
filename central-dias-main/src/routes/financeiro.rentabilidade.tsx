@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { FleetProfitabilityPage } from "@/routes/lucros-despesas";
+import { FleetProfitabilityPage } from "@/components/financial/FleetProfitabilityPage";
 
 export const Route = createFileRoute("/financeiro/rentabilidade")({
   head: () => ({

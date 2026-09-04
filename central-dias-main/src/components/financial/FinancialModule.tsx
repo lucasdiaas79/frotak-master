@@ -172,7 +172,7 @@ function useFinancialAccess() {
   useEffect(() => {
     getFinancialAccess()
       .then(setAccess)
-      .catch(() => setError("VocÃª nÃ£o possui acesso ao mÃ³dulo Financeiro."))
+      .catch(() => setError("Você não possui acesso ao módulo Financeiro."))
       .finally(() => setLoading(false));
   }, []);
   return { access, loading, error };
@@ -193,7 +193,7 @@ function FinancialBoundary({ children }: { children: (access: FinancialAccess) =
           <Landmark className="mx-auto mb-3 size-8 text-muted-foreground" />
           <h2 className="text-lg font-bold">Acesso restrito</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {error || "Solicite uma permissÃ£o financeira ao owner."}
+            {error || "Solicite uma permissão financeira ao owner."}
           </p>
         </div>
       </div>
@@ -278,7 +278,7 @@ function LegacyOverviewContent() {
         setDocuments(d);
         setAccounts(a);
       })
-      .catch(() => toast.error("NÃ£o foi possÃ­vel carregar a visÃ£o financeira."));
+      .catch(() => toast.error("Não foi possível carregar a visão financeira."));
   }, []);
   const open = documents.filter((d) => !["draft", "voided", "settled"].includes(d.status));
   const received = documents
@@ -313,23 +313,23 @@ function LegacyOverviewContent() {
             .reduce((s, d) => s + d.installments.reduce((a, i) => a + i.balance, 0), 0)}
           icon={ArrowUpRight}
         />
-        <Stat label="Recebido no mÃªs" value={received} icon={CircleDollarSign} tone="success" />
-        <Stat label="Pago no mÃªs" value={paid} icon={ReceiptText} />
+        <Stat label="Recebido no mês" value={received} icon={CircleDollarSign} tone="success" />
+        <Stat label="Pago no mês" value={paid} icon={ReceiptText} />
         <Stat
           label="Saldo financeiro"
           value={accounts.reduce((s, a) => s + a.currentBalance, 0)}
           icon={Landmark}
           tone="success"
         />
-        <Stat label="TÃ­tulos vencidos" value={overdue.length} icon={CalendarClock} tone="danger" />
+        <Stat label="Títulos vencidos" value={overdue.length} icon={CalendarClock} tone="danger" />
       </div>
       <div className="grid gap-3 px-3 lg:grid-cols-2 md:px-0">
         <Upcoming
-          title="PrÃ³ximos recebimentos"
+          title="Próximos recebimentos"
           documents={documents.filter((d) => d.direction === "receivable")}
         />
         <Upcoming
-          title="PrÃ³ximos pagamentos"
+          title="Próximos pagamentos"
           documents={documents.filter((d) => d.direction === "payable")}
         />
       </div>
@@ -356,7 +356,7 @@ function Upcoming({ title, documents }: { title: string; documents: FinancialDoc
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-bold">{i.description}</div>
                 <div className="text-xs text-muted-foreground">
-                  {i.partner || "Sem parceiro"} Â· {date.format(new Date(`${i.dueDate}T12:00:00`))}
+                  {i.partner || "Sem parceiro"} · {date.format(new Date(`${i.dueDate}T12:00:00`))}
                 </div>
               </div>
               <strong className="text-sm">{money.format(i.balance)}</strong>
@@ -364,7 +364,7 @@ function Upcoming({ title, documents }: { title: string; documents: FinancialDoc
           ))
         ) : (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            Nenhum vencimento prÃ³ximo.
+            Nenhum vencimento próximo.
           </p>
         )}
       </div>
@@ -1241,8 +1241,8 @@ function DreContent({ access }: { access: FinancialAccess }) {
                         <div className="min-w-0">
                           <div className="truncate text-sm font-bold">{document.description}</div>
                           <div className="text-xs text-muted-foreground">
-                            {date.format(new Date(`${document.competence_date}T12:00:00`))} Â·{" "}
-                            {document.partner_name || "Sem parceiro"} Â·{" "}
+                            {date.format(new Date(`${document.competence_date}T12:00:00`))} ·{" "}
+                            {document.partner_name || "Sem parceiro"} ·{" "}
                             {document.source_type || "manual"}
                           </div>
                         </div>
@@ -1279,7 +1279,7 @@ function DreContent({ access }: { access: FinancialAccess }) {
                       <div className="min-w-0">
                         <div className="truncate text-sm font-bold">{account.name}</div>
                         <div className="text-xs text-muted-foreground">
-                          {account.code} Â· {account.document_count} documentos
+                          {account.code} · {account.document_count} documentos
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1513,8 +1513,8 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
                         <div className="min-w-0">
                           <div className="truncate text-sm font-bold">{entry.description}</div>
                           <div className="text-xs text-muted-foreground">
-                            {date.format(new Date(`${entry.entry_date}T12:00:00`))} Â·{" "}
-                            {entry.partner_name || "Sem parceiro"} Â·{" "}
+                            {date.format(new Date(`${entry.entry_date}T12:00:00`))} ·{" "}
+                            {entry.partner_name || "Sem parceiro"} ·{" "}
                             {entry.financial_account_name ||
                               entry.chart_account_name ||
                               "Sem categoria"}
@@ -1619,7 +1619,7 @@ function TitlesContent({
     setFreights(f);
   }, [direction]);
   useEffect(() => {
-    load().catch(() => toast.error("NÃ£o foi possÃ­vel carregar os tÃ­tulos."));
+    load().catch(() => toast.error("Não foi possível carregar os títulos."));
   }, [load]);
   const allowedPartners = partners.filter(
     (p) =>
@@ -1690,7 +1690,7 @@ function TitlesContent({
               }}
             >
               <Plus className="size-4" />
-              Novo tÃ­tulo
+              Novo título
             </Button>
           ) : undefined
         }
@@ -1700,12 +1700,12 @@ function TitlesContent({
         <Stat label={receiving ? "A receber" : "A pagar"} value={openBalance} icon={WalletCards} />
         <Stat label="Vencido" value={overdue} icon={CalendarClock} tone="danger" />
         <Stat
-          label={receiving ? "Recebido no perÃ­odo" : "Pago no perÃ­odo"}
+          label={receiving ? "Recebido no período" : "Pago no período"}
           value={settledPeriod}
           icon={CircleDollarSign}
           tone="success"
         />
-        <Stat label="PrÃ³ximos 7 dias" value={upcoming} icon={CalendarClock} />
+        <Stat label="Próximos 7 dias" value={upcoming} icon={CalendarClock} />
       </div>
       <div className="hidden md:block">
         <FilterPanel
@@ -1726,9 +1726,9 @@ function TitlesContent({
           </SheetTrigger>
           <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-lg">
             <SheetHeader className="text-left">
-              <SheetTitle>Filtrar tÃ­tulos</SheetTitle>
+              <SheetTitle>Filtrar títulos</SheetTitle>
               <SheetDescription>
-                Refine a consulta por perÃ­odo, parceiro e situaÃ§Ã£o.
+                Refine a consulta por período, parceiro e situação.
               </SheetDescription>
             </SheetHeader>
             <FilterPanel
@@ -1764,7 +1764,7 @@ function TitlesContent({
             toast.success("Baixa estornada.");
             await load();
           } catch {
-            toast.error("NÃ£o foi possÃ­vel estornar a baixa.");
+            toast.error("Não foi possível estornar a baixa.");
           }
         }}
         onVoid={async (document) => {
@@ -1772,10 +1772,10 @@ function TitlesContent({
           if (!reason) return;
           try {
             await voidFinancialDocument(document.id, reason);
-            toast.success("TÃ­tulo cancelado.");
+            toast.success("Título cancelado.");
             await load();
           } catch {
-            toast.error("NÃ£o foi possÃ­vel cancelar o tÃ­tulo.");
+            toast.error("Não foi possível cancelar o título.");
           }
         }}
       />
@@ -1796,12 +1796,12 @@ function TitlesContent({
           setSaving(true);
           try {
             await saveFinancialDocument(input);
-            toast.success("TÃ­tulo salvo com sucesso.");
+            toast.success("Título salvo com sucesso.");
             setFormOpen(false);
             setEditingDocument(null);
             await load();
           } catch (e) {
-            toast.error(e instanceof Error ? e.message : "NÃ£o foi possÃ­vel salvar.");
+            toast.error(e instanceof Error ? e.message : "Não foi possível salvar.");
           } finally {
             setSaving(false);
           }
@@ -1902,7 +1902,7 @@ function FilterPanel({
         <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
         <Input
           className="pl-9"
-          placeholder="Buscar tÃ­tulo, documento ou parceiro"
+          placeholder="Buscar título, documento ou parceiro"
           value={filters.search}
           onChange={(e) => set("search", e.target.value)}
         />
@@ -1931,7 +1931,7 @@ function FilterPanel({
         value={filters.category}
         onChange={(v) => set("category", v)}
         all="Todas as categorias"
-        items={chart.filter((a) => a.isPostable).map((a) => [a.id, `${a.code} Â· ${a.name}`])}
+        items={chart.filter((a) => a.isPostable).map((a) => [a.id, `${a.code} · ${a.name}`])}
       />
       <SimpleSelect
         value={filters.center}
@@ -1941,13 +1941,13 @@ function FilterPanel({
       />
       <Input
         type="number"
-        placeholder="Valor mÃ­nimo"
+        placeholder="Valor mínimo"
         value={filters.min}
         onChange={(e) => set("min", e.target.value)}
       />
       <Input
         type="number"
-        placeholder="Valor mÃ¡ximo"
+        placeholder="Valor máximo"
         value={filters.max}
         onChange={(e) => set("max", e.target.value)}
       />
@@ -2010,13 +2010,13 @@ function TitleList({
   return (
     <section className="premium-card mx-3 overflow-hidden md:mx-0">
       <div className="hidden grid-cols-[1.4fr_1fr_0.8fr_1fr_1fr_1fr_auto] gap-3 border-b border-border financial-table-head px-4 py-3 md:grid">
-        <span>TÃ­tulo</span>
+        <span>Título</span>
         <span>Parceiro</span>
         <span>Origem</span>
         <span>Vencimento</span>
         <span>Valor</span>
-        <span>SituaÃ§Ã£o</span>
-        <span>AÃ§Ã£o</span>
+        <span>Situação</span>
+        <span>Ação</span>
       </div>
       {documents.length ? (
         documents.map((d) => (
@@ -2075,12 +2075,12 @@ function TitleRow({
       <div>
         <div className="text-sm font-extrabold">{d.description}</div>
         <div className="text-xs text-muted-foreground">
-          {d.documentNumber || "Sem nÃºmero"} Â· {d.installments.length} parcela(s)
+          {d.documentNumber || "Sem número"} · {d.installments.length} parcela(s)
         </div>
       </div>
       <div className="text-sm">
-        <span className="md:hidden text-xs text-muted-foreground">Parceiro Â· </span>
-        {d.partnerName || "NÃ£o informado"}
+        <span className="md:hidden text-xs text-muted-foreground">Parceiro · </span>
+        {d.partnerName || "Não informado"}
       </div>
       <div>
         <FinancialStatusBadge state="muted">
@@ -2088,7 +2088,7 @@ function TitleRow({
         </FinancialStatusBadge>
       </div>
       <div className="text-sm">
-        <span className="md:hidden text-xs text-muted-foreground">Vencimento Â· </span>
+        <span className="md:hidden text-xs text-muted-foreground">Vencimento · </span>
         {installment ? date.format(new Date(`${installment.dueDate}T12:00:00`)) : "-"}
       </div>
       <div>
@@ -2135,7 +2135,7 @@ function TitleRow({
         <div className="absolute right-4 top-4 md:hidden">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="outline" aria-label="AÃ§Ãµes do tÃ­tulo">
+              <Button size="icon" variant="outline" aria-label="Ações do título">
                 <MoreVertical className="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -2153,7 +2153,7 @@ function TitleRow({
               )}
               {d.status === "draft" && canEdit && (
                 <DropdownMenuItem onSelect={() => onVoid(d)}>
-                  <ReceiptText /> Cancelar tÃ­tulo
+                  <ReceiptText /> Cancelar título
                 </DropdownMenuItem>
               )}
               {canReverse &&
@@ -2298,11 +2298,11 @@ function DocumentDialog({
               {document
                 ? "Editar rascunho"
                 : direction === "receivable"
-                  ? "Novo tÃ­tulo a receber"
-                  : "Novo tÃ­tulo a pagar"}
+                  ? "Novo título a receber"
+                  : "Novo título a pagar"}
             </DialogTitle>
             <DialogDescription>
-              Cadastre o fato financeiro e seus vencimentos sem alterar a operaÃ§Ã£o.
+              Cadastre o fato financeiro e seus vencimentos sem alterar a operação.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -2324,26 +2324,26 @@ function DocumentDialog({
                 </Button>
               </div>
             </Field>
-            <Field label="NÃºmero / documento">
+            <Field label="Número / documento">
               <Input
                 value={form.documentNumber}
                 onChange={(e) => set("documentNumber", e.target.value)}
               />
             </Field>
-            <Field label="DescriÃ§Ã£o" className="sm:col-span-2">
+            <Field label="Descrição" className="sm:col-span-2">
               <Input
                 value={form.description}
                 onChange={(e) => set("description", e.target.value)}
               />
             </Field>
-            <Field label="EmissÃ£o">
+            <Field label="Emissão">
               <Input
                 type="date"
                 value={form.issueDate}
                 onChange={(e) => set("issueDate", e.target.value)}
               />
             </Field>
-            <Field label="CompetÃªncia">
+            <Field label="Competência">
               <Input
                 type="date"
                 value={form.competenceDate}
@@ -2366,7 +2366,7 @@ function DocumentDialog({
                 onChange={(e) => set("dueDate", e.target.value)}
               />
             </Field>
-            <Field label="NÃºmero de parcelas">
+            <Field label="Número de parcelas">
               <Input
                 type="number"
                 min="1"
@@ -2375,7 +2375,7 @@ function DocumentDialog({
                 onChange={(e) => setInstallmentCount(e.target.value)}
               />
             </Field>
-            <Field label="DistribuiÃ§Ã£o das parcelas">
+            <Field label="Distribuição das parcelas">
               <Select
                 value={customMode ? "custom" : "equal"}
                 onValueChange={(value) => {
@@ -2399,7 +2399,7 @@ function DocumentDialog({
                 </div>
                 {customInstallments.map((item, index) => (
                   <div key={index} className="grid grid-cols-[52px_1fr_1fr] items-center gap-2">
-                    <span className="text-xs font-bold text-muted-foreground">{index + 1}Âª</span>
+                    <span className="text-xs font-bold text-muted-foreground">{index + 1}ª</span>
                     <Input
                       type="number"
                       min="0.01"
@@ -2439,22 +2439,22 @@ function DocumentDialog({
                 all="Selecionar categoria"
                 items={chart
                   .filter((a) => a.isPostable && a.active)
-                  .map((a) => [a.id, `${a.code} Â· ${a.name}`])}
+                  .map((a) => [a.id, `${a.code} · ${a.name}`])}
               />
             </Field>
             <Field label="Centro de custo">
               <SimpleSelect
                 value={form.costCenterId || "all"}
                 onChange={(v) => set("costCenterId", v === "all" ? "" : v)}
-                all="NÃ£o alocado"
+                all="Não alocado"
                 items={centers.filter((c) => c.active).map((c) => [c.id, c.name])}
               />
             </Field>
-            <Field label="CaminhÃ£o (opcional)">
+            <Field label="Caminhão (opcional)">
               <SimpleSelect
                 value={form.vehicleId || "all"}
                 onChange={(v) => set("vehicleId", v === "all" ? "" : v)}
-                all="Sem caminhÃ£o"
+                all="Sem caminhão"
                 items={vehicles.map((v) => [v.id, v.plate])}
               />
             </Field>
@@ -2466,8 +2466,7 @@ function DocumentDialog({
                 items={freights
                   .slice(0, 100)
                   .map(
-                    (f) =>
-                      [f.id, `${f.id.slice(0, 8)} Â· ${f.lifecycleStatus}`] as [string, string],
+                    (f) => [f.id, `${f.id.slice(0, 8)} · ${f.lifecycleStatus}`] as [string, string],
                   )}
               />
             </Field>
@@ -2479,18 +2478,18 @@ function DocumentDialog({
                 items={products.map((p) => [p.id, p.name])}
               />
             </Field>
-            <Field label="SituaÃ§Ã£o">
+            <Field label="Situação">
               <Select value={form.status} onValueChange={(v) => set("status", v)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="draft">Rascunho</SelectItem>
-                  <SelectItem value="posted">LanÃ§ado</SelectItem>
+                  <SelectItem value="posted">Lançado</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="ObservaÃ§Ã£o" className="sm:col-span-2">
+            <Field label="Observação" className="sm:col-span-2">
               <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} />
             </Field>
           </div>
@@ -2536,7 +2535,7 @@ function DocumentDialog({
                 })
               }
             >
-              {saving && <LoaderCircle className="size-4 animate-spin" />}Salvar tÃ­tulo
+              {saving && <LoaderCircle className="size-4 animate-spin" />}Salvar título
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2583,7 +2582,7 @@ function PartnerDialog({
           <Input value={tax} onChange={(e) => setTax(e.target.value)} />
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Prazo padrÃ£o a receber">
+          <Field label="Prazo padrão a receber">
             <Input
               type="number"
               min="0"
@@ -2592,7 +2591,7 @@ function PartnerDialog({
               placeholder="Opcional"
             />
           </Field>
-          <Field label="Prazo padrÃ£o a pagar">
+          <Field label="Prazo padrão a pagar">
             <Input
               type="number"
               min="0"
@@ -2676,8 +2675,8 @@ function SettlementDialog({
         <DialogHeader>
           <DialogTitle>{actionLabel} parcela</DialogTitle>
           <DialogDescription>
-            Saldo disponÃ­vel: {money.format(target?.installment.balance || 0)}. A baixa nÃ£o altera
-            o valor original.
+            Saldo disponível: {money.format(target?.installment.balance || 0)}. A baixa não altera o
+            valor original.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -2701,7 +2700,7 @@ function SettlementDialog({
               value={form.account || "all"}
               onChange={(v) => setForm({ ...form, account: v === "all" ? "" : v })}
               all="Selecionar conta"
-              items={accounts.map((a) => [a.id, `${a.name} Â· ${money.format(a.currentBalance)}`])}
+              items={accounts.map((a) => [a.id, `${a.name} · ${money.format(a.currentBalance)}`])}
             />
           </Field>
           <Field label="Juros">
@@ -2735,15 +2734,15 @@ function SettlementDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="pix">PIX</SelectItem>
-                <SelectItem value="bank_transfer">TransferÃªncia</SelectItem>
+                <SelectItem value="bank_transfer">Transferência</SelectItem>
                 <SelectItem value="cash">Dinheiro</SelectItem>
-                <SelectItem value="card">CartÃ£o</SelectItem>
+                <SelectItem value="card">Cartão</SelectItem>
                 <SelectItem value="boleto">Boleto</SelectItem>
                 <SelectItem value="other">Outro</SelectItem>
               </SelectContent>
             </Select>
           </Field>
-          <Field label="ObservaÃ§Ã£o" className="sm:col-span-2">
+          <Field label="Observação" className="sm:col-span-2">
             <Textarea
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -4241,7 +4240,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
     <div className="financial-shell space-y-4">
       <PageHeader
         title="Bancos e Caixas"
-        subtitle="Saldos calculados por movimentaÃ§Ãµes"
+        subtitle="Saldos calculados por movimentações"
         actions={
           can ? (
             <Button onClick={openNewAccount}>
@@ -4259,7 +4258,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
               <div>
                 <div className="text-sm font-extrabold">{a.name}</div>
                 <div className="text-xs text-muted-foreground">
-                  {a.bankName || "Conta interna"} {a.accountNumber && `Â· ${a.accountNumber}`}
+                  {a.bankName || "Conta interna"} {a.accountNumber && `· ${a.accountNumber}`}
                 </div>
               </div>
               <Landmark className="size-5 text-primary" />
@@ -4288,7 +4287,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
               {form.id ? "Editar conta financeira" : "Nova conta financeira"}
             </DialogTitle>
             <DialogDescription>
-              O saldo futuro serÃ¡ calculado pelas baixas registradas.
+              O saldo futuro será calculado pelas baixas registradas.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -4305,7 +4304,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="checking">Conta corrente</SelectItem>
-                  <SelectItem value="savings">PoupanÃ§a</SelectItem>
+                  <SelectItem value="savings">Poupança</SelectItem>
                   <SelectItem value="cash">Caixa</SelectItem>
                   <SelectItem value="wallet">Carteira</SelectItem>
                   <SelectItem value="other">Outros</SelectItem>
@@ -4318,7 +4317,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
                 onChange={(e) => setForm({ ...form, bank: e.target.value })}
               />
             </Field>
-            <Field label="AgÃªncia">
+            <Field label="Agência">
               <Input
                 value={form.agency}
                 onChange={(e) => setForm({ ...form, agency: e.target.value })}
@@ -4347,7 +4346,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
                 onChange={(e) => setForm({ ...form, date: e.target.value })}
               />
             </Field>
-            <Field label="SituaÃ§Ã£o">
+            <Field label="Situação">
               <Select
                 value={form.active}
                 onValueChange={(value) => setForm({ ...form, active: value })}
@@ -4468,8 +4467,8 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
         title={kind === "chart" ? "Plano de Contas" : "Centros de Custo"}
         subtitle={
           kind === "chart"
-            ? "Categorias hierÃ¡rquicas e classificaÃ§Ã£o gerencial"
-            : "Estrutura organizacional para alocaÃ§Ãµes"
+            ? "Categorias hierárquicas e classificação gerencial"
+            : "Estrutura organizacional para alocações"
         }
         actions={
           can ? (
@@ -4492,13 +4491,13 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-extrabold">
-                {item.code} Â· {item.name}
+                {item.code} · {item.name}
               </div>
               <div className="text-xs text-muted-foreground">
-                {item.parentId ? "NÃ­vel vinculado" : "Conta raiz"} Â·{" "}
+                {item.parentId ? "Nível vinculado" : "Conta raiz"} ·{" "}
                 {item.active ? "Ativo" : "Inativo"}
                 {kind === "chart" && "dreGroup" in item && item.dreGroup
-                  ? ` Â· ${item.dreGroup}`
+                  ? ` · ${item.dreGroup}`
                   : ""}
               </div>
             </div>
@@ -4529,11 +4528,11 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
                   : "Novo centro de custo"}
             </DialogTitle>
             <DialogDescription>
-              Crie um item personalizado sem alterar as estruturas obrigatÃ³rias.
+              Crie um item personalizado sem alterar as estruturas obrigatórias.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="CÃ³digo">
+            <Field label="Código">
               <Input
                 value={form.code}
                 onChange={(e) => setForm({ ...form, code: e.target.value })}
@@ -4550,7 +4549,7 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
                 value={form.parent || "all"}
                 onChange={(v) => setForm({ ...form, parent: v === "all" ? "" : v })}
                 all="Sem pai"
-                items={items.map((i) => [i.id, `${i.code} Â· ${i.name}`])}
+                items={items.map((i) => [i.id, `${i.code} · ${i.name}`])}
               />
             </Field>
             {kind === "chart" && (
@@ -4568,17 +4567,17 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="ClassificaÃ§Ã£o DRE">
+                <Field label="Classificação DRE">
                   <SimpleSelect
                     value={form.dre}
                     onChange={(v) => setForm({ ...form, dre: v })}
-                    all="Sem classificaÃ§Ã£o"
+                    all="Sem classificação"
                     items={[
                       ["gross_revenue", "Receita bruta"],
-                      ["revenue_deduction", "DeduÃ§Ãµes"],
-                      ["variable_cost", "Custos variÃ¡veis"],
+                      ["revenue_deduction", "Deduções"],
+                      ["variable_cost", "Custos variáveis"],
                       ["operating_expense", "Despesas operacionais"],
-                      ["depreciation_amortization", "DepreciaÃ§Ã£o"],
+                      ["depreciation_amortization", "Depreciação"],
                       ["financial_result", "Resultado financeiro"],
                       ["income_tax", "Impostos"],
                       ["other_result", "Outros resultados"],
@@ -4587,7 +4586,7 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
                 </Field>
               </>
             )}
-            <Field label="SituaÃ§Ã£o">
+            <Field label="Situação">
               <Select
                 value={form.active}
                 onValueChange={(value) => setForm({ ...form, active: value })}
@@ -4649,26 +4648,26 @@ const integrationStatusLabel = {
   pending: "Pendente",
   processed: "Processado",
   failed: "Com erro",
-  needs_review: "RevisÃ£o necessÃ¡ria",
+  needs_review: "Revisão necessária",
 } as const;
 
 const integrationSourceLabel = {
-  freight: "Frete concluÃ­do",
+  freight: "Frete concluído",
   fuel_record: "Abastecimento",
   freight_expense: "Despesa de frete",
 } as const;
 
 const integrationReasonLabel: Record<string, string> = {
   payment_terms_missing: "Condicao de pagamento nao definida",
-  missing_workspace: "Workspace nÃ£o identificado",
+  missing_workspace: "Workspace não identificado",
   missing_freight_value: "Valor do frete ausente",
-  missing_customer: "Cliente nÃ£o identificado",
-  missing_vehicle: "VeÃ­culo nÃ£o identificado",
-  missing_supplier: "Fornecedor nÃ£o identificado",
-  unknown_category: "Categoria sem classificaÃ§Ã£o segura",
-  missing_chart_account: "Conta contÃ¡bil nÃ£o encontrada",
-  missing_due_policy: "PolÃ­tica de vencimento nÃ£o definida",
-  invalid_amount: "Valor invÃ¡lido",
+  missing_customer: "Cliente não identificado",
+  missing_vehicle: "Veículo não identificado",
+  missing_supplier: "Fornecedor não identificado",
+  unknown_category: "Categoria sem classificação segura",
+  missing_chart_account: "Conta contábil não encontrada",
+  missing_due_policy: "Política de vencimento não definida",
+  invalid_amount: "Valor inválido",
 };
 
 export function FinancialIntegrationsPage() {
@@ -4702,7 +4701,7 @@ function FinancialIntegrationsContent({ access }: { access: FinancialAccess }) {
 
   useEffect(() => {
     load()
-      .catch(() => toast.error("NÃ£o foi possÃ­vel carregar as integraÃ§Ãµes financeiras."))
+      .catch(() => toast.error("Não foi possível carregar as integrações financeiras."))
       .finally(() => setLoading(false));
   }, [load]);
 
@@ -4711,11 +4710,11 @@ function FinancialIntegrationsContent({ access }: { access: FinancialAccess }) {
     try {
       const result = await processFinancialIntegrations(jobId);
       toast.success(
-        `${result.processed} processado(s), ${result.needsReview} para revisÃ£o e ${result.failed} com erro.`,
+        `${result.processed} processado(s), ${result.needsReview} para revisão e ${result.failed} com erro.`,
       );
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao processar integraÃ§Ãµes.");
+      toast.error(error instanceof Error ? error.message : "Falha ao processar integrações.");
     } finally {
       setProcessingId(null);
     }
@@ -4735,13 +4734,13 @@ function FinancialIntegrationsContent({ access }: { access: FinancialAccess }) {
   return (
     <div className="financial-shell space-y-4">
       <PageHeader
-        title="IntegraÃ§Ãµes Financeiras"
-        subtitle="ConciliaÃ§Ã£o segura entre fatos operacionais e lanÃ§amentos"
+        title="Integrações Financeiras"
+        subtitle="Conciliação segura entre fatos operacionais e lançamentos"
         actions={
           canProcess ? (
             <Button onClick={() => void process()} disabled={processingId !== null}>
               <RefreshCw className={cn("size-4", processingId === "all" && "animate-spin")} />
-              Processar pendÃªncias
+              Processar pendências
             </Button>
           ) : undefined
         }
@@ -4751,15 +4750,15 @@ function FinancialIntegrationsContent({ access }: { access: FinancialAccess }) {
         <Stat label="Pendentes" value={counts.pending} icon={CalendarClock} />
         <Stat label="Processados" value={counts.processed} icon={CircleDollarSign} tone="success" />
         <Stat label="Com erro" value={counts.failed} icon={ShieldAlert} tone="danger" />
-        <Stat label="Para revisÃ£o" value={counts.needs_review} icon={Settings2} />
+        <Stat label="Para revisão" value={counts.needs_review} icon={Settings2} />
       </div>
 
       <section className="financial-filter-bar mx-3 p-4 md:mx-0">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-sm font-extrabold">Prazos padrÃ£o</h2>
+            <h2 className="text-sm font-extrabold">Prazos padrão</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Sem prazo definido, novos lanÃ§amentos ficam em rascunho para revisÃ£o financeira.
+              Sem prazo definido, novos lançamentos ficam em rascunho para revisão financeira.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-[150px_150px_auto]">
@@ -4769,7 +4768,7 @@ function FinancialIntegrationsContent({ access }: { access: FinancialAccess }) {
                 min="0"
                 disabled={!canConfigure}
                 value={settings.defaultReceivableDueDays ?? ""}
-                placeholder="NÃ£o definido"
+                placeholder="Não definido"
                 onChange={(event) =>
                   setSettings((current) => ({
                     ...current,
@@ -4785,7 +4784,7 @@ function FinancialIntegrationsContent({ access }: { access: FinancialAccess }) {
                 min="0"
                 disabled={!canConfigure}
                 value={settings.defaultPayableDueDays ?? ""}
-                placeholder="NÃ£o definido"
+                placeholder="Não definido"
                 onChange={(event) =>
                   setSettings((current) => ({
                     ...current,
@@ -4801,15 +4800,15 @@ function FinancialIntegrationsContent({ access }: { access: FinancialAccess }) {
                 onClick={async () => {
                   try {
                     await saveFinancialIntegrationSettings(settings);
-                    toast.success("PolÃ­tica de vencimento atualizada.");
+                    toast.success("Política de vencimento atualizada.");
                   } catch (error) {
                     toast.error(
-                      error instanceof Error ? error.message : "Falha ao salvar polÃ­tica.",
+                      error instanceof Error ? error.message : "Falha ao salvar política.",
                     );
                   }
                 }}
               >
-                Salvar polÃ­tica
+                Salvar política
               </Button>
             )}
           </div>
@@ -4819,7 +4818,7 @@ function FinancialIntegrationsContent({ access }: { access: FinancialAccess }) {
       <section className="premium-card mx-3 overflow-hidden md:mx-0">
         {loading ? (
           <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" /> Carregando integraÃ§Ãµes...
+            <LoaderCircle className="size-4 animate-spin" /> Carregando integrações...
           </div>
         ) : jobs.length ? (
           jobs.map((job) => (
@@ -4850,13 +4849,13 @@ function FinancialIntegrationsContent({ access }: { access: FinancialAccess }) {
                   <p className="mt-1 text-xs text-muted-foreground">
                     {job.reviewReasons
                       .map((reason) => integrationReasonLabel[reason] ?? reason)
-                      .join(" Â· ") || "Falha no processamento. Consulte os registros tÃ©cnicos."}
+                      .join(" · ") || "Falha no processamento. Consulte os registros técnicos."}
                   </p>
                 )}
               </div>
               <div className="flex items-center justify-between gap-3 sm:justify-end">
                 <span className="text-xs text-muted-foreground">
-                  {date.format(new Date(job.detectedAt))} Â· tentativa {job.attempts}/
+                  {date.format(new Date(job.detectedAt))} · tentativa {job.attempts}/
                   {job.maxAttempts}
                 </span>
                 {canProcess && job.status !== "processed" && job.attempts < job.maxAttempts && (
@@ -4877,7 +4876,7 @@ function FinancialIntegrationsContent({ access }: { access: FinancialAccess }) {
           ))
         ) : (
           <p className="py-12 text-center text-sm text-muted-foreground">
-            Nenhum fato operacional aguardando integraÃ§Ã£o.
+            Nenhum fato operacional aguardando integração.
           </p>
         )}
       </section>
