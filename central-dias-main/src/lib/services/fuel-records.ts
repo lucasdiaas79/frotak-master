@@ -3,6 +3,7 @@ import type { FuelRecord, FuelType } from "@/lib/types";
 
 type FuelRecordRow = {
   id: string;
+  fuel_document_id?: string | null;
   vehicle_id: string | null;
   driver_id: string | null;
   vehicle_plate: string;
@@ -44,6 +45,7 @@ async function createInvoiceUrl(row: FuelRecordRow) {
 async function fuelRecordFromRow(row: FuelRecordRow): Promise<FuelRecord> {
   return {
     id: row.id,
+    fuelDocumentId: optional(row.fuel_document_id),
     vehicleId: optional(row.vehicle_id),
     driverId: optional(row.driver_id),
     vehiclePlate: row.vehicle_plate,
