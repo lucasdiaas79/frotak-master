@@ -6,9 +6,36 @@ import crypto from "node:crypto";
 const ROOT = process.cwd();
 const DEMO_SLUG = "frotak-demo";
 const DEMO_EMAIL = "demo@frotak.local";
-const DEMO_PASSWORD = "FrotakDemo2026!";
+const DEMO_ADMIN_EMAIL = "demo-admin@frotak.local";
 const DEMO_TENANT_NAME = "Frotak Demo";
 const DEMO_WORKSPACE_NAME = "Frotak Demo";
+const COMMERCIAL_DEMO_PERMISSIONS = [
+  "financial.cashflow.view",
+  "financial.dashboard.read",
+  "financial.dashboard.view",
+  "financial.dre.view",
+  "financial.export",
+  "financial.manage_accounts",
+  "financial.payroll.view",
+  "financial.reports.export",
+  "financial.transactions.read",
+  "financial.view",
+  "fleet.dashboard.read",
+  "fleet.documents.read",
+  "fleet.drivers.read",
+  "fleet.freights.read",
+  "fleet.fuel.read",
+  "fleet.history.export",
+  "fleet.history.read",
+  "fleet.map.read",
+  "fleet.positions.read",
+  "fleet.trailers.read",
+  "fleet.vehicles.read",
+  "tracking.positions.read",
+  "workspace.modules.read",
+  "workspace.settings.read",
+  "workspace.subscription.read",
+];
 
 function loadEnvFile(path) {
   try {
@@ -167,6 +194,12 @@ function uuid() {
   return crypto.randomUUID();
 }
 
+function requiredEnv(name) {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} is required. Set it in the environment or local .env before running this seed.`);
+  return value;
+}
+
 function chunk(items, size = 500) {
   const chunks = [];
   for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
@@ -209,32 +242,32 @@ async function findAuthUserByEmail(supabase, email) {
   return null;
 }
 
-async function ensureDemoUser(supabase) {
-  const existing = await findAuthUserByEmail(supabase, DEMO_EMAIL);
+async function ensureAuthUser(supabase, input) {
+  const existing = await findAuthUserByEmail(supabase, input.email);
   if (existing) {
     const { data, error } = await supabase.auth.admin.updateUserById(existing.id, {
-      password: DEMO_PASSWORD,
+      password: input.password,
       email_confirm: true,
       user_metadata: {
         ...(existing.user_metadata ?? {}),
-        full_name: "Administrador Frotak Demo",
+        full_name: input.fullName,
         demo: true,
       },
     });
-    if (error || !data.user) throw error ?? new Error("Failed updating demo user.");
+    if (error || !data.user) throw error ?? new Error(`Failed updating ${input.label} user.`);
     return data.user;
   }
 
   const { data, error } = await supabase.auth.admin.createUser({
-    email: DEMO_EMAIL,
-    password: DEMO_PASSWORD,
+    email: input.email,
+    password: input.password,
     email_confirm: true,
     user_metadata: {
-      full_name: "Administrador Frotak Demo",
+      full_name: input.fullName,
       demo: true,
     },
   });
-  if (error || !data.user) throw error ?? new Error("Failed creating demo user.");
+  if (error || !data.user) throw error ?? new Error(`Failed creating ${input.label} user.`);
   return data.user;
 }
 
@@ -250,7 +283,7 @@ async function getActorUserId(supabase, fallbackUserId) {
   return data?.user_id ?? fallbackUserId;
 }
 
-async function ensureDemoTenant(supabase, demoUser) {
+async function ensureDemoTenant(supabase, adminUser, commercialUser) {
   const { data: existing, error: existingError } = await supabase
     .from("tenants")
     .select("id, slug, settings, workspaces(id, slug)")
@@ -263,8 +296,15 @@ async function ensureDemoTenant(supabase, demoUser) {
     "profiles",
     [
       {
-        id: demoUser.id,
+        id: adminUser.id,
         full_name: "Administrador Frotak Demo",
+        email: DEMO_ADMIN_EMAIL,
+        active: true,
+        must_change_password: false,
+      },
+      {
+        id: commercialUser.id,
+        full_name: "Demo Comercial Frotak",
         email: DEMO_EMAIL,
         active: true,
         must_change_password: false,
@@ -279,13 +319,13 @@ async function ensureDemoTenant(supabase, demoUser) {
     return { tenantId: existing.id, workspaceId };
   }
 
-  const actorUserId = await getActorUserId(supabase, demoUser.id);
+  const actorUserId = await getActorUserId(supabase, adminUser.id);
   const now = new Date();
   const endsAt = new Date(now);
   endsAt.setUTCFullYear(endsAt.getUTCFullYear() + 1);
 
   const { data, error } = await supabase.rpc("provision_tenant", {
-    p_owner_user_id: demoUser.id,
+    p_owner_user_id: adminUser.id,
     p_owner_full_name: "Administrador Frotak Demo",
     p_legal_name: "Frotak Demo Transportes Ltda",
     p_trade_name: DEMO_TENANT_NAME,
@@ -308,7 +348,7 @@ async function ensureDemoTenant(supabase, demoUser) {
   return { tenantId: row.tenant_id, workspaceId: row.workspace_id };
 }
 
-async function ensureDemoAccess(supabase, tenantId, workspaceId, userId) {
+async function ensureDemoAccess(supabase, tenantId, workspaceId, adminUserId, commercialUserId) {
   const { data: modules, error: modulesError } = await supabase
     .from("modules")
     .select("id, code")
@@ -327,25 +367,43 @@ async function ensureDemoAccess(supabase, tenantId, workspaceId, userId) {
       configuration: {},
       starts_at: new Date().toISOString(),
       expires_at: null,
-      created_by: userId,
+      created_by: adminUserId,
     })),
     { onConflict: "workspace_id,module_id" },
   );
 
-  const { data: ownerRole, error: roleError } = await supabase
+  const { data: roles, error: roleError } = await supabase
     .from("workspace_roles")
+    .select("id, code")
+    .eq("workspace_id", workspaceId)
+    .in("code", ["OWNER", "MANAGER"]);
+  if (roleError) throw roleError;
+  const ownerRole = roles.find((role) => role.code === "OWNER");
+  const managerRole = roles.find((role) => role.code === "MANAGER");
+  if (!ownerRole?.id || !managerRole?.id) throw new Error("Required demo roles OWNER/MANAGER were not found.");
+
+  const { data: previousCommercialMembership, error: previousCommercialMembershipError } = await supabase
+    .from("workspace_memberships")
     .select("id")
     .eq("workspace_id", workspaceId)
-    .eq("code", "OWNER")
-    .single();
-  if (roleError) throw roleError;
+    .eq("user_id", commercialUserId)
+    .maybeSingle();
+  if (previousCommercialMembershipError) throw previousCommercialMembershipError;
+  if (previousCommercialMembership?.id) {
+    const { error } = await supabase
+      .from("workspace_memberships")
+      .update({ status: "active", is_owner: false })
+      .eq("id", previousCommercialMembership.id)
+      .eq("workspace_id", workspaceId);
+    if (error) throw error;
+  }
 
-  const { data: membership, error: membershipError } = await supabase
+  const { data: adminMembership, error: adminMembershipError } = await supabase
     .from("workspace_memberships")
     .upsert(
       {
         workspace_id: workspaceId,
-        user_id: userId,
+        user_id: adminUserId,
         status: "active",
         is_owner: true,
         joined_at: new Date().toISOString(),
@@ -354,18 +412,56 @@ async function ensureDemoAccess(supabase, tenantId, workspaceId, userId) {
     )
     .select("id")
     .single();
-  if (membershipError) throw membershipError;
+  if (adminMembershipError) throw adminMembershipError;
+
+  const { data: commercialMembership, error: commercialMembershipError } = await supabase
+    .from("workspace_memberships")
+    .upsert(
+      {
+        workspace_id: workspaceId,
+        user_id: commercialUserId,
+        status: "active",
+        is_owner: false,
+        joined_at: new Date().toISOString(),
+      },
+      { onConflict: "workspace_id,user_id" },
+    )
+    .select("id")
+    .single();
+  if (commercialMembershipError) throw commercialMembershipError;
+
+  const { data: existingCommercialRoles, error: existingCommercialRolesError } = await supabase
+    .from("membership_roles")
+    .select("role_id")
+    .eq("membership_id", commercialMembership.id)
+    .eq("workspace_id", workspaceId);
+  if (existingCommercialRolesError) throw existingCommercialRolesError;
+  const rolesToRemove = (existingCommercialRoles ?? [])
+    .map((row) => row.role_id)
+    .filter((roleId) => roleId !== managerRole.id);
+  if (rolesToRemove.length) {
+    const { error } = await supabase
+      .from("membership_roles")
+      .delete()
+      .eq("membership_id", commercialMembership.id)
+      .eq("workspace_id", workspaceId)
+      .in("role_id", rolesToRemove);
+    if (error) throw error;
+  }
 
   await upsertRows(
     supabase,
     "membership_roles",
-    [{ membership_id: membership.id, role_id: ownerRole.id, workspace_id: workspaceId }],
+    [
+      { membership_id: adminMembership.id, role_id: ownerRole.id, workspace_id: workspaceId },
+      { membership_id: commercialMembership.id, role_id: managerRole.id, workspace_id: workspaceId },
+    ],
     { onConflict: "membership_id,role_id" },
   );
 
   const { data: permissions, error: permissionsError } = await supabase
     .from("permissions")
-    .select("id")
+    .select("id, code")
     .eq("active", true);
   if (permissionsError) throw permissionsError;
 
@@ -373,6 +469,23 @@ async function ensureDemoAccess(supabase, tenantId, workspaceId, userId) {
     supabase,
     "role_permissions",
     permissions.map((permission) => ({ role_id: ownerRole.id, permission_id: permission.id })),
+    { onConflict: "role_id,permission_id", chunkSize: 1000 },
+  );
+
+  const commercialPermissions = permissions.filter((permission) =>
+    COMMERCIAL_DEMO_PERMISSIONS.includes(permission.code),
+  );
+  const missingPermissions = COMMERCIAL_DEMO_PERMISSIONS.filter(
+    (code) => !commercialPermissions.some((permission) => permission.code === code),
+  );
+  if (missingPermissions.length) {
+    throw new Error(`Missing commercial demo permissions: ${missingPermissions.join(", ")}`);
+  }
+
+  await upsertRows(
+    supabase,
+    "role_permissions",
+    commercialPermissions.map((permission) => ({ role_id: managerRole.id, permission_id: permission.id })),
     { onConflict: "role_id,permission_id", chunkSize: 1000 },
   );
 
@@ -1328,6 +1441,8 @@ async function main() {
   if (!url || !serviceRoleKey) {
     throw new Error("SUPABASE_URL/VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.");
   }
+  const demoPassword = requiredEnv("FROTAK_DEMO_PASSWORD");
+  const demoAdminPassword = requiredEnv("FROTAK_DEMO_ADMIN_PASSWORD");
   if (!url.includes("ujssyufhyvxfpfkwxdux")) {
     throw new Error("Refusing to run: configured Supabase URL is not the expected project.");
   }
@@ -1336,16 +1451,27 @@ async function main() {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const demoUser = await ensureDemoUser(supabase);
-  const { tenantId, workspaceId } = await ensureDemoTenant(supabase, demoUser);
-  await ensureDemoAccess(supabase, tenantId, workspaceId, demoUser.id);
+  const adminUser = await ensureAuthUser(supabase, {
+    email: DEMO_ADMIN_EMAIL,
+    password: demoAdminPassword,
+    fullName: "Administrador Frotak Demo",
+    label: "internal admin demo",
+  });
+  const demoUser = await ensureAuthUser(supabase, {
+    email: DEMO_EMAIL,
+    password: demoPassword,
+    fullName: "Demo Comercial Frotak",
+    label: "commercial demo",
+  });
+  const { tenantId, workspaceId } = await ensureDemoTenant(supabase, adminUser, demoUser);
+  await ensureDemoAccess(supabase, tenantId, workspaceId, adminUser.id, demoUser.id);
   await clearDemoData(supabase, tenantId);
   const fleet = await seedFleet(supabase, tenantId, workspaceId);
   const operations = await seedOperations(supabase, tenantId, workspaceId, fleet);
   const fuel = await seedFuel(supabase, tenantId, fleet);
-  const finance = await ensureFinanceCatalog(supabase, tenantId, workspaceId, demoUser.id);
-  const financial = await seedFinancial(supabase, tenantId, workspaceId, demoUser.id, fleet, finance);
-  const payroll = await seedPayroll(supabase, tenantId, workspaceId, demoUser.id, fleet, finance);
+  const finance = await ensureFinanceCatalog(supabase, tenantId, workspaceId, adminUser.id);
+  const financial = await seedFinancial(supabase, tenantId, workspaceId, adminUser.id, fleet, finance);
+  const payroll = await seedPayroll(supabase, tenantId, workspaceId, adminUser.id, fleet, finance);
 
   const counts = {};
   for (const table of [
@@ -1371,8 +1497,8 @@ async function main() {
         tenantSlug: DEMO_SLUG,
         tenantId,
         workspaceId,
-        login: DEMO_EMAIL,
-        password: DEMO_PASSWORD,
+        adminLogin: DEMO_ADMIN_EMAIL,
+        commercialLogin: DEMO_EMAIL,
         seeded: {
           fleet: {
             drivers: fleet.drivers.length,
