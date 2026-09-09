@@ -1,5 +1,11 @@
 import { freightStageById, nextFreightStage, type FreightStageId } from "@/lib/freight-workflow";
-import type { Driver, FreightPaymentType, VehicleFreightStage, VehicleStatus } from "@/lib/types";
+import type {
+  Driver,
+  FreightPaymentType,
+  FreightPricingMode,
+  VehicleFreightStage,
+  VehicleStatus,
+} from "@/lib/types";
 
 type FinalCommand = "RETORNO_SOLICITADO" | "PRONTO_NOVO_FRETE";
 
@@ -92,6 +98,8 @@ export async function createFreightOperation(input: {
   recipientId: string;
   productId: string;
   freightValue?: number;
+  freightPricingMode?: FreightPricingMode;
+  freightTonPrice?: number;
   freightPaymentType: FreightPaymentType;
   paymentTermDays?: number | null;
   link: (
@@ -103,6 +111,8 @@ export async function createFreightOperation(input: {
       recipientId?: string;
       productId?: string;
       freightValue?: number;
+      freightPricingMode?: FreightPricingMode;
+      freightTonPrice?: number;
       trailerIds?: string[];
       freightPaymentType?: FreightPaymentType;
       paymentTermDays?: number | null;
@@ -121,6 +131,8 @@ export async function createFreightOperation(input: {
       recipientId: input.recipientId,
       productId: input.productId,
       freightValue: input.freightValue,
+      freightPricingMode: input.freightPricingMode ?? "fixed",
+      freightTonPrice: input.freightTonPrice,
       freightPaymentType: input.freightPaymentType,
       paymentTermDays: input.paymentTermDays ?? null,
     });
@@ -131,6 +143,9 @@ export async function createFreightOperation(input: {
     }
     if (message.includes("FREIGHT_BILLING_PARTNER_NOT_MAPPED")) {
       throw new Error("Não foi possível identificar o pagador deste frete.");
+    }
+    if (message.includes("FREIGHT_TON_PRICE_REQUIRED")) {
+      throw new Error("Informe o valor da tonelada para frete por tonelada.");
     }
     throw error;
   }

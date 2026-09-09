@@ -33,6 +33,7 @@ export type VehicleFreightStage =
   | "ENTREGA_FINALIZADA";
 
 export type FreightPaymentType = "CIF" | "FOB";
+export type FreightPricingMode = "fixed" | "per_ton";
 
 export interface Vehicle {
   id: string;
@@ -60,6 +61,9 @@ export interface Vehicle {
   recipientId?: string;
   productId?: string;
   freightValue?: number;
+  freightPricingMode?: FreightPricingMode;
+  freightTonPrice?: number;
+  unloadedTons?: number;
   city: string;
   state: string;
   lat: number;
@@ -218,7 +222,8 @@ export type StatusTone = "success" | "warning" | "muted" | "destructive";
 
 export function statusTone(s: VehicleStatus): StatusTone {
   if (s === "disponivel-patio") return "success";
-  if (s.startsWith("rota")) return "success";
+  if (s === "rota-retornando") return "success";
+  if (s.startsWith("rota")) return "warning";
   if (s === "parado-quebrado") return "destructive";
   if (
     s === "parado-aguardando-carga" ||
@@ -234,8 +239,8 @@ export const STATUS_HEX: Record<VehicleStatus, string> = {
   "disponivel-patio": "#2563eb",
   "disponivel-oficina": "#525252",
   "aguardando-motorista": "#0ea5e9",
-  "rota-carregar": "#16a34a",
-  "rota-descarregar": "#22c55e",
+  "rota-carregar": "#f97316",
+  "rota-descarregar": "#f97316",
   "rota-retornando": "#15803d",
   "parado-aguardando-carga": "#f97316",
   "aguardando-cte": "#dc2626",

@@ -110,6 +110,7 @@ import type {
   Driver,
   FreightDocument,
   FreightPaymentType,
+  FreightPricingMode,
   Product,
   Recipient,
   Sender,
@@ -205,7 +206,9 @@ interface FreightFormState {
   senderId: string;
   recipientId: string;
   productId: string;
+  freightPricingMode: FreightPricingMode;
   freightValue: string;
+  freightTonPrice: string;
   freightPaymentType: FreightPaymentType | "";
   paymentTermDays: string;
   paymentTermTouched: boolean;
@@ -216,7 +219,9 @@ interface GroupFreightFormState {
   senderId: string;
   recipientId: string;
   productId: string;
+  freightPricingMode: FreightPricingMode;
   freightValue: string;
+  freightTonPrice: string;
   freightPaymentType: FreightPaymentType | "";
   paymentTermDays: string;
   paymentTermTouched: boolean;
@@ -231,7 +236,9 @@ const EMPTY_FORM: FreightFormState = {
   senderId: "",
   recipientId: "",
   productId: "",
+  freightPricingMode: "fixed",
   freightValue: "",
+  freightTonPrice: "",
   freightPaymentType: "",
   paymentTermDays: "",
   paymentTermTouched: false,
@@ -242,7 +249,9 @@ const EMPTY_GROUP_FORM: GroupFreightFormState = {
   senderId: "",
   recipientId: "",
   productId: "",
+  freightPricingMode: "fixed",
   freightValue: "",
+  freightTonPrice: "",
   freightPaymentType: "",
   paymentTermDays: "",
   paymentTermTouched: false,
@@ -358,6 +367,11 @@ function parseFreightValue(value: string) {
   const normalized = cleaned.includes(",") ? cleaned.replace(/\./g, "").replace(",", ".") : cleaned;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function pricingSummary(mode: FreightPricingMode, fixedValue?: number, tonPrice?: number) {
+  if (mode === "per_ton") return tonPrice ? `${formatMoney(tonPrice)} / ton` : "Por tonelada";
+  return formatMoney(fixedValue);
 }
 
 function parsePaymentTermDays(value: string) {
@@ -1028,12 +1042,12 @@ function GestaoFrotaPage() {
       demand.documents.note.id,
       "rejeitado",
     );
-    await setVehicleStatus(demand.id, "aguardando-cte", "NOTA_EM_CONFERENCIA");
+    await setVehicleStatus(demand.id, "aguardando-cte", "NOTA_APROVADA_AG_CTE");
     await supabase.from("fleet_events").insert({
       vehicle_id: demand.id,
       freight_id: demand.currentFreightId ?? null,
       status: "aguardando-cte",
-      freight_stage: "NOTA_EM_CONFERENCIA",
+      freight_stage: "NOTA_APROVADA_AG_CTE",
       city: demand.city,
       state: demand.state,
       source: "Operador",
@@ -1069,6 +1083,10 @@ function GestaoFrotaPage() {
       toast.error("Selecione se o frete é CIF ou FOB.");
       return;
     }
+    if (form.freightPricingMode === "per_ton" && !parseFreightValue(form.freightTonPrice)) {
+      toast.error("Informe o valor da tonelada.");
+      return;
+    }
     if (!isDriverAvailable(driver, form.vehicleId, activeDriverIds)) {
       toast.error("Motorista indisponível para novo frete.");
       return;
@@ -1090,7 +1108,13 @@ function GestaoFrotaPage() {
         senderId: form.senderId,
         recipientId: form.recipientId,
         productId: form.productId,
-        freightValue: parseFreightValue(form.freightValue),
+        freightValue:
+          form.freightPricingMode === "fixed" ? parseFreightValue(form.freightValue) : undefined,
+        freightPricingMode: form.freightPricingMode,
+        freightTonPrice:
+          form.freightPricingMode === "per_ton"
+            ? parseFreightValue(form.freightTonPrice)
+            : undefined,
         freightPaymentType: form.freightPaymentType,
         paymentTermDays: parsePaymentTermDays(form.paymentTermDays),
         link,
@@ -1123,6 +1147,10 @@ function GestaoFrotaPage() {
     }
     if (!groupForm.freightPaymentType) {
       toast.error("Selecione se o frete em grupo é CIF ou FOB.");
+      return;
+    }
+    if (groupForm.freightPricingMode === "per_ton" && !parseFreightValue(groupForm.freightTonPrice)) {
+      toast.error("Informe o valor da tonelada do frete em grupo.");
       return;
     }
     if (groupForm.vehicleIds.length === 0) {
@@ -1159,7 +1187,15 @@ function GestaoFrotaPage() {
           senderId: groupForm.senderId,
           recipientId: groupForm.recipientId,
           productId: groupForm.productId,
-          freightValue: parseFreightValue(groupForm.freightValue),
+          freightValue:
+            groupForm.freightPricingMode === "fixed"
+              ? parseFreightValue(groupForm.freightValue)
+              : undefined,
+          freightPricingMode: groupForm.freightPricingMode,
+          freightTonPrice:
+            groupForm.freightPricingMode === "per_ton"
+              ? parseFreightValue(groupForm.freightTonPrice)
+              : undefined,
           freightPaymentType: groupForm.freightPaymentType,
           paymentTermDays: parsePaymentTermDays(groupForm.paymentTermDays),
           link,
@@ -2307,11 +2343,15 @@ function GroupFreightWorkspace({
   const recipient = recipients.find((item) => item.id === form.recipientId);
   const product = products.find((item) => item.id === form.productId);
   const freightValue = parseFreightValue(form.freightValue);
+  const freightTonPrice = parseFreightValue(form.freightTonPrice);
+  const hasPricingValue =
+    form.freightPricingMode === "per_ton" ? Boolean(freightTonPrice) : true;
   const validCreate =
     !!form.senderId &&
     !!form.recipientId &&
     !!form.productId &&
     !!form.freightPaymentType &&
+    hasPricingValue &&
     form.vehicleIds.length > 0;
 
   const toggleVehicle = (vehicleId: string) => {
@@ -2360,11 +2400,33 @@ function GroupFreightWorkspace({
                 .filter((item) => item.active)
                 .map((item) => ({ value: item.id, label: item.name }))}
             />
-            <Field label="Valor do frete">
+            <Field label="Tipo de valor">
+              <Select
+                value={form.freightPricingMode}
+                onValueChange={(value) =>
+                  setForm({ ...form, freightPricingMode: value as FreightPricingMode })
+                }
+              >
+                <SelectTrigger className="h-11 text-[13px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fixed">Valor fixo</SelectItem>
+                  <SelectItem value="per_ton">Valor por tonelada</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label={form.freightPricingMode === "per_ton" ? "Valor da tonelada" : "Valor do frete"}>
               <Input
-                value={form.freightValue}
-                onChange={(event) => setForm({ ...form, freightValue: event.target.value })}
-                placeholder="Ex.: 12500,00"
+                value={form.freightPricingMode === "per_ton" ? form.freightTonPrice : form.freightValue}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    [form.freightPricingMode === "per_ton" ? "freightTonPrice" : "freightValue"]:
+                      event.target.value,
+                  })
+                }
+                placeholder={form.freightPricingMode === "per_ton" ? "Ex.: 185,00" : "Ex.: 12500,00"}
                 inputMode="decimal"
                 className="h-11"
               />
@@ -2506,7 +2568,10 @@ function GroupFreightWorkspace({
             value={recipient ? `${recipient.city}/${recipient.state}` : "-"}
           />
           <SummaryRow label="Produto" value={product?.name ?? "-"} />
-          <SummaryRow label="Valor" value={formatMoney(freightValue)} />
+          <SummaryRow
+            label={form.freightPricingMode === "per_ton" ? "Preço" : "Valor"}
+            value={pricingSummary(form.freightPricingMode, freightValue, freightTonPrice)}
+          />
           <CheckLine ok={selectedResources.length > 0} label="Caminhões selecionados" />
           <CheckLine ok={!!sender} label="Remetente ativo" />
           <CheckLine ok={!!recipient} label="Destinatário ativo" />
@@ -2562,6 +2627,8 @@ function DemandWorkspace({
   const currentForm = form ?? EMPTY_FORM;
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === currentForm.vehicleId);
   const selectedDriver = drivers.find((driver) => driver.id === currentForm.driverId);
+  const freightValue = parseFreightValue(currentForm.freightValue);
+  const freightTonPrice = parseFreightValue(currentForm.freightTonPrice);
   const availableDrivers = drivers.filter((driver) =>
     isDriverAvailable(driver, currentForm.vehicleId, activeDriverIds),
   );
@@ -2572,6 +2639,7 @@ function DemandWorkspace({
     !!currentForm.recipientId &&
     !!currentForm.productId &&
     !!currentForm.freightPaymentType &&
+    (currentForm.freightPricingMode === "fixed" || Boolean(freightTonPrice)) &&
     isVehicleAvailableForFreight(selectedVehicle);
 
   const selectVehicle = (vehicleId: string) => {
@@ -2648,13 +2716,46 @@ function DemandWorkspace({
                   Gerado a partir do veículo vinculado
                 </div>
               </Field>
-              <Field label="Valor do frete">
-                <Input
-                  value={currentForm.freightValue}
-                  onChange={(event) =>
-                    setForm({ ...currentForm, freightValue: event.target.value })
+              <Field label="Tipo de valor">
+                <Select
+                  value={currentForm.freightPricingMode}
+                  onValueChange={(value) =>
+                    setForm({ ...currentForm, freightPricingMode: value as FreightPricingMode })
                   }
-                  placeholder="Ex.: 12500,00"
+                >
+                  <SelectTrigger className="h-11 text-[13px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fixed">Valor fixo</SelectItem>
+                    <SelectItem value="per_ton">Valor por tonelada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field
+                label={
+                  currentForm.freightPricingMode === "per_ton"
+                    ? "Valor da tonelada"
+                    : "Valor do frete"
+                }
+              >
+                <Input
+                  value={
+                    currentForm.freightPricingMode === "per_ton"
+                      ? currentForm.freightTonPrice
+                      : currentForm.freightValue
+                  }
+                  onChange={(event) =>
+                    setForm({
+                      ...currentForm,
+                      [currentForm.freightPricingMode === "per_ton"
+                        ? "freightTonPrice"
+                        : "freightValue"]: event.target.value,
+                    })
+                  }
+                  placeholder={
+                    currentForm.freightPricingMode === "per_ton" ? "Ex.: 185,00" : "Ex.: 12500,00"
+                  }
                   inputMode="decimal"
                   className="h-11"
                 />
@@ -2999,7 +3100,14 @@ function DemandFooterSummary({ demand }: { demand: FreightDemand }) {
           value={demand.recipient ? `${demand.recipient.city}/${demand.recipient.state}` : "-"}
         />
         <SummaryRow label="Produto" value={demand.product?.name ?? "-"} />
-        <SummaryRow label="Valor" value={formatMoney(demand.freightValue)} />
+        <SummaryRow
+          label={demand.freightPricingMode === "per_ton" ? "Preço" : "Valor"}
+          value={pricingSummary(
+            demand.freightPricingMode ?? "fixed",
+            demand.freightValue,
+            demand.freightTonPrice,
+          )}
+        />
         <SummaryRow label="Nota" value={noteLabel(demand)} />
         <SummaryRow label="CTE" value={cteLabel(demand)} />
       </div>
@@ -3040,6 +3148,7 @@ function FreightSummaryPanel({
   const recipient = recipients.find((item) => item.id === form.recipientId);
   const product = products.find((item) => item.id === form.productId);
   const freightValue = parseFreightValue(form.freightValue);
+  const freightTonPrice = parseFreightValue(form.freightTonPrice);
   const next = demand ? nextFreightStage(demand.stage.id) : null;
   const summaryDriver = mode === "create" ? driver : demand?.driver;
   const whatsappUrl = buildWhatsAppUrl(summaryDriver?.phone);
@@ -3063,7 +3172,10 @@ function FreightSummaryPanel({
               value={recipient ? `${recipient.city}/${recipient.state}` : "-"}
             />
             <SummaryRow label="Produto" value={product?.name ?? "-"} />
-            <SummaryRow label="Valor" value={formatMoney(freightValue)} />
+            <SummaryRow
+              label={form.freightPricingMode === "per_ton" ? "Preço" : "Valor"}
+              value={pricingSummary(form.freightPricingMode, freightValue, freightTonPrice)}
+            />
             <CheckLine ok={!!vehicle} label="Veículo selecionado" />
             <CheckLine ok={!!driver} label="Motorista disponível selecionado" />
             <CheckLine ok={!!sender} label="Remetente ativo" />
@@ -3088,7 +3200,14 @@ function FreightSummaryPanel({
               value={demand.recipient ? `${demand.recipient.city}/${demand.recipient.state}` : "-"}
             />
             <SummaryRow label="Produto" value={demand.product?.name ?? "-"} />
-            <SummaryRow label="Valor" value={formatMoney(demand.freightValue)} />
+            <SummaryRow
+              label={demand.freightPricingMode === "per_ton" ? "Preço" : "Valor"}
+              value={pricingSummary(
+                demand.freightPricingMode ?? "fixed",
+                demand.freightValue,
+                demand.freightTonPrice,
+              )}
+            />
             <SummaryRow label="Nota" value={noteLabel(demand)} />
             <SummaryRow label="CTE" value={cteLabel(demand)} />
             <div className="border-t border-border/80 pt-3">
@@ -3371,7 +3490,10 @@ function AwaitingCtePanel({
 }) {
   const note = demand.documents.note;
   const noteIsImage = Boolean(note?.mimeType?.startsWith("image/") && note?.url);
-  const noteApproved = note?.status === "aprovado" || demand.stage.id === "NOTA_APROVADA_AG_CTE";
+  const noteStatus = String(note?.status ?? "").toLowerCase();
+  const noteRejected = ["rejeitado", "rejected"].includes(noteStatus);
+  const noteApproved =
+    !noteRejected && (noteStatus === "aprovado" || demand.stage.id === "NOTA_APROVADA_AG_CTE");
 
   return (
     <div className="space-y-4">
@@ -3418,11 +3540,25 @@ function AwaitingCtePanel({
               Reprovar nota
             </Button>
           </div>
-        ) : null}
+        ) : (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-success/25 bg-success/10 px-3 py-1.5 text-[12px] font-bold text-success">
+              Nota aprovada
+            </span>
+            <Button variant="outline" onClick={() => onRejectNote?.(demand)} disabled={!note}>
+              <XCircle className="size-4" />
+              Reprovar nota
+            </Button>
+          </div>
+        )}
       </div>
 
       {noteApproved ? (
         <DocumentPanel demand={demand} kind="cte" onDocument={onDocument} />
+      ) : noteRejected ? (
+        <div className="rounded-2xl border border-border bg-surface-2/45 p-4 text-[12.5px] text-muted-foreground">
+          Nota reprovada. Aguarde o motorista reenviar a foto ou informar envio por email.
+        </div>
       ) : (
         <div className="rounded-2xl border border-border bg-surface-2/45 p-4 text-[12.5px] text-muted-foreground">
           Aprove a nota para liberar o envio do CTE.
@@ -3950,6 +4086,9 @@ function microStatusOf(
   }
 
   if (stageId === "DISPONIVEL") {
+    if (vehicleStatus === "aguardando-motorista") {
+      return { label: "Aguardando motorista", tone: "info" };
+    }
     return {
       label:
         vehicleSituation === "disponivel-oficina" ? "Disponível na oficina" : "Disponível no pátio",
@@ -3957,7 +4096,7 @@ function microStatusOf(
     };
   }
   if (stageId === "EM_ROTA_CARREGAR") {
-    return { label: "Em rota indo carregar", tone: "success" };
+    return { label: "Em rota indo carregar", tone: "warning" };
   }
   if (stageId === "AGUARDANDO_NOTA") {
     return { label: "Parado esperando carga", tone: "warning" };
@@ -3986,7 +4125,7 @@ function microStatusOf(
     return { label: "Aguardando confirmação", tone: "info" };
   }
   if (stageId === "EM_ROTA_ENTREGA") {
-    return { label: "Em rota indo descarregar", tone: "success" };
+    return { label: "Em rota indo descarregar", tone: "warning" };
   }
   if (stageId === "ENTREGUE_AG_FINALIZACAO") {
     return { label: "Parado esperando descarga", tone: "warning" };

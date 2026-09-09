@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import type {
   FleetEventSource,
   FreightPaymentType,
+  FreightPricingMode,
   Vehicle,
   VehicleFreightStage,
   VehicleStatus,
@@ -65,6 +66,8 @@ export async function linkVehicle(input: {
   recipientId?: string;
   productId?: string;
   freightValue?: number;
+  freightPricingMode?: FreightPricingMode;
+  freightTonPrice?: number;
   freightPaymentType?: FreightPaymentType;
   paymentTermDays?: number | null;
 }): Promise<Vehicle> {
@@ -83,6 +86,8 @@ export async function linkVehicle(input: {
         ...payload,
         p_freight_payment_type: input.freightPaymentType,
         p_payment_term_days: input.paymentTermDays ?? null,
+        p_freight_pricing_mode: input.freightPricingMode ?? "fixed",
+        p_freight_ton_price: input.freightTonPrice ?? null,
       })
     : await supabase.rpc("link_vehicle_operation", payload);
   if (error) throw error;

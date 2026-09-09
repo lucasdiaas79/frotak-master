@@ -47,7 +47,7 @@ export const FREIGHT_STAGES: FreightStage[] = [
     description: "Motorista liberado para seguir ao ponto de carregamento.",
     nextAction: "Confirmar carregamento",
     legacyStatus: "rota-carregar",
-    tone: "success",
+    tone: "warning",
   },
   {
     id: "AGUARDANDO_NOTA",
@@ -92,7 +92,7 @@ export const FREIGHT_STAGES: FreightStage[] = [
     description: "Veículo em deslocamento para descarga no destino.",
     nextAction: "Confirmar entrega",
     legacyStatus: "rota-descarregar",
-    tone: "success",
+    tone: "warning",
   },
   {
     id: "ENTREGUE_AG_FINALIZACAO",
@@ -127,7 +127,7 @@ export const FREIGHT_MACRO_STAGES: FreightMacroStage[] = [
     label: "Carregamento",
     shortLabel: "Carregamento",
     description: "Aguardando motorista, em rota para carga ou parado esperando carga.",
-    tone: "success",
+    tone: "warning",
   },
   {
     id: "AGUARDANDO_CTE",
@@ -141,7 +141,7 @@ export const FREIGHT_MACRO_STAGES: FreightMacroStage[] = [
     label: "Descarga",
     shortLabel: "Descarga",
     description: "Em rota para descarregar ou parado esperando descarga.",
-    tone: "success",
+    tone: "warning",
   },
   {
     id: "ROTA_FINALIZADA",
