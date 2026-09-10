@@ -68,6 +68,7 @@ export async function linkVehicle(input: {
   freightValue?: number;
   freightPricingMode?: FreightPricingMode;
   freightTonPrice?: number;
+  freightTaxRate?: number;
   freightPaymentType?: FreightPaymentType;
   paymentTermDays?: number | null;
 }): Promise<Vehicle> {
@@ -88,6 +89,7 @@ export async function linkVehicle(input: {
         p_payment_term_days: input.paymentTermDays ?? null,
         p_freight_pricing_mode: input.freightPricingMode ?? "fixed",
         p_freight_ton_price: input.freightTonPrice ?? null,
+        p_freight_tax_rate: input.freightTaxRate ?? null,
       })
     : await supabase.rpc("link_vehicle_operation", payload);
   if (error) throw error;

@@ -64,6 +64,7 @@ export interface Vehicle {
   freightPricingMode?: FreightPricingMode;
   freightTonPrice?: number;
   unloadedTons?: number;
+  freightTaxRate?: number;
   city: string;
   state: string;
   lat: number;

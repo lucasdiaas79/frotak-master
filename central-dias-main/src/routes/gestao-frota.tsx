@@ -209,6 +209,7 @@ interface FreightFormState {
   freightPricingMode: FreightPricingMode;
   freightValue: string;
   freightTonPrice: string;
+  freightTaxRate: string;
   freightPaymentType: FreightPaymentType | "";
   paymentTermDays: string;
   paymentTermTouched: boolean;
@@ -222,6 +223,7 @@ interface GroupFreightFormState {
   freightPricingMode: FreightPricingMode;
   freightValue: string;
   freightTonPrice: string;
+  freightTaxRate: string;
   freightPaymentType: FreightPaymentType | "";
   paymentTermDays: string;
   paymentTermTouched: boolean;
@@ -239,6 +241,7 @@ const EMPTY_FORM: FreightFormState = {
   freightPricingMode: "fixed",
   freightValue: "",
   freightTonPrice: "",
+  freightTaxRate: "",
   freightPaymentType: "",
   paymentTermDays: "",
   paymentTermTouched: false,
@@ -252,6 +255,7 @@ const EMPTY_GROUP_FORM: GroupFreightFormState = {
   freightPricingMode: "fixed",
   freightValue: "",
   freightTonPrice: "",
+  freightTaxRate: "",
   freightPaymentType: "",
   paymentTermDays: "",
   paymentTermTouched: false,
@@ -369,9 +373,35 @@ function parseFreightValue(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
+function parseFreightTaxRate(value: string) {
+  const cleaned = value.replace(/[^\d,.-]/g, "").trim();
+  if (!cleaned) return undefined;
+  const normalized = cleaned.includes(",") ? cleaned.replace(/\./g, "").replace(",", ".") : cleaned;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed >= 0 && parsed < 100 ? parsed : undefined;
+}
+
 function pricingSummary(mode: FreightPricingMode, fixedValue?: number, tonPrice?: number) {
   if (mode === "per_ton") return tonPrice ? `${formatMoney(tonPrice)} / ton` : "Por tonelada";
   return formatMoney(fixedValue);
+}
+
+function freightNetAmount(grossValue?: number, taxRate?: number) {
+  if (!grossValue) return undefined;
+  const rate = taxRate ?? 0;
+  return Math.round(grossValue * (100 - rate)) / 100;
+}
+
+function taxRateSummary(taxRate?: number) {
+  return taxRate === undefined ? "0%" : `${taxRate.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
+}
+
+function freightNetSummary(mode: FreightPricingMode, fixedValue?: number, tonPrice?: number, taxRate?: number) {
+  if (mode === "per_ton") {
+    if (!tonPrice) return "Calculado na descarga";
+    return `${formatMoney(freightNetAmount(tonPrice, taxRate))} / ton líquido`;
+  }
+  return formatMoney(freightNetAmount(fixedValue, taxRate));
 }
 
 function parsePaymentTermDays(value: string) {
@@ -851,6 +881,9 @@ function GestaoFrotaPage() {
         recipientId: seed?.recipientId ?? "",
         productId: seed?.productId ?? "",
         freightValue: seed?.freightValue ?? "",
+        freightTonPrice: seed?.freightTonPrice ?? "",
+        freightPricingMode: seed?.freightPricingMode ?? "fixed",
+        freightTaxRate: seed?.freightTaxRate ?? "",
         freightPaymentType: seed?.freightPaymentType ?? "",
         paymentTermDays: seed?.paymentTermDays ?? "",
         paymentTermTouched: seed?.paymentTermTouched ?? false,
@@ -1087,6 +1120,11 @@ function GestaoFrotaPage() {
       toast.error("Informe o valor da tonelada.");
       return;
     }
+    const freightTaxRate = parseFreightTaxRate(form.freightTaxRate) ?? 0;
+    if (form.freightTaxRate.trim() && parseFreightTaxRate(form.freightTaxRate) === undefined) {
+      toast.error("Informe uma alíquota entre 0% e menor que 100%.");
+      return;
+    }
     if (!isDriverAvailable(driver, form.vehicleId, activeDriverIds)) {
       toast.error("Motorista indisponível para novo frete.");
       return;
@@ -1115,6 +1153,7 @@ function GestaoFrotaPage() {
           form.freightPricingMode === "per_ton"
             ? parseFreightValue(form.freightTonPrice)
             : undefined,
+        freightTaxRate,
         freightPaymentType: form.freightPaymentType,
         paymentTermDays: parsePaymentTermDays(form.paymentTermDays),
         link,
@@ -1151,6 +1190,11 @@ function GestaoFrotaPage() {
     }
     if (groupForm.freightPricingMode === "per_ton" && !parseFreightValue(groupForm.freightTonPrice)) {
       toast.error("Informe o valor da tonelada do frete em grupo.");
+      return;
+    }
+    const freightTaxRate = parseFreightTaxRate(groupForm.freightTaxRate) ?? 0;
+    if (groupForm.freightTaxRate.trim() && parseFreightTaxRate(groupForm.freightTaxRate) === undefined) {
+      toast.error("Informe uma alíquota entre 0% e menor que 100%.");
       return;
     }
     if (groupForm.vehicleIds.length === 0) {
@@ -1196,6 +1240,7 @@ function GestaoFrotaPage() {
             groupForm.freightPricingMode === "per_ton"
               ? parseFreightValue(groupForm.freightTonPrice)
               : undefined,
+          freightTaxRate,
           freightPaymentType: groupForm.freightPaymentType,
           paymentTermDays: parsePaymentTermDays(groupForm.paymentTermDays),
           link,
@@ -2431,6 +2476,15 @@ function GroupFreightWorkspace({
                 className="h-11"
               />
             </Field>
+            <Field label="Alíquota do frete (%)">
+              <Input
+                value={form.freightTaxRate}
+                onChange={(event) => setForm({ ...form, freightTaxRate: event.target.value })}
+                placeholder="Ex.: 12"
+                inputMode="decimal"
+                className="h-11"
+              />
+            </Field>
             <FreightPaymentSelector
               value={form.freightPaymentType}
               onChange={(value) => setForm({ ...form, freightPaymentType: value })}
@@ -2571,6 +2625,16 @@ function GroupFreightWorkspace({
           <SummaryRow
             label={form.freightPricingMode === "per_ton" ? "Preço" : "Valor"}
             value={pricingSummary(form.freightPricingMode, freightValue, freightTonPrice)}
+          />
+          <SummaryRow label="Alíquota" value={taxRateSummary(parseFreightTaxRate(form.freightTaxRate))} />
+          <SummaryRow
+            label="Líquido financeiro"
+            value={freightNetSummary(
+              form.freightPricingMode,
+              freightValue,
+              freightTonPrice,
+              parseFreightTaxRate(form.freightTaxRate),
+            )}
           />
           <CheckLine ok={selectedResources.length > 0} label="Caminhões selecionados" />
           <CheckLine ok={!!sender} label="Remetente ativo" />
@@ -2756,6 +2820,17 @@ function DemandWorkspace({
                   placeholder={
                     currentForm.freightPricingMode === "per_ton" ? "Ex.: 185,00" : "Ex.: 12500,00"
                   }
+                  inputMode="decimal"
+                  className="h-11"
+                />
+              </Field>
+              <Field label="Alíquota do frete (%)">
+                <Input
+                  value={currentForm.freightTaxRate}
+                  onChange={(event) =>
+                    setForm({ ...currentForm, freightTaxRate: event.target.value })
+                  }
+                  placeholder="Ex.: 12"
                   inputMode="decimal"
                   className="h-11"
                 />
@@ -3149,6 +3224,7 @@ function FreightSummaryPanel({
   const product = products.find((item) => item.id === form.productId);
   const freightValue = parseFreightValue(form.freightValue);
   const freightTonPrice = parseFreightValue(form.freightTonPrice);
+  const freightTaxRate = parseFreightTaxRate(form.freightTaxRate);
   const next = demand ? nextFreightStage(demand.stage.id) : null;
   const summaryDriver = mode === "create" ? driver : demand?.driver;
   const whatsappUrl = buildWhatsAppUrl(summaryDriver?.phone);
@@ -3175,6 +3251,16 @@ function FreightSummaryPanel({
             <SummaryRow
               label={form.freightPricingMode === "per_ton" ? "Preço" : "Valor"}
               value={pricingSummary(form.freightPricingMode, freightValue, freightTonPrice)}
+            />
+            <SummaryRow label="Alíquota" value={taxRateSummary(freightTaxRate)} />
+            <SummaryRow
+              label="Líquido financeiro"
+              value={freightNetSummary(
+                form.freightPricingMode,
+                freightValue,
+                freightTonPrice,
+                freightTaxRate,
+              )}
             />
             <CheckLine ok={!!vehicle} label="Veículo selecionado" />
             <CheckLine ok={!!driver} label="Motorista disponível selecionado" />
@@ -3206,6 +3292,16 @@ function FreightSummaryPanel({
                 demand.freightPricingMode ?? "fixed",
                 demand.freightValue,
                 demand.freightTonPrice,
+              )}
+            />
+            <SummaryRow label="Alíquota" value={taxRateSummary(demand.freightTaxRate)} />
+            <SummaryRow
+              label="Líquido financeiro"
+              value={freightNetSummary(
+                demand.freightPricingMode ?? "fixed",
+                demand.freightValue,
+                demand.freightTonPrice,
+                demand.freightTaxRate,
               )}
             />
             <SummaryRow label="Nota" value={noteLabel(demand)} />
