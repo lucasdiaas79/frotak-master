@@ -100,7 +100,6 @@ export async function createFreightOperation(input: {
   freightValue?: number;
   freightPricingMode?: FreightPricingMode;
   freightTonPrice?: number;
-  freightTaxRate?: number;
   freightPaymentType: FreightPaymentType;
   paymentTermDays?: number | null;
   link: (
@@ -114,7 +113,6 @@ export async function createFreightOperation(input: {
       freightValue?: number;
       freightPricingMode?: FreightPricingMode;
       freightTonPrice?: number;
-      freightTaxRate?: number;
       trailerIds?: string[];
       freightPaymentType?: FreightPaymentType;
       paymentTermDays?: number | null;
@@ -135,7 +133,6 @@ export async function createFreightOperation(input: {
       freightValue: input.freightValue,
       freightPricingMode: input.freightPricingMode ?? "fixed",
       freightTonPrice: input.freightTonPrice,
-      freightTaxRate: input.freightTaxRate,
       freightPaymentType: input.freightPaymentType,
       paymentTermDays: input.paymentTermDays ?? null,
     });

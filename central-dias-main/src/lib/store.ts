@@ -62,7 +62,6 @@ interface FleetState {
       freightValue?: number;
       freightPricingMode?: import("@/lib/types").FreightPricingMode;
       freightTonPrice?: number;
-      freightTaxRate?: number;
       trailerIds?: string[];
       freightPaymentType?: import("@/lib/types").FreightPaymentType;
       paymentTermDays?: number | null;
@@ -403,7 +402,6 @@ export const useFleet = create<FleetState>((set, get) => ({
                   freightValue: extras?.freightValue,
                   freightPricingMode: extras?.freightPricingMode ?? "fixed",
                   freightTonPrice: extras?.freightTonPrice,
-                  freightTaxRate: extras?.freightTaxRate,
                   unloadedTons: undefined,
                   updatedAt: new Date().toISOString(),
                 }
@@ -440,7 +438,6 @@ export const useFleet = create<FleetState>((set, get) => ({
       freightValue: extras?.freightValue,
       freightPricingMode: extras?.freightPricingMode ?? "fixed",
       freightTonPrice: extras?.freightTonPrice,
-      freightTaxRate: extras?.freightTaxRate,
       freightPaymentType: extras?.freightPaymentType,
       paymentTermDays: extras?.paymentTermDays ?? null,
     });
