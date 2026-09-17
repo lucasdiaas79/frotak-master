@@ -18,38 +18,41 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            central-dias-main/package-lock.json
       - name: Install root dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci
       - name: Build Master
-        run: bun run build
+        run: npm run build
       - name: Install Central dependencies
         working-directory: central-dias-main
-        run: bun install --frozen-lockfile
+        run: npm ci
       - name: Build Central
         working-directory: central-dias-main
-        run: bun run build
+        run: npm run build
 
   database-verification:
     name: Supabase migrations + DB tests
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
         with:
-          bun-version: latest
-      - name: Install Supabase CLI dependency
-        working-directory: central-dias-main
-        run: bun install --frozen-lockfile
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
       - name: Start isolated Supabase
-        run: bunx --cwd central-dias-main supabase start -x studio,imgproxy,edge-runtime,logflare,vector
+        run: npx --yes supabase@2.98.2 start -x studio,imgproxy,edge-runtime,logflare,vector
       - name: Apply all migrations from zero
-        run: bunx --cwd central-dias-main supabase db reset
+        run: npx --yes supabase@2.98.2 db reset
       - name: Run database tests
-        run: bunx --cwd central-dias-main supabase test db
+        run: npx --yes supabase@2.98.2 test db
       - name: Stop isolated Supabase
         if: always()
-        run: bunx --cwd central-dias-main supabase stop --no-backup
+        run: npx --yes supabase@2.98.2 stop --no-backup || true
