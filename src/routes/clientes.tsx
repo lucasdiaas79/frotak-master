@@ -47,11 +47,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  buildClientAccessUrl,
-  getCurrentAccessToken,
-  getSession,
-} from "@/lib/auth";
+import { getCurrentAccessToken, getSession } from "@/lib/auth";
 import { createSecureClientHandoffRedirect } from "@/lib/clientHandoff";
 import { listManagedTenants, tenantFeatureCatalog, type ManagedTenant } from "@/lib/masterControl";
 import { provisionTenant } from "@/lib/tenantProvisioning";
@@ -279,15 +275,13 @@ function Clientes() {
     }
 
     try {
-      const legacyRedirect = buildClientAccessUrl({
+      const secureRedirect = await createSecureClientHandoffRedirect({
         accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
         clientId: client.id,
         tenantId: client.tenantId,
         clientName: client.name,
         email: client.loginEmail || session.email,
       });
-      const secureRedirect = await createSecureClientHandoffRedirect(legacyRedirect);
       window.open(secureRedirect, "_blank", "noopener,noreferrer");
     } catch {
       toast.error("Nao foi possivel criar um acesso seguro para este cliente.");
