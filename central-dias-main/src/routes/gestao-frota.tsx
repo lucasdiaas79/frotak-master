@@ -122,7 +122,6 @@ import type {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
-import { getActiveTenantId } from "@/lib/auth";
 
 export const Route = createFileRoute("/gestao-frota")({
   head: () => ({
@@ -503,23 +502,29 @@ function GestaoFrotaPage() {
     async function loadPaymentTermDefaults() {
       try {
         const access = await getFinancialAccess();
-        const activeTenantId = getActiveTenantId();
-        const [partners, settings, links, tenantSettings] = await Promise.all([
+        const [partners, settings, links, workspaceSettings] = await Promise.all([
           listFinancialPartners(),
           getFinancialIntegrationSettings(access.workspaceId),
           supabase
             .from("legacy_partner_links")
             .select("legacy_table, legacy_id, partner_id")
             .in("legacy_table", ["senders", "recipients"]),
-          supabase.from("tenants").select("settings").eq("id", activeTenantId).maybeSingle(),
+          supabase
+            .from("workspaces")
+            .select("tenant_id, tenants(settings)")
+            .eq("id", access.workspaceId)
+            .maybeSingle(),
         ]);
         if (links.error) throw links.error;
-        if (tenantSettings.error) throw tenantSettings.error;
+        if (workspaceSettings.error) throw workspaceSettings.error;
         if (cancelled) return;
+        const tenant = Array.isArray(workspaceSettings.data?.tenants)
+          ? workspaceSettings.data?.tenants[0]
+          : workspaceSettings.data?.tenants;
         setFinancialPartners(partners);
         setFinancialSettings(settings);
         setLegacyPartnerLinks((links.data ?? []) as LegacyPartnerLink[]);
-        setAssetAssignmentMode(readAssetAssignmentMode(tenantSettings.data?.settings));
+        setAssetAssignmentMode(readAssetAssignmentMode(tenant?.settings));
       } catch (error) {
         if (!cancelled) {
           console.warn("[gestao-frota] payment term defaults unavailable", error);
