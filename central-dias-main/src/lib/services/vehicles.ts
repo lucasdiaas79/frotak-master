@@ -45,6 +45,7 @@ export async function updateVehicleStatus(
   source: FleetEventSource = "Operador",
   description?: string,
   freightStage?: VehicleFreightStage,
+  expectedWorkflowVersion?: number,
 ): Promise<Vehicle> {
   const { data, error } = await supabase.rpc("set_vehicle_status", {
     p_vehicle_id: id,
@@ -52,8 +53,14 @@ export async function updateVehicleStatus(
     p_source: source,
     p_description: description ?? null,
     p_freight_stage: freightStage ?? null,
+    p_expected_version: expectedWorkflowVersion ?? null,
   });
-  if (error) throw error;
+  if (error) {
+    if (error.message?.includes("WORKFLOW_VERSION_CONFLICT")) {
+      throw new Error("WORKFLOW_VERSION_CONFLICT");
+    }
+    throw error;
+  }
   return vehicleFromRow(Array.isArray(data) ? data[0] : data);
 }
 
