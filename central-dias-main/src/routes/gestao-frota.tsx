@@ -2450,9 +2450,9 @@ function CreateFreightWorkspace({
   onCreateLongTrip: () => void;
 }) {
   const manualAssetAssignment = assetAssignmentMode === "manual_per_freight";
-  const activeCreateMode = manualAssetAssignment ? "individual" : createMode;
+  const activeCreateMode = !manualAssetAssignment && createMode === "long-trip" ? "individual" : createMode;
   const createModes: FreightCreateMode[] = manualAssetAssignment
-    ? ["individual", "long-trip"]
+    ? ["individual", "group", "long-trip"]
     : ["individual", "group"];
 
   return (
