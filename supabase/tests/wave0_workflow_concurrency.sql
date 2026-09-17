@@ -32,14 +32,16 @@ begin
     raise exception 'Expected initial workflow_version=0, got %', v_version;
   end if;
 
-  select public.set_vehicle_status(
+  select *
+    into v_vehicle
+  from public.set_vehicle_status(
     v_vehicle_id,
     'rota-carregar',
     'Operador',
     'Wave 0 test',
     'EM_ROTA_CARREGAR',
     0
-  ) into v_vehicle;
+  );
 
   if v_vehicle.workflow_version <> 1 then
     raise exception 'Expected workflow_version=1 after state transition, got %', v_vehicle.workflow_version;
