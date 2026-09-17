@@ -4,6 +4,14 @@ on:
   pull_request:
     branches: [main]
 
+# Zero-cost safety mode:
+# - public repository + standard ubuntu-latest runners;
+# - no cloud Supabase branch/project;
+# - no production credentials or remote migrations;
+# - no uploaded workflow artifacts/cache.
+permissions:
+  contents: read
+
 concurrency:
   group: forge-wave0-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
@@ -18,10 +26,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            central-dias-main/package-lock.json
       - name: Install root dependencies
         run: npm install --no-audit --no-fund
       - name: Build Master
@@ -29,12 +33,29 @@ jobs:
       - name: Install Central dependencies
         working-directory: central-dias-main
         run: npm install --no-audit --no-fund
+      - name: Create CI-only placeholders for missing legacy local seed files
+        shell: bash
+        run: |
+          set -euo pipefail
+          seed_dir="central-dias-main/supabase/migrations"
+          mkdir -p "${seed_dir}"
+          for file in \
+            202606100002_reset_fleet_from_spreadsheet.sql \
+            202606150001_refresh_trailers_from_final_fleet_sheet.sql \
+            202606150004_refresh_vehicle_metadata_from_final_fleet_sheet.sql \
+            202606150005_refresh_driver_phones_from_final_fleet_sheet.sql
+          do
+            path="${seed_dir}/${file}"
+            if [[ ! -e "${path}" ]]; then
+              printf '%s\n' '-- CI-only empty placeholder. Never deploy or use as production data.' > "${path}"
+            fi
+          done
       - name: Build Central
         working-directory: central-dias-main
         run: npm run build
 
   database-verification:
-    name: Supabase migrations + DB tests
+    name: Ephemeral Supabase + DB tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -42,6 +63,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Assert local-only verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "FROTAK LAB uses only 127.0.0.1 in this job."
+          test ! -f supabase/.temp/project-ref || {
+            echo "Refusing linked Supabase project in zero-cost CI lab." >&2
+            exit 1
+          }
       - name: Start isolated Supabase
         run: npx --yes supabase@2.98.2 start -x studio,imgproxy,edge-runtime,logflare,vector
       - name: Apply all migrations from zero
