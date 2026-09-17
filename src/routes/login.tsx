@@ -53,9 +53,11 @@ function LoginPage() {
       }
 
       if (result.external) {
-        // Wave 0: a URL legada nunca vai para a barra do navegador. O JWT e
-        // usado apenas em memoria/Authorization para criar um ticket efemero.
-        const secureRedirect = await createSecureClientHandoffRedirect(result.redirectTo);
+        if (!result.clientHandoff) {
+          throw new Error("Contexto de handoff seguro ausente.");
+        }
+
+        const secureRedirect = await createSecureClientHandoffRedirect(result.clientHandoff);
         window.location.href = secureRedirect;
         return;
       }
