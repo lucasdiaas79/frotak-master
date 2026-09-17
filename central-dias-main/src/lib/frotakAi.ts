@@ -1,5 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
+import { createClient } from "@supabase/supabase-js";
 import { createServerFn } from "@tanstack/react-start";
+import { getCurrentAccessToken } from "@/lib/auth";
 
 export const FROTAK_AI_TEXT_MODEL = "gemini-3.1-flash-lite";
 export const FROTAK_AI_LIVE_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025";
@@ -9,11 +11,57 @@ type FrotakAiMessage = {
   text: string;
 };
 
+type AiAccessKind = "chat" | "live_token";
+
 function geminiApiKey() {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY nao configurada");
   process.env.GOOGLE_API_KEY = key;
   return key;
+}
+
+function supabaseServerConfig() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  if (!url || !anonKey) throw new Error("SUPABASE_SERVER_CONFIG_MISSING");
+  return { url, anonKey };
+}
+
+async function authorizeAiCaller(accessToken: string, kind: AiAccessKind) {
+  if (!accessToken.trim()) throw new Error("AI_AUTH_REQUIRED");
+
+  const { url, anonKey } = supabaseServerConfig();
+  const client = createClient(url, anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  });
+
+  const { data: userData, error: userError } = await client.auth.getUser(accessToken);
+  if (userError || !userData.user) throw new Error("AI_AUTH_REQUIRED");
+
+  const { data, error } = await client.rpc("authorize_frotak_ai", { p_kind: kind });
+  if (error) {
+    const message = error.message || "";
+    if (message.includes("AI_RATE_LIMIT_EXCEEDED")) throw new Error("AI_RATE_LIMIT_EXCEEDED");
+    if (
+      message.includes("AI_AUTH_REQUIRED") ||
+      message.includes("AI_TENANT_ACCESS_REQUIRED") ||
+      message.includes("AI_PERMISSION_REQUIRED")
+    ) {
+      throw new Error("AI_ACCESS_DENIED");
+    }
+    throw new Error("AI_ACCESS_CHECK_FAILED");
+  }
+
+  return data;
 }
 
 function historyToContents(history: FrotakAiMessage[]) {
@@ -28,6 +76,15 @@ function historyToContents(history: FrotakAiMessage[]) {
 
 function publicError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("AI_RATE_LIMIT_EXCEEDED")) {
+    return "Limite temporario da Frotak IA atingido. Aguarde um minuto e tente novamente.";
+  }
+  if (message.includes("AI_AUTH_REQUIRED") || message.includes("AI_ACCESS_DENIED")) {
+    return "Sua sessao nao tem permissao para usar a Frotak IA.";
+  }
+  if (message.includes("AI_ACCESS_CHECK_FAILED") || message.includes("SUPABASE_SERVER_CONFIG_MISSING")) {
+    return "Nao foi possivel validar o acesso a Frotak IA.";
+  }
   if (message.includes("GEMINI_API_KEY")) return "Chave da IA nao configurada.";
   if (message.includes("API key")) return "Chave da IA invalida ou nao autorizada.";
   if (message.includes("not found")) return "Modelo de IA nao encontrado ou indisponivel.";
@@ -73,64 +130,79 @@ function frotakAiSystemInstruction() {
   ].join(" ");
 }
 
-export const createFrotakLiveToken = createServerFn({ method: "POST" }).handler(async () => {
-  try {
-    const model = process.env.GEMINI_LIVE_MODEL || FROTAK_AI_LIVE_MODEL;
-    const ai = new GoogleGenAI({
-      apiKey: geminiApiKey(),
-      httpOptions: { apiVersion: "v1beta" },
-    });
+const createFrotakLiveTokenServer = createServerFn({ method: "POST" })
+  .inputValidator((input: { accessToken: string } | undefined) => ({
+    accessToken: input?.accessToken ?? "",
+  }))
+  .handler(async ({ data }) => {
+    try {
+      await authorizeAiCaller(data.accessToken, "live_token");
 
-    const token = await ai.authTokens.create({
-      config: {
-        uses: 1,
-        newSessionExpireTime: new Date(Date.now() + 60_000).toISOString(),
-        expireTime: new Date(Date.now() + 30 * 60_000).toISOString(),
-        liveConnectConstraints: {
-          model,
-          config: {
-            responseModalities: ["AUDIO"],
-            temperature: 0.2,
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName: process.env.GEMINI_LIVE_VOICE || "Aoede",
+      const model = process.env.GEMINI_LIVE_MODEL || FROTAK_AI_LIVE_MODEL;
+      const ai = new GoogleGenAI({
+        apiKey: geminiApiKey(),
+        httpOptions: { apiVersion: "v1beta" },
+      });
+
+      const token = await ai.authTokens.create({
+        config: {
+          uses: 1,
+          newSessionExpireTime: new Date(Date.now() + 60_000).toISOString(),
+          expireTime: new Date(Date.now() + 30 * 60_000).toISOString(),
+          liveConnectConstraints: {
+            model,
+            config: {
+              responseModalities: ["AUDIO"],
+              temperature: 0.2,
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: process.env.GEMINI_LIVE_VOICE || "Aoede",
+                  },
                 },
               },
-            },
-            inputAudioTranscription: {},
-            outputAudioTranscription: {},
-            thinkingConfig: {
-              thinkingLevel: "minimal",
-            },
-            systemInstruction: {
-              parts: [{ text: frotakAiSystemInstruction() }],
+              inputAudioTranscription: {},
+              outputAudioTranscription: {},
+              thinkingConfig: {
+                thinkingLevel: "minimal",
+              },
+              systemInstruction: {
+                parts: [{ text: frotakAiSystemInstruction() }],
+              },
             },
           },
+          lockAdditionalFields: [],
         },
-        lockAdditionalFields: [],
-      },
-    });
+      });
 
-    if (!token.name) throw new Error("Token efemero vazio");
-    return { token: token.name, model };
-  } catch (error) {
-    console.error("[frotakAi] live token failed", {
-      message: error instanceof Error ? error.message : String(error),
-    });
-    throw new Error(publicError(error));
-  }
-});
+      if (!token.name) throw new Error("Token efemero vazio");
+      return { token: token.name, model };
+    } catch (error) {
+      console.error("[frotakAi] live token failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw new Error(publicError(error));
+    }
+  });
 
-export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
-  .inputValidator((input: { message: string; history?: FrotakAiMessage[] } | undefined) => ({
-    message: input?.message ?? "",
-    history: input?.history ?? [],
-  }))
+const sendFrotakAiChatMessageServer = createServerFn({ method: "POST" })
+  .inputValidator(
+    (
+      input:
+        | { message: string; history?: FrotakAiMessage[]; accessToken: string }
+        | undefined,
+    ) => ({
+      message: input?.message ?? "",
+      history: input?.history ?? [],
+      accessToken: input?.accessToken ?? "",
+    }),
+  )
   .handler(async ({ data }) => {
     try {
       const message = data.message.trim();
       if (!message) throw new Error("Mensagem vazia");
+
+      await authorizeAiCaller(data.accessToken, "chat");
 
       const ai = new GoogleGenAI({ apiKey: geminiApiKey() });
       const model = process.env.GEMINI_TEXT_MODEL || FROTAK_AI_TEXT_MODEL;
@@ -157,3 +229,19 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
       throw new Error(publicError(error));
     }
   });
+
+export async function createFrotakLiveToken() {
+  const accessToken = await getCurrentAccessToken();
+  if (!accessToken) throw new Error("Sua sessao nao tem permissao para usar a Frotak IA.");
+  return createFrotakLiveTokenServer({ data: { accessToken } });
+}
+
+export async function sendFrotakAiChatMessage(input: {
+  data: { message: string; history?: FrotakAiMessage[] };
+}) {
+  const accessToken = await getCurrentAccessToken();
+  if (!accessToken) throw new Error("Sua sessao nao tem permissao para usar a Frotak IA.");
+  return sendFrotakAiChatMessageServer({
+    data: { ...input.data, accessToken },
+  });
+}
