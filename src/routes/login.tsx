@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { authenticate } from "@/lib/auth";
+import { createSecureClientHandoffRedirect } from "@/lib/clientHandoff";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import frotakLogoDark from "@/assets/frotak-logo-dark.png";
@@ -52,7 +53,12 @@ function LoginPage() {
       }
 
       if (result.external) {
-        window.location.href = result.redirectTo;
+        if (!result.clientHandoff) {
+          throw new Error("Contexto de handoff seguro ausente.");
+        }
+
+        const secureRedirect = await createSecureClientHandoffRedirect(result.clientHandoff);
+        window.location.href = secureRedirect;
         return;
       }
 
