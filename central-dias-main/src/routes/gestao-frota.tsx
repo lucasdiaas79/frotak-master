@@ -121,6 +121,7 @@ import type {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
+import { getActiveTenantId } from "@/lib/auth";
 
 export const Route = createFileRoute("/gestao-frota")({
   head: () => ({
@@ -141,6 +142,7 @@ type DemandMode = "create" | "detail";
 type FreightCreateMode = "individual" | "group";
 type DocumentKind = "note" | "cte";
 type FinalCommand = "RETORNO_SOLICITADO" | "PRONTO_NOVO_FRETE";
+type AssetAssignmentMode = "fixed_vehicle" | "manual_per_freight";
 
 interface LocalDocument {
   id?: string;
@@ -381,6 +383,22 @@ function parsePaymentTermDays(value: string) {
   return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : null;
 }
 
+function isAssetAssignmentMode(value: unknown): value is AssetAssignmentMode {
+  return value === "fixed_vehicle" || value === "manual_per_freight";
+}
+
+function readAssetAssignmentMode(settings: unknown): AssetAssignmentMode {
+  const record = settings && typeof settings === "object" ? (settings as Record<string, unknown>) : {};
+  const driverApp =
+    record.driverApp && typeof record.driverApp === "object"
+      ? (record.driverApp as Record<string, unknown>)
+      : record.driver_app && typeof record.driver_app === "object"
+        ? (record.driver_app as Record<string, unknown>)
+        : {};
+  const mode = driverApp.assetAssignmentMode ?? driverApp.asset_assignment_mode;
+  return isAssetAssignmentMode(mode) ? mode : "fixed_vehicle";
+}
+
 function trailerImplementModels(
   vehicle: Pick<Vehicle, "trailerId" | "trailerIds">,
   trailersById: Map<string, Trailer>,
@@ -440,6 +458,9 @@ function GestaoFrotaPage() {
     null,
   );
   const [legacyPartnerLinks, setLegacyPartnerLinks] = useState<LegacyPartnerLink[]>([]);
+  const [assetAssignmentMode, setAssetAssignmentMode] =
+    useState<AssetAssignmentMode>("fixed_vehicle");
+  const manualAssetAssignment = assetAssignmentMode === "manual_per_freight";
 
   const driversById = useMemo(
     () => new Map(drivers.map((driver) => [driver.id, driver])),
@@ -468,25 +489,30 @@ function GestaoFrotaPage() {
     async function loadPaymentTermDefaults() {
       try {
         const access = await getFinancialAccess();
-        const [partners, settings, links] = await Promise.all([
+        const activeTenantId = getActiveTenantId();
+        const [partners, settings, links, tenantSettings] = await Promise.all([
           listFinancialPartners(),
           getFinancialIntegrationSettings(access.workspaceId),
           supabase
             .from("legacy_partner_links")
             .select("legacy_table, legacy_id, partner_id")
             .in("legacy_table", ["senders", "recipients"]),
+          supabase.from("tenants").select("settings").eq("id", activeTenantId).maybeSingle(),
         ]);
         if (links.error) throw links.error;
+        if (tenantSettings.error) throw tenantSettings.error;
         if (cancelled) return;
         setFinancialPartners(partners);
         setFinancialSettings(settings);
         setLegacyPartnerLinks((links.data ?? []) as LegacyPartnerLink[]);
+        setAssetAssignmentMode(readAssetAssignmentMode(tenantSettings.data?.settings));
       } catch (error) {
         if (!cancelled) {
           console.warn("[gestao-frota] payment term defaults unavailable", error);
           setFinancialPartners([]);
           setFinancialSettings(null);
           setLegacyPartnerLinks([]);
+          setAssetAssignmentMode("fixed_vehicle");
         }
       }
     }
@@ -567,10 +593,22 @@ function GestaoFrotaPage() {
       vehicles
         .filter((vehicle) => {
           const stage = stageOfVehicle(vehicle);
-          return vehicle.driverId && stage !== "DISPONIVEL" && !isFinalFreightStage(stage);
+          return vehicle.driverId && vehicle.currentFreightId && !isFinalFreightStage(stage);
         })
         .map((vehicle) => vehicle.driverId as string),
     );
+  }, [vehicles]);
+  const activeTrailerIds = useMemo(() => {
+    const ids = new Set<string>();
+    vehicles
+      .filter((vehicle) => {
+        const stage = stageOfVehicle(vehicle);
+        return vehicle.currentFreightId && !isFinalFreightStage(stage);
+      })
+      .forEach((vehicle) => {
+        vehicleTrailerIds(vehicle).forEach((id) => ids.add(id));
+      });
+    return ids;
   }, [vehicles]);
 
   useEffect(() => {
@@ -823,12 +861,14 @@ function GestaoFrotaPage() {
   const formWithVehicleDefaults = useCallback(
     (seed?: Partial<FreightFormState>): FreightFormState => {
       const vehicle = seed?.vehicleId ? vehicles.find((item) => item.id === seed.vehicleId) : null;
-      const linkedDriver = vehicle?.driverId
-        ? drivers.find((item) => item.id === vehicle.driverId)
-        : undefined;
-      const linkedTrailer = vehicle?.trailerId
-        ? trailers.find((item) => item.id === vehicle.trailerId)
-        : undefined;
+      const linkedDriver =
+        !manualAssetAssignment && vehicle?.driverId
+          ? drivers.find((item) => item.id === vehicle.driverId)
+          : undefined;
+      const linkedTrailer =
+        !manualAssetAssignment && vehicle?.trailerId
+          ? trailers.find((item) => item.id === vehicle.trailerId)
+          : undefined;
 
       return {
         ...EMPTY_FORM,
@@ -837,7 +877,7 @@ function GestaoFrotaPage() {
         trailerId: seed?.trailerId ?? linkedTrailer?.id ?? "",
       };
     },
-    [drivers, trailers, vehicles],
+    [drivers, manualAssetAssignment, trailers, vehicles],
   );
 
   const openCreate = useCallback(
@@ -1089,8 +1129,23 @@ function GestaoFrotaPage() {
       toast.error("Informe o valor da tonelada.");
       return;
     }
-    if (!isDriverAvailable(driver, form.vehicleId, activeDriverIds)) {
+    if (
+      !isDriverAvailableForFreightMode(
+        driver,
+        form.vehicleId,
+        activeDriverIds,
+        assetAssignmentMode,
+      )
+    ) {
       toast.error("Motorista indisponível para novo frete.");
+      return;
+    }
+    if (manualAssetAssignment && !form.trailerId) {
+      toast.error("Selecione a caçamba deste frete.");
+      return;
+    }
+    if (manualAssetAssignment && form.trailerId && activeTrailerIds.has(form.trailerId)) {
+      toast.error("Caçamba indisponível para novo frete.");
       return;
     }
     if (!isVehicleAvailableForFreight(vehicle)) {
@@ -1100,7 +1155,11 @@ function GestaoFrotaPage() {
 
     const selectedVehicle = vehicles.find((vehicle) => vehicle.id === form.vehicleId);
     const trailerIds =
-      selectedVehicle?.trailerIds?.[0] === form.trailerId ? selectedVehicle.trailerIds : undefined;
+      manualAssetAssignment && form.trailerId
+        ? [form.trailerId]
+        : selectedVehicle?.trailerIds?.[0] === form.trailerId
+          ? selectedVehicle.trailerIds
+          : undefined;
     try {
       await createFreightOperation({
         vehicleId: form.vehicleId,
@@ -1484,6 +1543,8 @@ function GestaoFrotaPage() {
             products={products}
             availableResources={availableDriverResources}
             activeDriverIds={activeDriverIds}
+            activeTrailerIds={activeTrailerIds}
+            assetAssignmentMode={assetAssignmentMode}
             suggestedIndividualPaymentTerm={suggestedIndividualPaymentTerm}
             suggestedGroupPaymentTerm={suggestedGroupPaymentTerm}
             onCreateIndividual={createFreight}
@@ -1500,6 +1561,8 @@ function GestaoFrotaPage() {
             recipients={recipients}
             products={products}
             activeDriverIds={activeDriverIds}
+            activeTrailerIds={activeTrailerIds}
+            assetAssignmentMode={assetAssignmentMode}
             onAdvance={advanceDemand}
             onFinalCommand={setFinalCommand}
             onDocument={handleDocument}
@@ -2213,6 +2276,8 @@ function CreateFreightWorkspace({
   products,
   availableResources,
   activeDriverIds,
+  activeTrailerIds,
+  assetAssignmentMode,
   suggestedIndividualPaymentTerm,
   suggestedGroupPaymentTerm,
   onCreateIndividual,
@@ -2232,15 +2297,20 @@ function CreateFreightWorkspace({
   products: Product[];
   availableResources: AvailableDriverResource[];
   activeDriverIds: Set<string>;
+  activeTrailerIds: Set<string>;
+  assetAssignmentMode: AssetAssignmentMode;
   suggestedIndividualPaymentTerm: number | null;
   suggestedGroupPaymentTerm: number | null;
   onCreateIndividual: () => void;
   onCreateGroup: () => void;
 }) {
+  const manualAssetAssignment = assetAssignmentMode === "manual_per_freight";
+  const activeCreateMode = manualAssetAssignment ? "individual" : createMode;
+
   return (
     <div className="space-y-4">
       <div className="inline-flex rounded-2xl border border-border bg-surface-2/70 p-1">
-        {(["individual", "group"] as FreightCreateMode[]).map((mode) => (
+        {(["individual", ...(manualAssetAssignment ? [] : ["group"])] as FreightCreateMode[]).map((mode) => (
           <button
             key={mode}
             type="button"
@@ -2257,7 +2327,14 @@ function CreateFreightWorkspace({
         ))}
       </div>
 
-      {createMode === "individual" ? (
+      {manualAssetAssignment && (
+        <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-[12.5px] font-semibold text-muted-foreground">
+          Modo JO Transportes: motorista, trator e caçamba são escolhidos manualmente neste frete.
+          Vínculos fixos do cadastro não bloqueiam a criação.
+        </div>
+      )}
+
+      {activeCreateMode === "individual" ? (
         <DemandWorkspace
           mode="create"
           form={individualForm}
@@ -2269,6 +2346,8 @@ function CreateFreightWorkspace({
           recipients={recipients}
           products={products}
           activeDriverIds={activeDriverIds}
+          activeTrailerIds={activeTrailerIds}
+          assetAssignmentMode={assetAssignmentMode}
           suggestedPaymentTerm={suggestedIndividualPaymentTerm}
           onCreate={onCreateIndividual}
         />
@@ -2599,6 +2678,8 @@ function DemandWorkspace({
   recipients,
   products,
   activeDriverIds,
+  activeTrailerIds,
+  assetAssignmentMode,
   suggestedPaymentTerm,
   onCreate,
   onAdvance,
@@ -2618,6 +2699,8 @@ function DemandWorkspace({
   recipients: Recipient[];
   products: Product[];
   activeDriverIds: Set<string>;
+  activeTrailerIds: Set<string>;
+  assetAssignmentMode: AssetAssignmentMode;
   suggestedPaymentTerm?: number | null;
   onCreate?: () => void;
   onAdvance?: (demand: FreightDemand, explicitNext?: FreightStageId) => Promise<void>;
@@ -2631,8 +2714,14 @@ function DemandWorkspace({
   const selectedDriver = drivers.find((driver) => driver.id === currentForm.driverId);
   const freightValue = parseFreightValue(currentForm.freightValue);
   const freightTonPrice = parseFreightValue(currentForm.freightTonPrice);
+  const manualAssetAssignment = assetAssignmentMode === "manual_per_freight";
   const availableDrivers = drivers.filter((driver) =>
-    isDriverAvailable(driver, currentForm.vehicleId, activeDriverIds),
+    isDriverAvailableForFreightMode(
+      driver,
+      currentForm.vehicleId,
+      activeDriverIds,
+      assetAssignmentMode,
+    ),
   );
   const validCreate =
     !!selectedVehicle &&
@@ -2641,24 +2730,27 @@ function DemandWorkspace({
     !!currentForm.recipientId &&
     !!currentForm.productId &&
     !!currentForm.freightPaymentType &&
+    (!manualAssetAssignment || Boolean(currentForm.trailerId)) &&
     (currentForm.freightPricingMode === "fixed" || Boolean(freightTonPrice)) &&
     isVehicleAvailableForFreight(selectedVehicle);
 
   const selectVehicle = (vehicleId: string) => {
     if (!setForm) return;
     const vehicle = vehicles.find((item) => item.id === vehicleId);
-    const linkedDriver = vehicle?.driverId
-      ? drivers.find((item) => item.id === vehicle.driverId)
-      : undefined;
-    const linkedTrailer = vehicle?.trailerId
-      ? trailers.find((item) => item.id === vehicle.trailerId)
-      : undefined;
+    const linkedDriver =
+      !manualAssetAssignment && vehicle?.driverId
+        ? drivers.find((item) => item.id === vehicle.driverId)
+        : undefined;
+    const linkedTrailer =
+      !manualAssetAssignment && vehicle?.trailerId
+        ? trailers.find((item) => item.id === vehicle.trailerId)
+        : undefined;
 
     setForm({
       ...currentForm,
       vehicleId,
-      driverId: linkedDriver?.id ?? "",
-      trailerId: linkedTrailer?.id ?? "",
+      driverId: manualAssetAssignment ? currentForm.driverId : (linkedDriver?.id ?? ""),
+      trailerId: manualAssetAssignment ? currentForm.trailerId : (linkedTrailer?.id ?? ""),
     });
   };
 
@@ -2801,10 +2893,10 @@ function DemandWorkspace({
           {mode === "create" && setForm ? (
             <div className="grid gap-3 md:grid-cols-2">
               <SelectorField
-                label="Veículo / placa"
+                label={manualAssetAssignment ? "Trator / placa" : "Veículo / placa"}
                 value={currentForm.vehicleId}
                 onChange={selectVehicle}
-                placeholder="Selecione o veículo"
+                placeholder={manualAssetAssignment ? "Selecione o trator" : "Selecione o veículo"}
                 options={vehicles.map((v) => ({
                   value: v.id,
                   label: `${v.plate} · ${v.type} · ${v.city}/${v.state}`,
@@ -2812,28 +2904,34 @@ function DemandWorkspace({
                 }))}
               />
               <SelectorField
-                label="Motorista disponível"
+                label={manualAssetAssignment ? "Motorista" : "Motorista disponível"}
                 value={currentForm.driverId}
                 onChange={(value) => setForm({ ...currentForm, driverId: value })}
                 placeholder="Selecione o motorista"
                 options={availableDrivers.map((d) => ({
                   value: d.id,
-                  label: `${d.name} · ${d.cnh}`,
+                  label: `${d.name} · ${d.cnh || "CNH não informada"}`,
                 }))}
               />
               <SelectorField
-                label="Caçamba"
+                label={manualAssetAssignment ? "Caçamba do frete" : "Caçamba"}
                 value={currentForm.trailerId || "__none"}
                 onChange={(value) =>
                   setForm({ ...currentForm, trailerId: value === "__none" ? "" : value })
                 }
                 placeholder="Selecione a caçamba"
                 options={[
-                  { value: "__none", label: "Sem caçamba" },
+                  {
+                    value: "__none",
+                    label: manualAssetAssignment ? "Selecione uma caçamba" : "Sem caçamba",
+                    disabled: manualAssetAssignment,
+                  },
                   ...trailers.map((t) => ({
                     value: t.id,
-                    label: `${t.identifier} · ${t.type}`,
-                    disabled: !!t.vehicleId && t.vehicleId !== currentForm.vehicleId,
+                    label: `${t.identifier} · ${t.implementModel || t.type}`,
+                    disabled: manualAssetAssignment
+                      ? activeTrailerIds.has(t.id)
+                      : !!t.vehicleId && t.vehicleId !== currentForm.vehicleId,
                   })),
                 ]}
               />
@@ -4046,6 +4144,18 @@ function isDriverAvailable(driver: Driver, vehicleId: string, activeDriverIds: S
   if (activeDriverIds.has(driver.id)) return false;
   if (driver.vehicleId && driver.vehicleId !== vehicleId) return false;
   return true;
+}
+
+function isDriverAvailableForFreightMode(
+  driver: Driver,
+  vehicleId: string,
+  activeDriverIds: Set<string>,
+  assetAssignmentMode: AssetAssignmentMode,
+) {
+  if (assetAssignmentMode === "manual_per_freight") {
+    return driver.active && !activeDriverIds.has(driver.id);
+  }
+  return isDriverAvailable(driver, vehicleId, activeDriverIds);
 }
 
 function noteLabel(demand: FreightDemand) {
