@@ -1,0 +1,55 @@
+name: Forge Wave 0 Verification
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - forge/wave0-security-foundation
+
+concurrency:
+  group: forge-wave0-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app-builds:
+    name: Build Master + Central
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+      - name: Build Master
+        run: bun run build
+      - name: Install Central dependencies
+        working-directory: central-dias-main
+        run: bun install --frozen-lockfile
+      - name: Build Central
+        working-directory: central-dias-main
+        run: bun run build
+
+  database-verification:
+    name: Supabase migrations + DB tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install Supabase CLI dependency
+        working-directory: central-dias-main
+        run: bun install --frozen-lockfile
+      - name: Start isolated Supabase
+        run: bunx --cwd central-dias-main supabase start -x studio,imgproxy,edge-runtime,logflare,vector
+      - name: Apply all migrations from zero
+        run: bunx --cwd central-dias-main supabase db reset
+      - name: Run database tests
+        run: bunx --cwd central-dias-main supabase test db
+      - name: Stop isolated Supabase
+        if: always()
+        run: bunx --cwd central-dias-main supabase stop --no-backup
