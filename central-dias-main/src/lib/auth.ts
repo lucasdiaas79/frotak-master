@@ -59,7 +59,7 @@ interface MembershipProfileRow {
 function profileFromRow(row: ProfileRow): Profile {
   return {
     id: row.id,
-    tenantId: row.tenant_id ?? "00000000-0000-0000-0000-000000000001",
+    tenantId: row.tenant_id ?? DEFAULT_TENANT_ID,
     name: row.name ?? row.full_name ?? "",
     email: row.email ?? "",
     role: row.role ?? "operador",
@@ -101,6 +101,13 @@ function saveLocalSession(session: LocalSession) {
   window.localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify(session));
   window.localStorage.setItem("frotak-active-tenant-id", session.profile.tenantId);
   window.localStorage.setItem("frotak-active-tenant-name", session.profile.name);
+}
+
+function allowInsecureLocalSso() {
+  if (typeof window === "undefined") return false;
+  const hostname = window.location.hostname;
+  const isLocal = hostname === "localhost" || hostname === "127.0.0.1";
+  return isLocal && import.meta.env.VITE_ALLOW_INSECURE_LOCAL_SSO === "true";
 }
 
 export function shouldUseLocalTenantData() {
@@ -164,32 +171,63 @@ export async function acceptMasterSsoFromUrl(search: string) {
   for (const [key, value] of hashParams.entries()) {
     if (!params.has(key)) params.set(key, value);
   }
+
   const token = params.get("sso_token");
   const refreshToken = params.get("refresh_token");
   const source = params.get("source");
 
-  if (!token || source !== "frotak-master") return readLocalSession();
+  if (!token || source !== MASTER_SSO_SOURCE) return readLocalSession();
 
-  const tenantId = params.get("tenant_id") || DEFAULT_TENANT_ID;
-  const clientName = params.get("client_name") || "Central Transportes";
-  const email = params.get("login_hint") || CENTRAL_DEMO_EMAIL;
-  let userId: string | undefined;
-
-  if (hasSupabaseConfig() && refreshToken) {
-    try {
-      const { data, error } = await supabase.auth.setSession({
-        access_token: token,
-        refresh_token: refreshToken,
-      });
-      if (error) throw error;
-      userId = data.session?.user.id;
-    } catch {
-      console.warn("Master SSO Supabase session was not persisted; using tenant session.");
+  if (!hasSupabaseConfig()) {
+    if (!allowInsecureLocalSso()) {
+      throw new Error("SSO do Master exige Supabase configurado.");
     }
+
+    const session = createLocalSession({
+      email: params.get("login_hint") || CENTRAL_DEMO_EMAIL,
+      name: params.get("client_name") || "FROTAK LAB",
+      tenantId: params.get("tenant_id") || DEFAULT_TENANT_ID,
+    });
+    saveLocalSession(session);
+    window.localStorage.setItem("frotak-sso-source", MASTER_SSO_SOURCE);
+    window.history.replaceState(null, "", window.location.pathname);
+    return session;
   }
 
-  const session = createLocalSession({ email, name: clientName, tenantId, userId });
+  if (!refreshToken) {
+    throw new Error("Handoff do Master incompleto: refresh token ausente.");
+  }
 
+  const { data, error } = await supabase.auth.setSession({
+    access_token: token,
+    refresh_token: refreshToken,
+  });
+
+  if (error || !data.session?.user) {
+    await supabase.auth.signOut();
+    throw new Error("Handoff do Master inválido ou expirado.");
+  }
+
+  const profile = await getProfile(data.session.user.id);
+  if (!profile?.active || !profile.tenantId) {
+    await supabase.auth.signOut();
+    throw new Error("Usuário do Master sem tenant ativo na Central.");
+  }
+
+  const requestedTenantId = params.get("tenant_id");
+  if (requestedTenantId && requestedTenantId !== profile.tenantId) {
+    await supabase.auth.signOut();
+    throw new Error("Tenant do handoff não corresponde ao tenant autorizado.");
+  }
+
+  const session = createLocalSession({
+    email: data.session.user.email || profile.email,
+    name: profile.name,
+    tenantId: profile.tenantId,
+    userId: data.session.user.id,
+  });
+
+  session.profile = profile;
   saveLocalSession(session);
   window.localStorage.setItem("frotak-sso-source", MASTER_SSO_SOURCE);
   window.history.replaceState(null, "", window.location.pathname);
@@ -318,7 +356,6 @@ export async function getCurrentUser(): Promise<User | null> {
   }
 
   const local = readLocalSession();
-
   if (local) return local.user;
   return null;
 }
