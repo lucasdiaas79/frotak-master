@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useFleet } from "@/lib/store";
+import { useManualFreightAssetMode } from "@/lib/tenantDriverApp";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Modal } from "@/components/Modal";
@@ -71,6 +72,7 @@ const blank: Vehicle = {
 
 function VeiculosPage() {
   const { vehicles, drivers, trailers, upsertVehicle, deleteVehicle, link } = useFleet();
+  const manualFreightAssetMode = useManualFreightAssetMode();
   const [search, setSearch] = useState("");
   const [statusF, setStatusF] = useState<string>("all");
   const [ufF, setUfF] = useState<string>("all");
@@ -106,12 +108,15 @@ function VeiculosPage() {
   const driverName = (id?: string) => drivers.find((d) => d.id === id)?.name ?? "-";
   const trailerName = (vehicle: Vehicle) => vehicleTrailerLabel(vehicle, trailers);
   const exportCsv = () => {
-    const header =
-      "Tipo;Marca;Modelo;Ano;Placa;Renavam;Situação;Status;Motorista;Caçamba;Cidade;UF\n";
+    const header = manualFreightAssetMode
+      ? "Tipo;Marca;Modelo;Ano;Placa;Renavam;Situação;Status;Caçamba;Cidade;UF\n"
+      : "Tipo;Marca;Modelo;Ano;Placa;Renavam;Situação;Status;Motorista;Caçamba;Cidade;UF\n";
     const rows = filtered
       .map(
         (v) =>
-          `${v.fleetKind || v.type};${v.brand ?? ""};${v.model ?? ""};${v.manufactureYear ?? ""};${v.plate};${v.renavam ?? ""};${VEHICLE_SITUATION_LABEL[v.situation]};${VEHICLE_STATUS_LABEL[v.status]};${driverName(v.driverId)};${trailerName(v)};${v.city};${v.state}`,
+          manualFreightAssetMode
+            ? `${v.fleetKind || v.type};${v.brand ?? ""};${v.model ?? ""};${v.manufactureYear ?? ""};${v.plate};${v.renavam ?? ""};${VEHICLE_SITUATION_LABEL[v.situation]};${VEHICLE_STATUS_LABEL[v.status]};${trailerName(v)};${v.city};${v.state}`
+            : `${v.fleetKind || v.type};${v.brand ?? ""};${v.model ?? ""};${v.manufactureYear ?? ""};${v.plate};${v.renavam ?? ""};${VEHICLE_SITUATION_LABEL[v.situation]};${VEHICLE_STATUS_LABEL[v.status]};${driverName(v.driverId)};${trailerName(v)};${v.city};${v.state}`,
       )
       .join("\n");
     const blob = new Blob([header + rows], { type: "text/csv" });
@@ -151,12 +156,12 @@ function VeiculosPage() {
         ? "DISPONIVEL"
         : stageFromLegacyStatus(editing.status),
     };
-    const desiredDriverId = normalized.driverId;
+    const desiredDriverId = manualFreightAssetMode ? undefined : normalized.driverId;
     const saved = await upsertVehicle({
       ...normalized,
-      driverId: original?.driverId,
+      driverId: manualFreightAssetMode ? undefined : original?.driverId,
     });
-    if ((original?.driverId ?? "") !== (normalized.driverId ?? "")) {
+    if (!manualFreightAssetMode && (original?.driverId ?? "") !== (normalized.driverId ?? "")) {
       await link(saved.id, desiredDriverId, saved.trailerId, {
         trailerIds: saved.trailerIds,
         senderId: saved.senderId,
@@ -275,7 +280,7 @@ function VeiculosPage() {
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className="data-table min-w-[1220px]">
+          <table className={`data-table ${manualFreightAssetMode ? "min-w-[1120px]" : "min-w-[1220px]"}`}>
             <thead>
               <tr>
                 <th>Tipo</th>
@@ -286,7 +291,7 @@ function VeiculosPage() {
                 <th>Renavam</th>
                 <th>Situação</th>
                 <th>Status</th>
-                <th>Motorista</th>
+                {!manualFreightAssetMode && <th>Motorista</th>}
                 <th>Caçamba</th>
                 <th className="text-right">Ações</th>
               </tr>
@@ -323,7 +328,9 @@ function VeiculosPage() {
                   <td>
                     <StatusBadge status={v.status} full />
                   </td>
-                  <td className="font-medium">{driverName(v.driverId)}</td>
+                  {!manualFreightAssetMode && (
+                    <td className="font-medium">{driverName(v.driverId)}</td>
+                  )}
                   <td className="font-sans text-[12px] text-muted-foreground">
                     {trailerName(v)}
                   </td>
@@ -356,7 +363,7 @@ function VeiculosPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center">
+                  <td colSpan={manualFreightAssetMode ? 10 : 11} className="py-12 text-center">
                     <div className="mx-auto flex max-w-sm flex-col items-center gap-2 text-muted-foreground">
                       <span className="inline-flex size-11 items-center justify-center rounded-full border border-border bg-surface-2">
                         <Search className="size-5" />
@@ -457,39 +464,41 @@ function VeiculosPage() {
                 placeholder="00349186146"
               />
             </Field>
-            <Field label="Motorista" full>
-              <Select
-                value={editing.driverId ?? "none"}
-                onValueChange={(value) =>
-                  setEditing({ ...editing, driverId: value === "none" ? undefined : value })
-                }
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sem motorista vinculado</SelectItem>
-                  {drivers
-                    .filter((driver) => driver.active)
-                    .map((driver) => {
-                      const linkedVehicle = vehicles.find(
-                        (vehicle) => vehicle.driverId === driver.id,
-                      );
-                      const linkedLabel =
-                        linkedVehicle && linkedVehicle.id !== editing.id
-                          ? ` · vinculado em ${linkedVehicle.plate}`
-                          : "";
+            {!manualFreightAssetMode && (
+              <Field label="Motorista" full>
+                <Select
+                  value={editing.driverId ?? "none"}
+                  onValueChange={(value) =>
+                    setEditing({ ...editing, driverId: value === "none" ? undefined : value })
+                  }
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem motorista vinculado</SelectItem>
+                    {drivers
+                      .filter((driver) => driver.active)
+                      .map((driver) => {
+                        const linkedVehicle = vehicles.find(
+                          (vehicle) => vehicle.driverId === driver.id,
+                        );
+                        const linkedLabel =
+                          linkedVehicle && linkedVehicle.id !== editing.id
+                            ? ` · vinculado em ${linkedVehicle.plate}`
+                            : "";
 
-                      return (
-                        <SelectItem key={driver.id} value={driver.id}>
-                          {driver.name}
-                          {linkedLabel}
-                        </SelectItem>
-                      );
-                    })}
-                </SelectContent>
-              </Select>
-            </Field>
+                        return (
+                          <SelectItem key={driver.id} value={driver.id}>
+                            {driver.name}
+                            {linkedLabel}
+                          </SelectItem>
+                        );
+                      })}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
             <Field label="Situação operacional" full>
               <Select
                 value={editing.situation}
@@ -596,7 +605,9 @@ function VeiculosPage() {
             <Info label="Status" value={<StatusBadge status={viewing.status} full />} />
             <Info label="Situação" value={VEHICLE_SITUATION_LABEL[viewing.situation]} />
             <Info label="Atualizado" value={formatRelative(viewing.updatedAt)} />
-            <Info label="Motorista" value={driverName(viewing.driverId)} />
+            {!manualFreightAssetMode && (
+              <Info label="Motorista" value={driverName(viewing.driverId)} />
+            )}
             <Info
               label="Caçamba"
               value={<span className="font-sans">{trailerName(viewing)}</span>}

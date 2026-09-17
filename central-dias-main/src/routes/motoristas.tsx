@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useFleet } from "@/lib/store";
 import { getCurrentAccessToken } from "@/lib/auth";
 import { createDriverAppAccess } from "@/lib/driverAppUsers";
+import { useManualFreightAssetMode } from "@/lib/tenantDriverApp";
 import { PageHeader } from "@/components/PageHeader";
 import { Modal } from "@/components/Modal";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ const blank: Driver = { id: "", name: "", phone: "", cnh: "", active: true };
 
 function MotoristasPage() {
   const { drivers, vehicles, trailers, upsertDriver, link } = useFleet();
+  const manualFreightAssetMode = useManualFreightAssetMode();
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<Driver | null>(null);
@@ -167,8 +169,8 @@ function MotoristasPage() {
                 <th>Telefone</th>
                 <th>CNH</th>
                 <th>Status</th>
-                <th>Ve?culo vinculado</th>
-                <th>Caçambas</th>
+                {!manualFreightAssetMode && <th>Ve?culo vinculado</th>}
+                {!manualFreightAssetMode && <th>Caçambas</th>}
                 <th className="text-right">Ações</th>
               </tr>
             </thead>
@@ -188,22 +190,28 @@ function MotoristasPage() {
                   <td>
                     <StatusPill active={d.active} />
                   </td>
-                  <td className="font-sans text-[12.5px]">{vehiclePlate(d.vehicleId)}</td>
-                  <td className="font-sans text-[12.5px] text-muted-foreground">
-                    {vehicleTrailers(d.vehicleId)}
-                  </td>
+                  {!manualFreightAssetMode && (
+                    <td className="font-sans text-[12.5px]">{vehiclePlate(d.vehicleId)}</td>
+                  )}
+                  {!manualFreightAssetMode && (
+                    <td className="font-sans text-[12.5px] text-muted-foreground">
+                      {vehicleTrailers(d.vehicleId)}
+                    </td>
+                  )}
                   <td>
                     <div className="flex justify-end gap-1">
-                      <button
-                        onClick={() => {
-                          setLinking(d);
-                          setLinkVehicleId(d.vehicleId ?? "");
-                        }}
-                        className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
-                        title="Vincular"
-                      >
-                        <Link2 className="size-3.5" />
-                      </button>
+                      {!manualFreightAssetMode && (
+                        <button
+                          onClick={() => {
+                            setLinking(d);
+                            setLinkVehicleId(d.vehicleId ?? "");
+                          }}
+                          className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+                          title="Vincular"
+                        >
+                          <Link2 className="size-3.5" />
+                        </button>
+                      )}
                       <button
                         onClick={() => setEditing(d)}
                         className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
@@ -217,7 +225,7 @@ function MotoristasPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center">
+                  <td colSpan={manualFreightAssetMode ? 5 : 7} className="py-12 text-center">
                     <div className="mx-auto flex max-w-sm flex-col items-center gap-2 text-muted-foreground">
                       <span className="inline-flex size-11 items-center justify-center rounded-full border border-border bg-surface-2">
                         <Search className="size-5" />
@@ -293,7 +301,7 @@ function MotoristasPage() {
       </Modal>
 
       <Modal
-        open={!!linking}
+        open={!manualFreightAssetMode && !!linking}
         onOpenChange={(o) => !o && setLinking(null)}
         title={`Vincular ${linking?.name ?? ""} a um veículo`}
         footer={
