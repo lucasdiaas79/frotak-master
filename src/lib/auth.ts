@@ -4,7 +4,6 @@ import { clients, type Client } from "@/lib/mock";
 const PLATFORM_SESSION_CACHE_KEY = "frotak-master-platform-session-cache";
 const AUTH_USERS_STORAGE_KEY = "frotak-master-users";
 const AUTH_EVENT = "frotak-auth-change";
-const CLIENT_TOKEN_TTL_MS = 10 * 60 * 1000;
 
 type AuthProvider = "supabase";
 type UserScope = "master" | "client";
@@ -40,10 +39,20 @@ export type AuthSession = {
   expiresAt: string;
 };
 
+export type ClientHandoffContext = {
+  clientUrl?: string;
+  accessToken: string;
+  clientId?: string;
+  tenantId: string;
+  clientName?: string;
+  email: string;
+};
+
 export type AuthResult = {
   session: AuthSession | null;
   redirectTo: string;
   external: boolean;
+  clientHandoff?: ClientHandoffContext;
 };
 
 export type AuthGateState =
@@ -192,35 +201,6 @@ function getSupabaseBrowserWithAccessToken(accessToken: string) {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
-}
-
-function slugify(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
-
-function base64Url(value: string) {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte);
-  });
-
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function createToken(payload: Record<string, unknown>) {
-  return base64Url(
-    JSON.stringify({
-      ...payload,
-      nonce: crypto.randomUUID(),
-      issuedAt: new Date().toISOString(),
-    }),
-  );
 }
 
 function getClientAppUrl() {
@@ -457,23 +437,24 @@ export async function authenticate(email: string, password: string, fallbackRedi
   }
 
   const settings = tenant.settings ?? {};
-  const clientUrl =
+  const configuredClientUrl =
     !isLocalMasterHost() && typeof settings.clientUrl === "string" && settings.clientUrl.trim()
       ? settings.clientUrl.trim()
       : undefined;
+  const targetClientUrl = configuredClientUrl || getClientAppUrl();
 
   return {
     session: null,
-    redirectTo: buildClientAccessUrl({
-      clientUrl,
+    redirectTo: targetClientUrl,
+    external: true,
+    clientHandoff: {
+      clientUrl: targetClientUrl,
       accessToken: session.access_token,
-      refreshToken: session.refresh_token,
       clientId: tenant.id,
       tenantId: tenant.id,
       clientName: tenant.trade_name || tenant.legal_name || workspace.name,
       email: session.user.email ?? normalizeEmail(email),
-    }),
-    external: true,
+    },
   } satisfies AuthResult;
 }
 
@@ -568,60 +549,4 @@ export function createClientAccess(input: CreateClientAccessInput) {
 
   saveStoredUsers([...storedUsers, user]);
   return user;
-}
-
-export function buildClientAccessUrl(session: {
-  clientUrl?: string;
-  accessToken: string;
-  refreshToken?: string;
-  clientId?: string;
-  tenantId?: string;
-  clientName?: string;
-  email: string;
-}) {
-  const baseUrl = session.clientUrl || getClientAppUrl();
-  const url = new URL(baseUrl);
-  url.pathname = "/";
-  url.hash = "";
-  url.search = "";
-
-  const handoffParams = new URLSearchParams();
-  handoffParams.set("sso_token", session.accessToken);
-  if (session.refreshToken) handoffParams.set("refresh_token", session.refreshToken);
-  handoffParams.set("client_id", session.clientId || "");
-  handoffParams.set("tenant_id", session.tenantId || session.clientId || "");
-  handoffParams.set("client_name", session.clientName || "");
-  handoffParams.set("login_hint", session.email);
-  handoffParams.set("source", "frotak-master");
-  url.hash = handoffParams.toString();
-
-  return url.toString();
-}
-
-export function createClientImpersonationUrl(
-  client: Client & { tenantId?: string; loginEmail?: string },
-) {
-  const masterSession = getSession();
-  const expiresAt = new Date(Date.now() + CLIENT_TOKEN_TTL_MS).toISOString();
-  const tenantId = client.tenantId || client.id;
-  const token = createToken({
-    type: "impersonation",
-    actorEmail: masterSession?.email,
-    actorName: masterSession?.name,
-    clientId: client.id,
-    tenantId,
-    clientName: client.name,
-    exp: expiresAt,
-  });
-  const url = new URL(buildClientUrl(client));
-
-  url.searchParams.set("sso_token", token);
-  url.searchParams.set("client_id", client.id);
-  url.searchParams.set("tenant_id", tenantId);
-  url.searchParams.set("client_name", client.name);
-  url.searchParams.set("login_hint", client.loginEmail || "");
-  url.searchParams.set("source", "frotak-master");
-  url.searchParams.set("mode", "impersonation");
-
-  return url.toString();
 }
