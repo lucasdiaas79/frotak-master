@@ -161,6 +161,13 @@ function createLocalSession(input: {
   };
 }
 
+/**
+ * Compatibilidade estritamente local para URLs SSO antigas.
+ *
+ * Em qualquer ambiente com Supabase configurado, access/refresh token na URL
+ * e recusado. O fluxo real Master -> Central usa `handoff_code` de uso unico
+ * em `/login`, trocado pela Edge Function client-handoff.
+ */
 export async function acceptMasterSsoFromUrl(search: string) {
   if (!canUseStorage()) return null;
   const params = new URLSearchParams(search);
@@ -173,64 +180,25 @@ export async function acceptMasterSsoFromUrl(search: string) {
   }
 
   const token = params.get("sso_token");
-  const refreshToken = params.get("refresh_token");
   const source = params.get("source");
 
   if (!token || source !== MASTER_SSO_SOURCE) return readLocalSession();
 
-  if (!hasSupabaseConfig()) {
-    if (!allowInsecureLocalSso()) {
-      throw new Error("SSO do Master exige Supabase configurado.");
-    }
+  // Nunca deixe token legado permanecer na barra/historico, mesmo ao recusar.
+  window.history.replaceState(null, "", window.location.pathname);
 
-    const session = createLocalSession({
-      email: params.get("login_hint") || CENTRAL_DEMO_EMAIL,
-      name: params.get("client_name") || "FROTAK LAB",
-      tenantId: params.get("tenant_id") || DEFAULT_TENANT_ID,
-    });
-    saveLocalSession(session);
-    window.localStorage.setItem("frotak-sso-source", MASTER_SSO_SOURCE);
-    window.history.replaceState(null, "", window.location.pathname);
-    return session;
-  }
-
-  if (!refreshToken) {
-    throw new Error("Handoff do Master incompleto: refresh token ausente.");
-  }
-
-  const { data, error } = await supabase.auth.setSession({
-    access_token: token,
-    refresh_token: refreshToken,
-  });
-
-  if (error || !data.session?.user) {
-    await supabase.auth.signOut();
-    throw new Error("Handoff do Master inválido ou expirado.");
-  }
-
-  const profile = await getProfile(data.session.user.id);
-  if (!profile?.active || !profile.tenantId) {
-    await supabase.auth.signOut();
-    throw new Error("Usuário do Master sem tenant ativo na Central.");
-  }
-
-  const requestedTenantId = params.get("tenant_id");
-  if (requestedTenantId && requestedTenantId !== profile.tenantId) {
-    await supabase.auth.signOut();
-    throw new Error("Tenant do handoff não corresponde ao tenant autorizado.");
+  if (hasSupabaseConfig() || !allowInsecureLocalSso()) {
+    await supabase.auth.signOut().catch(() => undefined);
+    throw new Error("SSO legado por token em URL foi desabilitado.");
   }
 
   const session = createLocalSession({
-    email: data.session.user.email || profile.email,
-    name: profile.name,
-    tenantId: profile.tenantId,
-    userId: data.session.user.id,
+    email: params.get("login_hint") || CENTRAL_DEMO_EMAIL,
+    name: params.get("client_name") || "FROTAK LAB",
+    tenantId: params.get("tenant_id") || DEFAULT_TENANT_ID,
   });
-
-  session.profile = profile;
   saveLocalSession(session);
   window.localStorage.setItem("frotak-sso-source", MASTER_SSO_SOURCE);
-  window.history.replaceState(null, "", window.location.pathname);
   return session;
 }
 
