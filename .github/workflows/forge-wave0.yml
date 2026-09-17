@@ -76,6 +76,23 @@ jobs:
         run: npx --yes supabase@2.98.2 start -x studio,imgproxy,edge-runtime,logflare,vector
       - name: Apply all migrations from zero
         run: npx --yes supabase@2.98.2 db reset
+      - name: Start local handoff Edge Function
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.98.2 functions serve client-handoff --no-verify-jwt > /tmp/client-handoff.log 2>&1 &
+          echo $! > /tmp/client-handoff.pid
+          for attempt in $(seq 1 45); do
+            if curl --silent --fail --request OPTIONS \
+              http://127.0.0.1:54321/functions/v1/client-handoff \
+              >/dev/null 2>&1; then
+              echo "client-handoff is ready."
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/client-handoff.log >&2 || true
+          exit 1
       - name: Run exception-based database tests
         shell: bash
         run: |
@@ -87,6 +104,17 @@ jobs:
             psql "${DB_URL}" --set=ON_ERROR_STOP=1 --file="${test_file}"
             echo "::endgroup::"
           done
+      - name: Run client handoff end-to-end test
+        shell: bash
+        run: |
+          set -euo pipefail
+          eval "$(npx --yes supabase@2.98.2 status -o env | grep -E '^(API_URL|ANON_KEY)=')"
+          export API_URL ANON_KEY
+          export DB_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          bash supabase/tests/wave0_client_handoff.sh
+      - name: Show handoff function log on failure
+        if: failure()
+        run: cat /tmp/client-handoff.log || true
       - name: Stop isolated Supabase
         if: always()
         run: npx --yes supabase@2.98.2 stop --no-backup || true
