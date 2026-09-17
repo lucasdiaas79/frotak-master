@@ -1,3 +1,5 @@
+import type { ClientHandoffContext } from "@/lib/auth";
+
 type HandoffCreateResponse = {
   code?: string;
   tenantId?: string;
@@ -18,22 +20,28 @@ function getSupabaseFunctionConfig() {
   return { url: url.replace(/\/$/, ""), key };
 }
 
-/**
- * Compatibilidade de transicao da Wave 0:
- * `authenticate()` ainda monta a URL legada internamente. Esta funcao nunca
- * navega para ela: extrai o JWT apenas em memoria, troca-o por um codigo curto
- * de uso unico via Edge Function e devolve uma URL sem access/refresh token.
- */
-export async function createSecureClientHandoffRedirect(legacyRedirectUrl: string) {
-  const legacyUrl = new URL(legacyRedirectUrl);
-  const legacyHash = legacyUrl.hash.startsWith("#") ? legacyUrl.hash.slice(1) : legacyUrl.hash;
-  const params = new URLSearchParams(legacyHash);
-  const accessToken = params.get("sso_token");
-  const tenantId = params.get("tenant_id");
-  const source = params.get("source");
+function getDefaultClientAppUrl() {
+  const configuredUrl = import.meta.env.VITE_FROTAK_CLIENT_APP_URL;
+  if (typeof configuredUrl === "string" && configuredUrl.trim()) return configuredUrl.trim();
 
-  if (!accessToken || !tenantId || source !== "frotak-master") {
-    throw new Error("Handoff legado incompleto; recusando fallback inseguro.");
+  if (typeof window !== "undefined") {
+    const hostname = window.location.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1") return "http://localhost:5174";
+  }
+
+  return "https://cliente.frotak.log.br";
+}
+
+/**
+ * Cria um ticket efemero usando o JWT somente no header Authorization. Nenhum
+ * access token ou refresh token e transformado em URL, query string ou hash.
+ */
+export async function createSecureClientHandoffRedirect(context: ClientHandoffContext) {
+  const accessToken = context.accessToken?.trim();
+  const tenantId = context.tenantId?.trim();
+
+  if (!accessToken || !tenantId) {
+    throw new Error("Handoff incompleto; recusando acesso inseguro.");
   }
 
   const { url, key } = getSupabaseFunctionConfig();
@@ -58,7 +66,7 @@ export async function createSecureClientHandoffRedirect(legacyRedirectUrl: strin
     throw new Error(payload.error || "Nao foi possivel criar handoff seguro.");
   }
 
-  const target = new URL(legacyUrl.origin);
+  const target = new URL(context.clientUrl || getDefaultClientAppUrl());
   target.pathname = "/login";
   target.search = "";
   target.hash = new URLSearchParams({
