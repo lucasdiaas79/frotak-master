@@ -3,12 +3,9 @@ name: Forge Wave 0 Verification
 on:
   pull_request:
     branches: [main]
-  push:
-    branches:
-      - forge/wave0-security-foundation
 
 concurrency:
-  group: forge-wave0-${{ github.ref }}
+  group: forge-wave0-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
