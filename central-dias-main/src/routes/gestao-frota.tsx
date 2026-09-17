@@ -727,7 +727,7 @@ function GestaoFrotaPage() {
 
   const availableDriverResources = useMemo<AvailableDriverResource[]>(() => {
     return vehicles
-      .filter((vehicle) => !vehicle.currentFreightId && isVehicleAvailableForFreight(vehicle))
+      .filter((vehicle) => isVehicleAvailableForFreightMode(vehicle, assetAssignmentMode))
       .map((vehicle) => {
         const driver = vehicle.driverId ? driversById.get(vehicle.driverId) : undefined;
         const linkedTrailer = vehicle.trailerId ? trailersById.get(vehicle.trailerId) : undefined;
@@ -773,7 +773,18 @@ function GestaoFrotaPage() {
         return true;
       })
       .sort((a, b) => a.vehicle.plate.localeCompare(b.vehicle.plate));
-  }, [vehicles, driversById, trailersById, trailers, search, stageF, implementModelF, ufF, sitF]);
+  }, [
+    vehicles,
+    driversById,
+    trailersById,
+    trailers,
+    search,
+    stageF,
+    implementModelF,
+    ufF,
+    sitF,
+    assetAssignmentMode,
+  ]);
 
   const filteredDemands = useMemo(() => {
     return demands.filter((demand) => {
@@ -1148,7 +1159,7 @@ function GestaoFrotaPage() {
       toast.error("Caçamba indisponível para novo frete.");
       return;
     }
-    if (!isVehicleAvailableForFreight(vehicle)) {
+    if (!isVehicleAvailableForFreightMode(vehicle, assetAssignmentMode)) {
       toast.error("Veículo indisponível para operação.");
       return;
     }
@@ -2732,7 +2743,7 @@ function DemandWorkspace({
     !!currentForm.freightPaymentType &&
     (!manualAssetAssignment || Boolean(currentForm.trailerId)) &&
     (currentForm.freightPricingMode === "fixed" || Boolean(freightTonPrice)) &&
-    isVehicleAvailableForFreight(selectedVehicle);
+    isVehicleAvailableForFreightMode(selectedVehicle, assetAssignmentMode);
 
   const selectVehicle = (vehicleId: string) => {
     if (!setForm) return;
@@ -2900,7 +2911,7 @@ function DemandWorkspace({
                 options={vehicles.map((v) => ({
                   value: v.id,
                   label: `${v.plate} · ${v.type} · ${v.city}/${v.state}`,
-                  disabled: !isVehicleAvailableForFreight(v),
+                  disabled: !isVehicleAvailableForFreightMode(v, assetAssignmentMode),
                 }))}
               />
               <SelectorField
@@ -2936,7 +2947,11 @@ function DemandWorkspace({
                 ]}
               />
               <Field label="Disponibilidade">
-                <Availability vehicle={selectedVehicle} driver={selectedDriver} />
+                <Availability
+                  vehicle={selectedVehicle}
+                  driver={selectedDriver}
+                  assetAssignmentMode={assetAssignmentMode}
+                />
               </Field>
             </div>
           ) : demand ? (
@@ -4087,8 +4102,16 @@ function IconButton({
   );
 }
 
-function Availability({ vehicle, driver }: { vehicle?: Vehicle; driver?: Driver }) {
-  const vehicleOk = vehicle ? isVehicleAvailableForFreight(vehicle) : false;
+function Availability({
+  vehicle,
+  driver,
+  assetAssignmentMode,
+}: {
+  vehicle?: Vehicle;
+  driver?: Driver;
+  assetAssignmentMode: AssetAssignmentMode;
+}) {
+  const vehicleOk = vehicle ? isVehicleAvailableForFreightMode(vehicle, assetAssignmentMode) : false;
   const driverOk = driver ? driver.active : false;
   return (
     <div className="space-y-2">
@@ -4125,6 +4148,18 @@ function isVehicleAvailableForFreight(
 ) {
   if (vehicle.currentFreightId) return false;
   return isAvailableVehicleSituation(vehicle.situation) || isAvailableVehicleStatus(vehicle.status);
+}
+
+function isVehicleAvailableForFreightMode(
+  vehicle: Pick<Vehicle, "currentFreightId" | "situation" | "status"> | undefined,
+  assetAssignmentMode: AssetAssignmentMode,
+) {
+  if (!vehicle || vehicle.currentFreightId) return false;
+  if (assetAssignmentMode !== "manual_per_freight") return isVehicleAvailableForFreight(vehicle);
+  if (isAvailableVehicleSituation(vehicle.situation) || isAvailableVehicleStatus(vehicle.status)) {
+    return true;
+  }
+  return vehicle.situation === "parado" && vehicle.status === "parado-aguardando-comando";
 }
 
 function canShowFinalCommands(demand: Pick<FreightDemand, "macroStage" | "status">) {
