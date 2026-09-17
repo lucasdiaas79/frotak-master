@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
+import { getCurrentAccessToken } from "@/lib/auth";
 
 export const FROTAK_AI_TEXT_MODEL = "gemini-3.1-flash-lite";
 export const FROTAK_AI_LIVE_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025";
@@ -305,7 +306,7 @@ function frotakAiSystemInstruction() {
   ].join(" ");
 }
 
-export const createFrotakLiveToken = createServerFn({ method: "POST" })
+const createFrotakLiveTokenServer = createServerFn({ method: "POST" })
   .inputValidator((input: { accessToken: string } | undefined) => ({
     accessToken: input?.accessToken ?? "",
   }))
@@ -367,7 +368,7 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" })
     }
   });
 
-export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
+const sendFrotakAiChatMessageServer = createServerFn({ method: "POST" })
   .inputValidator(
     (
       input:
@@ -421,3 +422,27 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
       throw new Error(publicError(error));
     }
   });
+
+async function currentAccessTokenOrThrow() {
+  const accessToken = await getCurrentAccessToken();
+  if (!accessToken) throw new Error("Sua sessao expirou. Entre novamente.");
+  return accessToken;
+}
+
+export async function createFrotakLiveToken() {
+  const accessToken = await currentAccessTokenOrThrow();
+  return createFrotakLiveTokenServer({ data: { accessToken } });
+}
+
+export async function sendFrotakAiChatMessage(input: {
+  data: { message: string; history?: FrotakAiMessage[] };
+}) {
+  const accessToken = await currentAccessTokenOrThrow();
+  return sendFrotakAiChatMessageServer({
+    data: {
+      accessToken,
+      message: input.data.message,
+      history: input.data.history,
+    },
+  });
+}
