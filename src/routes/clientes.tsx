@@ -52,6 +52,7 @@ import {
   getCurrentAccessToken,
   getSession,
 } from "@/lib/auth";
+import { createSecureClientHandoffRedirect } from "@/lib/clientHandoff";
 import { listManagedTenants, tenantFeatureCatalog, type ManagedTenant } from "@/lib/masterControl";
 import { provisionTenant } from "@/lib/tenantProvisioning";
 
@@ -270,25 +271,27 @@ function Clientes() {
     setEditing(client);
   }
 
-  function accessClient(client: ManagedTenant) {
+  async function accessClient(client: ManagedTenant) {
     const session = getSession();
     if (!session?.accessToken) {
       toast.error("Sessao do Master expirada. Entre novamente.");
       return;
     }
 
-    window.open(
-      buildClientAccessUrl({
+    try {
+      const legacyRedirect = buildClientAccessUrl({
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
         clientId: client.id,
         tenantId: client.tenantId,
         clientName: client.name,
         email: client.loginEmail || session.email,
-      }),
-      "_blank",
-      "noopener,noreferrer",
-    );
+      });
+      const secureRedirect = await createSecureClientHandoffRedirect(legacyRedirect);
+      window.open(secureRedirect, "_blank", "noopener,noreferrer");
+    } catch {
+      toast.error("Nao foi possivel criar um acesso seguro para este cliente.");
+    }
   }
 
   return (
