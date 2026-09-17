@@ -68,6 +68,7 @@ import {
   advanceFreightStage as advanceFreightStageOperation,
   applyFinalFreightCommand,
   createFreightOperation,
+  createLongTripFreightsOperation,
 } from "@/lib/freight-operations";
 import {
   FREIGHT_MACRO_STAGES,
@@ -139,7 +140,7 @@ export const Route = createFileRoute("/gestao-frota")({
 type Situacao = "all" | "operacao" | "parado" | "quebrado" | "manutencao" | "sem-vinculo";
 type ViewMode = "pipeline" | "table";
 type DemandMode = "create" | "detail";
-type FreightCreateMode = "individual" | "group";
+type FreightCreateMode = "individual" | "group" | "long-trip";
 type DocumentKind = "note" | "cte";
 type FinalCommand = "RETORNO_SOLICITADO" | "PRONTO_NOVO_FRETE";
 type AssetAssignmentMode = "fixed_vehicle" | "manual_per_freight";
@@ -231,6 +232,12 @@ interface GroupFreightFormState {
   vehicleIds: string[];
 }
 
+interface LongTripFormState {
+  vehicleId: string;
+  driverId: string;
+  segments: FreightFormState[];
+}
+
 const EMPTY_FORM: FreightFormState = {
   vehicleId: "",
   driverId: "",
@@ -259,6 +266,12 @@ const EMPTY_GROUP_FORM: GroupFreightFormState = {
   paymentTermTouched: false,
   observations: "",
   vehicleIds: [],
+};
+
+const EMPTY_LONG_TRIP_FORM: LongTripFormState = {
+  vehicleId: "",
+  driverId: "",
+  segments: [{ ...EMPTY_FORM }],
 };
 
 const STAGE_ICONS: Record<FreightStageId, LucideIcon> = {
@@ -444,6 +457,7 @@ function GestaoFrotaPage() {
   const [createMode, setCreateMode] = useState<FreightCreateMode>("individual");
   const [form, setForm] = useState<FreightFormState>(EMPTY_FORM);
   const [groupForm, setGroupForm] = useState<GroupFreightFormState>(EMPTY_GROUP_FORM);
+  const [longTripForm, setLongTripForm] = useState<LongTripFormState>(EMPTY_LONG_TRIP_FORM);
   const [intendedStageAfterCreation, setIntendedStageAfterCreation] =
     useState<FreightMacroStageId | null>(null);
   const [manualMove, setManualMove] = useState<{
@@ -910,9 +924,37 @@ function GestaoFrotaPage() {
         observations: seed?.observations ?? "",
         vehicleIds: seed?.vehicleId ? [seed.vehicleId] : [],
       });
+      setLongTripForm({
+        vehicleId: seed?.vehicleId ?? "",
+        driverId: seed?.driverId ?? "",
+        segments: [
+          {
+            ...EMPTY_FORM,
+            trailerId: seed?.trailerId ?? "",
+            senderId: seed?.senderId ?? "",
+            recipientId: seed?.recipientId ?? "",
+            productId: seed?.productId ?? "",
+            freightValue: seed?.freightValue ?? "",
+            freightTonPrice: seed?.freightTonPrice ?? "",
+            freightPricingMode: seed?.freightPricingMode ?? "fixed",
+            freightPaymentType: seed?.freightPaymentType ?? "",
+            paymentTermDays: seed?.paymentTermDays ?? "",
+            paymentTermTouched: seed?.paymentTermTouched ?? false,
+            observations: seed?.observations ?? "",
+          },
+        ],
+      });
       setDemandPanel({ mode: "create" });
     },
     [formWithVehicleDefaults],
+  );
+
+  const openLongTripCreate = useCallback(
+    (seed?: Partial<FreightFormState>) => {
+      openCreate(seed);
+      setCreateMode("long-trip");
+    },
+    [openCreate],
   );
 
   const openDemand = (id: string) => {
@@ -941,6 +983,7 @@ function GestaoFrotaPage() {
     setCreateMode("individual");
     setForm(EMPTY_FORM);
     setGroupForm(EMPTY_GROUP_FORM);
+    setLongTripForm(EMPTY_LONG_TRIP_FORM);
     if (!preserveIntendedStage) setIntendedStageAfterCreation(null);
   };
 
@@ -1287,6 +1330,73 @@ function GestaoFrotaPage() {
     closeDemandPanel();
   };
 
+  const createLongTripFreights = async () => {
+    const vehicle = vehicles.find((item) => item.id === longTripForm.vehicleId);
+    const driver = drivers.find((item) => item.id === longTripForm.driverId);
+    if (!vehicle || !driver) {
+      toast.error("Selecione trator e motorista para o tiro longo.");
+      return;
+    }
+
+    const segments = longTripForm.segments.filter(
+      (segment) => segment.senderId || segment.recipientId || segment.productId,
+    );
+    if (segments.length === 0) {
+      toast.error("Adicione pelo menos um frete ao tiro longo.");
+      return;
+    }
+
+    const invalidSegmentIndex = segments.findIndex((segment) => {
+      const fixedValue = parseFreightValue(segment.freightValue);
+      const tonPrice = parseFreightValue(segment.freightTonPrice);
+      return (
+        !segment.senderId ||
+        !segment.recipientId ||
+        !segment.productId ||
+        !segment.trailerId ||
+        !segment.freightPaymentType ||
+        (segment.freightPricingMode === "fixed" && !fixedValue) ||
+        (segment.freightPricingMode === "per_ton" && !tonPrice)
+      );
+    });
+    if (invalidSegmentIndex >= 0) {
+      toast.error(`Complete os dados do frete ${invalidSegmentIndex + 1} do tiro longo.`);
+      return;
+    }
+
+    try {
+      const result = await createLongTripFreightsOperation({
+        vehicleId: vehicle.id,
+        driverId: driver.id,
+        segments: segments.map((segment) => ({
+          trailerId: segment.trailerId,
+          senderId: segment.senderId,
+          recipientId: segment.recipientId,
+          productId: segment.productId,
+          freightValue:
+            segment.freightPricingMode === "fixed"
+              ? parseFreightValue(segment.freightValue)
+              : undefined,
+          freightPricingMode: segment.freightPricingMode,
+          freightTonPrice:
+            segment.freightPricingMode === "per_ton"
+              ? parseFreightValue(segment.freightTonPrice)
+              : undefined,
+          freightPaymentType: segment.freightPaymentType as FreightPaymentType,
+          paymentTermDays: parsePaymentTermDays(segment.paymentTermDays),
+          observations: segment.observations,
+        })),
+      });
+      toast.success(result.startedNow ? "Tiro longo criado" : "Fretes adicionados ao tiro longo", {
+        description: `${result.segmentCount ?? segments.length} frete(s) na rota de ${driver.name}.`,
+      });
+      closeDemandPanel();
+      await loadAll();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível criar o tiro longo.");
+    }
+  };
+
   const confirmCloseFreight = async () => {
     if (!closeFreightDemand) return;
     try {
@@ -1546,6 +1656,8 @@ function GestaoFrotaPage() {
             setIndividualForm={setForm}
             groupForm={groupForm}
             setGroupForm={setGroupForm}
+            longTripForm={longTripForm}
+            setLongTripForm={setLongTripForm}
             vehicles={vehicles}
             drivers={drivers}
             trailers={trailers}
@@ -1560,6 +1672,7 @@ function GestaoFrotaPage() {
             suggestedGroupPaymentTerm={suggestedGroupPaymentTerm}
             onCreateIndividual={createFreight}
             onCreateGroup={createGroupFreight}
+            onCreateLongTrip={createLongTripFreights}
           />
         ) : selectedDemand ? (
           <DemandWorkspace
@@ -1579,6 +1692,16 @@ function GestaoFrotaPage() {
             onDocument={handleDocument}
             onApproveNote={approveNote}
             onRejectNote={rejectNote}
+            onAddLongTripFreight={
+              manualAssetAssignment
+                ? (demand) =>
+                    openLongTripCreate({
+                      vehicleId: demand.id,
+                      driverId: demand.driver?.id ?? demand.driverId ?? "",
+                      trailerId: demand.trailerId ?? demand.trailerIds?.[0] ?? "",
+                    })
+                : undefined
+            }
           />
         ) : null}
       </Modal>
@@ -2279,6 +2402,8 @@ function CreateFreightWorkspace({
   setIndividualForm,
   groupForm,
   setGroupForm,
+  longTripForm,
+  setLongTripForm,
   vehicles,
   drivers,
   trailers,
@@ -2293,6 +2418,7 @@ function CreateFreightWorkspace({
   suggestedGroupPaymentTerm,
   onCreateIndividual,
   onCreateGroup,
+  onCreateLongTrip,
 }: {
   createMode: FreightCreateMode;
   setCreateMode: (mode: FreightCreateMode) => void;
@@ -2300,6 +2426,8 @@ function CreateFreightWorkspace({
   setIndividualForm: (form: FreightFormState) => void;
   groupForm: GroupFreightFormState;
   setGroupForm: (form: GroupFreightFormState) => void;
+  longTripForm: LongTripFormState;
+  setLongTripForm: (form: LongTripFormState) => void;
   vehicles: Vehicle[];
   drivers: Driver[];
   trailers: Trailer[];
@@ -2314,14 +2442,18 @@ function CreateFreightWorkspace({
   suggestedGroupPaymentTerm: number | null;
   onCreateIndividual: () => void;
   onCreateGroup: () => void;
+  onCreateLongTrip: () => void;
 }) {
   const manualAssetAssignment = assetAssignmentMode === "manual_per_freight";
   const activeCreateMode = manualAssetAssignment ? "individual" : createMode;
+  const createModes: FreightCreateMode[] = manualAssetAssignment
+    ? ["individual", "long-trip"]
+    : ["individual", "group"];
 
   return (
     <div className="space-y-4">
       <div className="inline-flex rounded-2xl border border-border bg-surface-2/70 p-1">
-        {(["individual", ...(manualAssetAssignment ? [] : ["group"])] as FreightCreateMode[]).map((mode) => (
+        {createModes.map((mode) => (
           <button
             key={mode}
             type="button"
@@ -2333,7 +2465,11 @@ function CreateFreightWorkspace({
                 : "text-muted-foreground hover:bg-accent",
             )}
           >
-            {mode === "individual" ? "Criar Frete Individual" : "Criar Frete em Grupo"}
+            {mode === "individual"
+              ? "Criar Frete Individual"
+              : mode === "long-trip"
+                ? "Tiro longo"
+                : "Criar Frete em Grupo"}
           </button>
         ))}
       </div>
@@ -2345,7 +2481,20 @@ function CreateFreightWorkspace({
         </div>
       )}
 
-      {activeCreateMode === "individual" ? (
+      {manualAssetAssignment && createMode === "long-trip" ? (
+        <LongTripWorkspace
+          form={longTripForm}
+          setForm={setLongTripForm}
+          vehicles={vehicles}
+          drivers={drivers}
+          trailers={trailers}
+          senders={senders}
+          recipients={recipients}
+          products={products}
+          activeTrailerIds={activeTrailerIds}
+          onCreate={onCreateLongTrip}
+        />
+      ) : activeCreateMode === "individual" ? (
         <DemandWorkspace
           mode="create"
           form={individualForm}
@@ -2677,6 +2826,272 @@ function GroupFreightWorkspace({
   );
 }
 
+function LongTripWorkspace({
+  form,
+  setForm,
+  vehicles,
+  drivers,
+  trailers,
+  senders,
+  recipients,
+  products,
+  onCreate,
+}: {
+  form: LongTripFormState;
+  setForm: (form: LongTripFormState) => void;
+  vehicles: Vehicle[];
+  drivers: Driver[];
+  trailers: Trailer[];
+  senders: Sender[];
+  recipients: Recipient[];
+  products: Product[];
+  activeTrailerIds: Set<string>;
+  onCreate: () => void;
+}) {
+  const selectedVehicle = vehicles.find((vehicle) => vehicle.id === form.vehicleId);
+  const selectedDriver = drivers.find((driver) => driver.id === form.driverId);
+  const canCreate = Boolean(form.vehicleId && form.driverId && form.segments.length > 0);
+
+  const setSegment = (index: number, patch: Partial<FreightFormState>) => {
+    setForm({
+      ...form,
+      segments: form.segments.map((segment, currentIndex) =>
+        currentIndex === index ? { ...segment, ...patch } : segment,
+      ),
+    });
+  };
+
+  const addSegment = () => {
+    const last = form.segments[form.segments.length - 1];
+    setForm({
+      ...form,
+      segments: [
+        ...form.segments,
+        {
+          ...EMPTY_FORM,
+          trailerId: last?.trailerId ?? "",
+          freightPricingMode: last?.freightPricingMode ?? "fixed",
+          freightPaymentType: last?.freightPaymentType ?? "",
+          paymentTermDays: last?.paymentTermDays ?? "",
+        },
+      ],
+    });
+  };
+
+  const removeSegment = (index: number) => {
+    if (form.segments.length === 1) return;
+    setForm({ ...form, segments: form.segments.filter((_, currentIndex) => currentIndex !== index) });
+  };
+
+  const selectVehicle = (vehicleId: string) => {
+    const vehicle = vehicles.find((item) => item.id === vehicleId);
+    setForm({
+      ...form,
+      vehicleId,
+      driverId: vehicle?.currentFreightId && vehicle.driverId ? vehicle.driverId : form.driverId,
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <Block
+        step="1"
+        icon={RouteIcon}
+        title="Tiro longo"
+        subtitle="Cadastre uma viagem com vários fretes ordenados para o mesmo motorista."
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          <SelectorField
+            label="Trator / placa"
+            value={form.vehicleId}
+            onChange={selectVehicle}
+            placeholder="Selecione o trator"
+            options={vehicles.map((vehicle) => ({
+              value: vehicle.id,
+              label: `${vehicle.plate} · ${vehicle.type} · ${
+                vehicle.currentFreightId ? "em viagem" : "livre"
+              }`,
+            }))}
+          />
+          <SelectorField
+            label="Motorista"
+            value={form.driverId}
+            onChange={(value) => setForm({ ...form, driverId: value })}
+            placeholder="Selecione o motorista"
+            options={drivers
+              .filter((driver) => driver.active)
+              .map((driver) => ({
+                value: driver.id,
+                label: `${driver.name} · ${driver.cnh || "CNH não informada"}`,
+                disabled: Boolean(
+                  selectedVehicle?.currentFreightId &&
+                    selectedVehicle.driverId &&
+                    selectedVehicle.driverId !== driver.id,
+                ),
+              }))}
+          />
+        </div>
+        <div className="mt-3 rounded-2xl border border-border bg-surface-2/50 px-4 py-3 text-[12.5px] text-muted-foreground">
+          {selectedVehicle?.currentFreightId
+            ? `Este trator já está em operação. Os fretes abaixo serão adicionados à fila da viagem atual de ${selectedDriver?.name ?? "motorista selecionado"}.`
+            : "O primeiro frete será liberado ao motorista agora; os demais ficarão na fila da mesma viagem."}
+        </div>
+      </Block>
+
+      <Block
+        step="2"
+        icon={ListChecks}
+        title="Fretes da rota"
+        subtitle="Ordene os trechos na sequência que o motorista deve executar."
+      >
+        <div className="space-y-3">
+          {form.segments.map((segment, index) => {
+            const priceField =
+              segment.freightPricingMode === "per_ton" ? "freightTonPrice" : "freightValue";
+            return (
+              <div key={index} className="rounded-2xl border border-border bg-background/55 p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="label-tiny">Frete {index + 1}</p>
+                    <h3 className="text-[14px] font-extrabold text-foreground">
+                      {index === 0 && !selectedVehicle?.currentFreightId
+                        ? "Frete atual"
+                        : "Próximo frete"}
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeSegment(index)}
+                    disabled={form.segments.length === 1}
+                    className="inline-flex size-8 items-center justify-center rounded-full text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive disabled:opacity-30"
+                    title="Remover frete"
+                  >
+                    <XCircle className="size-4" />
+                  </button>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <SelectorField
+                    label="Remetente / origem"
+                    value={segment.senderId}
+                    onChange={(value) => setSegment(index, { senderId: value })}
+                    placeholder="Selecione o remetente"
+                    options={senders
+                      .filter((sender) => sender.active)
+                      .map((sender) => ({
+                        value: sender.id,
+                        label: `${sender.name} · ${sender.city}/${sender.state}`,
+                      }))}
+                  />
+                  <SelectorField
+                    label="Destinatário / destino"
+                    value={segment.recipientId}
+                    onChange={(value) => setSegment(index, { recipientId: value })}
+                    placeholder="Selecione o destinatário"
+                    options={recipients
+                      .filter((recipient) => recipient.active)
+                      .map((recipient) => ({
+                        value: recipient.id,
+                        label: `${recipient.name} · ${recipient.city}/${recipient.state}`,
+                      }))}
+                  />
+                  <SelectorField
+                    label="Produto"
+                    value={segment.productId}
+                    onChange={(value) => setSegment(index, { productId: value })}
+                    placeholder="Selecione o produto"
+                    options={products
+                      .filter((product) => product.active)
+                      .map((product) => ({ value: product.id, label: product.name }))}
+                  />
+                  <SelectorField
+                    label="Caçamba"
+                    value={segment.trailerId || "__none"}
+                    onChange={(value) =>
+                      setSegment(index, { trailerId: value === "__none" ? "" : value })
+                    }
+                    placeholder="Selecione a caçamba"
+                    options={[
+                      { value: "__none", label: "Selecione uma caçamba", disabled: true },
+                      ...trailers.map((trailer) => ({
+                        value: trailer.id,
+                        label: `${trailer.identifier} · ${trailer.implementModel || trailer.type}`,
+                        disabled: Boolean(trailer.vehicleId && trailer.vehicleId !== form.vehicleId),
+                      })),
+                    ]}
+                  />
+                  <Field label="Tipo de valor">
+                    <Select
+                      value={segment.freightPricingMode}
+                      onValueChange={(value) =>
+                        setSegment(index, { freightPricingMode: value as FreightPricingMode })
+                      }
+                    >
+                      <SelectTrigger className="h-11 text-[13px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fixed">Valor fixo</SelectItem>
+                        <SelectItem value="per_ton">Valor por tonelada</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field
+                    label={
+                      segment.freightPricingMode === "per_ton"
+                        ? "Valor da tonelada"
+                        : "Valor do frete"
+                    }
+                  >
+                    <Input
+                      value={segment[priceField]}
+                      onChange={(event) => setSegment(index, { [priceField]: event.target.value })}
+                      placeholder={segment.freightPricingMode === "per_ton" ? "Ex.: 185,00" : "Ex.: 12500,00"}
+                      inputMode="decimal"
+                      className="h-11"
+                    />
+                  </Field>
+                  <FreightPaymentSelector
+                    value={segment.freightPaymentType}
+                    onChange={(value) => setSegment(index, { freightPaymentType: value })}
+                    senderName={senders.find((item) => item.id === segment.senderId)?.name}
+                    recipientName={recipients.find((item) => item.id === segment.recipientId)?.name}
+                    className="md:col-span-2"
+                  />
+                  <PaymentTermField
+                    value={segment.paymentTermDays}
+                    suggestedDays={null}
+                    onChange={(value) =>
+                      setSegment(index, { paymentTermDays: value, paymentTermTouched: true })
+                    }
+                    className="md:col-span-2"
+                  />
+                  <Field label="Observações" className="md:col-span-2">
+                    <Textarea
+                      value={segment.observations}
+                      onChange={(event) => setSegment(index, { observations: event.target.value })}
+                      placeholder="Observações deste trecho..."
+                    />
+                  </Field>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-between">
+          <Button type="button" variant="outline" onClick={addSegment} className="h-10">
+            Adicionar frete à rota
+          </Button>
+          <Button type="button" onClick={onCreate} disabled={!canCreate} className="h-10">
+            Criar tiro longo
+          </Button>
+        </div>
+      </Block>
+    </div>
+  );
+}
+
 function DemandWorkspace({
   mode,
   demand,
@@ -2698,6 +3113,7 @@ function DemandWorkspace({
   onDocument,
   onApproveNote,
   onRejectNote,
+  onAddLongTripFreight,
 }: {
   mode: DemandMode;
   demand?: FreightDemand;
@@ -2719,6 +3135,7 @@ function DemandWorkspace({
   onDocument?: (demand: FreightDemand, kind: DocumentKind, file: File) => Promise<void>;
   onApproveNote?: (demand: FreightDemand) => Promise<void>;
   onRejectNote?: (demand: FreightDemand) => Promise<void>;
+  onAddLongTripFreight?: (demand: FreightDemand) => void;
 }) {
   const currentForm = form ?? EMPTY_FORM;
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === currentForm.vehicleId);
@@ -2774,6 +3191,7 @@ function DemandWorkspace({
         onDocument={onDocument}
         onApproveNote={onApproveNote}
         onRejectNote={onRejectNote}
+        onAddLongTripFreight={onAddLongTripFreight}
       />
     );
   }
@@ -3072,6 +3490,7 @@ function DemandDetailWorkspace({
   onDocument,
   onApproveNote,
   onRejectNote,
+  onAddLongTripFreight,
 }: {
   demand: FreightDemand;
   onAdvance?: (demand: FreightDemand, explicitNext?: FreightStageId) => Promise<void>;
@@ -3079,9 +3498,29 @@ function DemandDetailWorkspace({
   onDocument?: (demand: FreightDemand, kind: DocumentKind, file: File) => Promise<void>;
   onApproveNote?: (demand: FreightDemand) => Promise<void>;
   onRejectNote?: (demand: FreightDemand) => Promise<void>;
+  onAddLongTripFreight?: (demand: FreightDemand) => void;
 }) {
   return (
     <div className="space-y-4">
+      {onAddLongTripFreight && (
+        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="label-tiny">Tiro longo</p>
+              <p className="mt-1 text-[13px] font-semibold text-muted-foreground">
+                Adicione outro frete à rota atual deste motorista sem encerrar a viagem.
+              </p>
+            </div>
+            <Button
+              type="button"
+              onClick={() => onAddLongTripFreight(demand)}
+              className="h-9 shrink-0"
+            >
+              Adicionar frete à rota
+            </Button>
+          </div>
+        </div>
+      )}
       <DemandStageSection
         demand={demand}
         onAdvance={onAdvance}

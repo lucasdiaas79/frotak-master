@@ -1,4 +1,5 @@
 import { freightStageById, nextFreightStage, type FreightStageId } from "@/lib/freight-workflow";
+import { supabase } from "@/lib/supabase";
 import type {
   Driver,
   FreightPaymentType,
@@ -150,4 +151,73 @@ export async function createFreightOperation(input: {
     throw error;
   }
   await input.setVehicleStatus(input.vehicleId, "aguardando-motorista", "DISPONIVEL");
+}
+
+export interface LongTripFreightSegmentInput {
+  trailerId?: string;
+  senderId: string;
+  recipientId: string;
+  productId: string;
+  freightValue?: number;
+  freightPricingMode?: FreightPricingMode;
+  freightTonPrice?: number;
+  freightPaymentType: FreightPaymentType;
+  paymentTermDays?: number | null;
+  observations?: string;
+}
+
+export async function createLongTripFreightsOperation(input: {
+  vehicleId: string;
+  driverId: string;
+  segments: LongTripFreightSegmentInput[];
+}) {
+  const { data, error } = await supabase.rpc("create_long_trip_freights", {
+    p_vehicle_id: input.vehicleId,
+    p_driver_id: input.driverId,
+    p_segments: input.segments.map((segment) => ({
+      trailerId: segment.trailerId ?? null,
+      senderId: segment.senderId,
+      recipientId: segment.recipientId,
+      productId: segment.productId,
+      freightValue: segment.freightValue ?? null,
+      freightPricingMode: segment.freightPricingMode ?? "fixed",
+      freightTonPrice: segment.freightTonPrice ?? null,
+      freightPaymentType: segment.freightPaymentType,
+      paymentTermDays: segment.paymentTermDays ?? null,
+      observations: segment.observations ?? null,
+    })),
+  });
+
+  if (error) {
+    const message = error.message;
+    if (message.includes("LONG_TRIP_SEGMENTS_REQUIRED")) {
+      throw new Error("Adicione pelo menos um trecho ao tiro longo.");
+    }
+    if (message.includes("LONG_TRIP_MODE_NOT_ENABLED")) {
+      throw new Error("Tiro longo não está habilitado para este tenant.");
+    }
+    if (message.includes("LONG_TRIP_INVALID_DRIVER")) {
+      throw new Error("Selecione um motorista ativo para o tiro longo.");
+    }
+    if (message.includes("LONG_TRIP_INVALID_TRAILER")) {
+      throw new Error("Selecione uma caçamba válida para todos os trechos.");
+    }
+    if (message.includes("LONG_TRIP_PAYMENT_TYPE_REQUIRED")) {
+      throw new Error("Selecione CIF ou FOB em todos os trechos.");
+    }
+    if (message.includes("LONG_TRIP_FIXED_VALUE_REQUIRED")) {
+      throw new Error("Informe o valor fixo dos trechos com preço fixo.");
+    }
+    if (message.includes("LONG_TRIP_TON_PRICE_REQUIRED")) {
+      throw new Error("Informe o valor da tonelada dos trechos por tonelada.");
+    }
+    throw error;
+  }
+
+  return data as {
+    tripCycleId: string;
+    createdFreightIds: string[];
+    startedNow: boolean;
+    segmentCount: number;
+  };
 }
