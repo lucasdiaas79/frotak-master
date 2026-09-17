@@ -28,7 +28,7 @@ max_rows = 1000
 enabled = false
 # Paths to self-signed certificate pair.
 # cert_path = "../certs/my-cert.pem"
-# key_path = "../certs/my-key.pem"
+# key_path = "../certs/key.pem"
 
 [db]
 # Port to use for the local database URL.
@@ -154,8 +154,7 @@ max_indexes = 5
 
 [auth]
 enabled = true
-# The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
-# in emails.
+# The base URL of your website. Used as an allow-list for redirects and for constructing URLs used in emails.
 site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
@@ -190,7 +189,7 @@ password_requirements = ""
 
 # Configure WebAuthn relying party settings (required when passkey is enabled).
 # [auth.webauthn]
-# rp_display_name = "Supabase"
+# rp_display_name = "localhost"
 # rp_id = "localhost"
 # rp_origins = ["http://127.0.0.1:3000"]
 
@@ -219,8 +218,7 @@ web3 = 30
 [auth.email]
 # Allow/disallow new user signups via email to your project.
 enable_signup = true
-# If enabled, a user will be required to confirm any email change on both the old, and new email
-# addresses. If disabled, only the new email is required to confirm.
+# If enabled, a user will be required to confirm any email change on both the old, and new email addresses. If disabled, only the new email is required to confirm.
 double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
 enable_confirmations = false
@@ -272,7 +270,7 @@ max_frequency = "5s"
 # [auth.sessions]
 # Force log out after the specified duration.
 # timebox = "24h"
-# Force log out if the user has been inactive longer than the specified duration.
+# Force log out if the user has been inactive longer than this duration.
 # inactivity_timeout = "8h"
 
 # This hook runs before a new user is created and allows developers to reject the request based on the incoming user object.
@@ -295,7 +293,7 @@ auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 
 # Multi-factor-authentication is available to Supabase Pro plan.
 [auth.mfa]
-# Control how many MFA factors can be enrolled at once per user.
+# Control how many MFA factors can be enrolled at once.
 max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
@@ -374,13 +372,19 @@ allow_dynamic_registration = false
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.
-# `per_worker` (default) — enables hot reload during local development.
-# `oneshot` — fallback mode if hot reload causes issues (e.g. in large repos or with symlinks).
+# `per_worker` (default) — enables hot reload.
+# `oneshot` — fallback mode if hot reload causes issues.
 policy = "per_worker"
-# Port to attach the Chrome inspector for debugging edge functions.
+# Port to attach the Chrome inspector for debugging Edge Functions.
 inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
+
+# client-handoff intentionally validates the calling JWT inside the function for
+# action=create and allows unauthenticated action=exchange with a one-time code.
+# Therefore the platform gateway must not reject exchange before our code runs.
+[functions.client-handoff]
+verify_jwt = false
 
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
