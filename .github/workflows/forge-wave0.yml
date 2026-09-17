@@ -26,6 +26,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Guard token-free browser handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIn --include='*.ts' --include='*.tsx' 'sso_token' src; then
+            echo "Master source must not build or consume sso_token URLs." >&2
+            exit 1
+          fi
+          if grep -nE 'sso_token|refresh_token' \
+            central-dias-main/src/routes/login.tsx \
+            central-dias-main/src/lib/clientHandoff.ts; then
+            echo "Central secure handoff path must not consume raw Supabase tokens from URLs." >&2
+            exit 1
+          fi
       - name: Install root dependencies
         run: npm install --no-audit --no-fund
       - name: Build Master
@@ -80,7 +94,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes supabase@2.98.2 functions serve client-handoff --no-verify-jwt > /tmp/client-handoff.log 2>&1 &
+          # Deliberately rely on supabase/config.toml here. If the committed
+          # [functions.client-handoff] gateway policy is wrong, this E2E must fail.
+          npx --yes supabase@2.98.2 functions serve client-handoff > /tmp/client-handoff.log 2>&1 &
           echo $! > /tmp/client-handoff.pid
           for attempt in $(seq 1 45); do
             if curl --silent --fail --request OPTIONS \
