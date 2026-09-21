@@ -351,6 +351,49 @@ function movementFromRow(row: Record<string, unknown>): FreightCostMovement {
   };
 }
 
+function buildMockRecentTripCosts(
+  vehicles: Vehicle[],
+  drivers: { id: string; name: string }[],
+): RecentTripCostSummary[] {
+  const driversById = new Map(drivers.map((driver) => [driver.id, driver.name]));
+  const now = Date.now();
+  const fallbackVehicles: Array<Pick<Vehicle, "id" | "plate" | "status" | "driverId">> = [
+    { id: "mock-vehicle-1", plate: "JOT0009", status: "rota-carregar", driverId: undefined },
+    { id: "mock-vehicle-2", plate: "JOT0014", status: "parado-aguardando-carga", driverId: undefined },
+    { id: "mock-vehicle-3", plate: "JOT0021", status: "rota-descarregar", driverId: undefined },
+    { id: "mock-vehicle-4", plate: "JOT0032", status: "aguardando-cte", driverId: undefined },
+  ];
+  const sourceVehicles = vehicles.length > 0 ? vehicles.slice(0, 6) : fallbackVehicles;
+  const mockDrivers = [
+    "Adriano Santos",
+    "Edvaldo dos Reis",
+    "Marcos Vinicius",
+    "Rafael Almeida",
+    "Carlos Henrique",
+    "Joao Batista",
+  ];
+
+  return sourceVehicles.map((vehicle, index) => {
+    const entries = 650 + index * 340 + (index % 2 === 0 ? 180 : 0);
+    const expenses = 145 + index * 95 + (index % 3 === 0 ? 220 : 0);
+    return {
+      id: `mock-trip-cost-${vehicle.id}`,
+      vehicleId: vehicle.id,
+      plate: vehicle.plate,
+      driverName:
+        (vehicle.driverId ? driversById.get(vehicle.driverId) : undefined) ||
+        mockDrivers[index % mockDrivers.length],
+      status: vehicle.status,
+      entries,
+      expenses,
+      balance: entries - expenses,
+      latestAt: new Date(now - (index + 1) * 21 * 60 * 1000).toISOString(),
+      transactionCount: 3 + index,
+      originLabel: "Mock visual",
+    };
+  });
+}
+
 function buildCurrentVehicleUpdates(vehicles: Vehicle[]): DashboardUpdate[] {
   return vehicles
     .filter((vehicle) => pendingActionKindOfVehicle(vehicle) !== null)
@@ -873,6 +916,14 @@ function Dashboard() {
       status: VEHICLE_STATUS_LABEL[vehicle.status],
     });
 
+  const visibleTripCosts = useMemo(
+    () =>
+      tripCosts.length > 0 || tripCostsLoading || tripCostsError
+        ? tripCosts
+        : buildMockRecentTripCosts(vehicles, drivers),
+    [drivers, tripCosts, tripCostsError, tripCostsLoading, vehicles],
+  );
+
   const urgentUpdates = useMemo(() => buildCurrentVehicleUpdates(vehicles), [vehicles]);
 
   const focusOnMap = (vehicleId: string) => {
@@ -1105,7 +1156,7 @@ function Dashboard() {
 
       <section className="grid gap-4 lg:grid-cols-2">
         <RecentTripCostsPanel
-          costs={tripCosts}
+          costs={visibleTripCosts}
           loading={tripCostsLoading}
           error={tripCostsError}
           money={fmtMoney}
