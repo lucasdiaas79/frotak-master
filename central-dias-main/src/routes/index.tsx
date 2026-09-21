@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { FleetMap } from "@/components/FleetMap";
 import { Modal } from "@/components/Modal";
+import { getActiveTenantId, shouldUseLocalTenantData } from "@/lib/auth";
+import { supabase } from "@/lib/supabase";
 import { statusGroup } from "@/lib/types";
 import { VEHICLE_STATUS_LABEL } from "@/lib/types";
 import type { FleetEvent, FleetEventSource, Vehicle, VehicleStatus } from "@/lib/types";
@@ -52,6 +54,30 @@ interface DashboardUpdate {
   source: FleetEventSource | "Sistema";
   description: string;
   timestamp: string;
+}
+
+interface FreightCostMovement {
+  id: string;
+  vehicleId?: string | null;
+  driverId?: string | null;
+  freightId?: string | null;
+  tripCycleId?: string | null;
+  amount: number;
+  recordedAt: string;
+}
+
+interface RecentTripCostSummary {
+  id: string;
+  vehicleId: string;
+  plate: string;
+  driverName: string;
+  status: VehicleStatus;
+  entries: number;
+  expenses: number;
+  balance: number;
+  latestAt: string;
+  transactionCount: number;
+  originLabel: string;
 }
 
 type PendingActionKind = "cte" | "confirmation" | "command";
@@ -235,6 +261,94 @@ function buildDashboardUpdates(events: FleetEvent[], vehicles: Vehicle[]): Dashb
         }));
 
   return updates.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
+function movementKey(movement: FreightCostMovement) {
+  return [
+    movement.vehicleId || "sem-veiculo",
+    movement.tripCycleId || movement.freightId || "sem-viagem",
+  ].join(":");
+}
+
+function buildRecentTripCosts({
+  entries,
+  expenses,
+  vehicles,
+  drivers,
+}: {
+  entries: FreightCostMovement[];
+  expenses: FreightCostMovement[];
+  vehicles: Vehicle[];
+  drivers: { id: string; name: string }[];
+}): RecentTripCostSummary[] {
+  const vehiclesById = new Map(vehicles.map((vehicle) => [vehicle.id, vehicle]));
+  const driversById = new Map(drivers.map((driver) => [driver.id, driver.name]));
+  const summaries = new Map<string, RecentTripCostSummary>();
+
+  const ensureSummary = (movement: FreightCostMovement) => {
+    if (!movement.vehicleId) return null;
+    const vehicle = vehiclesById.get(movement.vehicleId);
+    if (!vehicle) return null;
+    const key = movementKey(movement);
+    const existing = summaries.get(key);
+    if (existing) return existing;
+
+    const summary: RecentTripCostSummary = {
+      id: key,
+      vehicleId: vehicle.id,
+      plate: vehicle.plate,
+      driverName:
+        (movement.driverId ? driversById.get(movement.driverId) : undefined) ||
+        (vehicle.driverId ? driversById.get(vehicle.driverId) : undefined) ||
+        "-",
+      status: vehicle.status,
+      entries: 0,
+      expenses: 0,
+      balance: 0,
+      latestAt: movement.recordedAt,
+      transactionCount: 0,
+      originLabel: movement.tripCycleId ? "Ciclo de viagem" : "Frete atual",
+    };
+    summaries.set(key, summary);
+    return summary;
+  };
+
+  entries.forEach((entry) => {
+    const summary = ensureSummary(entry);
+    if (!summary) return;
+    summary.entries += entry.amount;
+    summary.transactionCount += 1;
+    if (new Date(entry.recordedAt).getTime() > new Date(summary.latestAt).getTime()) {
+      summary.latestAt = entry.recordedAt;
+    }
+  });
+
+  expenses.forEach((expense) => {
+    const summary = ensureSummary(expense);
+    if (!summary) return;
+    summary.expenses += expense.amount;
+    summary.transactionCount += 1;
+    if (new Date(expense.recordedAt).getTime() > new Date(summary.latestAt).getTime()) {
+      summary.latestAt = expense.recordedAt;
+    }
+  });
+
+  return [...summaries.values()]
+    .map((summary) => ({ ...summary, balance: summary.entries - summary.expenses }))
+    .sort((a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime())
+    .slice(0, 9);
+}
+
+function movementFromRow(row: Record<string, unknown>): FreightCostMovement {
+  return {
+    id: String(row.id),
+    vehicleId: typeof row.vehicle_id === "string" ? row.vehicle_id : null,
+    driverId: typeof row.driver_id === "string" ? row.driver_id : null,
+    freightId: typeof row.freight_id === "string" ? row.freight_id : null,
+    tripCycleId: typeof row.trip_cycle_id === "string" ? row.trip_cycle_id : null,
+    amount: Number(row.amount ?? 0),
+    recordedAt: String(row.recorded_at ?? new Date().toISOString()),
+  };
 }
 
 function buildCurrentVehicleUpdates(vehicles: Vehicle[]): DashboardUpdate[] {
@@ -438,6 +552,164 @@ function DashboardUpdateCard({
   );
 }
 
+function RecentTripCostsPanel({
+  costs,
+  loading,
+  error,
+  money,
+  onOpenMap,
+}: {
+  costs: RecentTripCostSummary[];
+  loading: boolean;
+  error?: string;
+  money: (value?: number) => string;
+  onOpenMap: (vehicleId: string) => void;
+}) {
+  const totals = costs.reduce(
+    (acc, cost) => ({
+      entries: acc.entries + cost.entries,
+      expenses: acc.expenses + cost.expenses,
+      balance: acc.balance + cost.balance,
+    }),
+    { entries: 0, expenses: 0, balance: 0 },
+  );
+
+  return (
+    <section className="premium-card min-h-[360px] overflow-hidden">
+      <div className="flex items-start justify-between gap-3 border-b border-border/80 bg-surface/35 px-4 py-4">
+        <div className="min-w-0">
+          <div className="label-tiny">Custos de viagens recentes</div>
+          <h2 className="mt-1 text-[17px] font-extrabold text-foreground">
+            Caixa por caminhão
+          </h2>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            Entradas, despesas e saldo espelhados do app motorista.
+          </p>
+        </div>
+        <span className="rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 font-sans text-[11px] font-black text-primary">
+          {costs.length}
+        </span>
+      </div>
+
+      <div className="border-b border-border/70 bg-surface-2/30 px-4 py-3">
+        <div className="grid gap-2 sm:grid-cols-3">
+          <div>
+            <div className="label-tiny">Entradas</div>
+            <strong className="font-sans text-[15px] text-success">{money(totals.entries)}</strong>
+          </div>
+          <div>
+            <div className="label-tiny">Despesas</div>
+            <strong className="font-sans text-[15px] text-destructive">
+              {money(totals.expenses)}
+            </strong>
+          </div>
+          <div>
+            <div className="label-tiny">Saldo em viagem</div>
+            <strong
+              className={cn(
+                "font-sans text-[15px]",
+                totals.balance < 0 ? "text-destructive" : "text-primary",
+              )}
+            >
+              {money(totals.balance)}
+            </strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-h-[520px] overflow-y-auto p-3">
+        <div className="grid gap-2 xl:grid-cols-2">
+          {costs.map((cost) => (
+            <article
+              key={cost.id}
+              className="rounded-2xl border border-border bg-surface-2/55 p-3 shadow-sm transition hover:-translate-y-0.5 hover:border-primary/25 hover:bg-surface-2"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="size-2.5 shrink-0 rounded-full bg-primary" />
+                    <strong className="truncate font-sans text-[15px] font-black text-foreground">
+                      {cost.plate}
+                    </strong>
+                  </div>
+                  <p className="mt-1 truncate text-[11.5px] font-semibold text-muted-foreground">
+                    {cost.driverName} - {cost.originLabel}
+                  </p>
+                </div>
+                <span className="shrink-0 font-sans text-[10.5px] font-bold text-muted-foreground">
+                  {formatRelative(cost.latestAt)}
+                </span>
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className="rounded-xl border border-success/15 bg-success/10 px-2 py-2">
+                  <span className="block text-[10px] font-black uppercase tracking-[0.1em] text-success">
+                    Entradas
+                  </span>
+                  <strong className="mt-1 block truncate font-sans text-[12px] text-foreground">
+                    {money(cost.entries)}
+                  </strong>
+                </div>
+                <div className="rounded-xl border border-destructive/15 bg-destructive/10 px-2 py-2">
+                  <span className="block text-[10px] font-black uppercase tracking-[0.1em] text-destructive">
+                    Despesas
+                  </span>
+                  <strong className="mt-1 block truncate font-sans text-[12px] text-foreground">
+                    {money(cost.expenses)}
+                  </strong>
+                </div>
+                <div className="rounded-xl border border-primary/15 bg-primary/10 px-2 py-2">
+                  <span className="block text-[10px] font-black uppercase tracking-[0.1em] text-primary">
+                    Saldo
+                  </span>
+                  <strong
+                    className={cn(
+                      "mt-1 block truncate font-sans text-[12px]",
+                      cost.balance < 0 ? "text-destructive" : "text-foreground",
+                    )}
+                  >
+                    {money(cost.balance)}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <StatusBadge status={cost.status} />
+                <button
+                  type="button"
+                  onClick={() => onOpenMap(cost.vehicleId)}
+                  className="inline-flex items-center gap-1.5 rounded-xl px-2 py-1.5 text-[11px] font-bold text-primary transition hover:bg-primary/10"
+                >
+                  <MapPin className="size-3.5" />
+                  Mapa
+                </button>
+              </div>
+            </article>
+          ))}
+
+          {!loading && costs.length === 0 && (
+            <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-surface-2/35 px-4 text-center text-[12.5px] font-semibold text-muted-foreground xl:col-span-2">
+              Nenhuma entrada ou despesa recente registrada pelo motorista.
+            </div>
+          )}
+
+          {loading && costs.length === 0 && (
+            <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-border bg-surface-2/35 px-4 text-center text-[12.5px] font-semibold text-muted-foreground xl:col-span-2">
+              Carregando custos de viagem...
+            </div>
+          )}
+
+          {error && (
+            <div className="rounded-2xl border border-destructive/25 bg-destructive/10 px-4 py-3 text-[12.5px] font-semibold text-destructive xl:col-span-2">
+              {error}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Dashboard() {
   const navigate = useNavigate();
   const { vehicles, drivers, trailers, senders, recipients, events, setVehicleStatus } = useFleet();
@@ -447,6 +719,9 @@ function Dashboard() {
   const [ctePhoto, setCtePhoto] = useState<File | null>(null);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [now, setNow] = useState<string>("");
+  const [tripCosts, setTripCosts] = useState<RecentTripCostSummary[]>([]);
+  const [tripCostsLoading, setTripCostsLoading] = useState(false);
+  const [tripCostsError, setTripCostsError] = useState<string | undefined>();
 
   useEffect(() => {
     const tick = () => setNow(new Date().toLocaleTimeString("pt-BR"));
@@ -454,6 +729,83 @@ function Dashboard() {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (shouldUseLocalTenantData()) {
+      setTripCosts([]);
+      return;
+    }
+
+    let cancelled = false;
+    let reloadTimer: number | undefined;
+
+    const loadTripCosts = async () => {
+      setTripCostsLoading(true);
+      setTripCostsError(undefined);
+      const tenantId = getActiveTenantId();
+      const since = new Date();
+      since.setDate(since.getDate() - 45);
+
+      const [entriesResult, expensesResult] = await Promise.all([
+        supabase
+          .from("freight_cash_entries")
+          .select("id, vehicle_id, driver_id, freight_id, trip_cycle_id, amount, recorded_at")
+          .eq("tenant_id", tenantId)
+          .gte("recorded_at", since.toISOString())
+          .order("recorded_at", { ascending: false })
+          .limit(240),
+        supabase
+          .from("freight_expenses")
+          .select("id, vehicle_id, driver_id, freight_id, trip_cycle_id, amount, recorded_at")
+          .eq("tenant_id", tenantId)
+          .gte("recorded_at", since.toISOString())
+          .order("recorded_at", { ascending: false })
+          .limit(240),
+      ]);
+
+      if (cancelled) return;
+      if (entriesResult.error || expensesResult.error) {
+        const message =
+          entriesResult.error?.message ||
+          expensesResult.error?.message ||
+          "Não foi possível carregar custos de viagem.";
+        setTripCostsError(message);
+        setTripCostsLoading(false);
+        return;
+      }
+
+      setTripCosts(
+        buildRecentTripCosts({
+          entries: ((entriesResult.data ?? []) as Record<string, unknown>[]).map(movementFromRow),
+          expenses: ((expensesResult.data ?? []) as Record<string, unknown>[]).map(movementFromRow),
+          vehicles,
+          drivers,
+        }),
+      );
+      setTripCostsLoading(false);
+    };
+
+    const scheduleReload = () => {
+      if (reloadTimer) window.clearTimeout(reloadTimer);
+      reloadTimer = window.setTimeout(() => {
+        void loadTripCosts();
+      }, 250);
+    };
+
+    void loadTripCosts();
+
+    const channel = supabase
+      .channel("dashboard-trip-costs")
+      .on("postgres_changes", { event: "*", schema: "public", table: "freight_cash_entries" }, scheduleReload)
+      .on("postgres_changes", { event: "*", schema: "public", table: "freight_expenses" }, scheduleReload)
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      if (reloadTimer) window.clearTimeout(reloadTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, [vehicles, drivers]);
 
   const stats = useMemo(
     () => ({
@@ -520,11 +872,6 @@ function Dashboard() {
       route: `${senderName(vehicle.senderId)} - ${recipientName(vehicle.recipientId)}`,
       status: VEHICLE_STATUS_LABEL[vehicle.status],
     });
-
-  const latestUpdates = useMemo(
-    () => buildDashboardUpdates(events, vehicles).slice(0, 8),
-    [events, vehicles],
-  );
 
   const urgentUpdates = useMemo(() => buildCurrentVehicleUpdates(vehicles), [vehicles]);
 
@@ -757,12 +1104,11 @@ function Dashboard() {
       </Modal>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <DashboardUpdatePanel
-          title="Últimas atualizações do sistema"
-          subtitle="Eventos recentes da frota em ordem de tempo"
-          updates={latestUpdates}
-          emptyLabel="Nenhuma atualização recente."
-          onFocus={setSelectedMapId}
+        <RecentTripCostsPanel
+          costs={tripCosts}
+          loading={tripCostsLoading}
+          error={tripCostsError}
+          money={fmtMoney}
           onOpenMap={focusOnMap}
         />
         <DashboardUpdatePanel
