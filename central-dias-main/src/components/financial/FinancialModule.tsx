@@ -4108,6 +4108,195 @@ function emptyRecurringForm(access: FinancialAccess) {
   };
 }
 
+export function FinancialCostsPage() {
+  return <FinancialBoundary>{(access) => <FinancialCostsContent access={access} />}</FinancialBoundary>;
+}
+
+function FinancialCostsContent({ access }: { access: FinancialAccess }) {
+  const [documents, setDocuments] = useState<FinancialDocumentDetails[]>([]);
+  const [rules, setRules] = useState<FinancialRecurringRule[]>([]);
+  const [payroll, setPayroll] = useState<PayrollEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const canViewPayroll = hasFinancialPermission(access, "financial.payroll.view");
+
+  useEffect(() => {
+    Promise.all([
+      listFinancialDocuments("payable"),
+      listFinancialRecurringRules(),
+      canViewPayroll ? listPayrollEntries() : Promise.resolve([] as PayrollEntry[]),
+    ])
+      .then(([nextDocuments, nextRules, nextPayroll]) => {
+        setDocuments(nextDocuments);
+        setRules(nextRules);
+        setPayroll(nextPayroll);
+      })
+      .catch(() => toast.error("Nao foi possivel carregar a central de custos."))
+      .finally(() => setLoading(false));
+  }, [canViewPayroll]);
+
+  const openDocuments = documents.filter(
+    (document) => !["settled", "voided"].includes(document.status),
+  );
+  const payableOpen = openDocuments.reduce(
+    (sum, document) =>
+      sum + document.installments.reduce((subtotal, installment) => subtotal + installment.balance, 0),
+    0,
+  );
+  const recurringActive = rules.filter(
+    (rule) => rule.status === "active" && rule.kind !== "salary",
+  );
+  const recurringMonthly = recurringActive
+    .filter((rule) => rule.frequency === "MONTHLY")
+    .reduce((sum, rule) => sum + rule.amount, 0);
+  const competence = currentCompetenceMonth();
+  const payrollOpen = payroll
+    .filter(
+      (entry) =>
+        entry.competenceMonth.slice(0, 7) === competence &&
+        !["paid", "voided"].includes(entry.status),
+    )
+    .reduce((sum, entry) => sum + entry.netAmount, 0);
+
+  return (
+    <div className="financial-shell space-y-4">
+      <PageHeader
+        title="Custos"
+        subtitle="Um ponto simples para acompanhar e lancar os custos da frota"
+        actions={
+          <Link
+            to="/financeiro/pagar"
+            className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-bold text-primary-foreground transition hover:opacity-90"
+          >
+            <Plus className="size-4" />
+            Novo custo
+          </Link>
+        }
+      />
+      <FinancialNav />
+
+      <div className="grid grid-cols-2 gap-3 px-3 lg:grid-cols-4 md:px-0">
+        <Stat label="A pagar em aberto" value={payableOpen} icon={ArrowUpRight} tone="danger" />
+        <Stat label="Recorrencias ativas" value={recurringActive.length} icon={Repeat2} />
+        <Stat label="Recorrente mensal" value={recurringMonthly} icon={CalendarClock} />
+        <Stat
+          label="Folha da competencia"
+          value={canViewPayroll ? payrollOpen : "Restrito"}
+          icon={ReceiptText}
+        />
+      </div>
+
+      <div className="grid gap-3 px-3 lg:grid-cols-3 md:px-0">
+        <section className="premium-card p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-extrabold">Custo direto</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Combustivel, oficina, pedagio, fornecedor e qualquer despesa pontual.
+              </p>
+            </div>
+            <ArrowUpRight className="size-5 text-primary" />
+          </div>
+          <Link
+            to="/financeiro/pagar"
+            className="mt-4 inline-flex text-xs font-bold text-primary hover:underline"
+          >
+            Lancar em A Pagar
+          </Link>
+        </section>
+
+        <section className="premium-card p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-extrabold">Custos recorrentes</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Aluguel, seguros, internet, contador e outros custos periodicos.
+              </p>
+            </div>
+            <Repeat2 className="size-5 text-primary" />
+          </div>
+          <Link
+            to="/financeiro/recorrencias"
+            className="mt-4 inline-flex text-xs font-bold text-primary hover:underline"
+          >
+            Gerenciar recorrencias
+          </Link>
+        </section>
+
+        <section className="premium-card p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-extrabold">Folha e salarios</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Salario base, comissao, hora extra, beneficios, descontos e adiantamentos.
+              </p>
+            </div>
+            <ReceiptText className="size-5 text-primary" />
+          </div>
+          {canViewPayroll ? (
+            <Link
+              to="/financeiro/salarios"
+              className="mt-4 inline-flex text-xs font-bold text-primary hover:underline"
+            >
+              Abrir folha
+            </Link>
+          ) : (
+            <span className="mt-4 inline-flex text-xs text-muted-foreground">Acesso restrito</span>
+          )}
+        </section>
+      </div>
+
+      <section className="premium-card mx-3 overflow-hidden md:mx-0">
+        <div className="border-b border-border px-4 py-3">
+          <h2 className="text-sm font-extrabold">Ultimos custos lancados</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            A estrutura contabil continua por baixo; aqui aparece apenas o que importa para operar.
+          </p>
+        </div>
+        {loading ? (
+          <div className="flex min-h-32 items-center justify-center gap-2 text-sm text-muted-foreground">
+            <LoaderCircle className="size-4 animate-spin" /> Carregando custos...
+          </div>
+        ) : documents.length ? (
+          documents.slice(0, 8).map((document) => {
+            const balance = document.installments.reduce(
+              (sum, installment) => sum + installment.balance,
+              0,
+            );
+            return (
+              <div
+                key={document.id}
+                className="flex flex-col gap-2 border-b border-border px-4 py-3 last:border-0 sm:flex-row sm:items-center"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-bold">{document.description}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {document.partnerName || "Sem favorecido"} ·{" "}
+                    {document.accountName || "Sem categoria"}
+                  </div>
+                </div>
+                <div className="text-left sm:text-right">
+                  <div className="text-sm font-black">{money.format(document.originalAmount)}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {balance > 0 ? (
+                      <>
+                        {money.format(balance)} em aberto
+                      </>
+                    ) : (
+                      "Liquidado"
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <EmptyReport text="Nenhum custo lancado." />
+        )}
+      </section>
+    </div>
+  );
+}
+
 export function FinancialRecurringPage() {
   return (
     <FinancialBoundary>
@@ -5916,6 +6105,87 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+export function FinancialSettingsPage() {
+  return (
+    <FinancialBoundary>
+      {(access) => <FinancialSettingsContent access={access} />}
+    </FinancialBoundary>
+  );
+}
+
+function FinancialSettingsContent({ access }: { access: FinancialAccess }) {
+  const settingsItems = [
+    {
+      to: "/financeiro/plano-contas" as const,
+      title: "Categorias financeiras",
+      description: "Plano de contas usado para classificar custos, receitas e DRE.",
+      icon: Tags,
+      permission: "financial.manage_chart",
+    },
+    {
+      to: "/financeiro/centros-custo" as const,
+      title: "Centros de custo",
+      description: "Estrutura de alocacao para operacao, administrativo e demais areas.",
+      icon: Building2,
+      permission: "financial.manage_cost_centers",
+    },
+    {
+      to: "/financeiro/integracoes" as const,
+      title: "Integracoes e prazos",
+      description: "Fila de integracao operacional e politicas padrao de vencimento.",
+      icon: RefreshCw,
+      permission: "financial.settings.manage",
+    },
+  ];
+
+  return (
+    <div className="financial-shell space-y-4">
+      <PageHeader
+        title="Configuracoes Financeiras"
+        subtitle="Estruturas avancadas ficam aqui, fora do fluxo diario do frotista"
+      />
+      <FinancialNav />
+      <div className="grid gap-3 px-3 lg:grid-cols-3 md:px-0">
+        {settingsItems.map(({ to, title, description, icon: Icon, permission }) => {
+          const canManage = hasFinancialPermission(access, permission);
+          return (
+            <Link
+              key={to}
+              to={to}
+              className="premium-card group block p-5 transition hover:border-primary/35"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <span className="grid size-10 place-items-center rounded-lg bg-primary/10 text-primary">
+                  <Icon className="size-5" />
+                </span>
+                <ChevronRight className="size-4 text-muted-foreground transition group-hover:translate-x-0.5" />
+              </div>
+              <h2 className="mt-4 text-sm font-extrabold">{title}</h2>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+              <div className="mt-4 text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+                {canManage ? "Gerenciar" : "Visualizar"}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+      <section className="premium-card mx-3 p-4 md:mx-0">
+        <div className="flex gap-3">
+          <Settings2 className="mt-0.5 size-5 shrink-0 text-primary" />
+          <div>
+            <h2 className="text-sm font-extrabold">Estrutura preservada</h2>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              Plano de contas, centros de custo e integracoes continuam existindo porque alimentam
+              DRE, rateios e automacoes. A mudanca desta etapa e de organizacao da experiencia,
+              nao de exclusao da estrutura financeira.
+            </p>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
