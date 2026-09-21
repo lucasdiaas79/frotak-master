@@ -57,6 +57,10 @@ interface VehicleRow {
   freight_pricing_mode?: Vehicle["freightPricingMode"] | null;
   freight_ton_price?: number | string | null;
   unloaded_tons?: number | string | null;
+  freight_tax_rate?: number | string | null;
+  freight_tax_rule_source?: string | null;
+  freight_origin_uf?: string | null;
+  freight_destination_uf?: string | null;
   city?: string | null;
   state?: string | null;
   lat?: number | null;
@@ -190,6 +194,10 @@ export function vehicleFromRow(row: VehicleRow): Vehicle {
     freightPricingMode: nil(row.freight_pricing_mode),
     freightTonPrice: nil(row.freight_ton_price == null ? undefined : Number(row.freight_ton_price)),
     unloadedTons: nil(row.unloaded_tons == null ? undefined : Number(row.unloaded_tons)),
+    freightTaxRate: nil(row.freight_tax_rate == null ? undefined : Number(row.freight_tax_rate)),
+    freightTaxRuleSource: nil(row.freight_tax_rule_source),
+    freightOriginUf: nil(row.freight_origin_uf),
+    freightDestinationUf: nil(row.freight_destination_uf),
     city: row.city ?? "",
     state: row.state ?? "",
     lat: Number(row.lat ?? 0),
@@ -243,6 +251,10 @@ export function vehicleToRow(vehicle: Partial<Vehicle>) {
     freight_pricing_mode: vehicle.freightPricingMode ?? "fixed",
     freight_ton_price: vehicle.freightTonPrice ?? null,
     unloaded_tons: vehicle.unloadedTons ?? null,
+    freight_tax_rate: vehicle.freightTaxRate ?? 0,
+    freight_tax_rule_source: vehicle.freightTaxRuleSource ?? null,
+    freight_origin_uf: vehicle.freightOriginUf ?? null,
+    freight_destination_uf: vehicle.freightDestinationUf ?? null,
     city: vehicle.city ?? null,
     state: vehicle.state ?? null,
     lat: vehicle.lat ?? null,

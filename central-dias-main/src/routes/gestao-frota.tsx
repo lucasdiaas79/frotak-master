@@ -383,9 +383,118 @@ function parseFreightValue(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
+const INTERNAL_FREIGHT_ICMS_RATES: Record<string, number> = {
+  AC: 19,
+  AL: 20.5,
+  AP: 18,
+  AM: 20,
+  BA: 20.5,
+  CE: 20,
+  DF: 20,
+  ES: 12,
+  GO: 19,
+  MA: 23,
+  MT: 17,
+  MS: 17,
+  MG: 18,
+  PA: 19,
+  PB: 20,
+  PR: 12,
+  PE: 20.5,
+  PI: 22.5,
+  RJ: 22,
+  RN: 20,
+  RS: 12,
+  RO: 19.5,
+  RR: 20,
+  SC: 17,
+  SP: 12,
+  SE: 19,
+  TO: 20,
+};
+
+const SOUTH_SOUTHEAST_EXCEPT_ES = new Set(["SP", "RJ", "MG", "PR", "SC", "RS"]);
+
+function normalizeUf(value?: string | null) {
+  const uf = value?.trim().toUpperCase();
+  return uf && INTERNAL_FREIGHT_ICMS_RATES[uf] !== undefined ? uf : undefined;
+}
+
+function freightIcmsRate(originState?: string | null, destinationState?: string | null) {
+  const origin = normalizeUf(originState);
+  const destination = normalizeUf(destinationState);
+  if (!origin || !destination) return 0;
+  if (origin === destination) return INTERNAL_FREIGHT_ICMS_RATES[origin] ?? 0;
+  if (SOUTH_SOUTHEAST_EXCEPT_ES.has(origin) && !SOUTH_SOUTHEAST_EXCEPT_ES.has(destination)) {
+    return 7;
+  }
+  return 12;
+}
+
+function freightIcmsPreview(originState?: string | null, destinationState?: string | null, gross?: number) {
+  const origin = normalizeUf(originState);
+  const destination = normalizeUf(destinationState);
+  const rate = freightIcmsRate(originState, destinationState);
+  const taxValue = gross ? Number(((gross * rate) / 100).toFixed(2)) : undefined;
+  const netValue = gross && taxValue !== undefined ? Number((gross - taxValue).toFixed(2)) : undefined;
+  const rule =
+    !origin || !destination
+      ? "UF pendente"
+      : origin === destination
+        ? `Interno ${origin}`
+        : rate === 7
+          ? "Interestadual 7%"
+          : "Interestadual 12%";
+  return { origin, destination, rate, taxValue, netValue, rule };
+}
+
 function pricingSummary(mode: FreightPricingMode, fixedValue?: number, tonPrice?: number) {
   if (mode === "per_ton") return tonPrice ? `${formatMoney(tonPrice)} / ton` : "Por tonelada";
   return formatMoney(fixedValue);
+}
+
+function FreightTaxPreviewCard({
+  preview,
+  pricingMode,
+  className,
+}: {
+  preview: ReturnType<typeof freightIcmsPreview>;
+  pricingMode: FreightPricingMode;
+  className?: string;
+}) {
+  const hasRoute = Boolean(preview.origin && preview.destination);
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border border-border/80 bg-surface-2/45 px-4 py-3",
+        className,
+      )}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="label-tiny">ICMS do frete</p>
+          <strong className="text-[13px] text-foreground">
+            {hasRoute ? `${preview.rule} - ${preview.rate.toLocaleString("pt-BR")}%` : "Informe origem e destino"}
+          </strong>
+        </div>
+        <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-primary">
+          Automatico
+        </span>
+      </div>
+      <div className="mt-3 grid gap-2 text-[12px] text-muted-foreground sm:grid-cols-3">
+        <span>
+          Origem/Destino <strong className="block text-foreground">{preview.origin ?? "-"}{" -> "}{preview.destination ?? "-"}</strong>
+        </span>
+        <span>
+          ICMS estimado <strong className="block text-foreground">{formatMoney(preview.taxValue)}</strong>
+        </span>
+        <span>
+          {pricingMode === "per_ton" ? "Liquido apos descarga" : "Liquido estimado"}
+          <strong className="block text-foreground">{formatMoney(preview.netValue)}</strong>
+        </span>
+      </div>
+    </div>
+  );
 }
 
 function parsePaymentTermDays(value: string) {
@@ -2587,6 +2696,11 @@ function GroupFreightWorkspace({
   const product = products.find((item) => item.id === form.productId);
   const freightValue = parseFreightValue(form.freightValue);
   const freightTonPrice = parseFreightValue(form.freightTonPrice);
+  const icmsPreview = freightIcmsPreview(
+    sender?.state,
+    recipient?.state,
+    form.freightPricingMode === "fixed" ? freightValue : undefined,
+  );
   const hasPricingValue =
     form.freightPricingMode === "per_ton" ? Boolean(freightTonPrice) : true;
   const validCreate =
@@ -2674,6 +2788,11 @@ function GroupFreightWorkspace({
                 className="h-11"
               />
             </Field>
+            <FreightTaxPreviewCard
+              preview={icmsPreview}
+              pricingMode={form.freightPricingMode}
+              className="md:col-span-2"
+            />
             <FreightPaymentSelector
               value={form.freightPaymentType}
               onChange={(value) => setForm({ ...form, freightPaymentType: value })}
@@ -2950,6 +3069,14 @@ function LongTripWorkspace({
           {form.segments.map((segment, index) => {
             const priceField =
               segment.freightPricingMode === "per_ton" ? "freightTonPrice" : "freightValue";
+            const segmentSender = senders.find((item) => item.id === segment.senderId);
+            const segmentRecipient = recipients.find((item) => item.id === segment.recipientId);
+            const segmentFreightValue = parseFreightValue(segment.freightValue);
+            const segmentIcmsPreview = freightIcmsPreview(
+              segmentSender?.state,
+              segmentRecipient?.state,
+              segment.freightPricingMode === "fixed" ? segmentFreightValue : undefined,
+            );
             return (
               <div key={index} className="rounded-2xl border border-border bg-background/55 p-3">
                 <div className="mb-3 flex items-center justify-between gap-3">
@@ -3053,6 +3180,11 @@ function LongTripWorkspace({
                       className="h-11"
                     />
                   </Field>
+                  <FreightTaxPreviewCard
+                    preview={segmentIcmsPreview}
+                    pricingMode={segment.freightPricingMode}
+                    className="md:col-span-2"
+                  />
                   <FreightPaymentSelector
                     value={segment.freightPaymentType}
                     onChange={(value) => setSegment(index, { freightPaymentType: value })}
@@ -3142,8 +3274,15 @@ function DemandWorkspace({
   const currentForm = form ?? EMPTY_FORM;
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === currentForm.vehicleId);
   const selectedDriver = drivers.find((driver) => driver.id === currentForm.driverId);
+  const selectedSender = senders.find((item) => item.id === currentForm.senderId);
+  const selectedRecipient = recipients.find((item) => item.id === currentForm.recipientId);
   const freightValue = parseFreightValue(currentForm.freightValue);
   const freightTonPrice = parseFreightValue(currentForm.freightTonPrice);
+  const icmsPreview = freightIcmsPreview(
+    selectedSender?.state,
+    selectedRecipient?.state,
+    currentForm.freightPricingMode === "fixed" ? freightValue : undefined,
+  );
   const manualAssetAssignment = assetAssignmentMode === "manual_per_freight";
   const availableDrivers = drivers.filter((driver) =>
     isDriverAvailableForFreightMode(
@@ -3285,6 +3424,11 @@ function DemandWorkspace({
                   className="h-11"
                 />
               </Field>
+              <FreightTaxPreviewCard
+                preview={icmsPreview}
+                pricingMode={currentForm.freightPricingMode}
+                className="md:col-span-2"
+              />
               <FreightPaymentSelector
                 value={currentForm.freightPaymentType}
                 onChange={(value) => setForm({ ...currentForm, freightPaymentType: value })}
