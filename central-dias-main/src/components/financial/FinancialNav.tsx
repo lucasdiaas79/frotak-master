@@ -4,10 +4,10 @@ import {
   ArrowUpRight,
   BadgeDollarSign,
   BarChart3,
-   Landmark,
+  Landmark,
   ReceiptText,
-   RefreshCw,
-   TrendingUp,
+  RefreshCw,
+  TrendingUp,
   WalletCards,
 } from "lucide-react";
 import { useEffect, useState } from "react";
