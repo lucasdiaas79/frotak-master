@@ -4,13 +4,10 @@ import {
   ArrowUpRight,
   BadgeDollarSign,
   BarChart3,
-  Building2,
-  Landmark,
+   Landmark,
   ReceiptText,
-  Repeat2,
-  RefreshCw,
-  Tags,
-  TrendingUp,
+   RefreshCw,
+   TrendingUp,
   WalletCards,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -25,21 +22,15 @@ const financeNav = [
   ["/financeiro/rentabilidade", "Rentabilidade", TrendingUp],
   ["/financeiro/receber", "A Receber", ArrowDownLeft],
   ["/financeiro/pagar", "A Pagar", ArrowUpRight],
+  ["/financeiro/custos", "Custos", ReceiptText],
   ["/financeiro/contas", "Bancos e Caixas", Landmark],
-  ["/financeiro/salarios", "Salarios", ReceiptText],
-  ["/financeiro/recorrencias", "Recorrencias", Repeat2],
-  ["/financeiro/plano-contas", "Plano de Contas", Tags],
-  ["/financeiro/centros-custo", "Centros de Custo", Building2],
-  ["/financeiro/integracoes", "Configuracoes", RefreshCw],
+  ["/financeiro/configuracoes", "Configuracoes", RefreshCw],
 ] as const;
 
 function canShowItem(to: string, access: FinancialAccess | null) {
   return (
     access?.isOwner ||
-    (to !== "/financeiro/salarios" &&
-      to !== "/financeiro/dre" &&
-      to !== "/financeiro/fluxo-caixa") ||
-    (to === "/financeiro/salarios" && access?.permissions.includes("financial.payroll.view")) ||
+    (to !== "/financeiro/dre" && to !== "/financeiro/fluxo-caixa") ||
     (to === "/financeiro/dre" && access?.permissions.includes("financial.dre.view")) ||
     (to === "/financeiro/fluxo-caixa" && access?.permissions.includes("financial.cashflow.view"))
   );
