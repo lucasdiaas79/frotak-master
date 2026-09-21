@@ -2,7 +2,6 @@ import * as React from "react";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Bell,
-  BarChart3,
   Bot,
   Building2,
   ChevronRight,
@@ -19,14 +18,9 @@ import {
   Package,
   PanelLeftClose,
   PanelLeftOpen,
-  ReceiptText,
-  Repeat2,
-  RefreshCw,
   Search,
-  TrendingUp,
   Truck,
   Users,
-  WalletCards,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -121,40 +115,33 @@ const MOBILE_NAV: NavItem[] = [
 const ADMIN_NAV: NavItem[] = [{ to: "/usuarios", label: "Usuários", icon: Users }];
 
 const FINANCIAL_NAV: NavItem[] = [
-  { to: "/financeiro", label: "Visão Geral", icon: Landmark },
-  { to: "/financeiro/fluxo-caixa", label: "Fluxo de Caixa", icon: WalletCards },
-  { to: "/financeiro/dre", label: "DRE Gerencial", icon: BarChart3 },
   {
-    to: "/financeiro/rentabilidade",
-    label: "Rentabilidade",
-    icon: TrendingUp,
-    activePaths: ["/lucros-despesas"],
+    to: "/financeiro",
+    label: "Financeiro",
+    icon: Landmark,
+    activePaths: [
+      "/financeiro",
+      "/financeiro/fluxo-caixa",
+      "/financeiro/dre",
+      "/financeiro/rentabilidade",
+      "/financeiro/receber",
+      "/financeiro/contas-receber",
+      "/financeiro/pagar",
+      "/financeiro/contas-pagar",
+      "/financeiro/contas",
+      "/financeiro/salarios",
+      "/financeiro/recorrencias",
+      "/financeiro/plano-contas",
+      "/financeiro/centros-custo",
+      "/financeiro/integracoes",
+      "/lucros-despesas",
+    ],
   },
-  { to: "/financeiro/receber", label: "Contas a Receber", icon: WalletCards },
-  { to: "/financeiro/pagar", label: "Contas a Pagar", icon: ReceiptText },
-  { to: "/financeiro/contas", label: "Bancos e Caixas", icon: Building2 },
-  { to: "/financeiro/salarios", label: "Salários", icon: ReceiptText },
-  { to: "/financeiro/recorrencias", label: "Despesas Recorrentes", icon: Repeat2 },
-  { to: "/financeiro/plano-contas", label: "Plano de Contas", icon: ListChecks },
-  { to: "/financeiro/centros-custo", label: "Centros de Custo", icon: FolderKanban },
-  { to: "/financeiro/integracoes", label: "Configurações", icon: RefreshCw },
 ];
 
 function financialNavFor(access: FinancialAccess | null) {
-  return FINANCIAL_NAV.filter(
-    (item) =>
-      access?.isOwner ||
-      (item.to !== "/financeiro/salarios" &&
-        item.to !== "/financeiro/dre" &&
-        item.to !== "/financeiro/fluxo-caixa") ||
-      (item.to === "/financeiro/salarios" &&
-        access?.permissions?.includes("financial.payroll.view")) ||
-      (item.to === "/financeiro/dre" && access?.permissions?.includes("financial.dre.view")) ||
-      (item.to === "/financeiro/fluxo-caixa" &&
-        access?.permissions?.includes("financial.cashflow.view")),
-  );
+  return access?.canView ? FINANCIAL_NAV : [];
 }
-
 const ROUTE_TITLES: Record<string, string> = {
   "/": "Dashboard Operacional",
   "/gestao-frota": "Gestão de Frota",
@@ -254,7 +241,10 @@ function NavSection({
       </div>
       <nav className="flex flex-col gap-1">
         {items.map((item) => {
-          const active = loc.pathname === item.to;
+          const active =
+            loc.pathname === item.to ||
+            item.activePaths?.includes(loc.pathname) ||
+            (item.to === "/financeiro" && loc.pathname.startsWith("/financeiro/"));
           const Icon = item.icon;
 
           return (
