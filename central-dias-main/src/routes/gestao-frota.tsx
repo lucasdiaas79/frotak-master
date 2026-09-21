@@ -2450,10 +2450,7 @@ function CreateFreightWorkspace({
   onCreateLongTrip: () => void;
 }) {
   const manualAssetAssignment = assetAssignmentMode === "manual_per_freight";
-  const activeCreateMode = !manualAssetAssignment && createMode === "long-trip" ? "individual" : createMode;
-  const createModes: FreightCreateMode[] = manualAssetAssignment
-    ? ["individual", "group", "long-trip"]
-    : ["individual", "group"];
+  const createModes: FreightCreateMode[] = ["individual", "group", "long-trip"];
 
   return (
     <div className="space-y-4">
@@ -2473,7 +2470,7 @@ function CreateFreightWorkspace({
             {mode === "individual"
               ? "Criar Frete Individual"
               : mode === "long-trip"
-                ? "Tiro longo"
+                ? "Tiro Longo"
                 : "Criar Frete em Grupo"}
           </button>
         ))}
@@ -2486,7 +2483,7 @@ function CreateFreightWorkspace({
         </div>
       )}
 
-      {manualAssetAssignment && createMode === "long-trip" ? (
+      {createMode === "long-trip" ? (
         <LongTripWorkspace
           form={longTripForm}
           setForm={setLongTripForm}
@@ -2499,7 +2496,7 @@ function CreateFreightWorkspace({
           activeTrailerIds={activeTrailerIds}
           onCreate={onCreateLongTrip}
         />
-      ) : activeCreateMode === "individual" ? (
+      ) : createMode === "individual" ? (
         <DemandWorkspace
           mode="create"
           form={individualForm}
