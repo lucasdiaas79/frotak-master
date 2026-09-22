@@ -39,21 +39,44 @@ export async function deleteVehicle(id: string): Promise<void> {
   if (error) throw error;
 }
 
+async function currentWorkflowVersion(id: string) {
+  const { data, error } = await supabase
+    .from("vehicles")
+    .select("workflow_version")
+    .eq("id", id)
+    .single<{ workflow_version: number }>();
+  if (error) throw error;
+  return data.workflow_version;
+}
+
 export async function updateVehicleStatus(
   id: string,
   status: VehicleStatus,
   source: FleetEventSource = "Operador",
   description?: string,
   freightStage?: VehicleFreightStage,
+  expectedWorkflowVersion?: number,
 ): Promise<Vehicle> {
+  // Se a UI ainda nao fornece a versao que exibiu, pelo menos leia a versao
+  // imediatamente antes da escrita. O RPC usa row lock + comparacao atomica,
+  // fechando a janela de corrida entre esta leitura e a atualizacao.
+  const expectedVersion =
+    expectedWorkflowVersion ?? (await currentWorkflowVersion(id));
+
   const { data, error } = await supabase.rpc("set_vehicle_status", {
     p_vehicle_id: id,
     p_status: status,
     p_source: source,
     p_description: description ?? null,
     p_freight_stage: freightStage ?? null,
+    p_expected_version: expectedVersion,
   });
-  if (error) throw error;
+  if (error) {
+    if (error.message?.includes("WORKFLOW_VERSION_CONFLICT")) {
+      throw new Error("WORKFLOW_VERSION_CONFLICT");
+    }
+    throw error;
+  }
   return vehicleFromRow(Array.isArray(data) ? data[0] : data);
 }
 
