@@ -1853,11 +1853,11 @@ function TitlesContent({
     const [documentsResult, partnersResult, accountsResult, chartResult, centersResult, freightsResult] =
       await Promise.allSettled([
         listFinancialDocuments(direction, access.workspaceId),
-        listFinancialPartners(),
-        listFinancialAccounts(),
-        listFinancialChart(),
-        listFinancialCostCenters(),
-        listCanonicalFreights(),
+        listFinancialPartners(access.tenantId),
+        listFinancialAccounts(access.workspaceId),
+        listFinancialChart(access.tenantId),
+        listFinancialCostCenters(access.workspaceId),
+        listCanonicalFreights(access.workspaceId),
       ]);
 
     if (documentsResult.status === "fulfilled") {

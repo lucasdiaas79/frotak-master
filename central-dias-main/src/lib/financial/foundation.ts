@@ -14,8 +14,10 @@ function requireData<T>(data: T | null, error: { message: string } | null, opera
   return data;
 }
 
-export async function listCanonicalFreights(): Promise<CanonicalFreight[]> {
-  const { data, error } = await supabase.from("freights").select("*").order("created_at");
+export async function listCanonicalFreights(workspaceId?: string): Promise<CanonicalFreight[]> {
+  let query = supabase.from("freights").select("*").order("created_at");
+  if (workspaceId) query = query.eq("workspace_id", workspaceId);
+  const { data, error } = await query;
   return requireData(data, error, "Não foi possível consultar os fretes canônicos").map((row) => ({
     id: row.id,
     tenantId: row.tenant_id,

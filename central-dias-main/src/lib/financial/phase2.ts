@@ -137,11 +137,13 @@ export async function reverseSettlement(id: string, reason: string) {
   return data as string;
 }
 
-export async function listFinancialAccounts(): Promise<FinancialAccount[]> {
-  const { data, error } = await supabase
+export async function listFinancialAccounts(workspaceId?: string): Promise<FinancialAccount[]> {
+  let query = supabase
     .from("financial_account_balances")
     .select("*")
     .order("name");
+  if (workspaceId) query = query.eq("workspace_id", workspaceId);
+  const { data, error } = await query;
   fail("Não foi possível carregar bancos e caixas", error);
   return (data ?? []).map((row) => ({
     id: row.id,
@@ -165,10 +167,23 @@ export async function saveFinancialAccount(payload: Record<string, unknown>) {
   return data as string;
 }
 
-export async function listFinancialPartners(): Promise<BusinessPartner[]> {
+export async function listFinancialPartners(tenantId?: string): Promise<BusinessPartner[]> {
+  let partnersQuery = supabase
+    .from("business_partners")
+    .select("*")
+    .eq("active", true)
+    .order("trade_name");
+  let rolesQuery = supabase
+    .from("business_partner_roles")
+    .select("partner_id, role")
+    .eq("active", true);
+  if (tenantId) {
+    partnersQuery = partnersQuery.eq("tenant_id", tenantId);
+    rolesQuery = rolesQuery.eq("tenant_id", tenantId);
+  }
   const [{ data, error }, { data: roles, error: rolesError }] = await Promise.all([
-    supabase.from("business_partners").select("*").eq("active", true).order("trade_name"),
-    supabase.from("business_partner_roles").select("partner_id, role").eq("active", true),
+    partnersQuery,
+    rolesQuery,
   ]);
   fail("Não foi possível carregar os parceiros", error);
   fail("Não foi possível carregar os papéis dos parceiros", rolesError);
@@ -202,8 +217,10 @@ export async function saveBusinessPartner(payload: Record<string, unknown>) {
   return data as string;
 }
 
-export async function listFinancialChart(): Promise<ChartAccount[]> {
-  const { data, error } = await supabase.from("chart_of_accounts").select("*").order("code");
+export async function listFinancialChart(tenantId?: string): Promise<ChartAccount[]> {
+  let query = supabase.from("chart_of_accounts").select("*").order("code");
+  if (tenantId) query = query.eq("tenant_id", tenantId);
+  const { data, error } = await query;
   fail("Não foi possível carregar o plano de contas", error);
   return (data ?? []).map((row) => ({
     id: row.id,
@@ -226,8 +243,10 @@ export async function saveChartAccount(payload: Record<string, unknown>) {
   return data as string;
 }
 
-export async function listFinancialCostCenters(): Promise<CostCenter[]> {
-  const { data, error } = await supabase.from("cost_centers").select("*").order("code");
+export async function listFinancialCostCenters(workspaceId?: string): Promise<CostCenter[]> {
+  let query = supabase.from("cost_centers").select("*").order("code");
+  if (workspaceId) query = query.eq("workspace_id", workspaceId);
+  const { data, error } = await query;
   fail("Não foi possível carregar os centros de custo", error);
   return (data ?? []).map((row) => ({
     id: row.id,
