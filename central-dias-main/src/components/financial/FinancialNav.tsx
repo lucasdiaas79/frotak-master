@@ -8,7 +8,6 @@ import {
   Landmark,
   ReceiptText,
   Repeat2,
-  RefreshCw,
   Tags,
   TrendingUp,
   WalletCards,
@@ -30,7 +29,6 @@ const financeNav = [
   ["/financeiro/recorrencias", "Recorrencias", Repeat2],
   ["/financeiro/plano-contas", "Gerenciais", Tags],
   ["/financeiro/centros-custo", "Apropriações", Building2],
-  ["/financeiro/integracoes", "Integrações", RefreshCw],
 ] as const;
 
 function canShowItem(to: string, access: FinancialAccess | null) {

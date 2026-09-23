@@ -133,7 +133,6 @@ const FINANCIAL_NAV: NavItem[] = [
       "/financeiro/recorrencias",
       "/financeiro/plano-contas",
       "/financeiro/centros-custo",
-      "/financeiro/integracoes",
       "/lucros-despesas",
     ],
   },
@@ -170,7 +169,6 @@ const ROUTE_TITLES: Record<string, string> = {
   "/financeiro/recorrencias": "Despesas Recorrentes",
   "/financeiro/plano-contas": "Gerenciais",
   "/financeiro/centros-custo": "Apropriações",
-  "/financeiro/integracoes": "Integrações Financeiras",
 };
 
 const ROUTE_GROUPS: Record<string, string> = {
@@ -201,7 +199,6 @@ const ROUTE_GROUPS: Record<string, string> = {
   "/financeiro/contas": "Financeiro",
   "/financeiro/plano-contas": "Financeiro",
   "/financeiro/centros-custo": "Financeiro",
-  "/financeiro/integracoes": "Financeiro",
 };
 
 function getInitials(profile: Profile | null) {
