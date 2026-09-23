@@ -240,6 +240,7 @@ async function queryVehicles(
     .from("vehicles")
     .select(
       "id, plate, type, status, situation, freight_stage, city, state, driver_id, trailer_id, current_freight_id, freight_value, updated_at, last_position_at",
+      { count: "exact" },
     )
     .eq("tenant_id", context.tenantId)
     .order("plate")
@@ -252,11 +253,12 @@ async function queryVehicles(
   if (search)
     query = query.or(`plate.ilike.%${search}%,type.ilike.%${search}%,city.ilike.%${search}%`);
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
   if (error) return { error: error.message };
 
   return {
     count: data?.length ?? 0,
+    totalCount: count ?? data?.length ?? 0,
     items: compactRows((data ?? []) as Array<Record<string, unknown>>, [
       "plate",
       "type",
@@ -280,7 +282,7 @@ async function queryDrivers(
 ) {
   let query = supabase
     .from("drivers")
-    .select("id, name, phone, cnh, active, vehicle_id, updated_at")
+    .select("id, name, phone, cnh, active, vehicle_id, updated_at", { count: "exact" })
     .eq("tenant_id", context.tenantId)
     .order("name")
     .limit(limitFromArgs(args));
@@ -293,11 +295,12 @@ async function queryDrivers(
   if (search)
     query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%,cnh.ilike.%${search}%`);
 
-  const { data, error } = await query;
+  const { data, error, count } = await query;
   if (error) return { error: error.message };
 
   return {
     count: data?.length ?? 0,
+    totalCount: count ?? data?.length ?? 0,
     items: compactRows((data ?? []) as Array<Record<string, unknown>>, [
       "name",
       "phone",
