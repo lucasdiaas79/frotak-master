@@ -1850,23 +1850,49 @@ function TitlesContent({
   const [saving, setSaving] = useState(false);
   const { vehicles, products } = useFleet();
   const load = useCallback(async () => {
-    const [d, p, a, c, cc, f] = await Promise.all([
-      listFinancialDocuments(direction),
-      listFinancialPartners(),
-      listFinancialAccounts(),
-      listFinancialChart(),
-      listFinancialCostCenters(),
-      listCanonicalFreights(),
-    ]);
-    setDocuments(d);
-    setPartners(p);
-    setAccounts(a);
-    setChart(c);
-    setCenters(cc);
-    setFreights(f);
+    const [documentsResult, partnersResult, accountsResult, chartResult, centersResult, freightsResult] =
+      await Promise.allSettled([
+        listFinancialDocuments(direction),
+        listFinancialPartners(),
+        listFinancialAccounts(),
+        listFinancialChart(),
+        listFinancialCostCenters(),
+        listCanonicalFreights(),
+      ]);
+
+    if (documentsResult.status === "fulfilled") {
+      setDocuments(documentsResult.value);
+    } else {
+      console.error("[financeiro] Falha ao carregar títulos", documentsResult.reason);
+      toast.error("Não foi possível carregar os títulos.");
+      setDocuments([]);
+    }
+
+    const applyAuxiliaryResult = <T,>(
+      result: PromiseSettledResult<T[]>,
+      setter: (value: T[]) => void,
+      label: string,
+    ) => {
+      if (result.status === "fulfilled") {
+        setter(result.value);
+        return;
+      }
+      console.error(`[financeiro] Falha ao carregar ${label}`, result.reason);
+      toast.error(`Não foi possível carregar ${label}.`);
+      setter([]);
+    };
+
+    applyAuxiliaryResult(partnersResult, setPartners, "parceiros financeiros");
+    applyAuxiliaryResult(accountsResult, setAccounts, "bancos e caixas");
+    applyAuxiliaryResult(chartResult, setChart, "plano de contas");
+    applyAuxiliaryResult(centersResult, setCenters, "centros de custo");
+    applyAuxiliaryResult(freightsResult, setFreights, "fretes financeiros");
   }, [direction]);
   useEffect(() => {
-    load().catch(() => toast.error("Não foi possível carregar os títulos."));
+    load().catch((error) => {
+      console.error("[financeiro] Falha inesperada ao carregar contas a receber/pagar", error);
+      toast.error("Não foi possível carregar a página financeira.");
+    });
   }, [load]);
   const allowedPartners = partners.filter(
     (p) =>
