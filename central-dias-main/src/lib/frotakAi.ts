@@ -201,6 +201,108 @@ function requestedLimit(text: string, fallback = 10) {
   return Number.isFinite(value) ? Math.max(1, Math.min(80, value)) : fallback;
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function resultItems(value: unknown) {
+  const items = asRecord(value).items;
+  return Array.isArray(items) ? (items as Array<Record<string, unknown>>) : [];
+}
+
+async function answerDeterministicTenantQuestion(
+  context: Awaited<ReturnType<typeof resolveFrotakAiContext>>,
+  message: string,
+) {
+  const normalized = normalizeIntentText(message);
+  const limit = requestedLimit(normalized, 5);
+  const asksCompany =
+    /\b(empresa|companhia|tenant|workspace|cliente)\b/.test(normalized) &&
+    /\b(nome|qual|minha|meu|atual)\b/.test(normalized);
+  const asksVehicle = /\b(caminhao|caminhoes|veiculo|veiculos|frota|placa|placas)\b/.test(
+    normalized,
+  );
+  const asksDriver = /\b(motorista|motoristas|condutor|condutores)\b/.test(normalized);
+  const asksCount = /\b(quantos|quantas|qtd|quantidade|total|numero)\b/.test(normalized);
+  const asksList = /\b(cite|listar|liste|mostre|quais|nomes|nome)\b/.test(normalized);
+
+  if (asksCompany) {
+    const sameName = context.tenantName === context.workspaceName;
+    return {
+      text: sameName
+        ? `Sua empresa atual é ${context.tenantName}.`
+        : `Sua empresa atual é ${context.tenantName}. Workspace: ${context.workspaceName}.`,
+      tools: ["contexto_empresa"],
+    };
+  }
+
+  if (asksVehicle && asksCount) {
+    const result = asRecord(await executeFrotakAiTool(context, "consultar_veiculos", { limit: 1 }));
+    if (result.error)
+      return {
+        text: `Nao consegui consultar a frota: ${result.error}`,
+        tools: ["consultar_veiculos"],
+      };
+    const total = Number(result.totalCount ?? result.count ?? 0);
+    return {
+      text: `Voce tem ${total} caminhoes/veiculos cadastrados no tenant ${context.tenantName}.`,
+      tools: ["consultar_veiculos"],
+    };
+  }
+
+  if (asksDriver && asksCount) {
+    const result = asRecord(
+      await executeFrotakAiTool(context, "consultar_motoristas", {
+        status: "active",
+        limit: 1,
+      }),
+    );
+    if (result.error)
+      return {
+        text: `Nao consegui consultar os motoristas: ${result.error}`,
+        tools: ["consultar_motoristas"],
+      };
+    const total = Number(result.totalCount ?? result.count ?? 0);
+    return {
+      text: `Voce tem ${total} motoristas ativos cadastrados no tenant ${context.tenantName}.`,
+      tools: ["consultar_motoristas"],
+    };
+  }
+
+  if (asksDriver && asksList) {
+    const result = await executeFrotakAiTool(context, "consultar_motoristas", {
+      status: "active",
+      limit,
+    });
+    const record = asRecord(result);
+    if (record.error)
+      return {
+        text: `Nao consegui consultar os motoristas: ${record.error}`,
+        tools: ["consultar_motoristas"],
+      };
+
+    const names = resultItems(result)
+      .map((item) => String(item.name ?? "").trim())
+      .filter(Boolean);
+
+    if (names.length === 0) {
+      return {
+        text: `Nao encontrei motoristas ativos cadastrados no tenant ${context.tenantName}.`,
+        tools: ["consultar_motoristas"],
+      };
+    }
+
+    return {
+      text: names.join(", "),
+      tools: ["consultar_motoristas"],
+    };
+  }
+
+  return null;
+}
+
 async function buildMandatoryTenantData(
   context: Awaited<ReturnType<typeof resolveFrotakAiContext>>,
   message: string,
@@ -402,6 +504,15 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
       if (!message) throw new Error("Mensagem vazia");
 
       const context = await resolveFrotakAiContext(data.accessToken);
+      const deterministicAnswer = await answerDeterministicTenantQuestion(context, message);
+      if (deterministicAnswer) {
+        return {
+          text: deterministicAnswer.text,
+          model: "frotak-server-data",
+          tools: deterministicAnswer.tools,
+        };
+      }
+
       const snapshot = await buildFrotakAiOperationalSnapshot(context);
       const mandatoryTenantData = await buildMandatoryTenantData(context, message);
       const systemInstruction = frotakAiSystemInstruction(
