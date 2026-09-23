@@ -1852,7 +1852,7 @@ function TitlesContent({
   const load = useCallback(async () => {
     const [documentsResult, partnersResult, accountsResult, chartResult, centersResult, freightsResult] =
       await Promise.allSettled([
-        listFinancialDocuments(direction),
+        listFinancialDocuments(direction, access.workspaceId),
         listFinancialPartners(),
         listFinancialAccounts(),
         listFinancialChart(),
