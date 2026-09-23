@@ -30,7 +30,7 @@ const financeNav = [
   ["/financeiro/recorrencias", "Recorrencias", Repeat2],
   ["/financeiro/plano-contas", "Plano de Contas", Tags],
   ["/financeiro/centros-custo", "Centros de Custo", Building2],
-  ["/financeiro/integracoes", "Configuracoes", RefreshCw],
+  ["/financeiro/integracoes", "Integrações", RefreshCw],
 ] as const;
 
 function canShowItem(to: string, access: FinancialAccess | null) {
