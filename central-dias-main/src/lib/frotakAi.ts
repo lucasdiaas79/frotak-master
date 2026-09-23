@@ -220,9 +220,6 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" })
               inputAudioTranscription: {},
               outputAudioTranscription: {},
               sessionResumption: {},
-              thinkingConfig: {
-                thinkingLevel: "minimal",
-              },
               tools: [{ functionDeclarations: FROTAK_AI_TOOL_DECLARATIONS }],
               systemInstruction: {
                 parts: [
