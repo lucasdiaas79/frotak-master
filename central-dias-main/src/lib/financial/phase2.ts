@@ -221,7 +221,7 @@ export async function listFinancialChart(tenantId?: string): Promise<ChartAccoun
   let query = supabase.from("chart_of_accounts").select("*").order("code");
   if (tenantId) query = query.eq("tenant_id", tenantId);
   const { data, error } = await query;
-  fail("Não foi possível carregar o plano de contas", error);
+  fail("Não foi possível carregar os gerenciais", error);
   return (data ?? []).map((row) => ({
     id: row.id,
     tenantId: row.tenant_id,
@@ -247,7 +247,7 @@ export async function listFinancialCostCenters(workspaceId?: string): Promise<Co
   let query = supabase.from("cost_centers").select("*").order("code");
   if (workspaceId) query = query.eq("workspace_id", workspaceId);
   const { data, error } = await query;
-  fail("Não foi possível carregar os centros de custo", error);
+  fail("Não foi possível carregar as apropriações", error);
   return (data ?? []).map((row) => ({
     id: row.id,
     tenantId: row.tenant_id,
@@ -262,7 +262,7 @@ export async function listFinancialCostCenters(workspaceId?: string): Promise<Co
 
 export async function saveCostCenter(payload: Record<string, unknown>) {
   const { data, error } = await supabase.rpc("save_cost_center", { p_payload: payload });
-  fail("Não foi possível salvar o centro de custo", error);
+  fail("Não foi possível salvar a apropriação", error);
   return data as string;
 }
 

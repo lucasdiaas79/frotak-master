@@ -1354,7 +1354,7 @@ function DreContent({ access }: { access: FinancialAccess }) {
           onEnd={setEnd}
           compact
         />
-        <Field label="Centro de custo">
+        <Field label="Apropriação">
           <Select value={costCenterId} onValueChange={setCostCenterId}>
             <SelectTrigger>
               <SelectValue />
@@ -1880,8 +1880,8 @@ function TitlesContent({
 
     applyAuxiliaryResult(partnersResult, setPartners, "parceiros financeiros");
     applyAuxiliaryResult(accountsResult, setAccounts, "bancos e caixas");
-    applyAuxiliaryResult(chartResult, setChart, "plano de contas");
-    applyAuxiliaryResult(centersResult, setCenters, "centros de custo");
+    applyAuxiliaryResult(chartResult, setChart, "gerenciais");
+    applyAuxiliaryResult(centersResult, setCenters, "apropriações");
     applyAuxiliaryResult(freightsResult, setFreights, "fretes financeiros");
   }, [direction]);
   useEffect(() => {
@@ -3740,7 +3740,7 @@ function DocumentDialog({
                   .map((a) => [a.id, `${a.code} · ${a.name}`])}
               />
             </Field>
-            <Field label="Centro de custo">
+            <Field label="Apropriação">
               <SimpleSelect
                 value={form.costCenterId || "all"}
                 onChange={(v) => set("costCenterId", v === "all" ? "" : v)}
@@ -4506,7 +4506,7 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
                   .map((account) => [account.id, `${account.code} - ${account.name}`])}
               />
             </Field>
-            <Field label="Centro de custo">
+            <Field label="Apropriação">
               <SimpleSelect
                 value={form.costCenterId || "all"}
                 onChange={(value) =>
@@ -5090,7 +5090,7 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
                   .map((account) => [account.id, `${account.code} - ${account.name}`])}
               />
             </Field>
-            <Field label="Centro de custo">
+            <Field label="Apropriação">
               <SimpleSelect
                 value={employeeForm.defaultCostCenterId || "all"}
                 onChange={(value) =>
@@ -5581,7 +5581,7 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
   return (
     <div className="financial-shell space-y-4">
       <PageHeader
-        title={kind === "chart" ? "Plano de Contas" : "Centros de Custo"}
+        title={kind === "chart" ? "Gerenciais" : "Apropriações"}
         subtitle={
           kind === "chart"
             ? "Categorias hierárquicas e classificação gerencial"
@@ -5642,7 +5642,7 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
                 ? "Editar estrutura"
                 : kind === "chart"
                   ? "Nova conta"
-                  : "Novo centro de custo"}
+                  : "Nova apropriação"}
             </DialogTitle>
             <DialogDescription>
               Crie um item personalizado sem alterar as estruturas obrigatórias.

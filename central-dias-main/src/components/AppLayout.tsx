@@ -168,8 +168,8 @@ const ROUTE_TITLES: Record<string, string> = {
   "/financeiro/contas": "Bancos e Caixas",
   "/financeiro/salarios": "Salários",
   "/financeiro/recorrencias": "Despesas Recorrentes",
-  "/financeiro/plano-contas": "Plano de Contas",
-  "/financeiro/centros-custo": "Centros de Custo",
+  "/financeiro/plano-contas": "Gerenciais",
+  "/financeiro/centros-custo": "Apropriações",
   "/financeiro/integracoes": "Integrações Financeiras",
 };
 

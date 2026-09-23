@@ -28,8 +28,8 @@ const financeNav = [
   ["/financeiro/contas", "Bancos e Caixas", Landmark],
   ["/financeiro/salarios", "Salarios", ReceiptText],
   ["/financeiro/recorrencias", "Recorrencias", Repeat2],
-  ["/financeiro/plano-contas", "Plano de Contas", Tags],
-  ["/financeiro/centros-custo", "Centros de Custo", Building2],
+  ["/financeiro/plano-contas", "Gerenciais", Tags],
+  ["/financeiro/centros-custo", "Apropriações", Building2],
   ["/financeiro/integracoes", "Integrações", RefreshCw],
 ] as const;
 

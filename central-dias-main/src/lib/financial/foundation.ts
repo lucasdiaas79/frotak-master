@@ -82,7 +82,7 @@ export async function listBusinessPartners(): Promise<BusinessPartner[]> {
 
 export async function listChartOfAccounts(): Promise<ChartAccount[]> {
   const { data, error } = await supabase.from("chart_of_accounts").select("*").order("code");
-  return requireData(data, error, "Não foi possível consultar o plano de contas").map((row) => ({
+  return requireData(data, error, "Não foi possível consultar os gerenciais").map((row) => ({
     id: row.id,
     tenantId: row.tenant_id,
     parentId: row.parent_id,
@@ -99,7 +99,7 @@ export async function listChartOfAccounts(): Promise<ChartAccount[]> {
 
 export async function listCostCenters(): Promise<CostCenter[]> {
   const { data, error } = await supabase.from("cost_centers").select("*").order("code");
-  return requireData(data, error, "Não foi possível consultar os centros de custo").map((row) => ({
+  return requireData(data, error, "Não foi possível consultar as apropriações").map((row) => ({
     id: row.id,
     tenantId: row.tenant_id,
     workspaceId: row.workspace_id,
