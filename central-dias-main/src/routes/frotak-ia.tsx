@@ -15,7 +15,12 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { createFrotakLiveToken, sendFrotakAiChatMessage } from "@/lib/frotakAi";
+import { getCurrentAccessToken } from "@/lib/auth";
+import {
+  createFrotakLiveToken,
+  executeFrotakAiToolCall,
+  sendFrotakAiChatMessage,
+} from "@/lib/frotakAi";
 import {
   FrotakLiveSession,
   requestFrotakLiveMicrophone,
@@ -61,11 +66,20 @@ function cleanAssistantText(text: string) {
 
 function liveStatusLabel(status: FrotakLiveStatus) {
   if (status === "connecting") return "Conectando ao Frotak Live";
+  if (status === "reconnecting") return "Reconectando";
   if (status === "ready") return "Pode falar";
   if (status === "listening") return "Ouvindo";
+  if (status === "thinking") return "Pensando";
   if (status === "speaking") return "Respondendo";
+  if (status === "interrupted") return "Interrompido";
   if (status === "error") return "Voz indisponivel";
   return "Frotak Live";
+}
+
+async function requireAccessToken() {
+  const accessToken = await getCurrentAccessToken();
+  if (!accessToken) throw new Error("Sessao expirada. Entre novamente para usar a Frotak IA.");
+  return accessToken;
 }
 
 function FrotakIaPage() {
@@ -75,6 +89,7 @@ function FrotakIaPage() {
   const [mode, setMode] = useState<"text" | "live">("text");
   const [liveStatus, setLiveStatus] = useState<FrotakLiveStatus>("idle");
   const [lastLiveText, setLastLiveText] = useState("");
+  const [lastUserTranscript, setLastUserTranscript] = useState("");
   const liveSessionRef = useRef<FrotakLiveSession | null>(null);
 
   useEffect(
@@ -122,8 +137,9 @@ function FrotakIaPage() {
       const history = messages
         .filter((message) => !message.pending)
         .map((message) => ({ role: message.role, text: message.text }));
+      const accessToken = await requireAccessToken();
       const response = await sendFrotakAiChatMessage({
-        data: { message: text, history },
+        data: { accessToken, message: text, history },
       });
 
       updateMessage(pendingId, cleanAssistantText(response.text), false);
@@ -145,9 +161,12 @@ function FrotakIaPage() {
       setMode("live");
       setLiveStatus("connecting");
       setLastLiveText("");
+      setLastUserTranscript("");
 
       stream = await requestFrotakLiveMicrophone();
-      const liveToken = await createFrotakLiveToken();
+      const fetchLiveToken = async () =>
+        createFrotakLiveToken({ data: { accessToken: await requireAccessToken() } });
+      const liveToken = await fetchLiveToken();
       const session = new FrotakLiveSession({
         token: liveToken.token,
         model: liveToken.model,
@@ -156,6 +175,21 @@ function FrotakIaPage() {
         onText: (text) => {
           if (text) setLastLiveText(text);
         },
+        onPartialText: (text) => {
+          if (text) setLastLiveText(text);
+        },
+        onInputText: (text) => {
+          if (text) setLastUserTranscript(text);
+        },
+        refreshToken: fetchLiveToken,
+        onToolCall: async (call) =>
+          executeFrotakAiToolCall({
+            data: {
+              accessToken: await requireAccessToken(),
+              name: call.name,
+              args: call.args ?? {},
+            },
+          }),
         onError: (message) => {
           toast.error(message);
           setLiveStatus("error");
@@ -193,6 +227,7 @@ function FrotakIaPage() {
         draft={draft}
         liveStatus={liveStatus}
         lastLiveText={lastLiveText}
+        lastUserTranscript={lastUserTranscript}
         setDraft={setDraft}
         startLive={startLive}
         exitLiveMode={exitLiveMode}
@@ -265,6 +300,7 @@ function FrotakLiveView({
   draft,
   liveStatus,
   lastLiveText,
+  lastUserTranscript,
   setDraft,
   startLive,
   exitLiveMode,
@@ -273,6 +309,7 @@ function FrotakLiveView({
   draft: string;
   liveStatus: FrotakLiveStatus;
   lastLiveText: string;
+  lastUserTranscript: string;
   setDraft: (value: string) => void;
   startLive: () => Promise<void>;
   exitLiveMode: () => Promise<void>;
@@ -281,6 +318,7 @@ function FrotakLiveView({
   const active = liveStatus !== "idle" && liveStatus !== "error";
   const speaking = liveStatus === "speaking";
   const listening = liveStatus === "listening";
+  const thinking = liveStatus === "thinking" || liveStatus === "reconnecting";
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-black text-white md:absolute md:inset-0 md:rounded-[28px]">
@@ -314,6 +352,7 @@ function FrotakLiveView({
             "shadow-[0_0_90px_rgba(34,197,94,0.25)]",
             speaking && "scale-105 animate-pulse shadow-[0_0_120px_rgba(34,197,94,0.42)]",
             listening && "scale-95 shadow-[0_0_110px_rgba(59,130,246,0.36)]",
+            thinking && "shadow-[0_0_105px_rgba(250,204,21,0.28)]",
           )}
         >
           <div
@@ -321,6 +360,7 @@ function FrotakLiveView({
               "absolute -inset-7 rounded-full border border-primary/0 transition",
               listening && "animate-ping border-primary/25",
               speaking && "animate-pulse border-sky-300/25",
+              thinking && "animate-pulse border-yellow-300/25",
             )}
           />
           <div
@@ -336,6 +376,11 @@ function FrotakLiveView({
         </div>
 
         <p className="mt-8 text-[15px] font-bold text-white/72">{liveStatusLabel(liveStatus)}</p>
+        {lastUserTranscript ? (
+          <p className="mt-3 max-w-md whitespace-pre-wrap text-[13px] font-semibold leading-relaxed text-white/45">
+            Voce: {lastUserTranscript}
+          </p>
+        ) : null}
         {lastLiveText ? (
           <p className="mt-4 max-w-md whitespace-pre-wrap text-[17px] font-semibold leading-relaxed text-white">
             {lastLiveText}

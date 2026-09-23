@@ -1,4 +1,13 @@
-export type FrotakLiveStatus = "idle" | "connecting" | "ready" | "listening" | "speaking" | "error";
+export type FrotakLiveStatus =
+  | "idle"
+  | "connecting"
+  | "reconnecting"
+  | "ready"
+  | "listening"
+  | "thinking"
+  | "speaking"
+  | "interrupted"
+  | "error";
 
 export type FrotakLiveSessionOptions = {
   token: string;
@@ -6,7 +15,15 @@ export type FrotakLiveSessionOptions = {
   stream: MediaStream;
   onStatus?: (status: FrotakLiveStatus) => void;
   onText?: (text: string) => void;
+  onInputText?: (text: string) => void;
+  onPartialText?: (text: string) => void;
   onError?: (message: string) => void;
+  refreshToken?: () => Promise<{ token: string; model: string }>;
+  onToolCall?: (call: {
+    id?: string;
+    name: string;
+    args?: Record<string, unknown>;
+  }) => Promise<unknown>;
 };
 
 const GEMINI_LIVE_WS =
@@ -38,12 +55,28 @@ type GeminiLiveMessage = {
     turnComplete?: boolean;
     generationComplete?: boolean;
   };
+  toolCall?: {
+    functionCalls?: Array<{
+      id?: string;
+      name?: string;
+      args?: Record<string, unknown>;
+    }>;
+  };
+  toolCallCancellation?: {
+    ids?: string[];
+  };
   error?: {
     code?: number;
     message?: string;
     status?: string;
   };
-  goAway?: unknown;
+  goAway?: {
+    timeLeft?: string;
+  };
+  sessionResumptionUpdate?: {
+    newHandle?: string;
+    resumable?: boolean;
+  };
 };
 
 export async function requestFrotakLiveMicrophone() {
@@ -161,78 +194,40 @@ export class FrotakLiveSession {
   private setupComplete = false;
   private closed = false;
   private transcriptBuffer = "";
+  private inputTranscriptBuffer = "";
   private captureBuffer: number[] = [];
   private setupTimeout: number | null = null;
+  private silenceTimer: number | null = null;
+  private reconnectTimer: number | null = null;
+  private reconnectAttempts = 0;
+  private reconnecting = false;
+  private sessionResumptionHandle: string | null = null;
+  private speaking = false;
 
   constructor(options: FrotakLiveSessionOptions) {
     this.options = options;
     this.stream = options.stream;
     this.player = new PcmAudioPlayer({
-      onStart: () => this.options.onStatus?.("speaking"),
+      onStart: () => {
+        this.speaking = true;
+        this.options.onStatus?.("speaking");
+      },
       onStop: () => {
-        if (!this.closed) this.options.onStatus?.("ready");
+        this.speaking = false;
+        if (!this.closed && !this.reconnecting) this.options.onStatus?.("ready");
       },
     });
   }
 
   async start() {
     this.closed = false;
-    this.options.onStatus?.("connecting");
-
-    this.websocket = new WebSocket(
-      `${GEMINI_LIVE_WS}?access_token=${encodeURIComponent(this.options.token)}`,
-    );
-    this.websocket.binaryType = "arraybuffer";
-    this.websocket.onmessage = (event) => {
-      void this.handleMessage(event);
-    };
-    this.websocket.onerror = (event) => {
-      console.error("[frotakLive] websocket error", event);
-      this.options.onStatus?.("error");
-      this.options.onError?.("Nao foi possivel conectar ao Frotak Live.");
-    };
-    this.websocket.onclose = (event) => {
-      if (event.code !== 1000) {
-        console.error("[frotakLive] websocket closed", {
-          code: event.code,
-          reason: event.reason,
-        });
-      }
-      if (!this.closed) this.options.onStatus?.("idle");
-    };
-
-    await waitForWebSocketOpen(this.websocket);
-    this.setupTimeout = window.setTimeout(() => {
-      if (this.closed || this.setupComplete) return;
-      console.error("[frotakLive] setup timeout");
-      this.options.onStatus?.("error");
-      this.options.onError?.("Nao foi possivel iniciar a conexao de voz.");
-      void this.stop();
-    }, 12_000);
-    this.websocket.send(
-      JSON.stringify({
-        setup: {
-          model: `models/${this.options.model}`,
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            temperature: 0.2,
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName: "Aoede",
-                },
-              },
-            },
-          },
-          inputAudioTranscription: {},
-          outputAudioTranscription: {},
-        },
-      }),
-    );
+    this.reconnectAttempts = 0;
+    await this.connect(false);
   }
 
   sendText(text: string) {
     if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) return;
+    this.options.onStatus?.("thinking");
     this.websocket.send(
       JSON.stringify({
         realtimeInput: {
@@ -245,7 +240,11 @@ export class FrotakLiveSession {
   async stop() {
     this.closed = true;
     if (this.setupTimeout) window.clearTimeout(this.setupTimeout);
+    if (this.silenceTimer) window.clearTimeout(this.silenceTimer);
+    if (this.reconnectTimer) window.clearTimeout(this.reconnectTimer);
     this.setupTimeout = null;
+    this.silenceTimer = null;
+    this.reconnectTimer = null;
     this.captureBuffer = [];
     this.captureNode?.port.close();
     this.captureNode?.disconnect();
@@ -275,8 +274,74 @@ export class FrotakLiveSession {
     this.options.onStatus?.("idle");
   }
 
+  private async connect(isReconnect: boolean) {
+    if (isReconnect) {
+      this.reconnecting = true;
+      this.options.onStatus?.("reconnecting");
+      if (this.options.refreshToken) {
+        const next = await this.options.refreshToken();
+        this.options.token = next.token;
+        this.options.model = next.model;
+      }
+    } else {
+      this.options.onStatus?.("connecting");
+    }
+
+    this.websocket = new WebSocket(
+      `${GEMINI_LIVE_WS}?access_token=${encodeURIComponent(this.options.token)}`,
+    );
+    this.websocket.binaryType = "arraybuffer";
+    this.websocket.onmessage = (event) => {
+      void this.handleMessage(event);
+    };
+    this.websocket.onerror = (event) => {
+      console.error("[frotakLive] websocket error", event);
+      if (!this.closed) void this.scheduleReconnect("erro de conexao");
+    };
+    this.websocket.onclose = (event) => {
+      if (event.code !== 1000) {
+        console.error("[frotakLive] websocket closed", {
+          code: event.code,
+          reason: event.reason,
+        });
+      }
+      if (!this.closed && !this.reconnecting) void this.scheduleReconnect("conexao encerrada");
+    };
+
+    await waitForWebSocketOpen(this.websocket);
+    this.setupTimeout = window.setTimeout(() => {
+      if (this.closed || this.setupComplete) return;
+      console.error("[frotakLive] setup timeout");
+      void this.scheduleReconnect("timeout de setup");
+    }, 12_000);
+    this.websocket.send(
+      JSON.stringify({
+        setup: {
+          model: `models/${this.options.model}`,
+          generationConfig: {
+            responseModalities: ["AUDIO"],
+            temperature: 0.2,
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: "Aoede",
+                },
+              },
+            },
+          },
+          inputAudioTranscription: {},
+          outputAudioTranscription: {},
+          sessionResumption: this.sessionResumptionHandle
+            ? { handle: this.sessionResumptionHandle }
+            : {},
+        },
+      }),
+    );
+  }
+
   private async startAudioCapture() {
     if (!this.stream) return;
+    if (this.captureNode) return;
     if (!window.AudioWorkletNode) {
       throw new Error("Este navegador nao suporta o modo de voz em tempo real.");
     }
@@ -308,8 +373,15 @@ export class FrotakLiveSession {
       const rms = calculateRms(input);
 
       if (rms > ACTIVITY_RMS_THRESHOLD) {
+        if (this.speaking) {
+          this.options.onStatus?.("interrupted");
+          this.player.stopNow();
+        }
         this.options.onStatus?.("listening");
-        this.player.stopNow();
+        if (this.silenceTimer) window.clearTimeout(this.silenceTimer);
+        this.silenceTimer = window.setTimeout(() => {
+          if (!this.closed && !this.speaking) this.options.onStatus?.("thinking");
+        }, 900);
       }
 
       this.captureBuffer.push(...input);
@@ -349,8 +421,7 @@ export class FrotakLiveSession {
         status: message.error.status,
         message: message.error.message,
       });
-      this.options.onStatus?.("error");
-      this.options.onError?.("Nao foi possivel concluir a conversa por voz.");
+      void this.scheduleReconnect("erro retornado pelo Gemini Live");
       return;
     }
 
@@ -358,6 +429,8 @@ export class FrotakLiveSession {
       if (this.setupTimeout) window.clearTimeout(this.setupTimeout);
       this.setupTimeout = null;
       this.setupComplete = true;
+      this.reconnecting = false;
+      this.reconnectAttempts = 0;
       void this.startAudioCapture()
         .then(() => {
           if (!this.closed) this.options.onStatus?.("ready");
@@ -373,30 +446,135 @@ export class FrotakLiveSession {
     }
 
     if (message.serverContent?.interrupted) {
+      this.options.onStatus?.("interrupted");
       this.player.stopNow();
       return;
+    }
+
+    const inputText = message.serverContent?.inputTranscription?.text;
+    if (inputText) {
+      this.inputTranscriptBuffer = `${this.inputTranscriptBuffer}${inputText}`.trimStart();
+      this.options.onInputText?.(sanitizeLiveText(this.inputTranscriptBuffer));
     }
 
     const outputText = message.serverContent?.outputTranscription?.text;
     if (outputText) {
       this.transcriptBuffer = `${this.transcriptBuffer}${outputText}`.trimStart();
+      this.options.onPartialText?.(sanitizeLiveText(this.transcriptBuffer));
     }
 
     const parts = message.serverContent?.modelTurn?.parts ?? [];
     parts.forEach((part) => {
       const audio = part.inlineData?.data;
       if (audio) void this.player.enqueue(audio);
-      if (part.text) this.transcriptBuffer = `${this.transcriptBuffer}${part.text}`.trimStart();
+      if (part.text) {
+        this.transcriptBuffer = `${this.transcriptBuffer}${part.text}`.trimStart();
+        this.options.onPartialText?.(sanitizeLiveText(this.transcriptBuffer));
+      }
     });
+
+    const toolCalls = message.toolCall?.functionCalls ?? [];
+    if (toolCalls.length > 0) {
+      void this.handleToolCalls(toolCalls);
+    }
+
+    if (message.toolCallCancellation?.ids?.length) {
+      this.options.onStatus?.("interrupted");
+    }
 
     if (message.serverContent?.turnComplete || message.serverContent?.generationComplete) {
       const text = this.transcriptBuffer.trim();
       this.transcriptBuffer = "";
+      this.inputTranscriptBuffer = "";
       if (text) this.options.onText?.(sanitizeLiveText(text));
     }
 
+    if (message.sessionResumptionUpdate?.resumable && message.sessionResumptionUpdate.newHandle) {
+      this.sessionResumptionHandle = message.sessionResumptionUpdate.newHandle;
+    }
+
     if (message.goAway) {
-      this.options.onError?.("Sessao Frotak Live encerrando. Inicie novamente se precisar.");
+      void this.scheduleReconnect("goAway");
+    }
+  }
+
+  private async handleToolCalls(
+    calls: Array<{ id?: string; name?: string; args?: Record<string, unknown> }>,
+  ) {
+    if (
+      !this.websocket ||
+      this.websocket.readyState !== WebSocket.OPEN ||
+      !this.options.onToolCall
+    ) {
+      return;
+    }
+
+    this.options.onStatus?.("thinking");
+    const functionResponses = await Promise.all(
+      calls
+        .filter((call) => call.name)
+        .map(async (call) => {
+          try {
+            const output = await this.options.onToolCall?.({
+              id: call.id,
+              name: String(call.name),
+              args: call.args ?? {},
+            });
+            return {
+              id: call.id,
+              name: call.name,
+              response: { output },
+            };
+          } catch (error) {
+            return {
+              id: call.id,
+              name: call.name,
+              response: {
+                error: error instanceof Error ? error.message : "Falha ao consultar ferramenta.",
+              },
+            };
+          }
+        }),
+    );
+
+    if (functionResponses.length === 0) return;
+    this.websocket.send(JSON.stringify({ toolResponse: { functionResponses } }));
+  }
+
+  private async scheduleReconnect(reason: string) {
+    if (this.closed || this.reconnecting) return;
+    if (!this.options.refreshToken || this.reconnectAttempts >= 3) {
+      this.options.onStatus?.("error");
+      this.options.onError?.("Nao foi possivel manter o Frotak Live conectado.");
+      return;
+    }
+
+    this.reconnectAttempts += 1;
+    this.reconnecting = true;
+    this.options.onStatus?.("reconnecting");
+    console.warn("[frotakLive] reconnecting", { reason, attempt: this.reconnectAttempts });
+
+    this.websocket?.close();
+    this.websocket = null;
+    this.setupComplete = false;
+    if (this.setupTimeout) window.clearTimeout(this.setupTimeout);
+    this.setupTimeout = null;
+
+    await new Promise<void>((resolve) => {
+      this.reconnectTimer = window.setTimeout(
+        resolve,
+        Math.min(1500 * this.reconnectAttempts, 4500),
+      );
+    });
+
+    try {
+      await this.connect(true);
+    } catch (error) {
+      console.error("[frotakLive] reconnect failed", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      this.reconnecting = false;
+      void this.scheduleReconnect("tentativa de reconexao falhou");
     }
   }
 }
