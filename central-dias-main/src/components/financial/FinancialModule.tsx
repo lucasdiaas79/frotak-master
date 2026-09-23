@@ -108,10 +108,8 @@ import {
 import {
   approvePayrollEntry,
   calculatePayrollEntry,
-  createEmployeeAdvance,
   createPayrollEntry,
   deletePayrollItem,
-  listEmployeeAdvances,
   listEmployeeFinancialProfiles,
   listPayrollEntries,
   postPayrollEntry,
@@ -136,7 +134,6 @@ import type {
   DreDetail,
   DreGroupRow,
   DreSummary,
-  EmployeeAdvance,
   EmployeeFinancialProfile,
   FinancialAccess,
   FinancialAccount,
@@ -154,7 +151,6 @@ import type {
   FinancialSettlement,
   PayrollEntry,
   PayrollEntryStatus,
-  PayrollItem,
   PayrollItemType,
 } from "@/lib/financial/types";
 import { useFleet } from "@/lib/store";
@@ -1218,7 +1214,7 @@ function DreDetailPanel({
                 {signedMoney(document.signed_amount)}
               </strong>
               {document.visible_document_id === null && (
-                <Badge variant="outline">folha restrita</Badge>
+                <Badge variant="outline">salarios restritos</Badge>
               )}
             </div>
           ))}
@@ -3154,7 +3150,7 @@ const statusLabels: Record<string, string> = {
 const originLabels: Record<string, string> = {
   manual: "Manual",
   fuel: "Abastecimento",
-  payroll: "Folha",
+  payroll: "Salarios",
   recurring: "Recorrencia",
   freight: "Frete",
   other: "Outras",
@@ -4636,9 +4632,11 @@ const payrollItemLabel: Record<PayrollItemType, string> = {
   OTHER_DEDUCTION: "Outra deducao",
 };
 
-function nextPayrollDueDate(month: string) {
+function nextPayrollDueDate(month: string, preferredDay = 5) {
   const [year, rawMonth] = month.split("-").map(Number);
-  const dateValue = new Date(year, rawMonth, 5, 12);
+  const lastDay = new Date(year, rawMonth, 0).getDate();
+  const day = Math.min(Math.max(preferredDay || 5, 1), lastDay);
+  const dateValue = new Date(year, rawMonth - 1, day, 12);
   return dateValue.toISOString().slice(0, 10);
 }
 
@@ -4649,6 +4647,7 @@ function emptyEmployeeForm(access: FinancialAccess, chart: ChartAccount[], cente
     driverId: "",
     jobTitle: "",
     baseSalary: "",
+    paymentDate: nextPayrollDueDate(currentCompetenceMonth()),
     defaultCostCenterId:
       centers.find((center) => center.code === "OPERACAO")?.id ||
       centers.find((center) => center.active)?.id ||
@@ -4676,7 +4675,6 @@ export function FinancialPayrollPage() {
 function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
   const [employees, setEmployees] = useState<EmployeeFinancialProfile[]>([]);
   const [entries, setEntries] = useState<PayrollEntry[]>([]);
-  const [advances, setAdvances] = useState<EmployeeAdvance[]>([]);
   const [chart, setChart] = useState<ChartAccount[]>([]);
   const [centers, setCenters] = useState<CostCenter[]>([]);
   const [competence, setCompetence] = useState(currentCompetenceMonth());
@@ -4685,7 +4683,6 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
   const [centerFilter, setCenterFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [employeeOpen, setEmployeeOpen] = useState(false);
-  const [entryOpen, setEntryOpen] = useState(false);
   const [detail, setDetail] = useState<PayrollEntry | null>(null);
   const [itemForm, setItemForm] = useState({
     itemType: "COMMISSION" as PayrollItemType,
@@ -4693,20 +4690,7 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
     amount: "",
     employeeAdvanceId: "",
   });
-  const [advanceOpen, setAdvanceOpen] = useState(false);
-  const [advanceForm, setAdvanceForm] = useState({
-    employeeProfileId: "",
-    amount: "",
-    paidOn: today(),
-    description: "Adiantamento salarial",
-    notes: "",
-  });
   const [employeeForm, setEmployeeForm] = useState(() => emptyEmployeeForm(access, [], []));
-  const [entryForm, setEntryForm] = useState({
-    employeeProfileId: "",
-    competenceMonth: currentCompetenceMonth(),
-    dueDate: nextPayrollDueDate(currentCompetenceMonth()),
-  });
   const [saving, setSaving] = useState(false);
   const { drivers } = useFleet();
   const canView = hasFinancialPermission(access, "financial.payroll.view");
@@ -4716,28 +4700,26 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
   const canVoid = hasFinancialPermission(access, "financial.payroll.void");
 
   const load = useCallback(async () => {
-    const [nextEmployees, nextEntries, nextAdvances, nextChart, nextCenters] = await Promise.all([
+    const [nextEmployees, nextEntries, nextChart, nextCenters] = await Promise.all([
       listEmployeeFinancialProfiles(),
       listPayrollEntries(),
-      listEmployeeAdvances(),
-      listFinancialChart(),
-      listFinancialCostCenters(),
+      listFinancialChart(access.tenantId),
+      listFinancialCostCenters(access.workspaceId),
     ]);
     setEmployees(nextEmployees);
     setEntries(nextEntries);
-    setAdvances(nextAdvances);
     setChart(nextChart);
     setCenters(nextCenters);
-  }, []);
+  }, [access.tenantId, access.workspaceId]);
 
   useEffect(() => {
-    if (canView) load().catch(() => toast.error("Nao foi possivel carregar a folha."));
+    if (canView) load().catch(() => toast.error("Nao foi possivel carregar os salarios."));
   }, [canView, load]);
 
   if (!canView) {
     return (
       <div className="financial-shell space-y-4">
-        <PageHeader title="Salarios" subtitle="Folha gerencial Frotak" />
+        <PageHeader title="Salarios" subtitle="Salarios cadastrados e enviados ao financeiro" />
         <FinancialNav />
         <section className="premium-card mx-3 p-8 text-center md:mx-0">
           <ShieldAlert className="mx-auto mb-3 size-8 text-muted-foreground" />
@@ -4780,6 +4762,7 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
         driverId: employee.driverId || "",
         jobTitle: employee.jobTitle || "",
         baseSalary: String(employee.baseSalary),
+        paymentDate: nextPayrollDueDate(currentCompetenceMonth(), employee.defaultPayDay),
         defaultCostCenterId: employee.defaultCostCenterId,
         defaultChartAccountId: employee.defaultChartAccountId,
         defaultPayDay: String(employee.defaultPayDay),
@@ -4796,7 +4779,9 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
   const saveEmployee = async () => {
     setSaving(true);
     try {
-      await saveEmployeeFinancialProfile({
+      const paymentDate = employeeForm.paymentDate || nextPayrollDueDate(currentCompetenceMonth());
+      const payDay = Number(paymentDate.slice(8, 10));
+      const employeeProfileId = await saveEmployeeFinancialProfile({
         id: employeeForm.id || undefined,
         workspaceId: access.workspaceId,
         displayName: employeeForm.displayName,
@@ -4805,35 +4790,31 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
         baseSalary: Number(employeeForm.baseSalary),
         defaultCostCenterId: employeeForm.defaultCostCenterId,
         defaultChartAccountId: employeeForm.defaultChartAccountId,
-        defaultPayDay: Number(employeeForm.defaultPayDay),
+        defaultPayDay: payDay,
         admissionDate: employeeForm.admissionDate || undefined,
         active: employeeForm.active === "true",
         notes: employeeForm.notes || undefined,
       });
-      toast.success("Funcionario salvo.");
+      if (!employeeForm.id) {
+        const payrollEntryId = await createPayrollEntry({
+          workspaceId: access.workspaceId,
+          employeeProfileId,
+          competenceMonth: normalizeMonth(paymentDate.slice(0, 7)),
+          dueDate: paymentDate,
+        });
+        await calculatePayrollEntry(payrollEntryId);
+        await approvePayrollEntry(payrollEntryId);
+        await postPayrollEntry(payrollEntryId);
+      }
+      toast.success(
+        employeeForm.id
+          ? "Funcionario salvo."
+          : "Funcionario salvo e salario enviado para o financeiro.",
+      );
       setEmployeeOpen(false);
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao salvar funcionario.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const saveEntry = async () => {
-    setSaving(true);
-    try {
-      await createPayrollEntry({
-        workspaceId: access.workspaceId,
-        employeeProfileId: entryForm.employeeProfileId,
-        competenceMonth: normalizeMonth(entryForm.competenceMonth),
-        dueDate: entryForm.dueDate,
-      });
-      toast.success("Funcionario adicionado a competencia.");
-      setEntryOpen(false);
-      await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao criar folha.");
     } finally {
       setSaving(false);
     }
@@ -4852,10 +4833,10 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
         if (!reason) return;
         await voidPayrollEntry(entry.id, reason);
       }
-      toast.success("Folha atualizada.");
+      toast.success("Salario atualizado.");
       await load();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha na acao da folha.");
+      toast.error(error instanceof Error ? error.message : "Falha na acao do salario.");
     }
   };
 
@@ -4883,66 +4864,26 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
     }
   };
 
-  const createAdvance = async () => {
-    setSaving(true);
-    try {
-      await createEmployeeAdvance({
-        workspaceId: access.workspaceId,
-        employeeProfileId: advanceForm.employeeProfileId,
-        amount: Number(advanceForm.amount),
-        paidOn: advanceForm.paidOn,
-        description: advanceForm.description,
-        notes: advanceForm.notes || undefined,
-      });
-      toast.success("Adiantamento registrado em Contas a Pagar.");
-      setAdvanceOpen(false);
-      await load();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao criar adiantamento.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   return (
     <div className="financial-shell space-y-4">
       <PageHeader
         title="Salarios"
-        subtitle="Folha gerencial por funcionario, competencia e contas a pagar"
+        subtitle="Salarios cadastrados e enviados ao financeiro"
         actions={
           canManage ? (
-            <>
-              <Button variant="outline" onClick={() => openEmployee()}>
-                <Plus className="size-4" />
-                Funcionario
-              </Button>
-              <Button variant="outline" onClick={() => setAdvanceOpen(true)}>
-                <WalletCards className="size-4" />
-                Adiantamento
-              </Button>
-              <Button
-                onClick={() => {
-                  setEntryForm({
-                    employeeProfileId: employees.find((employee) => employee.active)?.id || "",
-                    competenceMonth: competence,
-                    dueDate: nextPayrollDueDate(competence),
-                  });
-                  setEntryOpen(true);
-                }}
-              >
-                <Plus className="size-4" />
-                Adicionar a folha
-              </Button>
-            </>
+            <Button onClick={() => openEmployee()}>
+              <Plus className="size-4" />
+              Novo funcionario
+            </Button>
           ) : undefined
         }
       />
       <FinancialNav />
 
       <div className="grid grid-cols-2 gap-3 px-3 lg:grid-cols-5 md:px-0">
-        <Stat label="Folha bruta" value={gross} icon={ReceiptText} />
+        <Stat label="Salarios brutos" value={gross} icon={ReceiptText} />
         <Stat label="Descontos" value={deductions} icon={ArrowUpRight} tone="danger" />
-        <Stat label="Folha liquida" value={net} icon={CircleDollarSign} tone="success" />
+        <Stat label="Salarios liquidos" value={net} icon={CircleDollarSign} tone="success" />
         <Stat label="Pago" value={paid} icon={Banknote} tone="success" />
         <Stat label="A pagar" value={payable} icon={WalletCards} />
       </div>
@@ -5016,7 +4957,7 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="outline" aria-label="Acoes da folha">
+                  <Button size="icon" variant="outline" aria-label="Acoes do salario">
                     <MoreVertical className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -5057,7 +4998,7 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
           ))
         ) : (
           <div className="p-12 text-center text-sm text-muted-foreground">
-            Nenhum funcionario nesta competencia.
+            Nenhum salario nesta competencia.
           </div>
         )}
       </section>
@@ -5084,9 +5025,17 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
             <Field label="Motorista">
               <SimpleSelect
                 value={employeeForm.driverId || "all"}
-                onChange={(value) =>
-                  setEmployeeForm({ ...employeeForm, driverId: value === "all" ? "" : value })
-                }
+                onChange={(value) => {
+                  const driver = drivers.find((item) => item.id === value);
+                  setEmployeeForm({
+                    ...employeeForm,
+                    driverId: value === "all" ? "" : value,
+                    displayName:
+                      value !== "all" && driver && !employeeForm.displayName
+                        ? driver.name
+                        : employeeForm.displayName,
+                  });
+                }}
                 all="Sem motorista"
                 items={drivers.map((driver) => [driver.id, driver.name])}
               />
@@ -5099,7 +5048,7 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
                 }
               />
             </Field>
-            <Field label="Salario base">
+            <Field label="Valor do salario">
               <Input
                 type="number"
                 min="0"
@@ -5110,14 +5059,16 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
                 }
               />
             </Field>
-            <Field label="Dia de pagamento">
+            <Field label="Data de pagamento">
               <Input
-                type="number"
-                min="1"
-                max="31"
-                value={employeeForm.defaultPayDay}
+                type="date"
+                value={employeeForm.paymentDate}
                 onChange={(event) =>
-                  setEmployeeForm({ ...employeeForm, defaultPayDay: event.target.value })
+                  setEmployeeForm({
+                    ...employeeForm,
+                    paymentDate: event.target.value,
+                    defaultPayDay: event.target.value ? event.target.value.slice(8, 10) : "",
+                  })
                 }
               />
             </Field>
@@ -5191,127 +5142,15 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
               disabled={
                 saving ||
                 !employeeForm.displayName ||
+                Number(employeeForm.baseSalary) <= 0 ||
+                !employeeForm.paymentDate ||
                 !employeeForm.defaultChartAccountId ||
                 !employeeForm.defaultCostCenterId
               }
               onClick={() => void saveEmployee()}
             >
               {saving && <LoaderCircle className="size-4 animate-spin" />}
-              Salvar funcionario
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={entryOpen} onOpenChange={setEntryOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Adicionar funcionario a folha</DialogTitle>
-            <DialogDescription>
-              O salario base atual sera gravado como snapshot da competencia.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4">
-            <Field label="Funcionario">
-              <SimpleSelect
-                value={entryForm.employeeProfileId || "all"}
-                onChange={(value) =>
-                  setEntryForm({ ...entryForm, employeeProfileId: value === "all" ? "" : value })
-                }
-                all="Selecionar funcionario"
-                items={employees
-                  .filter((employee) => employee.active)
-                  .map((employee) => [employee.id, employee.displayName])}
-              />
-            </Field>
-            <Field label="Competencia">
-              <Input
-                type="month"
-                value={entryForm.competenceMonth}
-                onChange={(event) =>
-                  setEntryForm({
-                    ...entryForm,
-                    competenceMonth: event.target.value,
-                    dueDate: nextPayrollDueDate(event.target.value),
-                  })
-                }
-              />
-            </Field>
-            <Field label="Vencimento">
-              <Input
-                type="date"
-                value={entryForm.dueDate}
-                onChange={(event) => setEntryForm({ ...entryForm, dueDate: event.target.value })}
-              />
-            </Field>
-          </div>
-          <DialogFooter>
-            <Button
-              disabled={saving || !entryForm.employeeProfileId}
-              onClick={() => void saveEntry()}
-            >
-              {saving && <LoaderCircle className="size-4 animate-spin" />}
-              Criar fechamento
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={advanceOpen} onOpenChange={setAdvanceOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Adiantamento salarial</DialogTitle>
-            <DialogDescription>
-              Registra um titulo financeiro proprio e deixa o valor disponivel para desconto.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4">
-            <Field label="Funcionario">
-              <SimpleSelect
-                value={advanceForm.employeeProfileId || "all"}
-                onChange={(value) =>
-                  setAdvanceForm({
-                    ...advanceForm,
-                    employeeProfileId: value === "all" ? "" : value,
-                  })
-                }
-                all="Selecionar funcionario"
-                items={employees
-                  .filter((employee) => employee.active)
-                  .map((employee) => [employee.id, employee.displayName])}
-              />
-            </Field>
-            <Field label="Valor">
-              <Input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={advanceForm.amount}
-                onChange={(event) => setAdvanceForm({ ...advanceForm, amount: event.target.value })}
-              />
-            </Field>
-            <Field label="Data paga">
-              <Input
-                type="date"
-                value={advanceForm.paidOn}
-                onChange={(event) => setAdvanceForm({ ...advanceForm, paidOn: event.target.value })}
-              />
-            </Field>
-            <Field label="Descricao">
-              <Input
-                value={advanceForm.description}
-                onChange={(event) =>
-                  setAdvanceForm({ ...advanceForm, description: event.target.value })
-                }
-              />
-            </Field>
-          </div>
-          <DialogFooter>
-            <Button
-              disabled={saving || !advanceForm.employeeProfileId || Number(advanceForm.amount) <= 0}
-              onClick={() => void createAdvance()}
-            >
-              Registrar adiantamento
+              {employeeForm.id ? "Salvar funcionario" : "Salvar e enviar ao DRE"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -5390,41 +5229,17 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
                       })
                     }
                     all="Tipo"
-                    items={Object.entries(payrollItemLabel)}
+                    items={Object.entries(payrollItemLabel).filter(
+                      ([value]) => value !== "ADVANCE",
+                    )}
                   />
-                  {itemForm.itemType === "ADVANCE" ? (
-                    <SimpleSelect
-                      value={itemForm.employeeAdvanceId || "all"}
-                      onChange={(value) => {
-                        const advance = advances.find((item) => item.id === value);
-                        setItemForm({
-                          ...itemForm,
-                          employeeAdvanceId: value === "all" ? "" : value,
-                          amount: advance ? String(advance.amount) : itemForm.amount,
-                          description: advance?.description || "Adiantamento",
-                        });
-                      }}
-                      all="Selecionar adiantamento"
-                      items={advances
-                        .filter(
-                          (advance) =>
-                            advance.employeeProfileId === detail.employeeProfileId &&
-                            advance.status === "available",
-                        )
-                        .map((advance) => [
-                          advance.id,
-                          `${advance.description} - ${money.format(advance.amount)}`,
-                        ])}
-                    />
-                  ) : (
-                    <Input
-                      value={itemForm.description}
-                      onChange={(event) =>
-                        setItemForm({ ...itemForm, description: event.target.value })
-                      }
-                      placeholder="Descricao"
-                    />
-                  )}
+                  <Input
+                    value={itemForm.description}
+                    onChange={(event) =>
+                      setItemForm({ ...itemForm, description: event.target.value })
+                    }
+                    placeholder="Descricao"
+                  />
                   <Input
                     type="number"
                     min="0.01"
