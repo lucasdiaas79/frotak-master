@@ -190,6 +190,7 @@ export interface FinancialDocumentDetails extends FinancialDocument {
   notes: string | null;
   partnerName: string | null;
   accountName: string | null;
+  outstandingBalance?: number;
   costCenterId: string | null;
   vehicleId: string | null;
   driverId: string | null;

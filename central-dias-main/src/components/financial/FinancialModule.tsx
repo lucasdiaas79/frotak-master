@@ -29,7 +29,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   CartesianGrid,
@@ -166,7 +166,7 @@ function useFinancialAccess() {
   useEffect(() => {
     getFinancialAccess()
       .then(setAccess)
-      .catch(() => setError("Você não possui acesso ao módulo Financeiro."))
+      .catch(() => setError("VocÃª nÃ£o possui acesso ao mÃ³dulo Financeiro."))
       .finally(() => setLoading(false));
   }, []);
   return { access, loading, error };
@@ -187,7 +187,7 @@ function FinancialBoundary({ children }: { children: (access: FinancialAccess) =
           <Landmark className="mx-auto mb-3 size-8 text-muted-foreground" />
           <h2 className="text-lg font-bold">Acesso restrito</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {error || "Solicite uma permissão financeira ao owner."}
+            {error || "Solicite uma permissÃ£o financeira ao owner."}
           </p>
         </div>
       </div>
@@ -272,7 +272,7 @@ function LegacyOverviewContent() {
         setDocuments(d);
         setAccounts(a);
       })
-      .catch(() => toast.error("Não foi possível carregar a visão financeira."));
+      .catch(() => toast.error("NÃ£o foi possÃ­vel carregar a visÃ£o financeira."));
   }, []);
   const open = documents.filter((d) => !["draft", "voided", "settled"].includes(d.status));
   const received = documents
@@ -312,23 +312,23 @@ function LegacyOverviewContent() {
             .reduce((s, d) => s + d.installments.reduce((a, i) => a + i.balance, 0), 0)}
           icon={ArrowUpRight}
         />
-        <Stat label="Recebido no mês" value={received} icon={CircleDollarSign} tone="success" />
-        <Stat label="Pago no mês" value={paid} icon={ReceiptText} />
+        <Stat label="Recebido no mÃªs" value={received} icon={CircleDollarSign} tone="success" />
+        <Stat label="Pago no mÃªs" value={paid} icon={ReceiptText} />
         <Stat
           label="Saldo financeiro"
           value={accounts.reduce((s, a) => s + a.currentBalance, 0)}
           icon={Landmark}
           tone="success"
         />
-        <Stat label="Títulos vencidos" value={overdue.length} icon={CalendarClock} tone="danger" />
+        <Stat label="TÃ­tulos vencidos" value={overdue.length} icon={CalendarClock} tone="danger" />
       </div>
       <div className="grid gap-3 px-3 lg:grid-cols-2 md:px-0">
         <Upcoming
-          title="Próximos recebimentos"
+          title="PrÃ³ximos recebimentos"
           documents={documents.filter((d) => d.direction === "receivable")}
         />
         <Upcoming
-          title="Próximos pagamentos"
+          title="PrÃ³ximos pagamentos"
           documents={documents.filter((d) => d.direction === "payable")}
         />
       </div>
@@ -355,7 +355,7 @@ function Upcoming({ title, documents }: { title: string; documents: FinancialDoc
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-bold">{i.description}</div>
                 <div className="text-xs text-muted-foreground">
-                  {i.partner || "Sem parceiro"} · {date.format(new Date(`${i.dueDate}T12:00:00`))}
+                  {i.partner || "Sem parceiro"} Â· {date.format(new Date(`${i.dueDate}T12:00:00`))}
                 </div>
               </div>
               <strong className="text-sm">{money.format(i.balance)}</strong>
@@ -363,7 +363,7 @@ function Upcoming({ title, documents }: { title: string; documents: FinancialDoc
           ))
         ) : (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            Nenhum vencimento próximo.
+            Nenhum vencimento prÃ³ximo.
           </p>
         )}
       </div>
@@ -394,99 +394,7 @@ function marginLabel(value: number | null) {
   return `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
 }
 
-function signedMoney(value: number) {
-  return `${value >= 0 ? "+" : "-"} ${money.format(Math.abs(value))}`;
-}
-
-function exportCsv(filename: string, rows: Array<Record<string, string | number | null>>) {
-  if (!rows.length) {
-    toast.info("Nao ha dados para exportar.");
-    return;
-  }
-  const headers = Object.keys(rows[0]);
-  const csv = [
-    headers.join(";"),
-    ...rows.map((row) =>
-      headers.map((header) => `"${String(row[header] ?? "").replaceAll('"', '""')}"`).join(";"),
-    ),
-  ].join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function escapeHtml(value: unknown) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function downloadHtmlTable(filename: string, title: string, rows: Array<Record<string, unknown>>) {
-  if (!rows.length) {
-    toast.info("Nao ha dados para exportar.");
-    return;
-  }
-  const headers = Object.keys(rows[0]);
-  const html = `<!doctype html><html><head><meta charset="utf-8" /></head><body><h1>${escapeHtml(
-    title,
-  )}</h1><table border="1"><thead><tr>${headers
-    .map((header) => `<th>${escapeHtml(header)}</th>`)
-    .join("")}</tr></thead><tbody>${rows
-    .map(
-      (row) =>
-        `<tr>${headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`,
-    )
-    .join("")}</tbody></table></body></html>`;
-  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function openPrintableDre(title: string, subtitle: string, rows: Array<Record<string, unknown>>) {
-  if (!rows.length) {
-    toast.info("Nao ha dados para exportar.");
-    return;
-  }
-  const headers = Object.keys(rows[0]);
-  const popup = window.open("", "_blank", "noopener,noreferrer,width=1120,height=800");
-  if (!popup) {
-    toast.error("Nao foi possivel abrir a janela de impressao.");
-    return;
-  }
-  popup.document.write(`<!doctype html><html><head><meta charset="utf-8" />
-    <title>${escapeHtml(title)}</title>
-    <style>
-      body{font-family:Inter,Arial,sans-serif;margin:40px;color:#111827}
-      h1{font-size:28px;margin:0 0 6px} p{margin:0 0 24px;color:#4b5563}
-      table{width:100%;border-collapse:collapse;font-size:12px}
-      th{background:#111827;color:#fff;text-align:left;padding:10px}
-      td{border-bottom:1px solid #e5e7eb;padding:9px}
-      tr:nth-child(even) td{background:#f9fafb}
-    </style>
-  </head><body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(
-    subtitle,
-  )}</p><table><thead><tr>${headers
-    .map((header) => `<th>${escapeHtml(header)}</th>`)
-    .join("")}</tr></thead><tbody>${rows
-    .map(
-      (row) =>
-        `<tr>${headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`,
-    )
-    .join("")}</tbody></table><script>window.onload=()=>window.print()</script></body></html>`);
-  popup.document.close();
-}
-
-function ReportPeriodControls({
+function signedMoney(value: number) {   return `${value >= 0 ? "+" : "-"} ${money.format(Math.abs(value))}`; }  function exportCsv(filename: string, rows: Array<Record<string, string | number | null>>) {   if (!rows.length) {     toast.info("Nao ha dados para exportar.");     return;   }   const headers = Object.keys(rows[0]);   const csv = [     headers.join(";"),     ...rows.map((row) =>       headers.map((header) => `"${String(row[header] ?? "").replaceAll('"', '""')}"`).join(";"),     ),   ].join("\n");   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });   const url = URL.createObjectURL(blob);   const link = document.createElement("a");   link.href = url;   link.download = filename;   link.click();   URL.revokeObjectURL(url); }  function ReportPeriodControls({
   mode,
   start,
   end,
@@ -1162,7 +1070,7 @@ function DreStatement({
           <h2>DRE Gerencial</h2>
         </div>
         <Badge variant={summary.reconciliation.ok ? "outline" : "destructive"}>
-          {summary.reconciliation.ok ? "Reconciliado" : "Diferença"}
+          {summary.reconciliation.ok ? "Reconciliado" : "DiferenÃ§a"}
         </Badge>
       </div>
       <div className="financial-dre-sheet">
@@ -1196,7 +1104,7 @@ function DreStatement({
         {hasRevenueGroup && (
           <div className="financial-dre-row financial-dre-subtotal">
             <div className="financial-dre-row-label">
-              <span>Receita líquida</span>
+              <span>Receita lÃ­quida</span>
             </div>
             <strong>{money.format(summary.totals.netRevenue)}</strong>
           </div>
@@ -1235,11 +1143,11 @@ function DreStatement({
         <div className="financial-dre-notes">
           {summary.totals.unclassified_amount > 0 && (
             <span>
-              {money.format(summary.totals.unclassified_amount)} pendentes de classificação.
+              {money.format(summary.totals.unclassified_amount)} pendentes de classificaÃ§Ã£o.
             </span>
           )}
           {summary.totals.unallocated_amount > 0 && (
-            <span>Resíduo não alocado: {money.format(summary.totals.unallocated_amount)}.</span>
+            <span>ResÃ­duo nÃ£o alocado: {money.format(summary.totals.unallocated_amount)}.</span>
           )}
         </div>
       )}
@@ -1271,8 +1179,8 @@ function DreDetailPanel({
               <div className="min-w-0">
                 <strong>{document.description}</strong>
                 <span>
-                  {date.format(new Date(`${document.competence_date}T12:00:00`))} ·{" "}
-                  {document.partner_name || "Sem parceiro"} · {document.source_type || "manual"}
+                  {date.format(new Date(`${document.competence_date}T12:00:00`))} Â·{" "}
+                  {document.partner_name || "Sem parceiro"} Â· {document.source_type || "manual"}
                 </span>
               </div>
               <strong className={cn(document.signed_amount < 0 && "text-destructive")}>
@@ -1296,7 +1204,7 @@ function DreDetailPanel({
               <div className="min-w-0">
                 <strong>{account.name}</strong>
                 <span>
-                  {account.code} · {account.document_count} documentos
+                  {account.code} Â· {account.document_count} documentos
                 </span>
               </div>
               <div className="financial-dre-account-value">
@@ -1313,303 +1221,7 @@ function DreDetailPanel({
   );
 }
 
-function DreContent({ access }: { access: FinancialAccess }) {
-  const [mode, setMode] = useState<PeriodMode>("month");
-  const [start, setStart] = useState(() => periodBounds("month")[0]);
-  const [end, setEnd] = useState(() => periodBounds("month")[1]);
-  const [costCenterId, setCostCenterId] = useState("all");
-  const [centers, setCenters] = useState<CostCenter[]>([]);
-  const [summary, setSummary] = useState<DreSummary | null>(null);
-  const [detail, setDetail] = useState<DreDetail | null>(null);
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
-  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
-  const [exportOpen, setExportOpen] = useState(false);
-  const [exportScopeType, setExportScopeType] = useState<"company" | "center" | "vehicle" | "driver">("company");
-  const [exportScope, setExportScope] = useState("all");
-  const [loading, setLoading] = useState(true);
-  const { vehicles, drivers } = useFleet();
-  const canDre = hasFinancialPermission(access, "financial.dre.view");
-  const payload = useMemo(
-    () => ({
-      workspaceId: access.workspaceId,
-      startDate: start,
-      endDate: end,
-      costCenterId: costCenterId === "all" ? null : costCenterId,
-    }),
-    [access.workspaceId, costCenterId, end, start],
-  );
-  const loadSummary = useCallback(async () => {
-    if (!canDre) return;
-    setLoading(true);
-    const [nextSummary, nextCenters] = await Promise.all([
-      getDreSummary(payload),
-      listFinancialCostCenters(),
-    ]);
-    setSummary(nextSummary);
-    setCenters(nextCenters);
-    setDetail(null);
-    setSelectedGroup(null);
-    setSelectedAccount(null);
-    setLoading(false);
-  }, [canDre, payload]);
-  useEffect(() => {
-    loadSummary().catch(() => {
-      setLoading(false);
-      toast.error("Nao foi possivel carregar a DRE gerencial.");
-    });
-  }, [loadSummary]);
-  const openGroup = async (group: DreGroupRow) => {
-    setSelectedGroup(group.dre_group);
-    setSelectedAccount(null);
-    setDetail(await getDreDetail({ ...payload, dreGroup: group.dre_group }));
-  };
-  const openAccount = async (account: string | null) => {
-    setSelectedAccount(account);
-    setDetail(
-      await getDreDetail({
-        ...payload,
-        dreGroup: selectedGroup,
-        chartAccountId: account,
-      }),
-    );
-  };
-  const dreRows = (nextSummary = summary) =>
-    nextSummary
-      ? [
-          ...nextSummary.groups.map((group) => ({
-            linha: group.label,
-            documentos: group.document_count,
-            valor: group.signed_amount,
-          })),
-          {
-            linha: "Resultado gerencial",
-            documentos: nextSummary.totals.document_count,
-            valor: nextSummary.totals.managerial_result,
-          },
-        ]
-      : [];
-  const collectAnalyticRows = async () => {
-    if (!summary) return [];
-    const details = await Promise.all(
-      summary.groups.map(async (group) => ({
-        group,
-        detail: await getDreDetail({ ...payload, dreGroup: group.dre_group }),
-      })),
-    );
-    const rows = details.flatMap(({ group, detail: groupDetail }) =>
-      groupDetail.documents.map((document) => ({
-        grupo: group.label,
-        competencia: document.competence_date,
-        apropriacao: document.cost_center_name || "Empresa inteira",
-        caminhao: document.vehicle_plate || "",
-        funcionario: document.driver_name || "",
-        parceiro: document.partner_name || "",
-        titulo: document.description,
-        documento: document.document_number || "",
-        valor: document.signed_amount,
-      })),
-    );
-    if (exportScopeType === "center" && exportScope !== "all") {
-      const name = centers.find((center) => center.id === exportScope)?.name;
-      return rows.filter((row) => row.apropriacao === name);
-    }
-    if (exportScopeType === "vehicle" && exportScope !== "all") {
-      const plate = vehicles.find((vehicle) => vehicle.id === exportScope)?.plate;
-      return rows.filter((row) => row.caminhao === plate);
-    }
-    if (exportScopeType === "driver" && exportScope !== "all") {
-      const name = drivers.find((driver) => driver.id === exportScope)?.name;
-      return rows.filter((row) => row.funcionario === name);
-    }
-    return rows;
-  };
-  const rowsToDreLines = (rows: Array<Record<string, unknown>>) => {
-    const grouped = new Map<string, { documentos: number; valor: number }>();
-    rows.forEach((row) => {
-      const key = String(row.grupo || "Pendente");
-      const current = grouped.get(key) || { documentos: 0, valor: 0 };
-      grouped.set(key, {
-        documentos: current.documentos + 1,
-        valor: current.valor + Number(row.valor || 0),
-      });
-    });
-    const lines = Array.from(grouped.entries()).map(([linha, row]) => ({ linha, ...row }));
-    const total = lines.reduce((sum, row) => sum + row.valor, 0);
-    return [...lines, { linha: "Resultado gerencial", documentos: rows.length, valor: total }];
-  };
-
-  if (!canDre) {
-    return (
-      <div className="financial-shell space-y-4">
-        <PageHeader title="DRE Gerencial" subtitle="Visão gerencial por regime de competência" />
-        <FinancialNav />
-        <RestrictedReport permission="financial.dre.view" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="financial-shell financial-dre-shell space-y-4">
-      <PageHeader
-        title="DRE Gerencial"
-        subtitle="Visão gerencial por regime de competência"
-        actions={
-          summary ? (
-            <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
-              <Download className="size-4" />
-              Exportar
-            </Button>
-          ) : undefined
-        }
-      />
-      <FinancialNav />
-      <section className="financial-dre-control-bar">
-        <ReportPeriodControls
-          mode={mode}
-          start={start}
-          end={end}
-          onMode={setMode}
-          onStart={setStart}
-          onEnd={setEnd}
-          compact
-        />
-        <Field label="Apropriação">
-          <Select value={costCenterId} onValueChange={setCostCenterId}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Consolidado</SelectItem>
-              {centers.map((center) => (
-                <SelectItem key={center.id} value={center.id}>
-                  {center.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-      </section>
-      {loading || !summary ? (
-        <LoadingReport />
-      ) : (
-        <>
-          <DreExecutiveSummary summary={summary} />
-          <div className="financial-dre-layout">
-            <DreStatement
-              summary={summary}
-              selectedGroup={selectedGroup}
-              onGroup={(group) => openGroup(group).catch(() => toast.error("Falha no drilldown."))}
-            />
-            <DreDetailPanel
-              detail={detail}
-              selectedAccount={selectedAccount}
-              onAccount={(account) =>
-                openAccount(account).catch(() => toast.error("Falha no detalhe."))
-              }
-            />
-          </div>
-        </>
-      )}
-      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Exportar DRE</DialogTitle>
-            <DialogDescription>Mesma fonte, período e filtros da DRE exibida.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3">
-            <Button
-              variant="outline"
-              onClick={() =>
-                openPrintableDre(
-                  "DRE Gerencial",
-                  `${date.format(new Date(`${start}T12:00:00`))} a ${date.format(new Date(`${end}T12:00:00`))}`,
-                  dreRows(),
-                )
-              }
-            >
-              DRE Gerencial — PDF
-            </Button>
-            <Button
-              variant="outline"
-              onClick={async () =>
-                downloadHtmlTable(
-                  `dre-analitico-${start}-${end}.xls`,
-                  "DRE Analítico",
-                  await collectAnalyticRows(),
-                )
-              }
-            >
-              DRE Analítico — Excel
-            </Button>
-            <div className="rounded-md border border-border p-3">
-              <div className="mb-2 text-sm font-bold">DRE por Apropriação</div>
-              <Select
-                value={exportScopeType}
-                onValueChange={(value) => {
-                  setExportScopeType(value as "company" | "center" | "vehicle" | "driver");
-                  setExportScope("all");
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="company">Empresa inteira</SelectItem>
-                  <SelectItem value="center">Setor/gerencial</SelectItem>
-                  <SelectItem value="vehicle">Caminhão</SelectItem>
-                  <SelectItem value="driver">Funcionário</SelectItem>
-                </SelectContent>
-              </Select>
-              {exportScopeType !== "company" && (
-                <div className="mt-2">
-                  <SimpleSelect
-                    value={exportScope}
-                    onChange={setExportScope}
-                    all="Todos"
-                    items={
-                      exportScopeType === "center"
-                        ? centers.map((center) => [center.id, center.name])
-                        : exportScopeType === "vehicle"
-                          ? vehicles.map((vehicle) => [vehicle.id, vehicle.plate])
-                          : drivers.map((driver) => [driver.id, driver.name])
-                    }
-                  />
-                </div>
-              )}
-              <div className="mt-3 flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={async () =>
-                    openPrintableDre(
-                      "DRE por Apropriação",
-                      `${start} a ${end}`,
-                      rowsToDreLines(await collectAnalyticRows()),
-                    )
-                  }
-                >
-                  PDF
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={async () =>
-                    downloadHtmlTable(
-                      `dre-apropriacao-${start}-${end}.xls`,
-                      "DRE por Apropriação",
-                      await collectAnalyticRows(),
-                    )
-                  }
-                >
-                  Excel
-                </Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-export function FinancialCashFlowPage() {
+function DreContent({ access }: { access: FinancialAccess }) {   const [mode, setMode] = useState<PeriodMode>("month");   const [start, setStart] = useState(() => periodBounds("month")[0]);   const [end, setEnd] = useState(() => periodBounds("month")[1]);   const [costCenterId, setCostCenterId] = useState("all");   const [centers, setCenters] = useState<CostCenter[]>([]);   const [summary, setSummary] = useState<DreSummary | null>(null);   const [detail, setDetail] = useState<DreDetail | null>(null);   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);   const [loading, setLoading] = useState(true);   const canDre = hasFinancialPermission(access, "financial.dre.view");   const payload = useMemo(     () => ({       workspaceId: access.workspaceId,       startDate: start,       endDate: end,       costCenterId: costCenterId === "all" ? null : costCenterId,     }),     [access.workspaceId, costCenterId, end, start],   );   const loadSummary = useCallback(async () => {     if (!canDre) return;     setLoading(true);     const [nextSummary, nextCenters] = await Promise.all([       getDreSummary(payload),       listFinancialCostCenters(),     ]);     setSummary(nextSummary);     setCenters(nextCenters);     setDetail(null);     setSelectedGroup(null);     setSelectedAccount(null);     setLoading(false);   }, [canDre, payload]);   useEffect(() => {     loadSummary().catch(() => {       setLoading(false);       toast.error("Nao foi possivel carregar a DRE gerencial.");     });   }, [loadSummary]);   const openGroup = async (group: DreGroupRow) => {     setSelectedGroup(group.dre_group);     setSelectedAccount(null);     setDetail(await getDreDetail({ ...payload, dreGroup: group.dre_group }));   };   const openAccount = async (account: string | null) => {     setSelectedAccount(account);     setDetail(       await getDreDetail({         ...payload,         dreGroup: selectedGroup,         chartAccountId: account,       }),     );   };    if (!canDre) {     return (       <div className="financial-shell space-y-4">         <PageHeader title="DRE Gerencial" subtitle="Visão gerencial por regime de competência" />         <FinancialNav />         <RestrictedReport permission="financial.dre.view" />       </div>     );   }    return (     <div className="financial-shell financial-dre-shell space-y-4">       <PageHeader         title="DRE Gerencial"         subtitle="Visão gerencial por regime de competência"         actions={           summary ? (             <Button               variant="outline"               size="sm"               onClick={() =>                 exportCsv(                   `dre-${start}-${end}.csv`,                   summary.groups.map((group) => ({                     grupo: group.label,                     valor_assinado: group.signed_amount,                     movimento: group.movement_amount,                     documentos: group.document_count,                   })),                 )               }             >               <Download className="size-4" />               CSV             </Button>           ) : undefined         }       />       <FinancialNav />       <section className="financial-dre-control-bar">         <ReportPeriodControls           mode={mode}           start={start}           end={end}           onMode={setMode}           onStart={setStart}           onEnd={setEnd}           compact         />         <Field label="Apropriação">           <Select value={costCenterId} onValueChange={setCostCenterId}>             <SelectTrigger>               <SelectValue />             </SelectTrigger>             <SelectContent>               <SelectItem value="all">Consolidado</SelectItem>               {centers.map((center) => (                 <SelectItem key={center.id} value={center.id}>                   {center.name}                 </SelectItem>               ))}             </SelectContent>           </Select>         </Field>       </section>       {loading || !summary ? (         <LoadingReport />       ) : (         <>           <DreExecutiveSummary summary={summary} />           <div className="financial-dre-layout">             <DreStatement               summary={summary}               selectedGroup={selectedGroup}               onGroup={(group) => openGroup(group).catch(() => toast.error("Falha no drilldown."))}             />             <DreDetailPanel               detail={detail}               selectedAccount={selectedAccount}               onAccount={(account) =>                 openAccount(account).catch(() => toast.error("Falha no detalhe."))               }             />           </div>         </>       )}     </div>   ); } export function FinancialCashFlowPage() {
   return <FinancialBoundary>{(access) => <CashFlowContent access={access} />}</FinancialBoundary>;
 }
 
@@ -1667,8 +1279,8 @@ function CashFlowForecastPanel({ summary }: { summary: CashFlowSummary }) {
     <section className="financial-cashflow-forecast">
       <div className="flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="financial-section-kicker">Previsão de Caixa</p>
-          <h2 className="mt-1 text-lg font-black">Próximos compromissos</h2>
+          <p className="financial-section-kicker">PrevisÃ£o de Caixa</p>
+          <h2 className="mt-1 text-lg font-black">PrÃ³ximos compromissos</h2>
         </div>
         <CalendarClock className="size-5 shrink-0 text-primary" />
       </div>
@@ -1679,7 +1291,7 @@ function CashFlowForecastPanel({ summary }: { summary: CashFlowSummary }) {
             value={summary.forecast.expected_inflows}
             tone="success"
           />
-          <MiniMetric label="Saídas previstas" value={summary.forecast.expected_outflows} />
+          <MiniMetric label="SaÃ­das previstas" value={summary.forecast.expected_outflows} />
           <MiniMetric
             label="Vencido"
             value={summary.forecast.overdue_amount}
@@ -1712,8 +1324,8 @@ function CashFlowTimeline({
     <section className="financial-cashflow-temporal">
       <div className="flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="financial-section-kicker">Visão Temporal</p>
-          <h2 className="mt-1 text-lg font-black">Evolução do período</h2>
+          <p className="financial-section-kicker">VisÃ£o Temporal</p>
+          <h2 className="mt-1 text-lg font-black">EvoluÃ§Ã£o do perÃ­odo</h2>
         </div>
         <TrendingUp className="size-5 shrink-0 text-primary" />
       </div>
@@ -1725,7 +1337,7 @@ function CashFlowTimeline({
                 <div>
                   <strong>{date.format(new Date(`${group.date}T12:00:00`))}</strong>
                   <span>
-                    {group.count} movimentação{group.count === 1 ? "" : "ões"}
+                    {group.count} movimentaÃ§Ã£o{group.count === 1 ? "" : "Ãµes"}
                   </span>
                 </div>
                 <strong className={cn(group.net < 0 && "text-destructive")}>
@@ -1746,7 +1358,7 @@ function CashFlowTimeline({
           ))
         ) : (
           <div className="financial-cashflow-empty">
-            Nenhuma movimentação temporal para os filtros selecionados.
+            Nenhuma movimentaÃ§Ã£o temporal para os filtros selecionados.
           </div>
         )}
       </div>
@@ -1760,7 +1372,7 @@ function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
       <div className="flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="financial-section-kicker">Operacional</p>
-          <h2 className="mt-1 text-lg font-black">Movimentações do período</h2>
+          <h2 className="mt-1 text-lg font-black">MovimentaÃ§Ãµes do perÃ­odo</h2>
         </div>
         <ReceiptText className="size-5 shrink-0 text-primary" />
       </div>
@@ -1783,7 +1395,7 @@ function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
                 </div>
               </div>
               <div className="financial-cashflow-row-value">
-                <span>{entry.direction === "receivable" ? "Entrada" : "Saída"}</span>
+                <span>{entry.direction === "receivable" ? "Entrada" : "SaÃ­da"}</span>
                 <strong className={cn(entry.signed_amount < 0 && "text-destructive")}>
                   {signedMoney(entry.signed_amount)}
                 </strong>
@@ -1791,7 +1403,7 @@ function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
             </div>
           ))
         ) : (
-          <div className="financial-cashflow-empty">Nenhum lançamento no período.</div>
+          <div className="financial-cashflow-empty">Nenhum lanÃ§amento no perÃ­odo.</div>
         )}
       </div>
     </section>
@@ -1890,7 +1502,7 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
     <div className="financial-shell financial-cashflow-shell space-y-4">
       <PageHeader
         title="Fluxo de Caixa"
-        subtitle="Movimentações realizadas e compromissos previstos"
+        subtitle="MovimentaÃ§Ãµes realizadas e compromissos previstos"
         actions={
           <Button
             variant="outline"
@@ -1928,7 +1540,7 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
           compact
         />
         <div className="financial-cashflow-filter-grid">
-          <Field label="Visão">
+          <Field label="VisÃ£o">
             <Select
               value={view}
               onValueChange={(value) => setView(value as "realized" | "forecast")}
@@ -1942,15 +1554,15 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Direção">
+          <Field label="DireÃ§Ã£o">
             <Select value={direction} onValueChange={setDirection}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Entradas e saídas</SelectItem>
+                <SelectItem value="all">Entradas e saÃ­das</SelectItem>
                 <SelectItem value="receivable">Entradas</SelectItem>
-                <SelectItem value="payable">Saídas</SelectItem>
+                <SelectItem value="payable">SaÃ­das</SelectItem>
               </SelectContent>
             </Select>
           </Field>
@@ -1984,7 +1596,7 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
               tone="success"
             />
             <ChevronRight className="financial-cashflow-arrow" />
-            <CashFlowMovementStep label="Saídas" value={summary.realized.outflows} tone="outflow" />
+            <CashFlowMovementStep label="SaÃ­das" value={summary.realized.outflows} tone="outflow" />
             <ChevronRight className="financial-cashflow-arrow" />
             <CashFlowMovementStep
               label="Saldo final"
@@ -2086,25 +1698,22 @@ function TitlesContent({
   const [saving, setSaving] = useState(false);
   const { vehicles, drivers, products } = useFleet();
   const canManageRecurring = hasFinancialPermission(access, "financial.manage_recurring");
-  const load = useCallback(async () => {
-    if (canManageRecurring) {
-      await generateDueFinancialRecurringDocuments(access.workspaceId, today().slice(0, 7));
-    }
-    const [
-      documentsResult,
-      partnersResult,
-      accountsResult,
-      chartResult,
-      centersResult,
-      freightsResult,
-      recurringResult,
-    ] = await Promise.allSettled([
-      listFinancialDocumentsPage({
+  const [debouncedSearch, setDebouncedSearch] = useState(filters.search);
+  const recurringFallbackWorkspaces = useRef(new Set<string>());
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setDebouncedSearch(filters.search), 300);
+    return () => window.clearTimeout(timeout);
+  }, [filters.search]);
+
+  const loadDocuments = useCallback(async () => {
+    try {
+      const page = await listFinancialDocumentsPage({
         workspaceId: access.workspaceId,
         direction,
         page: documentsPage,
         pageSize: TITLE_PAGE_SIZE,
-        search: filters.search || undefined,
+        search: debouncedSearch || undefined,
         status: filters.status,
         origin: filters.origin,
         partnerId: filters.partner === "all" ? undefined : filters.partner,
@@ -2114,26 +1723,43 @@ function TitlesContent({
         endDate: filters.end || undefined,
         minAmount: filters.min || undefined,
         maxAmount: filters.max || undefined,
-      }),
-      listFinancialPartners(access.tenantId),
-      listFinancialAccounts(access.workspaceId),
-      listFinancialChart(access.tenantId),
-      listFinancialCostCenters(access.workspaceId),
-      listCanonicalFreights(access.workspaceId),
-      listFinancialRecurringRules(),
-    ]);
-
-    if (documentsResult.status === "fulfilled") {
-      setDocuments(documentsResult.value.rows);
-      setDocumentsTotal(documentsResult.value.total);
-      setDocumentsSummary(documentsResult.value.summary);
-    } else {
-      console.error("[financeiro] Falha ao carregar títulos", documentsResult.reason);
-      toast.error("Não foi possível carregar os títulos.");
+      });
+      setDocuments(page.rows);
+      setDocumentsTotal(page.total);
+      setDocumentsSummary(page.summary);
+    } catch (error) {
+      console.error("[financeiro] Falha ao carregar titulos", error);
+      toast.error("Nao foi possivel carregar os titulos.");
       setDocuments([]);
       setDocumentsTotal(0);
       setDocumentsSummary(emptyTitleSummary());
     }
+  }, [
+    access.workspaceId,
+    debouncedSearch,
+    direction,
+    documentsPage,
+    filters.category,
+    filters.center,
+    filters.end,
+    filters.max,
+    filters.min,
+    filters.origin,
+    filters.partner,
+    filters.start,
+    filters.status,
+  ]);
+
+  const loadAuxiliaryData = useCallback(async () => {
+    const [partnersResult, accountsResult, chartResult, centersResult, freightsResult, recurringResult] =
+      await Promise.allSettled([
+        listFinancialPartners(access.tenantId),
+        listFinancialAccounts(access.workspaceId),
+        listFinancialChart(access.tenantId),
+        listFinancialCostCenters(access.workspaceId),
+        listCanonicalFreights(access.workspaceId),
+        listFinancialRecurringRules(),
+      ]);
 
     const applyAuxiliaryResult = <T,>(
       result: PromiseSettledResult<T[]>,
@@ -2145,23 +1771,41 @@ function TitlesContent({
         return;
       }
       console.error(`[financeiro] Falha ao carregar ${label}`, result.reason);
-      toast.error(`Não foi possível carregar ${label}.`);
+      toast.error(`Nao foi possivel carregar ${label}.`);
       setter([]);
     };
 
     applyAuxiliaryResult(partnersResult, setPartners, "parceiros financeiros");
     applyAuxiliaryResult(accountsResult, setAccounts, "bancos e caixas");
     applyAuxiliaryResult(chartResult, setChart, "gerenciais");
-    applyAuxiliaryResult(centersResult, setCenters, "apropriações");
+    applyAuxiliaryResult(centersResult, setCenters, "apropriacoes");
     applyAuxiliaryResult(freightsResult, setFreights, "fretes financeiros");
     applyAuxiliaryResult(recurringResult, setRecurringRules, "recorrencias financeiras");
-  }, [access.tenantId, access.workspaceId, canManageRecurring, direction, documentsPage, filters]);
+  }, [access.tenantId, access.workspaceId]);
+
   useEffect(() => {
-    load().catch((error) => {
-      console.error("[financeiro] Falha inesperada ao carregar contas a receber/pagar", error);
-      toast.error("Não foi possível carregar a página financeira.");
+    if (!canManageRecurring) return;
+    if (recurringFallbackWorkspaces.current.has(access.workspaceId)) return;
+    recurringFallbackWorkspaces.current.add(access.workspaceId);
+    generateDueFinancialRecurringDocuments(access.workspaceId, today().slice(0, 7))
+      .then(() => loadDocuments())
+      .catch((error) => {
+        console.error("[financeiro] Fallback de recorrencia falhou", error);
+        toast.error("Nao foi possivel reconciliar recorrencias financeiras.");
+      });
+  }, [access.workspaceId, canManageRecurring, loadDocuments]);
+
+  useEffect(() => {
+    loadAuxiliaryData().catch((error) => {
+      console.error("[financeiro] Falha inesperada ao carregar dados auxiliares", error);
+      toast.error("Nao foi possivel carregar a pagina financeira.");
     });
-  }, [load]);
+  }, [loadAuxiliaryData]);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [loadDocuments]);
+
   useEffect(() => {
     setDocumentsPage(1);
   }, [direction, filters]);
@@ -2252,8 +1896,8 @@ function TitlesContent({
         title={receiving ? "Contas a Receber" : "Contas a Pagar"}
         subtitle={
           receiving
-            ? "Clientes, vencimentos e recebimentos do período"
-            : "Fornecedores, vencimentos e pagamentos do período"
+            ? "Clientes, vencimentos e recebimentos do perÃ­odo"
+            : "Fornecedores, vencimentos e pagamentos do perÃ­odo"
         }
         actions={
           canCreate ? (
@@ -2264,7 +1908,7 @@ function TitlesContent({
               }}
             >
               <Plus className="size-4" />
-              Novo título
+              Novo tÃ­tulo
             </Button>
           ) : undefined
         }
@@ -2309,9 +1953,9 @@ function TitlesContent({
               </SheetTrigger>
               <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-lg">
                 <SheetHeader className="text-left">
-                  <SheetTitle>Filtrar títulos</SheetTitle>
+                  <SheetTitle>Filtrar tÃ­tulos</SheetTitle>
                   <SheetDescription>
-                    Refine a consulta por período, parceiro e situação.
+                    Refine a consulta por perÃ­odo, parceiro e situaÃ§Ã£o.
                   </SheetDescription>
                 </SheetHeader>
                 <ReceivablesFilterPanel
@@ -2348,7 +1992,7 @@ function TitlesContent({
               try {
                 await setFinancialRecurringRuleStatus(rule.id, access.workspaceId, "ended");
                 toast.success("Recorrencia cancelada. Titulos ja gerados foram preservados.");
-                await load();
+                await Promise.all([loadDocuments(), loadAuxiliaryData()]);
               } catch {
                 toast.error("Nao foi possivel cancelar a recorrencia.");
               }
@@ -2359,9 +2003,9 @@ function TitlesContent({
               try {
                 await reverseSettlement(settlement.id, reason);
                 toast.success("Baixa estornada.");
-                await load();
+                await loadDocuments();
               } catch {
-                toast.error("Não foi possível estornar a baixa.");
+                toast.error("NÃ£o foi possÃ­vel estornar a baixa.");
               }
             }}
             onVoid={async (document) => {
@@ -2369,10 +2013,10 @@ function TitlesContent({
               if (!reason) return;
               try {
                 await voidFinancialDocument(document.id, reason);
-                toast.success("Título cancelado.");
-                await load();
+                toast.success("TÃ­tulo cancelado.");
+                await loadDocuments();
               } catch {
-                toast.error("Não foi possível cancelar o título.");
+                toast.error("NÃ£o foi possÃ­vel cancelar o tÃ­tulo.");
               }
             }}
           />
@@ -2411,9 +2055,9 @@ function TitlesContent({
               </SheetTrigger>
               <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-lg">
                 <SheetHeader className="text-left">
-                  <SheetTitle>Filtrar títulos</SheetTitle>
+                  <SheetTitle>Filtrar tÃ­tulos</SheetTitle>
                   <SheetDescription>
-                    Refine a consulta por período, fornecedor e situação.
+                    Refine a consulta por perÃ­odo, fornecedor e situaÃ§Ã£o.
                   </SheetDescription>
                 </SheetHeader>
                 <PayablesFilterPanel
@@ -2450,7 +2094,7 @@ function TitlesContent({
               try {
                 await setFinancialRecurringRuleStatus(rule.id, access.workspaceId, "ended");
                 toast.success("Recorrencia cancelada. Titulos ja gerados foram preservados.");
-                await load();
+                await Promise.all([loadDocuments(), loadAuxiliaryData()]);
               } catch {
                 toast.error("Nao foi possivel cancelar a recorrencia.");
               }
@@ -2461,9 +2105,9 @@ function TitlesContent({
               try {
                 await reverseSettlement(settlement.id, reason);
                 toast.success("Baixa estornada.");
-                await load();
+                await loadDocuments();
               } catch {
-                toast.error("Não foi possível estornar a baixa.");
+                toast.error("NÃ£o foi possÃ­vel estornar a baixa.");
               }
             }}
             onVoid={async (document) => {
@@ -2471,10 +2115,10 @@ function TitlesContent({
               if (!reason) return;
               try {
                 await voidFinancialDocument(document.id, reason);
-                toast.success("Título cancelado.");
-                await load();
+                toast.success("TÃ­tulo cancelado.");
+                await loadDocuments();
               } catch {
-                toast.error("Não foi possível cancelar o título.");
+                toast.error("NÃ£o foi possÃ­vel cancelar o tÃ­tulo.");
               }
             }}
           />
@@ -2509,17 +2153,17 @@ function TitlesContent({
             } else {
               await saveFinancialDocument(input);
             }
-            toast.success("Título salvo com sucesso.");
+            toast.success("TÃ­tulo salvo com sucesso.");
             setFormOpen(false);
             setEditingDocument(null);
-            await load();
+            await Promise.all([loadDocuments(), loadAuxiliaryData()]);
           } catch (e) {
-            toast.error(e instanceof Error ? e.message : "Não foi possível salvar.");
+            toast.error(e instanceof Error ? e.message : "NÃ£o foi possÃ­vel salvar.");
           } finally {
             setSaving(false);
           }
         }}
-        onPartnerCreated={load}
+        onPartnerCreated={loadAuxiliaryData}
       />
       <SettlementDialog
         target={settleTarget}
@@ -2533,7 +2177,7 @@ function TitlesContent({
             await settleInstallment(input);
             toast.success(receiving ? "Recebimento registrado." : "Pagamento registrado.");
             setSettleTarget(null);
-            await load();
+            await loadDocuments();
           } catch (e) {
             toast.error(e instanceof Error ? e.message : "Falha na baixa.");
           } finally {
@@ -2609,6 +2253,9 @@ function FinancialPagination({
 }
 
 function documentBalance(document: FinancialDocumentDetails) {
+  if (typeof document.outstandingBalance === "number") {
+    return document.outstandingBalance;
+  }
   return document.installments.reduce((sum, installment) => sum + installment.balance, 0);
 }
 
@@ -2627,7 +2274,7 @@ function receivableDueState(document: FinancialDocumentDetails) {
   const limit = new Date();
   limit.setDate(limit.getDate() + 7);
   if (installment.dueDate <= limit.toISOString().slice(0, 10)) {
-    return { label: "Próx. 7 dias", tone: "warning" as const };
+    return { label: "PrÃ³x. 7 dias", tone: "warning" as const };
   }
   return { label: "No prazo", tone: "muted" as const };
 }
@@ -2652,8 +2299,8 @@ function ReceivablesSummary({
       </article>
       <div className="financial-receivables-side-metrics">
         <ReceivableMiniMetric label="Vencido" value={overdue} tone="danger" />
-        <ReceivableMiniMetric label="Recebido no período" value={settledPeriod} tone="success" />
-        <ReceivableMiniMetric label="Próximos 7 dias" value={upcoming} tone="future" />
+        <ReceivableMiniMetric label="Recebido no perÃ­odo" value={settledPeriod} tone="success" />
+        <ReceivableMiniMetric label="PrÃ³ximos 7 dias" value={upcoming} tone="future" />
       </div>
     </section>
   );
@@ -2690,22 +2337,22 @@ function ReceivablesPriority({
   return (
     <section className="financial-receivables-priority">
       <div>
-        <p className="financial-section-kicker">Atenção</p>
-        <h2>Prioridades de cobrança</h2>
+        <p className="financial-section-kicker">AtenÃ§Ã£o</p>
+        <h2>Prioridades de cobranÃ§a</h2>
       </div>
       <div className="financial-receivables-priority-items">
         <div>
           <ShieldAlert className="size-4" />
           <span>Vencidos</span>
           <strong>
-            {overdueCount} títulos · {money.format(overdueAmount)}
+            {overdueCount} tÃ­tulos Â· {money.format(overdueAmount)}
           </strong>
         </div>
         <div>
           <CalendarClock className="size-4" />
           <span>Vencendo em 7 dias</span>
           <strong>
-            {upcomingCount} títulos · {money.format(upcomingAmount)}
+            {upcomingCount} tÃ­tulos Â· {money.format(upcomingAmount)}
           </strong>
         </div>
       </div>
@@ -2741,7 +2388,7 @@ function ReceivablesFilterPanel({
           <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
           <Input
             className="pl-9"
-            placeholder="Buscar título, documento ou parceiro"
+            placeholder="Buscar tÃ­tulo, documento ou parceiro"
             value={filters.search}
             onChange={(event) => set("search", event.target.value)}
           />
@@ -2782,7 +2429,7 @@ function ReceivablesFilterPanel({
           all="Todas as categorias"
           items={chart
             .filter((account) => account.isPostable)
-            .map((account) => [account.id, `${account.code} · ${account.name}`])}
+            .map((account) => [account.id, `${account.code} Â· ${account.name}`])}
         />
         <SimpleSelect
           value={filters.center}
@@ -2792,13 +2439,13 @@ function ReceivablesFilterPanel({
         />
         <Input
           type="number"
-          placeholder="Valor mínimo"
+          placeholder="Valor mÃ­nimo"
           value={filters.min}
           onChange={(event) => set("min", event.target.value)}
         />
         <Input
           type="number"
-          placeholder="Valor máximo"
+          placeholder="Valor mÃ¡ximo"
           value={filters.max}
           onChange={(event) => set("max", event.target.value)}
         />
@@ -2848,17 +2495,17 @@ function ReceivablesTitleList({
     <section className="financial-receivables-list">
       <div className="financial-receivables-list-head">
         <div>
-          <p className="financial-section-kicker">Títulos</p>
-          <h2>Carteira de recebíveis</h2>
+          <p className="financial-section-kicker">TÃ­tulos</p>
+          <h2>Carteira de recebÃ­veis</h2>
         </div>
         <span>{total} encontrados</span>
       </div>
       <div className="hidden financial-receivables-table-head md:grid">
-        <span>Cliente e título</span>
+        <span>Cliente e tÃ­tulo</span>
         <span>Vencimento</span>
         <span>Valor</span>
-        <span>Situação</span>
-        <span>Ação</span>
+        <span>SituaÃ§Ã£o</span>
+        <span>AÃ§Ã£o</span>
       </div>
       {documents.length ? (
         documents.map((document) => (
@@ -2883,16 +2530,16 @@ function ReceivablesTitleList({
         ))
       ) : (
         <div className="financial-receivables-empty">
-          <strong>Nenhum título encontrado</strong>
+          <strong>Nenhum tÃ­tulo encontrado</strong>
           <span>
             {filtersActive
-              ? "Nenhum título encontrado para os filtros atuais."
-              : "Cadastre um novo título para começar."}
+              ? "Nenhum tÃ­tulo encontrado para os filtros atuais."
+              : "Cadastre um novo tÃ­tulo para comeÃ§ar."}
           </span>
           {!filtersActive && canCreate && (
             <Button size="sm" variant="outline" onClick={onNew}>
               <Plus className="size-4" />
-              Novo título
+              Novo tÃ­tulo
             </Button>
           )}
         </div>
@@ -2947,11 +2594,11 @@ function ReceivablesTitleRow({
       }}
     >
       <div className="financial-receivables-title-cell">
-        <strong>{document.partnerName || "Cliente não informado"}</strong>
+        <strong>{document.partnerName || "Cliente nÃ£o informado"}</strong>
         <span>{document.description}</span>
         <small>
-          {document.documentNumber || "Sem número"} ·{" "}
-          {originLabels[documentOrigin(document.sourceType)]} Â·{" "}
+          {document.documentNumber || "Sem nÃºmero"} Â·{" "}
+          {originLabels[documentOrigin(document.sourceType)]} Ã‚Â·{" "}
           {recurringRule ? "Recorrente" : "Nao recorrente"}
         </small>
       </div>
@@ -3039,7 +2686,7 @@ function ReceivablesTitleRow({
         <div className="financial-receivables-mobile-action md:hidden">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="outline" aria-label="Ações do título">
+              <Button size="icon" variant="outline" aria-label="AÃ§Ãµes do tÃ­tulo">
                 <MoreVertical className="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -3057,7 +2704,7 @@ function ReceivablesTitleRow({
               )}
               {document.status === "draft" && canEdit && (
                 <DropdownMenuItem onSelect={() => onVoid(document)}>
-                  <ReceiptText /> Cancelar título
+                  <ReceiptText /> Cancelar tÃ­tulo
                 </DropdownMenuItem>
               )}
               {canReverse &&
@@ -3107,18 +2754,18 @@ function payableBucketForDays(days: number) {
 
 const payablePressureBuckets = [
   { key: "overdue", label: "Vencido", tone: "danger" },
-  { key: "week", label: "Até 7 dias", tone: "warning" },
+  { key: "week", label: "AtÃ© 7 dias", tone: "warning" },
   { key: "halfMonth", label: "8-15 dias", tone: "neutral" },
   { key: "month", label: "16-30 dias", tone: "neutral" },
-  { key: "later", label: "Após 30 dias", tone: "muted" },
+  { key: "later", label: "ApÃ³s 30 dias", tone: "muted" },
 ] as const;
 
 const payableAgendaGroups = [
   { key: "overdue", label: "Vencidos" },
   { key: "today", label: "Vencem hoje" },
-  { key: "week", label: "Próximos 7 dias" },
+  { key: "week", label: "PrÃ³ximos 7 dias" },
   { key: "later", label: "Mais adiante" },
-  { key: "closed", label: "Concluídos ou sem vencimento" },
+  { key: "closed", label: "ConcluÃ­dos ou sem vencimento" },
 ] as const;
 
 function summarizePayablePressure(documents: FinancialDocumentDetails[]) {
@@ -3172,7 +2819,7 @@ function PayablesSummary({
       </article>
       <div className="financial-payables-secondary-board">
         <PayableMiniMetric label="Vencido" value={overdue} tone="danger" />
-        <PayableMiniMetric label="Pago no período" value={settledPeriod} tone="success" />
+        <PayableMiniMetric label="Pago no perÃ­odo" value={settledPeriod} tone="success" />
       </div>
     </section>
   );
@@ -3203,14 +2850,14 @@ function PayablesPressure({ summary }: { summary: FinancialDocumentsPageSummary 
     <section className="financial-payables-pressure">
       <div className="financial-payables-pressure-title">
         <p className="financial-section-kicker">Agenda Financeira</p>
-        <h2>Pressão de caixa</h2>
-        <span>Distribuição por vencimento dos compromissos em aberto.</span>
+        <h2>PressÃ£o de caixa</h2>
+        <span>DistribuiÃ§Ã£o por vencimento dos compromissos em aberto.</span>
       </div>
       <article className="financial-payables-week-focus">
-        <span>Comprometido nos próximos 7 dias</span>
+        <span>Comprometido nos prÃ³ximos 7 dias</span>
         <strong>{money.format(week.amount)}</strong>
         <small>
-          {week.count} {week.count === 1 ? "parcela" : "parcelas"} exigem programação imediata
+          {week.count} {week.count === 1 ? "parcela" : "parcelas"} exigem programaÃ§Ã£o imediata
         </small>
       </article>
       <article className="financial-payables-overdue-alert">
@@ -3271,7 +2918,7 @@ function PayablesFilterPanel({
           <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
           <Input
             className="pl-9"
-            placeholder="Buscar título, documento ou fornecedor"
+            placeholder="Buscar tÃ­tulo, documento ou fornecedor"
             value={filters.search}
             onChange={(event) => set("search", event.target.value)}
           />
@@ -3312,7 +2959,7 @@ function PayablesFilterPanel({
           all="Todas as categorias"
           items={chart
             .filter((account) => account.isPostable)
-            .map((account) => [account.id, `${account.code} · ${account.name}`])}
+            .map((account) => [account.id, `${account.code} Â· ${account.name}`])}
         />
         <SimpleSelect
           value={filters.center}
@@ -3322,13 +2969,13 @@ function PayablesFilterPanel({
         />
         <Input
           type="number"
-          placeholder="Valor mínimo"
+          placeholder="Valor mÃ­nimo"
           value={filters.min}
           onChange={(event) => set("min", event.target.value)}
         />
         <Input
           type="number"
-          placeholder="Valor máximo"
+          placeholder="Valor mÃ¡ximo"
           value={filters.max}
           onChange={(event) => set("max", event.target.value)}
         />
@@ -3375,7 +3022,7 @@ function PayablesTitleList({
   onCancelRecurring: (rule: FinancialRecurringRule) => void;
 }) {
   const supplierCounts = documents.reduce<Record<string, number>>((acc, document) => {
-    const key = document.partnerName || "Fornecedor não informado";
+    const key = document.partnerName || "Fornecedor nÃ£o informado";
     acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
@@ -3396,17 +3043,17 @@ function PayablesTitleList({
     <section className="financial-payables-list">
       <div className="financial-payables-list-head">
         <div>
-          <p className="financial-section-kicker">Obrigações</p>
+          <p className="financial-section-kicker">ObrigaÃ§Ãµes</p>
           <h2>Agenda de pagamentos</h2>
         </div>
         <span>{total} encontrados</span>
       </div>
       <div className="hidden financial-payables-table-head md:grid">
-        <span>Fornecedor e título</span>
+        <span>Fornecedor e tÃ­tulo</span>
         <span>Vencimento</span>
         <span>Valor</span>
-        <span>Situação</span>
-        <span>Ação</span>
+        <span>SituaÃ§Ã£o</span>
+        <span>AÃ§Ã£o</span>
       </div>
       {documents.length ? (
         grouped
@@ -3422,7 +3069,7 @@ function PayablesTitleList({
                 <PayablesTitleRow
                   key={document.id}
                   document={document}
-                  supplierCount={supplierCounts[document.partnerName || "Fornecedor não informado"]}
+                  supplierCount={supplierCounts[document.partnerName || "Fornecedor nÃ£o informado"]}
                   canSettle={canSettle}
                   canReverse={canReverse}
                   canEdit={canEdit}
@@ -3445,18 +3092,18 @@ function PayablesTitleList({
         <div className="financial-payables-empty">
           <strong>
             {filtersActive
-              ? "Nenhuma obrigação encontrada para os filtros atuais"
-              : "Nenhuma obrigação em aberto"}
+              ? "Nenhuma obrigaÃ§Ã£o encontrada para os filtros atuais"
+              : "Nenhuma obrigaÃ§Ã£o em aberto"}
           </strong>
           <span>
             {filtersActive
-              ? "Ajuste período, fornecedor, status ou valor para ampliar a agenda."
-              : "Cadastre um novo título para iniciar a programação de pagamentos."}
+              ? "Ajuste perÃ­odo, fornecedor, status ou valor para ampliar a agenda."
+              : "Cadastre um novo tÃ­tulo para iniciar a programaÃ§Ã£o de pagamentos."}
           </span>
           {!filtersActive && canCreate && (
             <Button size="sm" variant="outline" onClick={onNew}>
               <Plus className="size-4" />
-              Novo título
+              Novo tÃ­tulo
             </Button>
           )}
         </div>
@@ -3513,14 +3160,14 @@ function PayablesTitleRow({
       }}
     >
       <div className="financial-payables-partner-cell">
-        <strong>{document.partnerName || "Fornecedor não informado"}</strong>
+        <strong>{document.partnerName || "Fornecedor nÃ£o informado"}</strong>
         <span>{document.description}</span>
         <small>
-          {document.documentNumber || "Sem número"} ·{" "}
+          {document.documentNumber || "Sem nÃºmero"} Â·{" "}
           {originLabels[documentOrigin(document.sourceType)]}
-          {" Â· "}
+          {" Ã‚Â· "}
           {recurringRule ? "Recorrente" : "Nao recorrente"}
-          {supplierCount > 1 ? ` · ${supplierCount} títulos na lista` : ""}
+          {supplierCount > 1 ? ` Â· ${supplierCount} tÃ­tulos na lista` : ""}
         </small>
       </div>
       <div className="financial-payables-due-cell">
@@ -3607,7 +3254,7 @@ function PayablesTitleRow({
         <div className="financial-payables-mobile-action md:hidden">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="outline" aria-label="Ações do título">
+              <Button size="icon" variant="outline" aria-label="AÃ§Ãµes do tÃ­tulo">
                 <MoreVertical className="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -3625,7 +3272,7 @@ function PayablesTitleRow({
               )}
               {document.status === "draft" && canEdit && (
                 <DropdownMenuItem onSelect={() => onVoid(document)}>
-                  <ReceiptText /> Cancelar título
+                  <ReceiptText /> Cancelar tÃ­tulo
                 </DropdownMenuItem>
               )}
               {canReverse &&
@@ -3848,7 +3495,7 @@ function FilterPanel({
         <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
         <Input
           className="pl-9"
-          placeholder="Buscar título, documento ou parceiro"
+          placeholder="Buscar tÃ­tulo, documento ou parceiro"
           value={filters.search}
           onChange={(e) => set("search", e.target.value)}
         />
@@ -3877,7 +3524,7 @@ function FilterPanel({
         value={filters.category}
         onChange={(v) => set("category", v)}
         all="Todas as categorias"
-        items={chart.filter((a) => a.isPostable).map((a) => [a.id, `${a.code} · ${a.name}`])}
+        items={chart.filter((a) => a.isPostable).map((a) => [a.id, `${a.code} Â· ${a.name}`])}
       />
       <SimpleSelect
         value={filters.center}
@@ -3887,13 +3534,13 @@ function FilterPanel({
       />
       <Input
         type="number"
-        placeholder="Valor mínimo"
+        placeholder="Valor mÃ­nimo"
         value={filters.min}
         onChange={(e) => set("min", e.target.value)}
       />
       <Input
         type="number"
-        placeholder="Valor máximo"
+        placeholder="Valor mÃ¡ximo"
         value={filters.max}
         onChange={(e) => set("max", e.target.value)}
       />
@@ -3956,13 +3603,13 @@ function TitleList({
   return (
     <section className="premium-card mx-3 overflow-hidden md:mx-0">
       <div className="hidden grid-cols-[1.4fr_1fr_0.8fr_1fr_1fr_1fr_auto] gap-3 border-b border-border financial-table-head px-4 py-3 md:grid">
-        <span>Título</span>
+        <span>TÃ­tulo</span>
         <span>Parceiro</span>
         <span>Origem</span>
         <span>Vencimento</span>
         <span>Valor</span>
-        <span>Situação</span>
-        <span>Ação</span>
+        <span>SituaÃ§Ã£o</span>
+        <span>AÃ§Ã£o</span>
       </div>
       {documents.length ? (
         documents.map((d) => (
@@ -4021,12 +3668,12 @@ function TitleRow({
       <div>
         <div className="text-sm font-extrabold">{d.description}</div>
         <div className="text-xs text-muted-foreground">
-          {d.documentNumber || "Sem número"} · {d.installments.length} parcela(s)
+          {d.documentNumber || "Sem nÃºmero"} Â· {d.installments.length} parcela(s)
         </div>
       </div>
       <div className="text-sm">
-        <span className="md:hidden text-xs text-muted-foreground">Parceiro · </span>
-        {d.partnerName || "Não informado"}
+        <span className="md:hidden text-xs text-muted-foreground">Parceiro Â· </span>
+        {d.partnerName || "NÃ£o informado"}
       </div>
       <div>
         <FinancialStatusBadge state="muted">
@@ -4034,7 +3681,7 @@ function TitleRow({
         </FinancialStatusBadge>
       </div>
       <div className="text-sm">
-        <span className="md:hidden text-xs text-muted-foreground">Vencimento · </span>
+        <span className="md:hidden text-xs text-muted-foreground">Vencimento Â· </span>
         {installment ? date.format(new Date(`${installment.dueDate}T12:00:00`)) : "-"}
       </div>
       <div>
@@ -4081,7 +3728,7 @@ function TitleRow({
         <div className="absolute right-4 top-4 md:hidden">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="outline" aria-label="Ações do título">
+              <Button size="icon" variant="outline" aria-label="AÃ§Ãµes do tÃ­tulo">
                 <MoreVertical className="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -4099,7 +3746,7 @@ function TitleRow({
               )}
               {d.status === "draft" && canEdit && (
                 <DropdownMenuItem onSelect={() => onVoid(d)}>
-                  <ReceiptText /> Cancelar título
+                  <ReceiptText /> Cancelar tÃ­tulo
                 </DropdownMenuItem>
               )}
               {canReverse &&
@@ -4264,11 +3911,11 @@ function DocumentDialog({
               {document
                 ? "Editar rascunho"
                 : direction === "receivable"
-                  ? "Novo título a receber"
-                  : "Novo título a pagar"}
+                  ? "Novo tÃ­tulo a receber"
+                  : "Novo tÃ­tulo a pagar"}
             </DialogTitle>
             <DialogDescription>
-              Cadastre o fato financeiro e seus vencimentos sem alterar a operação.
+              Cadastre o fato financeiro e seus vencimentos sem alterar a operaÃ§Ã£o.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -4290,26 +3937,26 @@ function DocumentDialog({
                 </Button>
               </div>
             </Field>
-            <Field label="Número / documento">
+            <Field label="NÃºmero / documento">
               <Input
                 value={form.documentNumber}
                 onChange={(e) => set("documentNumber", e.target.value)}
               />
             </Field>
-            <Field label="Descrição" className="sm:col-span-2">
+            <Field label="DescriÃ§Ã£o" className="sm:col-span-2">
               <Input
                 value={form.description}
                 onChange={(e) => set("description", e.target.value)}
               />
             </Field>
-            <Field label="Emissão">
+            <Field label="EmissÃ£o">
               <Input
                 type="date"
                 value={form.issueDate}
                 onChange={(e) => set("issueDate", e.target.value)}
               />
             </Field>
-            <Field label="Competência">
+            <Field label="CompetÃªncia">
               <Input
                 type="date"
                 value={form.competenceDate}
@@ -4339,7 +3986,7 @@ function DocumentDialog({
                 onChange={(e) => set("dueDate", e.target.value)}
               />
             </Field>
-            <Field label="Número de parcelas">
+            <Field label="NÃºmero de parcelas">
               <Input
                 type="number"
                 min="1"
@@ -4348,7 +3995,7 @@ function DocumentDialog({
                 onChange={(e) => setInstallmentCount(e.target.value)}
               />
             </Field>
-            <Field label="Distribuição das parcelas">
+            <Field label="DistribuiÃ§Ã£o das parcelas">
               <Select
                 value={customMode ? "custom" : "equal"}
                 onValueChange={(value) => {
@@ -4372,7 +4019,7 @@ function DocumentDialog({
                 </div>
                 {customInstallments.map((item, index) => (
                   <div key={index} className="grid grid-cols-[52px_1fr_1fr] items-center gap-2">
-                    <span className="text-xs font-bold text-muted-foreground">{index + 1}ª</span>
+                    <span className="text-xs font-bold text-muted-foreground">{index + 1}Âª</span>
                     <Input
                       type="number"
                       min="0.01"
@@ -4476,7 +4123,7 @@ function DocumentDialog({
                 all="Selecionar categoria"
                 items={chart
                   .filter((a) => a.isPostable && a.active)
-                  .map((a) => [a.id, `${a.code} · ${a.name}`])}
+                  .map((a) => [a.id, `${a.code} Â· ${a.name}`])}
               />
             </Field>
             <Field label="Setor / gerencial">
@@ -4515,18 +4162,18 @@ function DocumentDialog({
                 items={products.map((p) => [p.id, p.name])}
               />
             </Field>
-            <Field label="Situação">
+            <Field label="SituaÃ§Ã£o">
               <Select value={form.status} onValueChange={(v) => set("status", v)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="draft">Rascunho</SelectItem>
-                  <SelectItem value="posted">Lançado</SelectItem>
+                  <SelectItem value="posted">LanÃ§ado</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Observação" className="sm:col-span-2">
+            <Field label="ObservaÃ§Ã£o" className="sm:col-span-2">
               <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} />
             </Field>
           </div>
@@ -4600,7 +4247,7 @@ function DocumentDialog({
                 )
               }
             >
-              {saving && <LoaderCircle className="size-4 animate-spin" />}Salvar título
+              {saving && <LoaderCircle className="size-4 animate-spin" />}Salvar tÃ­tulo
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4647,7 +4294,7 @@ function PartnerDialog({
           <Input value={tax} onChange={(e) => setTax(e.target.value)} />
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Prazo padrão a receber">
+          <Field label="Prazo padrÃ£o a receber">
             <Input
               type="number"
               min="0"
@@ -4656,7 +4303,7 @@ function PartnerDialog({
               placeholder="Opcional"
             />
           </Field>
-          <Field label="Prazo padrão a pagar">
+          <Field label="Prazo padrÃ£o a pagar">
             <Input
               type="number"
               min="0"
@@ -4740,7 +4387,7 @@ function SettlementDialog({
         <DialogHeader>
           <DialogTitle>{actionLabel} parcela</DialogTitle>
           <DialogDescription>
-            Saldo disponível: {money.format(target?.installment.balance || 0)}. A baixa não altera o
+            Saldo disponÃ­vel: {money.format(target?.installment.balance || 0)}. A baixa nÃ£o altera o
             valor original.
           </DialogDescription>
         </DialogHeader>
@@ -4765,7 +4412,7 @@ function SettlementDialog({
               value={form.account || "all"}
               onChange={(v) => setForm({ ...form, account: v === "all" ? "" : v })}
               all="Selecionar conta"
-              items={accounts.map((a) => [a.id, `${a.name} · ${money.format(a.currentBalance)}`])}
+              items={accounts.map((a) => [a.id, `${a.name} Â· ${money.format(a.currentBalance)}`])}
             />
           </Field>
           <Field label="Juros">
@@ -4799,15 +4446,15 @@ function SettlementDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="pix">PIX</SelectItem>
-                <SelectItem value="bank_transfer">Transferência</SelectItem>
+                <SelectItem value="bank_transfer">TransferÃªncia</SelectItem>
                 <SelectItem value="cash">Dinheiro</SelectItem>
-                <SelectItem value="card">Cartão</SelectItem>
+                <SelectItem value="card">CartÃ£o</SelectItem>
                 <SelectItem value="boleto">Boleto</SelectItem>
                 <SelectItem value="other">Outro</SelectItem>
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Observação" className="sm:col-span-2">
+          <Field label="ObservaÃ§Ã£o" className="sm:col-span-2">
             <Textarea
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -5280,7 +4927,7 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
                   .map((account) => [account.id, `${account.code} - ${account.name}`])}
               />
             </Field>
-            <Field label="Apropriação">
+            <Field label="ApropriaÃ§Ã£o">
               <SimpleSelect
                 value={form.costCenterId || "all"}
                 onChange={(value) =>
@@ -5864,7 +5511,7 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
                   .map((account) => [account.id, `${account.code} - ${account.name}`])}
               />
             </Field>
-            <Field label="Apropriação">
+            <Field label="ApropriaÃ§Ã£o">
               <SimpleSelect
                 value={employeeForm.defaultCostCenterId || "all"}
                 onChange={(value) =>
@@ -6131,7 +5778,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
     <div className="financial-shell space-y-4">
       <PageHeader
         title="Bancos e Caixas"
-        subtitle="Saldos calculados por movimentações"
+        subtitle="Saldos calculados por movimentaÃ§Ãµes"
         actions={
           can ? (
             <Button onClick={openNewAccount}>
@@ -6149,7 +5796,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
               <div>
                 <div className="text-sm font-extrabold">{a.name}</div>
                 <div className="text-xs text-muted-foreground">
-                  {a.bankName || "Conta interna"} {a.accountNumber && `· ${a.accountNumber}`}
+                  {a.bankName || "Conta interna"} {a.accountNumber && `Â· ${a.accountNumber}`}
                 </div>
               </div>
               <Landmark className="size-5 text-primary" />
@@ -6178,7 +5825,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
               {form.id ? "Editar conta financeira" : "Nova conta financeira"}
             </DialogTitle>
             <DialogDescription>
-              O saldo futuro será calculado pelas baixas registradas.
+              O saldo futuro serÃ¡ calculado pelas baixas registradas.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -6195,7 +5842,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="checking">Conta corrente</SelectItem>
-                  <SelectItem value="savings">Poupança</SelectItem>
+                  <SelectItem value="savings">PoupanÃ§a</SelectItem>
                   <SelectItem value="cash">Caixa</SelectItem>
                   <SelectItem value="wallet">Carteira</SelectItem>
                   <SelectItem value="other">Outros</SelectItem>
@@ -6208,7 +5855,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
                 onChange={(e) => setForm({ ...form, bank: e.target.value })}
               />
             </Field>
-            <Field label="Agência">
+            <Field label="AgÃªncia">
               <Input
                 value={form.agency}
                 onChange={(e) => setForm({ ...form, agency: e.target.value })}
@@ -6237,7 +5884,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
                 onChange={(e) => setForm({ ...form, date: e.target.value })}
               />
             </Field>
-            <Field label="Situação">
+            <Field label="SituaÃ§Ã£o">
               <Select
                 value={form.active}
                 onValueChange={(value) => setForm({ ...form, active: value })}
@@ -6355,11 +6002,11 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
   return (
     <div className="financial-shell space-y-4">
       <PageHeader
-        title={kind === "chart" ? "Gerenciais" : "Apropriações"}
+        title={kind === "chart" ? "Gerenciais" : "ApropriaÃ§Ãµes"}
         subtitle={
           kind === "chart"
-            ? "Categorias hierárquicas e classificação gerencial"
-            : "Estrutura organizacional para alocações"
+            ? "Categorias hierÃ¡rquicas e classificaÃ§Ã£o gerencial"
+            : "Estrutura organizacional para alocaÃ§Ãµes"
         }
         actions={
           can ? (
@@ -6382,13 +6029,13 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-extrabold">
-                {item.code} · {item.name}
+                {item.code} Â· {item.name}
               </div>
               <div className="text-xs text-muted-foreground">
-                {item.parentId ? "Nível vinculado" : "Conta raiz"} ·{" "}
+                {item.parentId ? "NÃ­vel vinculado" : "Conta raiz"} Â·{" "}
                 {item.active ? "Ativo" : "Inativo"}
                 {kind === "chart" && "dreGroup" in item && item.dreGroup
-                  ? ` · ${item.dreGroup}`
+                  ? ` Â· ${item.dreGroup}`
                   : ""}
               </div>
             </div>
@@ -6416,14 +6063,14 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
                 ? "Editar estrutura"
                 : kind === "chart"
                   ? "Nova conta"
-                  : "Nova apropriação"}
+                  : "Nova apropriaÃ§Ã£o"}
             </DialogTitle>
             <DialogDescription>
-              Crie um item personalizado sem alterar as estruturas obrigatórias.
+              Crie um item personalizado sem alterar as estruturas obrigatÃ³rias.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Código">
+            <Field label="CÃ³digo">
               <Input
                 value={form.code}
                 onChange={(e) => setForm({ ...form, code: e.target.value })}
@@ -6440,7 +6087,7 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
                 value={form.parent || "all"}
                 onChange={(v) => setForm({ ...form, parent: v === "all" ? "" : v })}
                 all="Sem pai"
-                items={items.map((i) => [i.id, `${i.code} · ${i.name}`])}
+                items={items.map((i) => [i.id, `${i.code} Â· ${i.name}`])}
               />
             </Field>
             {kind === "chart" && (
@@ -6458,17 +6105,17 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="Classificação DRE">
+                <Field label="ClassificaÃ§Ã£o DRE">
                   <SimpleSelect
                     value={form.dre}
                     onChange={(v) => setForm({ ...form, dre: v })}
-                    all="Sem classificação"
+                    all="Sem classificaÃ§Ã£o"
                     items={[
                       ["gross_revenue", "Receita bruta"],
-                      ["revenue_deduction", "Deduções"],
-                      ["variable_cost", "Custos variáveis"],
+                      ["revenue_deduction", "DeduÃ§Ãµes"],
+                      ["variable_cost", "Custos variÃ¡veis"],
                       ["operating_expense", "Despesas operacionais"],
-                      ["depreciation_amortization", "Depreciação"],
+                      ["depreciation_amortization", "DepreciaÃ§Ã£o"],
                       ["financial_result", "Resultado financeiro"],
                       ["income_tax", "Impostos"],
                       ["other_result", "Outros resultados"],
@@ -6477,7 +6124,7 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
                 </Field>
               </>
             )}
-            <Field label="Situação">
+            <Field label="SituaÃ§Ã£o">
               <Select
                 value={form.active}
                 onValueChange={(value) => setForm({ ...form, active: value })}

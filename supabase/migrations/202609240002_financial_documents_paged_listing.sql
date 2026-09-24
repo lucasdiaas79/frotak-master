@@ -71,7 +71,6 @@ begin
       inst.first_due_date,
       inst.first_open_installment,
       inst.installment_count,
-      coalesce(settle.active_settlements, '[]'::jsonb) as active_settlements,
       coalesce(settle.settled_period_amount, 0)::numeric(18,2) as settled_period_amount,
       case
         when fd.status = 'draft' then 'draft'
@@ -126,65 +125,45 @@ begin
       limit 1
     ) alloc on true
     left join lateral (
-      with related as (
-        select fs.*
-        from public.financial_settlements fs
-        where fs.document_id = fd.id
-      ),
-      reversed as (
-        select original_settlement_id
-        from related
-        where settlement_type = 'reversal'
-      )
       select
-        coalesce(jsonb_agg(
-          jsonb_build_object(
-            'id', r.id,
-            'documentId', r.document_id,
-            'installmentId', r.installment_id,
-            'financialAccountId', r.financial_account_id,
-            'settlementType', r.settlement_type,
-            'originalSettlementId', r.original_settlement_id,
-            'principalAmount', r.principal_amount,
-            'interestAmount', r.interest_amount,
-            'penaltyAmount', r.penalty_amount,
-            'discountAmount', r.discount_amount,
-            'netAmount', r.net_amount,
-            'settledOn', r.settled_on,
-            'paymentMethod', r.payment_method,
-            'notes', r.notes,
-            'reversalReason', r.reversal_reason,
-            'createdAt', r.created_at
-          )
-          order by r.settled_on desc, r.created_at desc
-        ) filter (
-          where r.settlement_type = 'settlement'
-            and not exists (select 1 from reversed rev where rev.original_settlement_id = r.id)
-        ), '[]'::jsonb) as active_settlements,
-        coalesce(sum(r.net_amount) filter (
-          where r.settlement_type = 'settlement'
-            and r.settled_on between coalesce(v_start, '-infinity'::date) and coalesce(v_end, 'infinity'::date)
-            and not exists (select 1 from reversed rev where rev.original_settlement_id = r.id)
+        coalesce(sum(fs.net_amount) filter (
+          where fs.settlement_type = 'settlement'
+            and fs.settled_on between coalesce(v_start, '-infinity'::date) and coalesce(v_end, 'infinity'::date)
+            and not exists (
+              select 1
+              from public.financial_settlements rev
+              where rev.original_settlement_id = fs.id
+                and rev.settlement_type = 'reversal'
+            )
         ), 0)::numeric(18,2) as settled_period_amount
-      from related r
+      from public.financial_settlements fs
+      where fs.document_id = fd.id
     ) settle on true
     where fd.workspace_id = v_workspace_id
       and fd.direction = v_direction
       and (fd.source_type is null or fd.source_type <> 'settlement_adjustment')
   ),
   filtered as (
-    select *
-    from base
-    where (v_search is null or lower(description || ' ' || coalesce(document_number, '') || ' ' || coalesce(partner_name, '')) like '%' || v_search || '%')
-      and (v_status is null or v_status = 'all' or visual_status = v_status)
-      and (v_origin is null or v_origin = 'all' or origin = v_origin)
-      and (v_partner_id is null or partner_id = v_partner_id)
-      and (v_chart_account_id is null or chart_account_id = v_chart_account_id)
-      and (v_cost_center_id is null or cost_center_id = v_cost_center_id)
-      and (v_start is null or first_due_date >= v_start)
-      and (v_end is null or first_due_date <= v_end)
-      and (v_min is null or balance >= v_min)
-      and (v_max is null or balance <= v_max)
+    select b.*
+    from base b
+    where (v_search is null or lower(b.description || ' ' || coalesce(b.document_number, '') || ' ' || coalesce(b.partner_name, '')) like '%' || v_search || '%')
+      and (v_status is null or v_status = 'all' or b.visual_status = v_status)
+      and (v_origin is null or v_origin = 'all' or b.origin = v_origin)
+      and (v_partner_id is null or b.partner_id = v_partner_id)
+      and (v_chart_account_id is null or b.chart_account_id = v_chart_account_id)
+      and (
+        v_cost_center_id is null
+        or exists (
+          select 1
+          from public.financial_allocations fa_filter
+          where fa_filter.document_id = b.id
+            and fa_filter.cost_center_id = v_cost_center_id
+        )
+      )
+      and (v_start is null or b.first_due_date >= v_start)
+      and (v_end is null or b.first_due_date <= v_end)
+      and (v_min is null or b.balance >= v_min)
+      and (v_max is null or b.balance <= v_max)
   ),
   totals as (
     select
@@ -255,6 +234,7 @@ begin
         'notes', p.notes,
         'partnerName', p.partner_name,
         'accountName', p.account_name,
+        'outstandingBalance', p.balance,
         'costCenterId', p.cost_center_id,
         'vehicleId', p.vehicle_id,
         'driverId', p.driver_id,
@@ -262,9 +242,42 @@ begin
         'productId', p.product_id,
         'installmentCount', p.installment_count,
         'installments', case when p.first_open_installment is null then '[]'::jsonb else jsonb_build_array(p.first_open_installment) end,
-        'settlements', p.active_settlements
+        'settlements', coalesce(page_settle.active_settlements, '[]'::jsonb)
       ) order by coalesce(p.first_due_date, p.competence_date, p.created_at::date) asc, p.created_at desc, p.id)
       from page p
+      left join lateral (
+        select coalesce(jsonb_agg(
+          jsonb_build_object(
+            'id', fs.id,
+            'documentId', fs.document_id,
+            'installmentId', fs.installment_id,
+            'financialAccountId', fs.financial_account_id,
+            'settlementType', fs.settlement_type,
+            'originalSettlementId', fs.original_settlement_id,
+            'principalAmount', fs.principal_amount,
+            'interestAmount', fs.interest_amount,
+            'penaltyAmount', fs.penalty_amount,
+            'discountAmount', fs.discount_amount,
+            'netAmount', fs.net_amount,
+            'settledOn', fs.settled_on,
+            'paymentMethod', fs.payment_method,
+            'notes', fs.notes,
+            'reversalReason', fs.reversal_reason,
+            'createdAt', fs.created_at
+          )
+          order by fs.settled_on desc, fs.created_at desc
+        ) filter (
+          where fs.settlement_type = 'settlement'
+            and not exists (
+              select 1
+              from public.financial_settlements rev
+              where rev.original_settlement_id = fs.id
+                and rev.settlement_type = 'reversal'
+            )
+        ), '[]'::jsonb) as active_settlements
+        from public.financial_settlements fs
+        where fs.document_id = p.id
+      ) page_settle on true
     ), '[]'::jsonb)
   )
   into v_result

@@ -139,6 +139,10 @@ function mapFinancialDocumentDetails(row: Record<string, any>): FinancialDocumen
     notes: row.notes ?? null,
     partnerName: row.business_partners?.trade_name ?? row.partner_name ?? row.partnerName ?? null,
     accountName: row.chart_of_accounts?.name ?? row.account_name ?? row.accountName ?? null,
+    outstandingBalance:
+      row.outstanding_balance !== undefined || row.outstandingBalance !== undefined
+        ? numberValue(row.outstanding_balance ?? row.outstandingBalance)
+        : undefined,
     costCenterId:
       row.financial_allocations?.[0]?.cost_center_id ?? row.cost_center_id ?? row.costCenterId ?? null,
     vehicleId: row.financial_allocations?.[0]?.vehicle_id ?? row.vehicle_id ?? row.vehicleId ?? null,
