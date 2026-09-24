@@ -56,6 +56,7 @@ export type AccountType =
 
 export type DreGroup =
   | "gross_revenue"
+  | "discounts_obtained"
   | "revenue_deduction"
   | "variable_cost"
   | "operating_expense"
@@ -111,6 +112,7 @@ export interface FinancialDocument {
   originalAmount: number;
   competenceDate: string | null;
   issueDate: string | null;
+  entryDate: string | null;
   currency: CurrencyCode;
   status: FinancialDocumentStatus;
   chartAccountId: string | null;
@@ -132,6 +134,7 @@ export interface FinancialAllocation {
   documentId: string;
   freightId: string | null;
   vehicleId: string | null;
+  driverId: string | null;
   businessPartnerId: string | null;
   costCenterId: string | null;
   productId: string | null;
@@ -189,6 +192,7 @@ export interface FinancialDocumentDetails extends FinancialDocument {
   accountName: string | null;
   costCenterId: string | null;
   vehicleId: string | null;
+  driverId: string | null;
   freightId: string | null;
   productId: string | null;
   installments: FinancialInstallment[];
@@ -202,13 +206,15 @@ export interface FinancialDocumentInput {
   partnerId?: string;
   documentType?: string;
   documentNumber?: string;
-  description: string;
+  description?: string;
   originalAmount: number;
   competenceDate: string;
   issueDate: string;
+  entryDate?: string;
   chartAccountId?: string;
   costCenterId?: string;
   vehicleId?: string;
+  driverId?: string;
   freightId?: string;
   productId?: string;
   notes?: string;
@@ -259,7 +265,11 @@ export interface FinancialIntegrationProcessResult {
   failed: number;
 }
 
-export type FinancialRecurringKind = "salary" | "recurring_expense" | "fixed_cost";
+export type FinancialRecurringKind =
+  | "salary"
+  | "recurring_expense"
+  | "recurring_income"
+  | "fixed_cost";
 export type FinancialRecurringFrequency = "MONTHLY" | "WEEKLY" | "YEARLY";
 export type FinancialRecurringStatus = "active" | "paused" | "ended";
 
@@ -463,6 +473,7 @@ export interface DreGroupRow {
 
 export interface DreTotals {
   gross_revenue: number;
+  discounts_obtained: number;
   revenue_deductions: number;
   variable_costs: number;
   operating_expenses: number;

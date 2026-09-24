@@ -7,7 +7,6 @@ import {
   Building2,
   Landmark,
   ReceiptText,
-  Repeat2,
   Tags,
   TrendingUp,
   WalletCards,
@@ -26,7 +25,6 @@ const financeNav = [
   ["/financeiro/pagar", "A Pagar", ArrowUpRight],
   ["/financeiro/contas", "Bancos e Caixas", Landmark],
   ["/financeiro/salarios", "Salarios", ReceiptText],
-  ["/financeiro/recorrencias", "Recorrencias", Repeat2],
   ["/financeiro/plano-contas", "Gerenciais", Tags],
   ["/financeiro/centros-custo", "Apropriações", Building2],
 ] as const;
