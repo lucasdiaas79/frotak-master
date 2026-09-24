@@ -466,7 +466,13 @@ declare
   v_document_id uuid;
   v_rule_id uuid;
   v_workspace_id uuid := (p_payload->'document'->>'workspaceId')::uuid;
+  v_recurring_workspace_id uuid := (p_payload->'recurring'->>'workspaceId')::uuid;
 begin
+  if v_workspace_id is null or v_recurring_workspace_id is null
+    or v_workspace_id <> v_recurring_workspace_id then
+    raise exception 'FINANCIAL_RECURRING_WORKSPACE_MISMATCH';
+  end if;
+
   perform private.require_financial_permission(v_workspace_id, 'financial.create');
   perform private.require_financial_permission(v_workspace_id, 'financial.manage_recurring');
 
@@ -506,7 +512,9 @@ declare
   v_source_event text;
   v_direction text;
 begin
-  perform private.require_financial_permission(p_workspace_id, 'financial.manage_recurring');
+  if auth.uid() is not null then
+    perform private.require_financial_permission(p_workspace_id, 'financial.manage_recurring');
+  end if;
   select tenant_id into v_tenant_id
   from public.workspaces
   where id = p_workspace_id and status = 'active';
@@ -638,7 +646,9 @@ declare
   v_skipped integer := 0;
   v_document_ids uuid[] := '{}'::uuid[];
 begin
-  perform private.require_financial_permission(p_workspace_id, 'financial.manage_recurring');
+  if auth.uid() is not null then
+    perform private.require_financial_permission(p_workspace_id, 'financial.manage_recurring');
+  end if;
   select tenant_id into v_tenant_id
   from public.workspaces
   where id = p_workspace_id and status = 'active';
@@ -676,6 +686,70 @@ begin
   );
 end;
 $$;
+
+create or replace function public.run_financial_recurring_cron(
+  p_until_month date default current_date
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private
+as $$
+declare
+  v_workspace record;
+  v_result jsonb;
+  v_generated integer := 0;
+  v_skipped integer := 0;
+  v_workspace_count integer := 0;
+  v_errors jsonb := '[]'::jsonb;
+begin
+  for v_workspace in
+    select distinct w.id, w.tenant_id
+    from public.workspaces w
+    join public.financial_recurring_rules r
+      on r.workspace_id = w.id
+     and r.tenant_id = w.tenant_id
+     and r.status = 'active'
+    where w.status = 'active'
+  loop
+    begin
+      v_result := public.generate_due_financial_recurring_documents(v_workspace.id, p_until_month);
+      v_generated := v_generated + coalesce((v_result->>'generated')::integer, 0);
+      v_skipped := v_skipped + coalesce((v_result->>'skipped')::integer, 0);
+      v_workspace_count := v_workspace_count + 1;
+    exception when others then
+      v_errors := v_errors || jsonb_build_array(jsonb_build_object(
+        'workspaceId', v_workspace.id,
+        'tenantId', v_workspace.tenant_id,
+        'code', sqlstate,
+        'message', sqlerrm
+      ));
+    end;
+  end loop;
+
+  return jsonb_build_object(
+    'workspaces', v_workspace_count,
+    'generated', v_generated,
+    'skipped', v_skipped,
+    'errors', v_errors
+  );
+end;
+$$;
+
+do $$
+begin
+  if exists (select 1 from pg_extension where extname = 'pg_cron')
+     and to_regnamespace('cron') is not null then
+    perform cron.unschedule('financial-recurring-daily')
+    where exists (select 1 from cron.job where jobname = 'financial-recurring-daily');
+
+    perform cron.schedule(
+      'financial-recurring-daily',
+      '15 3 * * *',
+      'select public.run_financial_recurring_cron(current_date);'
+    );
+  end if;
+end $$;
 
 create or replace function private.find_financial_system_account(
   p_tenant_id uuid,
@@ -912,6 +986,7 @@ revoke all on function private.require_financial_payload_refs(uuid, uuid, jsonb)
 revoke all on function private.copy_financial_adjustment_allocations(uuid, uuid, numeric, uuid, text) from public, anon, authenticated;
 revoke all on function public.save_financial_document_with_recurring(jsonb) from public, anon;
 revoke all on function public.generate_due_financial_recurring_documents(uuid, date) from public, anon;
+revoke all on function public.run_financial_recurring_cron(date) from public, anon, authenticated;
 
 grant execute on function public.save_financial_document_with_recurring(jsonb) to authenticated;
 grant execute on function public.generate_due_financial_recurring_documents(uuid, date) to authenticated;
