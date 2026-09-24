@@ -32,7 +32,6 @@ type TenantRow = {
   id: string;
   legal_name?: string | null;
   trade_name?: string | null;
-  name?: string | null;
   status: string;
 };
 
@@ -93,63 +92,98 @@ function normalizeText(value: unknown) {
 async function readMembershipPermissions(
   supabase: ReturnType<typeof getSupabaseServerClient>,
   membershipId: string,
+  workspaceId: string,
 ) {
-  const { data, error } = await supabase
+  const { data: membershipRoles, error: membershipRolesError } = await supabase
     .from("membership_roles")
-    .select("workspace_roles(permissions)")
-    .eq("membership_id", membershipId);
+    .select("role_id")
+    .eq("membership_id", membershipId)
+    .eq("workspace_id", workspaceId);
 
-  if (error) {
-    console.warn("[frotakAiContext] roles unavailable", {
-      message: error.message,
-      code: error.code,
-    });
-    return [];
+  if (membershipRolesError) {
+    throw new Error(
+      `membership_roles permissions query failed (${membershipRolesError.code ?? "unknown"}): ${membershipRolesError.message}`,
+    );
   }
 
-  const permissions = new Set<string>();
-  (data ?? []).forEach((row) => {
-    const relation = row.workspace_roles;
-    const roles = Array.isArray(relation) ? relation : relation ? [relation] : [];
-    roles.forEach((role) => {
-      const raw = (role as { permissions?: unknown }).permissions;
-      if (Array.isArray(raw)) {
-        raw.forEach((permission) => {
-          if (typeof permission === "string" && permission.trim()) {
-            permissions.add(permission.trim());
-          }
-        });
-      }
-    });
-  });
+  const roleIds = [
+    ...new Set(
+      (membershipRoles ?? [])
+        .map((row) => (typeof row.role_id === "string" ? row.role_id : ""))
+        .filter(Boolean),
+    ),
+  ];
+  if (roleIds.length === 0) return [];
 
-  return Array.from(permissions);
+  const { data: rolePermissions, error: rolePermissionsError } = await supabase
+    .from("role_permissions")
+    .select("permission_id")
+    .in("role_id", roleIds);
+
+  if (rolePermissionsError) {
+    throw new Error(
+      `role_permissions query failed (${rolePermissionsError.code ?? "unknown"}): ${rolePermissionsError.message}`,
+    );
+  }
+
+  const permissionIds = [
+    ...new Set(
+      (rolePermissions ?? [])
+        .map((row) => (typeof row.permission_id === "string" ? row.permission_id : ""))
+        .filter(Boolean),
+    ),
+  ];
+  if (permissionIds.length === 0) return [];
+
+  const { data: permissionRows, error: permissionsError } = await supabase
+    .from("permissions")
+    .select("code")
+    .in("id", permissionIds)
+    .eq("active", true);
+
+  if (permissionsError) {
+    throw new Error(
+      `permissions query failed (${permissionsError.code ?? "unknown"}): ${permissionsError.message}`,
+    );
+  }
+
+  return [
+    ...new Set(
+      (permissionRows ?? [])
+        .map((row) => (typeof row.code === "string" ? row.code.trim() : ""))
+        .filter(Boolean),
+    ),
+  ];
 }
 
-export async function resolveFrotakAiContext(accessToken: string): Promise<FrotakAiContext> {
+export async function resolveFrotakAiContext(
+  accessToken: string,
+  workspaceId: string,
+): Promise<FrotakAiContext> {
   if (!normalizeText(accessToken)) throw new Error("unauthorized");
+  if (!normalizeText(workspaceId)) throw new Error("workspace_id ausente");
 
   const supabase = getSupabaseServerClient(accessToken);
   const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
   if (authError || !authData.user) throw new Error("unauthorized");
 
-  const { data: memberships, error: membershipError } = await supabase
+  const { data: membership, error: membershipError } = await supabase
     .from("workspace_memberships")
     .select("id, workspace_id, user_id, status, is_owner, created_at")
     .eq("user_id", authData.user.id)
+    .eq("workspace_id", workspaceId)
     .eq("status", "active")
-    .order("created_at", { ascending: false })
-    .limit(1);
+    .maybeSingle();
 
   if (membershipError) throw new Error(`membership query failed: ${membershipError.message}`);
 
-  const membership = (memberships?.[0] ?? null) as WorkspaceMembershipRow | null;
-  if (!membership) throw new Error("workspace_memberships: membership ativa ausente");
+  const membershipRow = (membership ?? null) as WorkspaceMembershipRow | null;
+  if (!membershipRow) throw new Error("workspace_memberships: membership ativa ausente");
 
   const { data: workspace, error: workspaceError } = await supabase
     .from("workspaces")
     .select("id, tenant_id, name, status")
-    .eq("id", membership.workspace_id)
+    .eq("id", membershipRow.workspace_id)
     .maybeSingle();
 
   if (workspaceError) throw new Error(`workspace query failed: ${workspaceError.message}`);
@@ -160,7 +194,7 @@ export async function resolveFrotakAiContext(accessToken: string): Promise<Frota
 
   const { data: tenant, error: tenantError } = await supabase
     .from("tenants")
-    .select("id, legal_name, trade_name, name, status")
+    .select("id, legal_name, trade_name, status")
     .eq("id", workspaceRow.tenant_id)
     .maybeSingle();
 
@@ -173,13 +207,17 @@ export async function resolveFrotakAiContext(accessToken: string): Promise<Frota
   return {
     accessToken,
     userId: authData.user.id,
-    membershipId: membership.id,
-    workspaceId: membership.workspace_id,
+    membershipId: membershipRow.id,
+    workspaceId: membershipRow.workspace_id,
     tenantId: workspaceRow.tenant_id,
     workspaceName: workspaceRow.name,
-    tenantName: tenantRow.trade_name || tenantRow.legal_name || tenantRow.name || workspaceRow.name,
-    isOwner: membership.is_owner === true,
-    permissions: await readMembershipPermissions(supabase, membership.id),
+    tenantName: tenantRow.trade_name || tenantRow.legal_name || workspaceRow.name,
+    isOwner: membershipRow.is_owner === true,
+    permissions: await readMembershipPermissions(
+      supabase,
+      membershipRow.id,
+      membershipRow.workspace_id,
+    ),
   };
 }
 

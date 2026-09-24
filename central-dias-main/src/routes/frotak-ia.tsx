@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { getCurrentAccessToken } from "@/lib/auth";
+import { getCurrentAccessToken, getCurrentUser, getProfile } from "@/lib/auth";
 import {
   createFrotakLiveToken,
   executeFrotakAiToolCall,
@@ -82,6 +82,20 @@ async function requireAccessToken() {
   return accessToken;
 }
 
+async function requireWorkspaceId() {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Sessao expirada. Entre novamente para usar a Frotak IA.");
+
+  const profile = await getProfile(user.id);
+  const workspaceId = profile?.workspaceId?.trim();
+  if (!workspaceId) throw new Error("Workspace atual indisponivel para a Frotak IA.");
+
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem("frotak-active-workspace-id", workspaceId);
+  }
+  return workspaceId;
+}
+
 function FrotakIaPage() {
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
@@ -138,8 +152,9 @@ function FrotakIaPage() {
         .filter((message) => !message.pending)
         .map((message) => ({ role: message.role, text: message.text }));
       const accessToken = await requireAccessToken();
+      const workspaceId = await requireWorkspaceId();
       const response = await sendFrotakAiChatMessage({
-        data: { accessToken, message: text, history },
+        data: { accessToken, workspaceId, message: text, history },
       });
 
       updateMessage(pendingId, cleanAssistantText(response.text), false);
@@ -164,8 +179,11 @@ function FrotakIaPage() {
       setLastUserTranscript("");
 
       stream = await requestFrotakLiveMicrophone();
+      const workspaceId = await requireWorkspaceId();
       const fetchLiveToken = async () =>
-        createFrotakLiveToken({ data: { accessToken: await requireAccessToken() } });
+        createFrotakLiveToken({
+          data: { accessToken: await requireAccessToken(), workspaceId },
+        });
       const liveToken = await fetchLiveToken();
       const session = new FrotakLiveSession({
         token: liveToken.token,
@@ -187,6 +205,7 @@ function FrotakIaPage() {
           executeFrotakAiToolCall({
             data: {
               accessToken: await requireAccessToken(),
+              workspaceId,
               name: call.name,
               args: call.args ?? {},
             },

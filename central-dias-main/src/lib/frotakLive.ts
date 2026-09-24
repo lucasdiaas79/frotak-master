@@ -37,6 +37,8 @@ const INPUT_RATE = 16_000;
 const OUTPUT_RATE = 24_000;
 const CAPTURE_CHUNK_SIZE = 4096;
 const ACTIVITY_RMS_THRESHOLD = 0.01;
+const FACTUAL_FAIL_CLOSED_MESSAGE =
+  "Nao foi possivel consultar os dados da Frotak neste momento. Tente novamente em instantes.";
 
 type GeminiLiveMessage = {
   setupComplete?: unknown;
@@ -208,6 +210,8 @@ export class FrotakLiveSession {
   private reconnecting = false;
   private sessionResumptionHandle: string | null = null;
   private speaking = false;
+  private groundingRequired = false;
+  private toolSucceededThisTurn = false;
 
   constructor(options: FrotakLiveSessionOptions) {
     this.options = options;
@@ -232,6 +236,12 @@ export class FrotakLiveSession {
 
   sendText(text: string) {
     if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) return;
+    if (isFrotakFactualTurn(text)) {
+      this.groundingRequired = true;
+      this.toolSucceededThisTurn = false;
+      this.player.stopNow();
+      console.info("[frotakLive] groundingRequired", { source: "text" });
+    }
     this.options.onStatus?.("thinking");
     this.websocket.send(
       JSON.stringify({
@@ -460,12 +470,18 @@ export class FrotakLiveSession {
 
     const inputText = message.serverContent?.inputTranscription?.text;
     if (inputText) {
+      console.info("[frotakLive] transcription received");
       this.inputTranscriptBuffer = `${this.inputTranscriptBuffer}${inputText}`.trimStart();
       this.options.onInputText?.(sanitizeLiveText(this.inputTranscriptBuffer));
+      if (isFrotakFactualTurn(this.inputTranscriptBuffer)) {
+        this.groundingRequired = true;
+        if (!this.toolSucceededThisTurn) this.player.stopNow();
+        console.info("[frotakLive] groundingRequired", { source: "transcription" });
+      }
     }
 
     const outputText = message.serverContent?.outputTranscription?.text;
-    if (outputText) {
+    if (outputText && (!this.groundingRequired || this.toolSucceededThisTurn)) {
       this.transcriptBuffer = `${this.transcriptBuffer}${outputText}`.trimStart();
       this.options.onPartialText?.(sanitizeLiveText(this.transcriptBuffer));
     }
@@ -473,10 +489,17 @@ export class FrotakLiveSession {
     const parts = message.serverContent?.modelTurn?.parts ?? [];
     parts.forEach((part) => {
       const audio = part.inlineData?.data;
-      if (audio) void this.player.enqueue(audio);
-      if (part.text) {
+      const canPlayModelOutput = !this.groundingRequired || this.toolSucceededThisTurn;
+      if (audio && canPlayModelOutput) void this.player.enqueue(audio);
+      if (audio && !canPlayModelOutput) {
+        console.info("[frotakLive] suppressed factual audio before tool");
+      }
+      if (part.text && canPlayModelOutput) {
         this.transcriptBuffer = `${this.transcriptBuffer}${part.text}`.trimStart();
         this.options.onPartialText?.(sanitizeLiveText(this.transcriptBuffer));
+      }
+      if (part.text && !canPlayModelOutput) {
+        console.info("[frotakLive] suppressed factual text before tool");
       }
     });
 
@@ -490,9 +513,12 @@ export class FrotakLiveSession {
     }
 
     if (message.serverContent?.turnComplete || message.serverContent?.generationComplete) {
-      const text = this.transcriptBuffer.trim();
+      const failClosed = this.groundingRequired && !this.toolSucceededThisTurn;
+      const text = failClosed ? FACTUAL_FAIL_CLOSED_MESSAGE : this.transcriptBuffer.trim();
       this.transcriptBuffer = "";
       this.inputTranscriptBuffer = "";
+      this.groundingRequired = false;
+      this.toolSucceededThisTurn = false;
       if (text) this.options.onText?.(sanitizeLiveText(text));
     }
 
@@ -522,11 +548,18 @@ export class FrotakLiveSession {
         .filter((call) => call.name)
         .map(async (call) => {
           try {
+            console.info("[frotakLive] tool call", { name: call.name });
             const output = await this.options.onToolCall?.({
               id: call.id,
               name: String(call.name),
               args: call.args ?? {},
             });
+            const succeeded = !hasToolError(output);
+            console.info("[frotakLive] tool result", {
+              name: call.name,
+              ok: succeeded,
+            });
+            if (succeeded) this.toolSucceededThisTurn = true;
             return {
               id: call.id,
               name: call.name,
@@ -615,6 +648,35 @@ async function readWebSocketMessage(data: string | ArrayBuffer | Blob) {
   if (typeof data === "string") return data;
   if (data instanceof Blob) return data.text();
   return new TextDecoder().decode(data);
+}
+
+function normalizeIntentText(text: string) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function isFrotakFactualTurn(text: string) {
+  const normalized = normalizeIntentText(text);
+  const domain =
+    /\b(frotak|empresa|companhia|tenant|workspace|cliente|frota|caminhao|caminhoes|veiculo|veiculos|placa|placas|motorista|motoristas|frete|fretes|viagem|viagens|rota|rotas|financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|despesa|saldo|abastecimento|abastecimentos|diesel|arla|posto|combustivel|posicao|posicoes|localizacao|sascar|telemetria|mapa|status|valor|valores|quantidade|quantos|quantas|total)\b/.test(
+      normalized,
+    );
+  const factual =
+    /\b(qual|quais|quanto|quantos|quantas|cite|listar|liste|mostre|status|valor|valores|total|numero|nome|nomes|placa|placas|onde)\b/.test(
+      normalized,
+    );
+  return domain && factual;
+}
+
+function hasToolError(value: unknown) {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    typeof (value as Record<string, unknown>).error === "string",
+  );
 }
 
 function calculateRms(input: Float32Array) {

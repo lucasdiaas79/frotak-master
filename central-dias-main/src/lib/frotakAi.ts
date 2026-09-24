@@ -9,7 +9,6 @@ import {
 import { createServerFn } from "@tanstack/react-start";
 import { createFrotakAiContextSummary, resolveFrotakAiContext } from "@/lib/frotakAiContext";
 import {
-  buildFrotakAiOperationalSnapshot,
   executeFrotakAiTool,
   FROTAK_AI_TOOL_DECLARATIONS,
   isFrotakAiToolName,
@@ -76,6 +75,42 @@ function publicError(error: unknown) {
   return "Nao foi possivel concluir a conversa com a Frotak IA.";
 }
 
+function errorInfo(error: unknown) {
+  const record = error && typeof error === "object" ? (error as Record<string, unknown>) : {};
+  const message = error instanceof Error ? error.message : String(error);
+  try {
+    const parsed = JSON.parse(message) as { error?: { code?: number | string; message?: string } };
+    if (parsed.error?.message) {
+      return {
+        code: parsed.error.code === undefined ? undefined : String(parsed.error.code),
+        message: parsed.error.message,
+      };
+    }
+  } catch {
+    // Some providers throw plain text errors.
+  }
+  return {
+    code: typeof record.code === "string" ? record.code : undefined,
+    message,
+  };
+}
+
+function logFrotakAiStage(
+  stage: "context" | "tool" | "gemini",
+  error: unknown,
+  meta: { workspaceId?: string; tenantId?: string; tool?: string } = {},
+) {
+  const info = errorInfo(error);
+  console.error(`[frotakAi] ${stage} failed`, {
+    stage,
+    workspaceId: meta.workspaceId,
+    tenantId: meta.tenantId,
+    tool: meta.tool,
+    code: info.code,
+    message: info.message,
+  });
+}
+
 function cleanModelText(text: string) {
   const blockedHeadingPatterns = [
     /^analyzing\b/i,
@@ -107,8 +142,9 @@ function frotakAiSystemInstruction(contextSummary?: string) {
     "Responda sempre em portugues do Brasil, com linguagem clara para operadores, gestores e expedicao.",
     "Se a pergunta pedir numero, status, lista, valor ou localizacao, comece pelo resultado objetivo.",
     "Quando o usuario pedir explicacao, analise, causa ou plano, entregue uma resposta completa e estruturada.",
-    "Para qualquer pergunta sobre a empresa atual, frota, caminhoes, veiculos, motoristas, fretes, financeiro, abastecimentos ou posicoes, use somente os dados reais fornecidos pelo servidor ou por ferramentas.",
+    "Para qualquer pergunta sobre a empresa atual, frota, caminhoes, veiculos, motoristas, fretes, financeiro, abastecimentos ou posicoes, chame a ferramenta consultar_frotak antes de responder ou use apenas o bloco de dados reais consultados pelo servidor.",
     "Nunca invente dados operacionais, financeiros, posicoes, fretes, motoristas ou veiculos.",
+    "Nunca use conhecimento proprio, exemplos, memoria antiga ou inferencia para responder fatos da Frotak.",
     "Se os dados reais nao trouxerem a informacao pedida, diga que nao encontrou essa informacao no tenant atual.",
     "Nunca consulte, revele ou infira dados de outro tenant/workspace.",
     "Nao execute nem sugira a execucao de alteracoes destrutivas nesta versao.",
@@ -212,6 +248,39 @@ function resultItems(value: unknown) {
   return Array.isArray(items) ? (items as Array<Record<string, unknown>>) : [];
 }
 
+function nestedRecord(value: unknown, key: string) {
+  return asRecord(asRecord(value)[key]);
+}
+
+function resultTotalCount(value: unknown) {
+  const record = asRecord(value);
+  const total = Number(record.totalCount ?? record.count ?? 0);
+  return Number.isFinite(total) ? total : 0;
+}
+
+function limitedListText(label: string, items: string[], result: unknown) {
+  const total = resultTotalCount(result);
+  const shown = items.length;
+  if (total > shown) return `${label} - primeiros ${shown} de ${total}: ${items.join(", ")}`;
+  return `${label} - ${shown} de ${total}: ${items.join(", ")}`;
+}
+
+function hasError(value: unknown) {
+  return typeof asRecord(value).error === "string";
+}
+
+function errorMessage(value: unknown) {
+  return String(asRecord(value).error ?? "nao foi possivel consultar o dado");
+}
+
+function moneyBRL(value: unknown) {
+  const amount = Number(value ?? 0);
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(Number.isFinite(amount) ? amount : 0);
+}
+
 async function answerDeterministicTenantQuestion(
   context: Awaited<ReturnType<typeof resolveFrotakAiContext>>,
   message: string,
@@ -225,78 +294,199 @@ async function answerDeterministicTenantQuestion(
     normalized,
   );
   const asksDriver = /\b(motorista|motoristas|condutor|condutores)\b/.test(normalized);
+  const asksFreight = /\b(frete|fretes|viagem|viagens|rota|rotas|carga|descarga)\b/.test(
+    normalized,
+  );
+  const asksFinancial =
+    /\b(financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|despesa|saldo|valor|valores)\b/.test(
+      normalized,
+    );
   const asksCount = /\b(quantos|quantas|qtd|quantidade|total|numero)\b/.test(normalized);
   const asksList = /\b(cite|listar|liste|mostre|quais|nomes|nome)\b/.test(normalized);
 
   if (asksCompany) {
+    const result = await executeFrotakAiTool(context, "consultar_frotak", {
+      pergunta: message,
+      limit: 1,
+    });
+    if (hasError(result))
+      return {
+        text: `Nao consegui consultar a empresa atual: ${errorMessage(result)}.`,
+        tools: ["consultar_frotak"],
+      };
+    const empresa = nestedRecord(nestedRecord(result, "consultas"), "empresa");
+    const tenantName = String(empresa.tenant_nome ?? context.tenantName);
+    const workspaceName = String(empresa.workspace_nome ?? context.workspaceName);
+    return {
+      text:
+        tenantName === workspaceName
+          ? `Sua empresa atual e ${tenantName}.`
+          : `Sua empresa atual e ${tenantName}. Workspace: ${workspaceName}.`,
+      tools: ["consultar_frotak"],
+    };
     const sameName = context.tenantName === context.workspaceName;
     return {
       text: sameName
         ? `Sua empresa atual é ${context.tenantName}.`
         : `Sua empresa atual é ${context.tenantName}. Workspace: ${context.workspaceName}.`,
-      tools: ["contexto_empresa"],
+      tools: ["consultar_frotak"],
     };
   }
 
   if (asksVehicle && asksCount) {
-    const result = asRecord(await executeFrotakAiTool(context, "consultar_veiculos", { limit: 1 }));
-    if (result.error)
+    const result = asRecord(
+      await executeFrotakAiTool(context, "consultar_frotak", {
+        pergunta: message,
+        limit: 1,
+      }),
+    );
+    const vehicles = nestedRecord(nestedRecord(result, "consultas"), "veiculos");
+    if (hasError(result) || hasError(vehicles))
       return {
-        text: `Nao consegui consultar a frota: ${result.error}`,
-        tools: ["consultar_veiculos"],
+        text: `Nao consegui consultar a frota: ${errorMessage(hasError(result) ? result : vehicles)}.`,
+        tools: ["consultar_frotak"],
       };
-    const total = Number(result.totalCount ?? result.count ?? 0);
+    const total = Number(vehicles.totalCount ?? vehicles.count ?? 0);
     return {
       text: `Voce tem ${total} caminhoes/veiculos cadastrados no tenant ${context.tenantName}.`,
-      tools: ["consultar_veiculos"],
+      tools: ["consultar_frotak"],
+    };
+  }
+
+  if (asksVehicle && asksList) {
+    const result = await executeFrotakAiTool(context, "consultar_frotak", {
+      pergunta: message,
+      limit,
+    });
+    const record = nestedRecord(nestedRecord(result, "consultas"), "veiculos");
+    if (hasError(result) || hasError(record))
+      return {
+        text: `Nao consegui consultar as placas: ${errorMessage(hasError(result) ? result : record)}.`,
+        tools: ["consultar_frotak"],
+      };
+
+    const plates = resultItems(record)
+      .map((item) => String(item.plate ?? "").trim())
+      .filter(Boolean);
+
+    if (plates.length === 0) {
+      return {
+        text: `Nao encontrei placas cadastradas no tenant ${context.tenantName}.`,
+        tools: ["consultar_frotak"],
+      };
+    }
+
+    return {
+      text: limitedListText("Placas encontradas", plates, record),
+      tools: ["consultar_frotak"],
     };
   }
 
   if (asksDriver && asksCount) {
     const result = asRecord(
-      await executeFrotakAiTool(context, "consultar_motoristas", {
-        status: "active",
+      await executeFrotakAiTool(context, "consultar_frotak", {
+        pergunta: message,
         limit: 1,
       }),
     );
-    if (result.error)
+    const drivers = nestedRecord(nestedRecord(result, "consultas"), "motoristas");
+    if (hasError(result) || hasError(drivers))
       return {
-        text: `Nao consegui consultar os motoristas: ${result.error}`,
-        tools: ["consultar_motoristas"],
+        text: `Nao consegui consultar os motoristas: ${errorMessage(hasError(result) ? result : drivers)}.`,
+        tools: ["consultar_frotak"],
       };
-    const total = Number(result.totalCount ?? result.count ?? 0);
+    const total = Number(drivers.totalCount ?? drivers.count ?? 0);
     return {
       text: `Voce tem ${total} motoristas ativos cadastrados no tenant ${context.tenantName}.`,
-      tools: ["consultar_motoristas"],
+      tools: ["consultar_frotak"],
     };
   }
 
   if (asksDriver && asksList) {
-    const result = await executeFrotakAiTool(context, "consultar_motoristas", {
-      status: "active",
+    const result = await executeFrotakAiTool(context, "consultar_frotak", {
+      pergunta: message,
       limit,
     });
-    const record = asRecord(result);
-    if (record.error)
+    const record = nestedRecord(nestedRecord(result, "consultas"), "motoristas");
+    if (hasError(result) || hasError(record))
       return {
-        text: `Nao consegui consultar os motoristas: ${record.error}`,
-        tools: ["consultar_motoristas"],
+        text: `Nao consegui consultar os motoristas: ${errorMessage(hasError(result) ? result : record)}.`,
+        tools: ["consultar_frotak"],
       };
 
-    const names = resultItems(result)
+    const names = resultItems(record)
       .map((item) => String(item.name ?? "").trim())
       .filter(Boolean);
 
     if (names.length === 0) {
       return {
         text: `Nao encontrei motoristas ativos cadastrados no tenant ${context.tenantName}.`,
-        tools: ["consultar_motoristas"],
+        tools: ["consultar_frotak"],
       };
     }
 
     return {
-      text: names.join(", "),
-      tools: ["consultar_motoristas"],
+      text: limitedListText("Motoristas encontrados", names, record),
+      tools: ["consultar_frotak"],
+    };
+  }
+
+  if (asksFreight && (asksList || /\b(em rota|andamento|ativos|abertos|status)\b/.test(normalized))) {
+    const result = await executeFrotakAiTool(context, "consultar_frotak", {
+      pergunta: message,
+      limit: Math.max(limit, 20),
+    });
+    const record = nestedRecord(nestedRecord(result, "consultas"), "fretes");
+    if (hasError(result) || hasError(record))
+      return {
+        text: `Nao consegui consultar os fretes: ${errorMessage(hasError(result) ? result : record)}.`,
+        tools: ["consultar_frotak"],
+      };
+    const active = Array.isArray(record.active)
+      ? (record.active as Array<Record<string, unknown>>)
+      : [];
+    if (active.length === 0) {
+      return {
+        text: `Nao encontrei fretes em rota no tenant ${context.tenantName}.`,
+        tools: ["consultar_frotak"],
+      };
+    }
+    const lines = active
+      .slice(0, limit)
+      .map((item) =>
+        [
+          item.plate,
+          item.freight_stage ?? item.status,
+          item.city && item.state ? `${item.city}/${item.state}` : "",
+        ]
+          .filter(Boolean)
+          .join(" - "),
+      )
+      .filter(Boolean);
+    return {
+      text:
+        active.length > lines.length
+          ? `Fretes em rota - primeiros ${lines.length} de ${active.length}: ${lines.join("; ")}`
+          : `Fretes em rota - ${lines.length}: ${lines.join("; ")}`,
+      tools: ["consultar_frotak"],
+    };
+  }
+
+  if (asksFinancial && /\b(receber|recebiveis)\b/.test(normalized)) {
+    const result = await executeFrotakAiTool(context, "consultar_frotak", {
+      pergunta: message,
+      limit: Math.max(limit, 20),
+    });
+    const record = nestedRecord(nestedRecord(result, "consultas"), "financeiro");
+    if (hasError(result) || hasError(record))
+      return {
+        text: `Nao consegui consultar o financeiro: ${errorMessage(hasError(result) ? result : record)}.`,
+        tools: ["consultar_frotak"],
+      };
+    const totals = asRecord(record.totals);
+    return {
+      text: `O total consultado em contas a receber em aberto e ${moneyBRL(totals.receivable)} no workspace ${context.workspaceName}.`,
+      tools: ["consultar_frotak"],
     };
   }
 
@@ -309,101 +499,36 @@ async function buildMandatoryTenantData(
 ) {
   const normalized = normalizeIntentText(message);
   const limit = requestedLimit(normalized);
-  const data: Record<string, unknown> = {
-    empresa_atual: {
-      tenant_id: context.tenantId,
-      tenant_nome: context.tenantName,
-      workspace_id: context.workspaceId,
-      workspace_nome: context.workspaceName,
-    },
-  };
+  const isFrotakDataQuestion =
+    /\b(empresa|companhia|tenant|workspace|cliente|caminhao|caminhoes|veiculo|veiculos|frota|placa|placas|motorista|motoristas|condutor|condutores|frete|fretes|viagem|viagens|rota|rotas|carga|descarga|financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|despesa|saldo|valor|valores|abastecimento|abastecimentos|diesel|arla|posto|combustivel|posicao|posicoes|localizacao|sascar|telemetria|mapa|onde)\b/.test(
+      normalized,
+    );
 
-  const toolRequests: Array<{
-    key: string;
-    name: FrotakAiToolCall["name"];
-    args: Record<string, unknown>;
-  }> = [];
+  if (!isFrotakDataQuestion) return null;
 
-  if (/\b(empresa|companhia|tenant|workspace|cliente)\b/.test(normalized)) {
-    data.instrucao_empresa = "Use empresa_atual para responder a empresa/workspace atual.";
-  }
-  if (/\b(caminhao|caminhoes|veiculo|veiculos|frota|placa|placas)\b/.test(normalized)) {
-    toolRequests.push({
-      key: "veiculos",
-      name: "consultar_veiculos",
-      args: { limit: Math.max(limit, 20) },
-    });
-  }
-  if (/\b(motorista|motoristas|condutor|condutores)\b/.test(normalized)) {
-    toolRequests.push({
-      key: "motoristas",
-      name: "consultar_motoristas",
-      args: { status: "active", limit },
-    });
-  }
-  if (/\b(frete|fretes|viagem|viagens|rota|rotas|carga|descarga)\b/.test(normalized)) {
-    toolRequests.push({
-      key: "fretes",
-      name: "consultar_fretes",
-      args: { source: "all", limit: Math.max(limit, 20) },
-    });
-  }
-  if (
-    /\b(financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|despesa|saldo)\b/.test(normalized)
-  ) {
-    toolRequests.push({
-      key: "financeiro",
-      name: "consultar_financeiro",
-      args: { direction: "all", days: 180, limit: Math.max(limit, 20) },
-    });
-  }
-  if (/\b(abastecimento|abastecimentos|diesel|arla|posto|combustivel)\b/.test(normalized)) {
-    toolRequests.push({
-      key: "abastecimentos",
-      name: "consultar_abastecimentos",
-      args: { fuel_type: "all", limit: Math.max(limit, 20) },
-    });
-  }
-  if (/\b(posicao|posicoes|localizacao|sascar|telemetria|mapa|onde)\b/.test(normalized)) {
-    toolRequests.push({
-      key: "posicoes",
-      name: "consultar_posicoes",
-      args: { limit: Math.max(limit, 20) },
-    });
-  }
-
-  if (toolRequests.length === 0 && !data.instrucao_empresa) return null;
-
-  const toolResults = await Promise.all(
-    toolRequests.map(async (request) => ({
-      key: request.key,
-      result: await executeFrotakAiTool(context, request.name, request.args),
-    })),
-  );
-
-  toolResults.forEach((item) => {
-    data[item.key] = item.result;
+  const data = await executeFrotakAiTool(context, "consultar_frotak", {
+    pergunta: message,
+    limit: Math.max(limit, 20),
   });
 
   return [
     "DADOS REAIS OBRIGATORIOS DO TENANT ATUAL:",
     JSON.stringify(data),
-    "Responda usando estes dados. Se a informacao pedida nao estiver nestes dados, diga que nao encontrou no tenant atual. Nao complete com exemplos ficticios.",
+    "Responda usando somente estes dados. Se a informacao pedida nao estiver nestes dados ou se houver erro, diga que nao foi possivel encontrar/consultar o dado no tenant atual. Nao complete com exemplos ficticios.",
   ].join("\n");
 }
 
 export const createFrotakLiveToken = createServerFn({ method: "POST" })
-  .inputValidator((input: { accessToken?: string } | undefined) => ({
+  .inputValidator((input: { accessToken?: string; workspaceId?: string } | undefined) => ({
     accessToken: input?.accessToken ?? "",
+    workspaceId: input?.workspaceId ?? "",
   }))
   .handler(async ({ data }) => {
+    let context: Awaited<ReturnType<typeof resolveFrotakAiContext>> | null = null;
     try {
-      const context = await resolveFrotakAiContext(data.accessToken);
-      const snapshot = await buildFrotakAiOperationalSnapshot(context);
+      context = await resolveFrotakAiContext(data.accessToken, data.workspaceId);
       const model = process.env.GEMINI_LIVE_MODEL || FROTAK_AI_LIVE_MODEL;
-      const liveSystemInstruction = frotakAiSystemInstruction(
-        `${createFrotakAiContextSummary(context)} Snapshot atual: ${JSON.stringify(snapshot)}.`,
-      );
+      const liveSystemInstruction = frotakAiSystemInstruction(createFrotakAiContextSummary(context));
       const liveSetupConfig = {
         tools: [{ functionDeclarations: FROTAK_AI_TOOL_DECLARATIONS }],
         systemInstruction: {
@@ -446,8 +571,9 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" })
       if (!token.name) throw new Error("Token efemero vazio");
       return { token: token.name, model, setupConfig: liveSetupConfig };
     } catch (error) {
-      console.error("[frotakAi] live token failed", {
-        message: error instanceof Error ? error.message : String(error),
+      logFrotakAiStage(context ? "gemini" : "context", error, {
+        workspaceId: data.workspaceId,
+        tenantId: context?.tenantId,
       });
       throw new Error(publicError(error));
     }
@@ -459,25 +585,29 @@ export const executeFrotakAiToolCall = createServerFn({ method: "POST" })
       input:
         | {
             accessToken?: string;
+            workspaceId?: string;
             name?: string;
             args?: Record<string, unknown>;
           }
         | undefined,
     ) => ({
       accessToken: input?.accessToken ?? "",
+      workspaceId: input?.workspaceId ?? "",
       name: input?.name ?? "",
       args: input?.args ?? {},
     }),
   )
   .handler(async ({ data }) => {
+    let context: Awaited<ReturnType<typeof resolveFrotakAiContext>> | null = null;
     try {
-      const context = await resolveFrotakAiContext(data.accessToken);
+      context = await resolveFrotakAiContext(data.accessToken, data.workspaceId);
       if (!isFrotakAiToolName(data.name)) throw new Error("Ferramenta indisponivel.");
       return await executeFrotakAiTool(context, data.name, data.args);
     } catch (error) {
-      console.error("[frotakAi] tool failed", {
+      logFrotakAiStage(context ? "tool" : "context", error, {
+        workspaceId: data.workspaceId,
+        tenantId: context?.tenantId,
         tool: data.name,
-        message: error instanceof Error ? error.message : String(error),
       });
       return { error: publicError(error) };
     }
@@ -489,22 +619,25 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
       input:
         | {
             accessToken?: string;
+            workspaceId?: string;
             message: string;
             history?: FrotakAiMessage[];
           }
         | undefined,
     ) => ({
       accessToken: input?.accessToken ?? "",
+      workspaceId: input?.workspaceId ?? "",
       message: input?.message ?? "",
       history: input?.history ?? [],
     }),
   )
   .handler(async ({ data }) => {
+    let context: Awaited<ReturnType<typeof resolveFrotakAiContext>> | null = null;
     try {
       const message = data.message.trim();
       if (!message) throw new Error("Mensagem vazia");
 
-      const context = await resolveFrotakAiContext(data.accessToken);
+      context = await resolveFrotakAiContext(data.accessToken, data.workspaceId);
       const deterministicAnswer = await answerDeterministicTenantQuestion(context, message);
       if (deterministicAnswer) {
         return {
@@ -514,11 +647,8 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
         };
       }
 
-      const snapshot = await buildFrotakAiOperationalSnapshot(context);
       const mandatoryTenantData = await buildMandatoryTenantData(context, message);
-      const systemInstruction = frotakAiSystemInstruction(
-        `${createFrotakAiContextSummary(context)} Snapshot atual: ${JSON.stringify(snapshot)}.`,
-      );
+      const systemInstruction = frotakAiSystemInstruction(createFrotakAiContextSummary(context));
       const ai = new GoogleGenAI({ apiKey: geminiApiKey() });
       const contents = [
         ...historyToContents(data.history),
@@ -568,8 +698,9 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
       if (!text) throw new Error("Resposta vazia da IA");
       return { text, model: first.model, tools: [] };
     } catch (error) {
-      console.error("[frotakAi] chat failed", {
-        message: error instanceof Error ? error.message : String(error),
+      logFrotakAiStage(context ? "gemini" : "context", error, {
+        workspaceId: data.workspaceId,
+        tenantId: context?.tenantId,
       });
       throw new Error(publicError(error));
     }

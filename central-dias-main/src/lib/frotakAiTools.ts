@@ -5,13 +5,7 @@ import {
   getSupabaseServerClient,
 } from "@/lib/frotakAiContext";
 
-export type FrotakAiToolName =
-  | "consultar_veiculos"
-  | "consultar_fretes"
-  | "consultar_motoristas"
-  | "consultar_financeiro"
-  | "consultar_abastecimentos"
-  | "consultar_posicoes";
+export type FrotakAiToolName = "consultar_frotak";
 
 export type FrotakAiToolCall = {
   id?: string;
@@ -56,99 +50,48 @@ function compactRows(rows: Array<Record<string, unknown>>, fields: string[]) {
   });
 }
 
-const commonLookupProperties = {
-  query: {
-    type: Type.STRING,
-    description: "Texto para buscar placa, nome, codigo ou descricao.",
-  },
-  status: {
-    type: Type.STRING,
-    description: "Status operacional ou financeiro quando aplicavel.",
-  },
-  limit: {
-    type: Type.INTEGER,
-    description: "Quantidade maxima de registros. Use ate 80.",
-  },
-};
-
 export const FROTAK_AI_TOOL_DECLARATIONS: FunctionDeclaration[] = [
   {
-    name: "consultar_veiculos",
+    name: "consultar_frotak",
     description:
-      "Consulta veiculos/caminhoes do tenant atual com status, placa, cidade, motorista e frete ativo.",
-    parameters: {
-      type: Type.OBJECT,
-      properties: commonLookupProperties,
-    },
-  },
-  {
-    name: "consultar_motoristas",
-    description: "Consulta motoristas do tenant atual com status ativo e veiculo vinculado.",
-    parameters: {
-      type: Type.OBJECT,
-      properties: commonLookupProperties,
-    },
-  },
-  {
-    name: "consultar_fretes",
-    description:
-      "Consulta fretes ativos em veiculos e fretes finalizados no historico do tenant atual.",
+      "Consulta dados reais do workspace/tenant autenticado da Frotak. Use antes de responder qualquer fato sobre empresa, frota, caminhoes, placas, motoristas, fretes, financeiro, abastecimentos ou posicoes.",
     parameters: {
       type: Type.OBJECT,
       properties: {
-        ...commonLookupProperties,
-        source: {
+        pergunta: {
           type: Type.STRING,
-          description: "Use active, history ou all.",
+          description: "Pergunta original do usuario.",
         },
-      },
-    },
-  },
-  {
-    name: "consultar_financeiro",
-    description:
-      "Consulta resumo e titulos financeiros do workspace atual. Use apenas para perguntas financeiras.",
-    parameters: {
-      type: Type.OBJECT,
-      properties: {
-        direction: {
+        topico: {
           type: Type.STRING,
-          description: "receivable para A Receber, payable para A Pagar ou all.",
+          description:
+            "Topico principal: empresa, veiculos, motoristas, fretes, financeiro, abastecimentos ou posicoes.",
+        },
+        query: {
+          type: Type.STRING,
+          description: "Texto para buscar placa, nome, codigo ou descricao.",
         },
         status: {
           type: Type.STRING,
-          description: "Status financeiro, por exemplo open, settled, voided.",
+          description: "Status operacional ou financeiro quando aplicavel.",
+        },
+        direction: {
+          type: Type.STRING,
+          description: "receivable para A Receber, payable para A Pagar ou all.",
         },
         days: {
           type: Type.INTEGER,
           description: "Janela em dias a partir de hoje para consulta por competencia/criacao.",
         },
-        limit: commonLookupProperties.limit,
-      },
-    },
-  },
-  {
-    name: "consultar_abastecimentos",
-    description:
-      "Consulta abastecimentos do tenant atual por placa, motorista, posto ou combustivel.",
-    parameters: {
-      type: Type.OBJECT,
-      properties: {
-        ...commonLookupProperties,
         fuel_type: {
           type: Type.STRING,
           description: "diesel_s10, arla ou all.",
         },
+        limit: {
+          type: Type.INTEGER,
+          description: "Quantidade maxima de registros. Use ate 80.",
+        },
       },
-    },
-  },
-  {
-    name: "consultar_posicoes",
-    description:
-      "Consulta ultimas posicoes/telemetria Sascar disponiveis para veiculos do tenant atual.",
-    parameters: {
-      type: Type.OBJECT,
-      properties: commonLookupProperties,
     },
   },
 ];
@@ -172,22 +115,179 @@ export async function executeFrotakAiTool(
   args: Record<string, unknown> = {},
 ) {
   const supabase = getSupabaseServerClient(context.accessToken);
-  switch (name) {
-    case "consultar_veiculos":
-      return queryVehicles(supabase, context, args);
-    case "consultar_motoristas":
-      return queryDrivers(supabase, context, args);
-    case "consultar_fretes":
-      return queryFreights(supabase, context, args);
-    case "consultar_financeiro":
-      return queryFinancial(supabase, context, args);
-    case "consultar_abastecimentos":
-      return queryFuelRecords(supabase, context, args);
-    case "consultar_posicoes":
-      return queryPositions(supabase, context, args);
-    default:
-      return { error: "Ferramenta indisponivel." };
+  const result =
+    name === "consultar_frotak"
+      ? await executeConsultarFrotak(supabase, context, args)
+      : { error: "Ferramenta indisponivel." };
+
+  if (
+    result &&
+    typeof result === "object" &&
+    !Array.isArray(result) &&
+    typeof (result as Record<string, unknown>).error === "string"
+  ) {
+    console.error("[frotakAi] tool failed", {
+      stage: "tool",
+      workspaceId: context.workspaceId,
+      tenantId: context.tenantId,
+      tool: name,
+      code:
+        typeof (result as Record<string, unknown>).code === "string"
+          ? (result as Record<string, unknown>).code
+          : undefined,
+      message: (result as Record<string, unknown>).error,
+    });
   }
+
+  return result;
+}
+
+type FrotakConsultaTopico =
+  | "empresa"
+  | "veiculos"
+  | "motoristas"
+  | "fretes"
+  | "financeiro"
+  | "abastecimentos"
+  | "posicoes";
+
+function normalizeIntentText(text: string) {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function addTopic(topics: FrotakConsultaTopico[], topic: FrotakConsultaTopico) {
+  if (!topics.includes(topic)) topics.push(topic);
+}
+
+function detectTopics(args: Record<string, unknown>) {
+  const text = normalizeIntentText(
+    [textArg(args, "pergunta"), textArg(args, "question"), textArg(args, "topico"), textArg(args, "query")]
+      .filter(Boolean)
+      .join(" "),
+  );
+  const topics: FrotakConsultaTopico[] = [];
+
+  if (/\b(empresa|companhia|tenant|workspace|cliente)\b/.test(text)) addTopic(topics, "empresa");
+  if (/\b(caminhao|caminhoes|veiculo|veiculos|frota|placa|placas)\b/.test(text))
+    addTopic(topics, "veiculos");
+  if (/\b(motorista|motoristas|condutor|condutores)\b/.test(text))
+    addTopic(topics, "motoristas");
+  if (/\b(frete|fretes|viagem|viagens|rota|rotas|carga|descarga)\b/.test(text))
+    addTopic(topics, "fretes");
+  if (
+    /\b(financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|despesa|saldo|valor|valores)\b/.test(
+      text,
+    )
+  )
+    addTopic(topics, "financeiro");
+  if (/\b(abastecimento|abastecimentos|diesel|arla|posto|combustivel)\b/.test(text))
+    addTopic(topics, "abastecimentos");
+  if (/\b(posicao|posicoes|localizacao|sascar|telemetria|mapa|onde)\b/.test(text))
+    addTopic(topics, "posicoes");
+
+  return { text, topics };
+}
+
+async function executeConsultarFrotak(
+  supabase: SupabaseServer,
+  context: FrotakAiContext,
+  args: Record<string, unknown>,
+) {
+  const { text, topics } = detectTopics(args);
+  const consultas: Record<string, unknown> = {};
+  const limit = limitFromArgs(args);
+
+  if (topics.length === 0) {
+    return {
+      ok: false,
+      error: "Nao foi possivel identificar qual dado da Frotak consultar.",
+      tenant: {
+        nome: context.tenantName,
+        workspace: context.workspaceName,
+      },
+    };
+  }
+
+  if (topics.includes("empresa")) {
+    consultas.empresa = {
+      tenant_nome: context.tenantName,
+      workspace_nome: context.workspaceName,
+    };
+  }
+
+  if (topics.includes("veiculos")) {
+    consultas.veiculos = await queryVehicles(supabase, context, {
+      limit,
+      query: textArg(args, "query"),
+      status: textArg(args, "status"),
+    });
+  }
+
+  if (topics.includes("motoristas")) {
+    const inactive = /\b(inativo|inativos|inactive)\b/.test(text);
+    consultas.motoristas = await queryDrivers(supabase, context, {
+      limit,
+      query: textArg(args, "query"),
+      status: textArg(args, "status") ?? (inactive ? "inactive" : "active"),
+    });
+  }
+
+  if (topics.includes("fretes")) {
+    const activeOnly = /\b(em rota|andamento|ativo|ativos|aberto|abertos|rodando)\b/.test(text);
+    consultas.fretes = await queryFreights(supabase, context, {
+      limit,
+      query: textArg(args, "query"),
+      status: textArg(args, "status"),
+      source: textArg(args, "source") ?? (activeOnly ? "active" : "all"),
+    });
+  }
+
+  if (topics.includes("financeiro")) {
+    const direction =
+      textArg(args, "direction") ??
+      (/\b(receber|recebiveis|entrada|entradas|receita|receitas)\b/.test(text)
+        ? "receivable"
+        : /\b(pagar|pagaveis|saida|saidas|despesa|despesas)\b/.test(text)
+          ? "payable"
+          : "all");
+    const financialStatus =
+      textArg(args, "status") ??
+      (/\b(tenho|aberto|abertos|pendente|pendentes|carteira)\b/.test(text) ? "open" : undefined);
+    consultas.financeiro = await queryFinancial(supabase, context, {
+      limit,
+      direction,
+      status: financialStatus,
+      days: args.days ?? 365,
+    });
+  }
+
+  if (topics.includes("abastecimentos")) {
+    consultas.abastecimentos = await queryFuelRecords(supabase, context, {
+      limit,
+      query: textArg(args, "query"),
+      fuel_type: textArg(args, "fuel_type") ?? "all",
+    });
+  }
+
+  if (topics.includes("posicoes")) {
+    consultas.posicoes = await queryPositions(supabase, context, {
+      limit,
+      query: textArg(args, "query"),
+      status: textArg(args, "status"),
+    });
+  }
+
+  return {
+    ok: true,
+    tenant: {
+      nome: context.tenantName,
+      workspace: context.workspaceName,
+    },
+    consultas,
+  };
 }
 
 export async function buildFrotakAiOperationalSnapshot(context: FrotakAiContext) {
@@ -239,7 +339,7 @@ async function queryVehicles(
   let query = supabase
     .from("vehicles")
     .select(
-      "id, plate, type, status, situation, freight_stage, city, state, driver_id, trailer_id, current_freight_id, freight_value, updated_at, last_position_at",
+      "id, plate, type, status, vehicle_situation, freight_stage, city, state, driver_id, trailer_id, current_freight_id, freight_value, updated_at, last_position_at",
       { count: "exact" },
     )
     .eq("tenant_id", context.tenantId)
@@ -254,7 +354,7 @@ async function queryVehicles(
     query = query.or(`plate.ilike.%${search}%,type.ilike.%${search}%,city.ilike.%${search}%`);
 
   const { data, error, count } = await query;
-  if (error) return { error: error.message };
+  if (error) return { error: error.message, code: error.code };
 
   return {
     count: data?.length ?? 0,
@@ -263,7 +363,7 @@ async function queryVehicles(
       "plate",
       "type",
       "status",
-      "situation",
+      "vehicle_situation",
       "freight_stage",
       "city",
       "state",
@@ -296,7 +396,7 @@ async function queryDrivers(
     query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%,cnh.ilike.%${search}%`);
 
   const { data, error, count } = await query;
-  if (error) return { error: error.message };
+  if (error) return { error: error.message, code: error.code };
 
   return {
     count: data?.length ?? 0,
@@ -339,7 +439,7 @@ async function queryFreights(
 
     const { data, error } = await activeQuery;
     result.active = error
-      ? { error: error.message }
+      ? { error: error.message, code: error.code }
       : compactRows((data ?? []) as Array<Record<string, unknown>>, [
           "current_freight_id",
           "plate",
@@ -374,7 +474,7 @@ async function queryFreights(
 
     const { data, error } = await historyQuery;
     result.history = error
-      ? { error: error.message }
+      ? { error: error.message, code: error.code }
       : compactRows((data ?? []) as Array<Record<string, unknown>>, [
           "freight_id",
           "vehicle_plate",
@@ -411,28 +511,48 @@ async function queryFinancial(
   const status = textArg(args, "status");
   const days = Math.max(1, Math.min(365, Number(args.days ?? 90)));
 
+  let totalsQuery = supabase
+    .from("financial_documents")
+    .select("direction, original_amount")
+    .eq("workspace_id", context.workspaceId)
+    .gte("created_at", dateDaysAgo(Number.isFinite(days) ? days : 90));
+
   let query = supabase
     .from("financial_documents")
     .select(
       "id, direction, description, original_amount, competence_date, issue_date, status, source_type, created_at",
+      { count: "exact" },
     )
     .eq("workspace_id", context.workspaceId)
     .gte("created_at", dateDaysAgo(Number.isFinite(days) ? days : 90))
     .order("created_at", { ascending: false })
     .limit(limitFromArgs(args));
 
-  if (direction === "receivable" || direction === "payable")
+  if (direction === "receivable" || direction === "payable") {
+    totalsQuery = totalsQuery.eq("direction", direction);
     query = query.eq("direction", direction);
-  if (status) query = query.eq("status", status);
+  }
+  if (status) {
+    totalsQuery = totalsQuery.eq("status", status);
+    query = query.eq("status", status);
+  }
 
-  const { data, error } = await query;
-  if (error) return { error: error.message };
+  const [{ data, error, count }, { data: totalsData, error: totalsError }] = await Promise.all([
+    query,
+    totalsQuery,
+  ]);
+  if (error) return { error: error.message, code: error.code };
+  if (totalsError) return { error: totalsError.message, code: totalsError.code };
 
   const rows = ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
     ...row,
     original_amount: numberValue(row.original_amount),
   }));
-  const totals = rows.reduce(
+  const totalRows = ((totalsData ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    ...row,
+    original_amount: numberValue(row.original_amount),
+  }));
+  const totals = totalRows.reduce(
     (acc, row) => {
       const amount = numberValue(row.original_amount);
       if (row.direction === "receivable") acc.receivable += amount;
@@ -444,6 +564,7 @@ async function queryFinancial(
 
   return {
     count: rows.length,
+    totalCount: count ?? rows.length,
     totals,
     items: compactRows(rows, [
       "direction",
@@ -481,7 +602,7 @@ async function queryFuelRecords(
   }
 
   const { data, error } = await query;
-  if (error) return { error: error.message };
+  if (error) return { error: error.message, code: error.code };
 
   const rows = ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
     ...row,
@@ -514,7 +635,7 @@ async function queryPositions(
   if (source) query = query.eq("source", source);
 
   const { data, error } = await query;
-  if (error) return { error: error.message };
+  if (error) return { error: error.message, code: error.code };
 
   return {
     count: data?.length ?? 0,
