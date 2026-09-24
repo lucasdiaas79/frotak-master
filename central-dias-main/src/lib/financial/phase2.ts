@@ -8,6 +8,8 @@ import type {
   FinancialAccount,
   FinancialDocumentDetails,
   FinancialDocumentDirection,
+  FinancialDocumentsPage,
+  FinancialDocumentsPageInput,
   FinancialDocumentInput,
   FinancialIntegrationJob,
   FinancialIntegrationProcessResult,
@@ -18,6 +20,11 @@ import type {
 
 function fail(operation: string, error: { message: string } | null) {
   if (error) throw new Error(`${operation}: ${error.message}`);
+}
+
+function numberValue(value: unknown) {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 export function hasFinancialPermission(access: FinancialAccess | null, permission: string) {
@@ -107,6 +114,134 @@ export async function listFinancialDocuments(
       }),
     ),
   }));
+}
+
+function mapFinancialDocumentDetails(row: Record<string, any>): FinancialDocumentDetails {
+  return {
+    id: String(row.id),
+    tenantId: String(row.tenant_id ?? row.tenantId),
+    workspaceId: String(row.workspace_id ?? row.workspaceId),
+    direction: row.direction,
+    partnerId: row.partner_id ?? row.partnerId ?? null,
+    documentType: row.document_type ?? row.documentType,
+    sourceType: row.source_type ?? row.sourceType ?? null,
+    sourceId: row.source_id ?? row.sourceId ?? null,
+    sourceEvent: row.source_event ?? row.sourceEvent ?? null,
+    description: String(row.description),
+    originalAmount: numberValue(row.original_amount ?? row.originalAmount),
+    competenceDate: row.competence_date ?? row.competenceDate ?? null,
+    issueDate: row.issue_date ?? row.issueDate ?? null,
+    currency: row.currency,
+    status: row.status,
+    chartAccountId: row.chart_account_id ?? row.chartAccountId ?? null,
+    entryDate: row.entry_date ?? row.entryDate ?? row.created_at?.slice?.(0, 10) ?? null,
+    documentNumber: row.document_number ?? row.documentNumber ?? null,
+    notes: row.notes ?? null,
+    partnerName: row.business_partners?.trade_name ?? row.partner_name ?? row.partnerName ?? null,
+    accountName: row.chart_of_accounts?.name ?? row.account_name ?? row.accountName ?? null,
+    costCenterId:
+      row.financial_allocations?.[0]?.cost_center_id ?? row.cost_center_id ?? row.costCenterId ?? null,
+    vehicleId: row.financial_allocations?.[0]?.vehicle_id ?? row.vehicle_id ?? row.vehicleId ?? null,
+    driverId: row.financial_allocations?.[0]?.driver_id ?? row.driver_id ?? row.driverId ?? null,
+    freightId: row.financial_allocations?.[0]?.freight_id ?? row.freight_id ?? row.freightId ?? null,
+    productId: row.financial_allocations?.[0]?.product_id ?? row.product_id ?? row.productId ?? null,
+    installments: (row.financial_installments ?? row.installments ?? [])
+      .map((item: Record<string, unknown>) => ({
+        id: String(item.id),
+        documentId: String(item.document_id ?? item.documentId),
+        installmentNumber: Number(item.installment_number ?? item.installmentNumber),
+        amount: numberValue(item.amount),
+        dueDate: String(item.due_date ?? item.dueDate),
+        status: item.status as "open" | "partially_settled" | "settled" | "voided",
+        settledAmount: numberValue(item.settled_amount ?? item.settledAmount),
+        balance: numberValue(item.balance),
+      }))
+      .sort((a, b) => a.installmentNumber - b.installmentNumber),
+    settlements: (row.financial_settlements ?? row.settlements ?? []).map(
+      (item: Record<string, unknown>): FinancialSettlement => ({
+        id: String(item.id),
+        documentId: String(item.document_id ?? item.documentId),
+        installmentId: String(item.installment_id ?? item.installmentId),
+        financialAccountId: String(item.financial_account_id ?? item.financialAccountId),
+        settlementType: item.settlement_type as "settlement" | "reversal",
+        originalSettlementId: item.original_settlement_id ?? item.originalSettlementId
+          ? String(item.original_settlement_id ?? item.originalSettlementId)
+          : null,
+        principalAmount: numberValue(item.principal_amount ?? item.principalAmount),
+        interestAmount: numberValue(item.interest_amount ?? item.interestAmount),
+        penaltyAmount: numberValue(item.penalty_amount ?? item.penaltyAmount),
+        discountAmount: numberValue(item.discount_amount ?? item.discountAmount),
+        netAmount: numberValue(item.net_amount ?? item.netAmount),
+        settledOn: String(item.settled_on ?? item.settledOn),
+        paymentMethod: String(item.payment_method ?? item.paymentMethod),
+        notes: item.notes ? String(item.notes) : null,
+        reversalReason: item.reversal_reason ?? item.reversalReason
+          ? String(item.reversal_reason ?? item.reversalReason)
+          : null,
+        createdAt: String(item.created_at ?? item.createdAt),
+      }),
+    ),
+  };
+}
+
+export async function listFinancialDocumentsPage(
+  input: FinancialDocumentsPageInput,
+): Promise<FinancialDocumentsPage> {
+  const { data, error } = await supabase.rpc("list_financial_documents_page", {
+    p_payload: input,
+  });
+  fail("Nao foi possivel carregar os titulos", error);
+  const page = (data ?? {}) as Record<string, any>;
+  const summary = (page.summary ?? {}) as Record<string, unknown>;
+  const payablePressure = (summary.payablePressure ?? {}) as Record<string, Record<string, unknown>>;
+  return {
+    rows: ((page.rows ?? []) as Array<Record<string, any>>).map(mapFinancialDocumentDetails),
+    page: numberValue(page.page) || input.page,
+    pageSize: numberValue(page.pageSize) || input.pageSize,
+    total: numberValue(page.total),
+    summary: {
+      openBalance: numberValue(summary.openBalance),
+      overdue: numberValue(summary.overdue),
+      overdueCount: numberValue(summary.overdueCount),
+      settledPeriod: numberValue(summary.settledPeriod),
+      upcoming: numberValue(summary.upcoming),
+      upcomingCount: numberValue(summary.upcomingCount),
+      payablePressure: {
+        overdue: {
+          amount: numberValue(payablePressure.overdue?.amount),
+          count: numberValue(payablePressure.overdue?.count),
+        },
+        week: {
+          amount: numberValue(payablePressure.week?.amount),
+          count: numberValue(payablePressure.week?.count),
+        },
+        halfMonth: {
+          amount: numberValue(payablePressure.halfMonth?.amount),
+          count: numberValue(payablePressure.halfMonth?.count),
+        },
+        month: {
+          amount: numberValue(payablePressure.month?.amount),
+          count: numberValue(payablePressure.month?.count),
+        },
+        later: {
+          amount: numberValue(payablePressure.later?.amount),
+          count: numberValue(payablePressure.later?.count),
+        },
+      },
+    },
+  };
+}
+
+export async function getFinancialDocumentDetails(id: string): Promise<FinancialDocumentDetails> {
+  const { data, error } = await supabase
+    .from("financial_documents")
+    .select(
+      "*, business_partners!financial_documents_partner_id_fkey(trade_name), chart_of_accounts!financial_documents_chart_account_id_fkey(name), financial_installments!financial_installments_document_id_fkey(*), financial_allocations!financial_allocations_document_id_fkey(*), financial_settlements!financial_settlements_document_id_fkey(*)",
+    )
+    .eq("id", id)
+    .single();
+  fail("Nao foi possivel carregar o detalhe do titulo", error);
+  return mapFinancialDocumentDetails(data as Record<string, any>);
 }
 
 export async function saveFinancialDocument(input: FinancialDocumentInput) {

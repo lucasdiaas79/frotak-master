@@ -79,11 +79,13 @@ import {
 import { listCanonicalFreights } from "@/lib/financial/foundation";
 import {
   getFinancialAccess,
+  getFinancialDocumentDetails,
   hasFinancialPermission,
   listFinancialAccounts,
   listFinancialChart,
   listFinancialCostCenters,
   listFinancialDocuments,
+  listFinancialDocumentsPage,
   listFinancialPartners,
   reverseSettlement,
   saveBusinessPartner,
@@ -137,6 +139,7 @@ import type {
   FinancialDashboard,
   FinancialDocumentDetails,
   FinancialDocumentDirection,
+  FinancialDocumentsPageSummary,
   FinancialDocumentInput,
   FinancialRecurringFrequency,
   FinancialInstallment,
@@ -2025,6 +2028,24 @@ const initialFilters = (): TitleFilters => ({
   max: "",
 });
 
+const TITLE_PAGE_SIZE = 50;
+
+const emptyTitleSummary = (): FinancialDocumentsPageSummary => ({
+  openBalance: 0,
+  overdue: 0,
+  overdueCount: 0,
+  settledPeriod: 0,
+  upcoming: 0,
+  upcomingCount: 0,
+  payablePressure: {
+    overdue: { amount: 0, count: 0 },
+    week: { amount: 0, count: 0 },
+    halfMonth: { amount: 0, count: 0 },
+    month: { amount: 0, count: 0 },
+    later: { amount: 0, count: 0 },
+  },
+});
+
 export function FinancialTitlesPage({ direction }: { direction: FinancialDocumentDirection }) {
   return (
     <FinancialBoundary>
@@ -2049,6 +2070,11 @@ function TitlesContent({
   const [freights, setFreights] = useState<CanonicalFreight[]>([]);
   const [recurringRules, setRecurringRules] = useState<FinancialRecurringRule[]>([]);
   const [filters, setFilters] = useState(initialFilters);
+  const [documentsTotal, setDocumentsTotal] = useState(0);
+  const [documentsPage, setDocumentsPage] = useState(1);
+  const [documentsSummary, setDocumentsSummary] =
+    useState<FinancialDocumentsPageSummary>(emptyTitleSummary);
+  const [loadingDocumentId, setLoadingDocumentId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingDocument, setEditingDocument] = useState<FinancialDocumentDetails | null>(null);
@@ -2073,7 +2099,22 @@ function TitlesContent({
       freightsResult,
       recurringResult,
     ] = await Promise.allSettled([
-      listFinancialDocuments(direction, access.workspaceId),
+      listFinancialDocumentsPage({
+        workspaceId: access.workspaceId,
+        direction,
+        page: documentsPage,
+        pageSize: TITLE_PAGE_SIZE,
+        search: filters.search || undefined,
+        status: filters.status,
+        origin: filters.origin,
+        partnerId: filters.partner === "all" ? undefined : filters.partner,
+        chartAccountId: filters.category === "all" ? undefined : filters.category,
+        costCenterId: filters.center === "all" ? undefined : filters.center,
+        startDate: filters.start || undefined,
+        endDate: filters.end || undefined,
+        minAmount: filters.min || undefined,
+        maxAmount: filters.max || undefined,
+      }),
       listFinancialPartners(access.tenantId),
       listFinancialAccounts(access.workspaceId),
       listFinancialChart(access.tenantId),
@@ -2083,11 +2124,15 @@ function TitlesContent({
     ]);
 
     if (documentsResult.status === "fulfilled") {
-      setDocuments(documentsResult.value);
+      setDocuments(documentsResult.value.rows);
+      setDocumentsTotal(documentsResult.value.total);
+      setDocumentsSummary(documentsResult.value.summary);
     } else {
       console.error("[financeiro] Falha ao carregar títulos", documentsResult.reason);
       toast.error("Não foi possível carregar os títulos.");
       setDocuments([]);
+      setDocumentsTotal(0);
+      setDocumentsSummary(emptyTitleSummary());
     }
 
     const applyAuxiliaryResult = <T,>(
@@ -2110,13 +2155,16 @@ function TitlesContent({
     applyAuxiliaryResult(centersResult, setCenters, "apropriações");
     applyAuxiliaryResult(freightsResult, setFreights, "fretes financeiros");
     applyAuxiliaryResult(recurringResult, setRecurringRules, "recorrencias financeiras");
-  }, [access.tenantId, access.workspaceId, canManageRecurring, direction]);
+  }, [access.tenantId, access.workspaceId, canManageRecurring, direction, documentsPage, filters]);
   useEffect(() => {
     load().catch((error) => {
       console.error("[financeiro] Falha inesperada ao carregar contas a receber/pagar", error);
       toast.error("Não foi possível carregar a página financeira.");
     });
   }, [load]);
+  useEffect(() => {
+    setDocumentsPage(1);
+  }, [direction, filters]);
   const allowedPartners = partners.filter(
     (p) =>
       p.roles.includes(receiving ? "customer" : "supplier") ||
@@ -2126,53 +2174,13 @@ function TitlesContent({
     () => new Map(recurringRules.map((rule) => [rule.id, rule])),
     [recurringRules],
   );
-  const filtered = useMemo(
-    () =>
-      documents.filter((d) => {
-        const due = d.installments[0]?.dueDate || "";
-        const balance = d.installments.reduce((s, i) => s + i.balance, 0);
-        return (
-          (!filters.search ||
-            `${d.description} ${d.documentNumber || ""} ${d.partnerName || ""}`
-              .toLowerCase()
-              .includes(filters.search.toLowerCase())) &&
-          (filters.status === "all" || visualStatus(d) === filters.status) &&
-          (filters.origin === "all" || documentOrigin(d.sourceType) === filters.origin) &&
-          (filters.partner === "all" || d.partnerId === filters.partner) &&
-          (filters.category === "all" || d.chartAccountId === filters.category) &&
-          (filters.center === "all" || d.costCenterId === filters.center) &&
-          (!filters.start || due >= filters.start) &&
-          (!filters.end || due <= filters.end) &&
-          (!filters.min || balance >= Number(filters.min)) &&
-          (!filters.max || balance <= Number(filters.max))
-        );
-      }),
-    [documents, filters],
-  );
-  const openBalance = documents
-    .filter((d) => !["draft", "voided", "settled"].includes(d.status))
-    .reduce((s, d) => s + d.installments.reduce((a, i) => a + i.balance, 0), 0);
-  const overdue = documents
-    .flatMap((d) => d.installments)
-    .filter((i) => i.balance > 0 && i.dueDate < today())
-    .reduce((s, i) => s + i.balance, 0);
-  const settledPeriod = documents
-    .flatMap(effectiveSettlements)
-    .filter((s) => s.settledOn >= filters.start && s.settledOn <= filters.end)
-    .reduce((s, i) => s + i.netAmount, 0);
-  const in7 = new Date();
-  in7.setDate(in7.getDate() + 7);
-  const date7 = in7.toISOString().slice(0, 10);
-  const upcoming = documents
-    .flatMap((d) => d.installments)
-    .filter((i) => i.balance > 0 && i.dueDate >= today() && i.dueDate <= date7)
-    .reduce((s, i) => s + i.balance, 0);
-  const overdueTitles = documents.filter((d) =>
-    d.installments.some((i) => i.balance > 0 && i.dueDate < today()),
-  );
-  const upcomingTitles = documents.filter((d) =>
-    d.installments.some((i) => i.balance > 0 && i.dueDate >= today() && i.dueDate <= date7),
-  );
+  const filtered = documents;
+  const openBalance = documentsSummary.openBalance;
+  const overdue = documentsSummary.overdue;
+  const settledPeriod = documentsSummary.settledPeriod;
+  const upcoming = documentsSummary.upcoming;
+  const overdueTitlesCount = documentsSummary.overdueCount;
+  const upcomingTitlesCount = documentsSummary.upcomingCount;
   const filtersActive =
     filters.search !== "" ||
     filters.status !== "all" ||
@@ -2189,6 +2197,50 @@ function TitlesContent({
     access,
     receiving ? "financial.receive" : "financial.pay",
   );
+  const loadDocumentDetails = useCallback(async (document: FinancialDocumentDetails) => {
+    setLoadingDocumentId(document.id);
+    try {
+      return await getFinancialDocumentDetails(document.id);
+    } catch (error) {
+      console.error("[financeiro] Falha ao carregar detalhe do titulo", error);
+      toast.error("Nao foi possivel carregar o detalhe do titulo.");
+      return null;
+    } finally {
+      setLoadingDocumentId(null);
+    }
+  }, []);
+  const openDocumentDetails = useCallback(
+    async (document: FinancialDocumentDetails) => {
+      const details = await loadDocumentDetails(document);
+      if (details) setDetailDocument(details);
+    },
+    [loadDocumentDetails],
+  );
+  const editDocument = useCallback(
+    async (document: FinancialDocumentDetails) => {
+      const details = await loadDocumentDetails(document);
+      if (!details) return;
+      setEditingDocument(details);
+      setFormOpen(true);
+    },
+    [loadDocumentDetails],
+  );
+  const settleDocument = useCallback(
+    async (document: FinancialDocumentDetails, installment: FinancialInstallment) => {
+      const details = await loadDocumentDetails(document);
+      if (!details) return;
+      const detailedInstallment =
+        details.installments.find((item) => item.id === installment.id) ??
+        firstOpenInstallment(details);
+      if (!detailedInstallment) {
+        toast.error("Nao foi possivel localizar a parcela em aberto.");
+        return;
+      }
+      setSettleTarget({ document: details, installment: detailedInstallment });
+    },
+    [loadDocumentDetails],
+  );
+  const totalPages = Math.max(1, Math.ceil(documentsTotal / TITLE_PAGE_SIZE));
   return (
     <div
       className={cn(
@@ -2218,6 +2270,12 @@ function TitlesContent({
         }
       />
       <FinancialNav />
+      {loadingDocumentId && (
+        <div className="flex items-center gap-2 px-3 text-xs text-muted-foreground">
+          <LoaderCircle className="size-3.5 animate-spin" />
+          Carregando detalhes do titulo...
+        </div>
+      )}
       {receiving ? (
         <>
           <ReceivablesSummary
@@ -2227,9 +2285,9 @@ function TitlesContent({
             upcoming={upcoming}
           />
           <ReceivablesPriority
-            overdueCount={overdueTitles.length}
+            overdueCount={overdueTitlesCount}
             overdueAmount={overdue}
-            upcomingCount={upcomingTitles.length}
+            upcomingCount={upcomingTitlesCount}
             upcomingAmount={upcoming}
           />
           <div className="hidden md:block">
@@ -2272,6 +2330,7 @@ function TitlesContent({
           </div>
           <ReceivablesTitleList
             documents={filtered}
+            total={documentsTotal}
             canSettle={canSettle}
             canReverse={hasFinancialPermission(access, "financial.reverse_settlement")}
             canEdit={hasFinancialPermission(access, "financial.edit_draft")}
@@ -2282,12 +2341,9 @@ function TitlesContent({
               setEditingDocument(null);
               setFormOpen(true);
             }}
-            onEdit={(document) => {
-              setEditingDocument(document);
-              setFormOpen(true);
-            }}
-            onSettle={(document, installment) => setSettleTarget({ document, installment })}
-            onOpenDetails={setDetailDocument}
+            onEdit={editDocument}
+            onSettle={settleDocument}
+            onOpenDetails={openDocumentDetails}
             onCancelRecurring={async (rule) => {
               try {
                 await setFinancialRecurringRuleStatus(rule.id, access.workspaceId, "ended");
@@ -2320,6 +2376,13 @@ function TitlesContent({
               }
             }}
           />
+          <FinancialPagination
+            page={documentsPage}
+            pageSize={TITLE_PAGE_SIZE}
+            total={documentsTotal}
+            totalPages={totalPages}
+            onPageChange={setDocumentsPage}
+          />
         </>
       ) : (
         <>
@@ -2328,7 +2391,7 @@ function TitlesContent({
             overdue={overdue}
             settledPeriod={settledPeriod}
           />
-          <PayablesPressure documents={documents} />
+          <PayablesPressure summary={documentsSummary} />
           <div className="hidden md:block">
             <PayablesFilterPanel
               filters={filters}
@@ -2369,6 +2432,7 @@ function TitlesContent({
           </div>
           <PayablesTitleList
             documents={filtered}
+            total={documentsTotal}
             canSettle={canSettle}
             canReverse={hasFinancialPermission(access, "financial.reverse_settlement")}
             canEdit={hasFinancialPermission(access, "financial.edit_draft")}
@@ -2379,12 +2443,9 @@ function TitlesContent({
               setEditingDocument(null);
               setFormOpen(true);
             }}
-            onEdit={(document) => {
-              setEditingDocument(document);
-              setFormOpen(true);
-            }}
-            onSettle={(document, installment) => setSettleTarget({ document, installment })}
-            onOpenDetails={setDetailDocument}
+            onEdit={editDocument}
+            onSettle={settleDocument}
+            onOpenDetails={openDocumentDetails}
             onCancelRecurring={async (rule) => {
               try {
                 await setFinancialRecurringRuleStatus(rule.id, access.workspaceId, "ended");
@@ -2416,6 +2477,13 @@ function TitlesContent({
                 toast.error("Não foi possível cancelar o título.");
               }
             }}
+          />
+          <FinancialPagination
+            page={documentsPage}
+            pageSize={TITLE_PAGE_SIZE}
+            total={documentsTotal}
+            totalPages={totalPages}
+            onPageChange={setDocumentsPage}
           />
         </>
       )}
@@ -2488,6 +2556,54 @@ function TitlesContent({
           if (!open) setDetailDocument(null);
         }}
       />
+    </div>
+  );
+}
+
+function FinancialPagination({
+  page,
+  pageSize,
+  total,
+  totalPages,
+  onPageChange,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+}) {
+  if (total <= pageSize) return null;
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border bg-card/40 p-3 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
+      <span>
+        Exibindo {start}-{end} de {total} titulos
+      </span>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={page <= 1}
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+        >
+          Anterior
+        </Button>
+        <span>
+          Pagina {page} de {totalPages}
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={page >= totalPages}
+          onClick={() => onPageChange(Math.min(totalPages, page + 1))}
+        >
+          Proxima
+        </Button>
+      </div>
     </div>
   );
 }
@@ -2697,6 +2813,7 @@ function ReceivablesFilterPanel({
 
 function ReceivablesTitleList({
   documents,
+  total,
   canSettle,
   canReverse,
   canEdit,
@@ -2712,6 +2829,7 @@ function ReceivablesTitleList({
   onCancelRecurring,
 }: {
   documents: FinancialDocumentDetails[];
+  total: number;
   canSettle: boolean;
   canReverse: boolean;
   canEdit: boolean;
@@ -2733,7 +2851,7 @@ function ReceivablesTitleList({
           <p className="financial-section-kicker">Títulos</p>
           <h2>Carteira de recebíveis</h2>
         </div>
-        <span>{documents.length} encontrados</span>
+        <span>{total} encontrados</span>
       </div>
       <div className="hidden financial-receivables-table-head md:grid">
         <span>Cliente e título</span>
@@ -3077,8 +3195,8 @@ function PayableMiniMetric({
   );
 }
 
-function PayablesPressure({ documents }: { documents: FinancialDocumentDetails[] }) {
-  const pressure = summarizePayablePressure(documents);
+function PayablesPressure({ summary }: { summary: FinancialDocumentsPageSummary }) {
+  const pressure = summary.payablePressure ?? summarizePayablePressure([]);
   const week = pressure.week;
   const overdue = pressure.overdue;
   return (
@@ -3225,6 +3343,7 @@ function PayablesFilterPanel({
 
 function PayablesTitleList({
   documents,
+  total,
   canSettle,
   canReverse,
   canEdit,
@@ -3240,6 +3359,7 @@ function PayablesTitleList({
   onCancelRecurring,
 }: {
   documents: FinancialDocumentDetails[];
+  total: number;
   canSettle: boolean;
   canReverse: boolean;
   canEdit: boolean;
@@ -3279,7 +3399,7 @@ function PayablesTitleList({
           <p className="financial-section-kicker">Obrigações</p>
           <h2>Agenda de pagamentos</h2>
         </div>
-        <span>{documents.length} encontrados</span>
+        <span>{total} encontrados</span>
       </div>
       <div className="hidden financial-payables-table-head md:grid">
         <span>Fornecedor e título</span>

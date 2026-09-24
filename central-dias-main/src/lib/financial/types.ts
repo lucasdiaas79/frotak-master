@@ -199,6 +199,44 @@ export interface FinancialDocumentDetails extends FinancialDocument {
   settlements: FinancialSettlement[];
 }
 
+export interface FinancialDocumentsPageSummary {
+  openBalance: number;
+  overdue: number;
+  overdueCount: number;
+  settledPeriod: number;
+  upcoming: number;
+  upcomingCount: number;
+  payablePressure?: Record<
+    "overdue" | "week" | "halfMonth" | "month" | "later",
+    { amount: number; count: number }
+  >;
+}
+
+export interface FinancialDocumentsPage {
+  rows: FinancialDocumentDetails[];
+  page: number;
+  pageSize: number;
+  total: number;
+  summary: FinancialDocumentsPageSummary;
+}
+
+export interface FinancialDocumentsPageInput {
+  workspaceId: string;
+  direction: FinancialDocumentDirection;
+  page: number;
+  pageSize: number;
+  search?: string;
+  status?: string;
+  origin?: string;
+  partnerId?: string;
+  chartAccountId?: string;
+  costCenterId?: string;
+  startDate?: string;
+  endDate?: string;
+  minAmount?: string;
+  maxAmount?: string;
+}
+
 export interface FinancialDocumentInput {
   id?: string;
   workspaceId: string;
