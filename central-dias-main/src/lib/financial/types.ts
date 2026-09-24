@@ -191,6 +191,7 @@ export interface FinancialDocumentDetails extends FinancialDocument {
   partnerName: string | null;
   accountName: string | null;
   outstandingBalance?: number;
+  allocationCount: number;
   costCenterId: string | null;
   vehicleId: string | null;
   driverId: string | null;
@@ -273,6 +274,12 @@ export interface SettlementInput {
   settledOn: string;
   paymentMethod: string;
   notes?: string;
+  adjustmentAllocation?: {
+    scope: "company" | "cost_center" | "vehicle" | "driver";
+    costCenterId?: string | null;
+    vehicleId?: string | null;
+    driverId?: string | null;
+  };
 }
 
 export type FinancialIntegrationStatus = "pending" | "processed" | "failed" | "needs_review";
