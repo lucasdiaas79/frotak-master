@@ -42,7 +42,6 @@ export async function listFinancialDocuments(
     .order("created_at", { ascending: false });
   if (workspaceId) query = query.eq("workspace_id", workspaceId);
   if (direction) query = query.eq("direction", direction);
-  query = query.or("source_type.is.null,source_type.neq.settlement_adjustment");
   const { data, error } = await query;
   fail("Não foi possível carregar os títulos", error);
   return (data ?? []).map((row) => ({
@@ -62,14 +61,12 @@ export async function listFinancialDocuments(
     currency: row.currency,
     status: row.status,
     chartAccountId: row.chart_account_id,
-    entryDate: row.entry_date ?? row.created_at?.slice(0, 10) ?? null,
     documentNumber: row.document_number,
     notes: row.notes,
     partnerName: row.business_partners?.trade_name ?? null,
     accountName: row.chart_of_accounts?.name ?? null,
     costCenterId: row.financial_allocations?.[0]?.cost_center_id ?? null,
     vehicleId: row.financial_allocations?.[0]?.vehicle_id ?? null,
-    driverId: row.financial_allocations?.[0]?.driver_id ?? null,
     freightId: row.financial_allocations?.[0]?.freight_id ?? null,
     productId: row.financial_allocations?.[0]?.product_id ?? null,
     installments: (row.financial_installments ?? [])

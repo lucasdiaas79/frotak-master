@@ -95,11 +95,9 @@ import {
   voidFinancialDocument,
 } from "@/lib/financial/phase2";
 import {
-  generateDueFinancialRecurringDocuments,
   generateFinancialRecurringDocuments,
   listFinancialRecurringRules,
   saveFinancialRecurringRule,
-  saveFinancialDocumentWithRecurring,
   setFinancialRecurringRuleStatus,
 } from "@/lib/financial/phase5";
 import {
@@ -414,73 +412,6 @@ function exportCsv(filename: string, rows: Array<Record<string, string | number 
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
-}
-
-function escapeHtml(value: unknown) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
-function downloadHtmlTable(filename: string, title: string, rows: Array<Record<string, unknown>>) {
-  if (!rows.length) {
-    toast.info("Nao ha dados para exportar.");
-    return;
-  }
-  const headers = Object.keys(rows[0]);
-  const html = `<!doctype html><html><head><meta charset="utf-8" /></head><body><h1>${escapeHtml(
-    title,
-  )}</h1><table border="1"><thead><tr>${headers
-    .map((header) => `<th>${escapeHtml(header)}</th>`)
-    .join("")}</tr></thead><tbody>${rows
-    .map(
-      (row) =>
-        `<tr>${headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`,
-    )
-    .join("")}</tbody></table></body></html>`;
-  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function openPrintableDre(title: string, subtitle: string, rows: Array<Record<string, unknown>>) {
-  if (!rows.length) {
-    toast.info("Nao ha dados para exportar.");
-    return;
-  }
-  const headers = Object.keys(rows[0]);
-  const popup = window.open("", "_blank", "noopener,noreferrer,width=1120,height=800");
-  if (!popup) {
-    toast.error("Nao foi possivel abrir a janela de impressao.");
-    return;
-  }
-  popup.document.write(`<!doctype html><html><head><meta charset="utf-8" />
-    <title>${escapeHtml(title)}</title>
-    <style>
-      body{font-family:Inter,Arial,sans-serif;margin:40px;color:#111827}
-      h1{font-size:28px;margin:0 0 6px} p{margin:0 0 24px;color:#4b5563}
-      table{width:100%;border-collapse:collapse;font-size:12px}
-      th{background:#111827;color:#fff;text-align:left;padding:10px}
-      td{border-bottom:1px solid #e5e7eb;padding:9px}
-      tr:nth-child(even) td{background:#f9fafb}
-    </style>
-  </head><body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(
-    subtitle,
-  )}</p><table><thead><tr>${headers
-    .map((header) => `<th>${escapeHtml(header)}</th>`)
-    .join("")}</tr></thead><tbody>${rows
-    .map(
-      (row) =>
-        `<tr>${headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`,
-    )
-    .join("")}</tbody></table><script>window.onload=()=>window.print()</script></body></html>`);
-  popup.document.close();
 }
 
 function ReportPeriodControls({
@@ -1320,11 +1251,7 @@ function DreContent({ access }: { access: FinancialAccess }) {
   const [detail, setDetail] = useState<DreDetail | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
-  const [exportOpen, setExportOpen] = useState(false);
-  const [exportScopeType, setExportScopeType] = useState<"company" | "center" | "vehicle" | "driver">("company");
-  const [exportScope, setExportScope] = useState("all");
   const [loading, setLoading] = useState(true);
-  const { vehicles, drivers } = useFleet();
   const canDre = hasFinancialPermission(access, "financial.dre.view");
   const payload = useMemo(
     () => ({
@@ -1370,70 +1297,6 @@ function DreContent({ access }: { access: FinancialAccess }) {
       }),
     );
   };
-  const dreRows = (nextSummary = summary) =>
-    nextSummary
-      ? [
-          ...nextSummary.groups.map((group) => ({
-            linha: group.label,
-            documentos: group.document_count,
-            valor: group.signed_amount,
-          })),
-          {
-            linha: "Resultado gerencial",
-            documentos: nextSummary.totals.document_count,
-            valor: nextSummary.totals.managerial_result,
-          },
-        ]
-      : [];
-  const collectAnalyticRows = async () => {
-    if (!summary) return [];
-    const details = await Promise.all(
-      summary.groups.map(async (group) => ({
-        group,
-        detail: await getDreDetail({ ...payload, dreGroup: group.dre_group }),
-      })),
-    );
-    const rows = details.flatMap(({ group, detail: groupDetail }) =>
-      groupDetail.documents.map((document) => ({
-        grupo: group.label,
-        competencia: document.competence_date,
-        apropriacao: document.cost_center_name || "Empresa inteira",
-        caminhao: document.vehicle_plate || "",
-        funcionario: document.driver_name || "",
-        parceiro: document.partner_name || "",
-        titulo: document.description,
-        documento: document.document_number || "",
-        valor: document.signed_amount,
-      })),
-    );
-    if (exportScopeType === "center" && exportScope !== "all") {
-      const name = centers.find((center) => center.id === exportScope)?.name;
-      return rows.filter((row) => row.apropriacao === name);
-    }
-    if (exportScopeType === "vehicle" && exportScope !== "all") {
-      const plate = vehicles.find((vehicle) => vehicle.id === exportScope)?.plate;
-      return rows.filter((row) => row.caminhao === plate);
-    }
-    if (exportScopeType === "driver" && exportScope !== "all") {
-      const name = drivers.find((driver) => driver.id === exportScope)?.name;
-      return rows.filter((row) => row.funcionario === name);
-    }
-    return rows;
-  };
-  const rowsToDreLines = (rows: Array<Record<string, unknown>>) => {
-    const grouped = new Map<string, { documentos: number; valor: number }>();
-    rows.forEach((row) => {
-      const key = String(row.grupo || "Pendente");
-      const current = grouped.get(key) || { documentos: 0, valor: 0 };
-      grouped.set(key, {
-        documentos: current.documentos + 1,
-        valor: current.valor + Number(row.valor || 0),
-      });
-    });
-    const lines = Array.from(grouped.entries()).map(([linha, row]) => ({ linha, ...row }));
-    const total = lines.reduce((sum, row) => sum + row.valor, 0);
-    return [...lines, { linha: "Resultado gerencial", documentos: rows.length, valor: total }];
-  };
 
   if (!canDre) {
     return (
@@ -1452,9 +1315,23 @@ function DreContent({ access }: { access: FinancialAccess }) {
         subtitle="Visão gerencial por regime de competência"
         actions={
           summary ? (
-            <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                exportCsv(
+                  `dre-${start}-${end}.csv`,
+                  summary.groups.map((group) => ({
+                    grupo: group.label,
+                    valor_assinado: group.signed_amount,
+                    movimento: group.movement_amount,
+                    documentos: group.document_count,
+                  })),
+                )
+              }
+            >
               <Download className="size-4" />
-              Exportar
+              CSV
             </Button>
           ) : undefined
         }
@@ -1507,102 +1384,6 @@ function DreContent({ access }: { access: FinancialAccess }) {
           </div>
         </>
       )}
-      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>Exportar DRE</DialogTitle>
-            <DialogDescription>Mesma fonte, período e filtros da DRE exibida.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-3">
-            <Button
-              variant="outline"
-              onClick={() =>
-                openPrintableDre(
-                  "DRE Gerencial",
-                  `${date.format(new Date(`${start}T12:00:00`))} a ${date.format(new Date(`${end}T12:00:00`))}`,
-                  dreRows(),
-                )
-              }
-            >
-              DRE Gerencial — PDF
-            </Button>
-            <Button
-              variant="outline"
-              onClick={async () =>
-                downloadHtmlTable(
-                  `dre-analitico-${start}-${end}.xls`,
-                  "DRE Analítico",
-                  await collectAnalyticRows(),
-                )
-              }
-            >
-              DRE Analítico — Excel
-            </Button>
-            <div className="rounded-md border border-border p-3">
-              <div className="mb-2 text-sm font-bold">DRE por Apropriação</div>
-              <Select
-                value={exportScopeType}
-                onValueChange={(value) => {
-                  setExportScopeType(value as "company" | "center" | "vehicle" | "driver");
-                  setExportScope("all");
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="company">Empresa inteira</SelectItem>
-                  <SelectItem value="center">Setor/gerencial</SelectItem>
-                  <SelectItem value="vehicle">Caminhão</SelectItem>
-                  <SelectItem value="driver">Funcionário</SelectItem>
-                </SelectContent>
-              </Select>
-              {exportScopeType !== "company" && (
-                <div className="mt-2">
-                  <SimpleSelect
-                    value={exportScope}
-                    onChange={setExportScope}
-                    all="Todos"
-                    items={
-                      exportScopeType === "center"
-                        ? centers.map((center) => [center.id, center.name])
-                        : exportScopeType === "vehicle"
-                          ? vehicles.map((vehicle) => [vehicle.id, vehicle.plate])
-                          : drivers.map((driver) => [driver.id, driver.name])
-                    }
-                  />
-                </div>
-              )}
-              <div className="mt-3 flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={async () =>
-                    openPrintableDre(
-                      "DRE por Apropriação",
-                      `${start} a ${end}`,
-                      rowsToDreLines(await collectAnalyticRows()),
-                    )
-                  }
-                >
-                  PDF
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={async () =>
-                    downloadHtmlTable(
-                      `dre-apropriacao-${start}-${end}.xls`,
-                      "DRE por Apropriação",
-                      await collectAnalyticRows(),
-                    )
-                  }
-                >
-                  Excel
-                </Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -2047,40 +1828,26 @@ function TitlesContent({
   const [chart, setChart] = useState<ChartAccount[]>([]);
   const [centers, setCenters] = useState<CostCenter[]>([]);
   const [freights, setFreights] = useState<CanonicalFreight[]>([]);
-  const [recurringRules, setRecurringRules] = useState<FinancialRecurringRule[]>([]);
   const [filters, setFilters] = useState(initialFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
   const [editingDocument, setEditingDocument] = useState<FinancialDocumentDetails | null>(null);
-  const [detailDocument, setDetailDocument] = useState<FinancialDocumentDetails | null>(null);
   const [settleTarget, setSettleTarget] = useState<{
     document: FinancialDocumentDetails;
     installment: FinancialInstallment;
   } | null>(null);
   const [saving, setSaving] = useState(false);
-  const { vehicles, drivers, products } = useFleet();
-  const canManageRecurring = hasFinancialPermission(access, "financial.manage_recurring");
+  const { vehicles, products } = useFleet();
   const load = useCallback(async () => {
-    if (canManageRecurring) {
-      await generateDueFinancialRecurringDocuments(access.workspaceId, today().slice(0, 7));
-    }
-    const [
-      documentsResult,
-      partnersResult,
-      accountsResult,
-      chartResult,
-      centersResult,
-      freightsResult,
-      recurringResult,
-    ] = await Promise.allSettled([
-      listFinancialDocuments(direction, access.workspaceId),
-      listFinancialPartners(access.tenantId),
-      listFinancialAccounts(access.workspaceId),
-      listFinancialChart(access.tenantId),
-      listFinancialCostCenters(access.workspaceId),
-      listCanonicalFreights(access.workspaceId),
-      listFinancialRecurringRules(),
-    ]);
+    const [documentsResult, partnersResult, accountsResult, chartResult, centersResult, freightsResult] =
+      await Promise.allSettled([
+        listFinancialDocuments(direction, access.workspaceId),
+        listFinancialPartners(access.tenantId),
+        listFinancialAccounts(access.workspaceId),
+        listFinancialChart(access.tenantId),
+        listFinancialCostCenters(access.workspaceId),
+        listCanonicalFreights(access.workspaceId),
+      ]);
 
     if (documentsResult.status === "fulfilled") {
       setDocuments(documentsResult.value);
@@ -2109,8 +1876,7 @@ function TitlesContent({
     applyAuxiliaryResult(chartResult, setChart, "gerenciais");
     applyAuxiliaryResult(centersResult, setCenters, "apropriações");
     applyAuxiliaryResult(freightsResult, setFreights, "fretes financeiros");
-    applyAuxiliaryResult(recurringResult, setRecurringRules, "recorrencias financeiras");
-  }, [access.tenantId, access.workspaceId, canManageRecurring, direction]);
+  }, [direction]);
   useEffect(() => {
     load().catch((error) => {
       console.error("[financeiro] Falha inesperada ao carregar contas a receber/pagar", error);
@@ -2121,10 +1887,6 @@ function TitlesContent({
     (p) =>
       p.roles.includes(receiving ? "customer" : "supplier") ||
       p.roles.includes(receiving ? "sender" : "recipient"),
-  );
-  const recurringById = useMemo(
-    () => new Map(recurringRules.map((rule) => [rule.id, rule])),
-    [recurringRules],
   );
   const filtered = useMemo(
     () =>
@@ -2275,7 +2037,6 @@ function TitlesContent({
             canSettle={canSettle}
             canReverse={hasFinancialPermission(access, "financial.reverse_settlement")}
             canEdit={hasFinancialPermission(access, "financial.edit_draft")}
-            recurringById={recurringById}
             filtersActive={filtersActive}
             canCreate={canCreate}
             onNew={() => {
@@ -2287,16 +2048,6 @@ function TitlesContent({
               setFormOpen(true);
             }}
             onSettle={(document, installment) => setSettleTarget({ document, installment })}
-            onOpenDetails={setDetailDocument}
-            onCancelRecurring={async (rule) => {
-              try {
-                await setFinancialRecurringRuleStatus(rule.id, access.workspaceId, "ended");
-                toast.success("Recorrencia cancelada. Titulos ja gerados foram preservados.");
-                await load();
-              } catch {
-                toast.error("Nao foi possivel cancelar a recorrencia.");
-              }
-            }}
             onReverse={async (settlement) => {
               const reason = window.prompt("Informe o motivo do estorno:");
               if (!reason) return;
@@ -2372,7 +2123,6 @@ function TitlesContent({
             canSettle={canSettle}
             canReverse={hasFinancialPermission(access, "financial.reverse_settlement")}
             canEdit={hasFinancialPermission(access, "financial.edit_draft")}
-            recurringById={recurringById}
             filtersActive={filtersActive}
             canCreate={canCreate}
             onNew={() => {
@@ -2384,16 +2134,6 @@ function TitlesContent({
               setFormOpen(true);
             }}
             onSettle={(document, installment) => setSettleTarget({ document, installment })}
-            onOpenDetails={setDetailDocument}
-            onCancelRecurring={async (rule) => {
-              try {
-                await setFinancialRecurringRuleStatus(rule.id, access.workspaceId, "ended");
-                toast.success("Recorrencia cancelada. Titulos ja gerados foram preservados.");
-                await load();
-              } catch {
-                toast.error("Nao foi possivel cancelar a recorrencia.");
-              }
-            }}
             onReverse={async (settlement) => {
               const reason = window.prompt("Informe o motivo do estorno:");
               if (!reason) return;
@@ -2429,18 +2169,13 @@ function TitlesContent({
         centers={centers}
         freights={freights}
         vehicles={vehicles}
-        drivers={drivers}
         products={products}
         saving={saving}
         document={editingDocument}
-        onSave={async (input, recurring) => {
+        onSave={async (input) => {
           setSaving(true);
           try {
-            if (recurring) {
-              await saveFinancialDocumentWithRecurring({ document: input, recurring });
-            } else {
-              await saveFinancialDocument(input);
-            }
+            await saveFinancialDocument(input);
             toast.success("Título salvo com sucesso.");
             setFormOpen(false);
             setEditingDocument(null);
@@ -2471,21 +2206,6 @@ function TitlesContent({
           } finally {
             setSaving(false);
           }
-        }}
-      />
-      <TitleDetailsDialog
-        document={detailDocument}
-        recurringRule={
-          detailDocument?.sourceType === "recurring_rule" && detailDocument.sourceId
-            ? recurringById.get(detailDocument.sourceId) ?? null
-            : null
-        }
-        chart={chart}
-        centers={centers}
-        vehicles={vehicles}
-        drivers={drivers}
-        onOpenChange={(open) => {
-          if (!open) setDetailDocument(null);
         }}
       />
     </div>
@@ -2700,7 +2420,6 @@ function ReceivablesTitleList({
   canSettle,
   canReverse,
   canEdit,
-  recurringById,
   filtersActive,
   canCreate,
   onNew,
@@ -2708,14 +2427,11 @@ function ReceivablesTitleList({
   onReverse,
   onVoid,
   onEdit,
-  onOpenDetails,
-  onCancelRecurring,
 }: {
   documents: FinancialDocumentDetails[];
   canSettle: boolean;
   canReverse: boolean;
   canEdit: boolean;
-  recurringById: Map<string, FinancialRecurringRule>;
   filtersActive: boolean;
   canCreate: boolean;
   onNew: () => void;
@@ -2723,8 +2439,6 @@ function ReceivablesTitleList({
   onReverse: (s: FinancialSettlement) => void;
   onVoid: (d: FinancialDocumentDetails) => void;
   onEdit: (d: FinancialDocumentDetails) => void;
-  onOpenDetails: (d: FinancialDocumentDetails) => void;
-  onCancelRecurring: (rule: FinancialRecurringRule) => void;
 }) {
   return (
     <section className="financial-receivables-list">
@@ -2750,17 +2464,10 @@ function ReceivablesTitleList({
             canSettle={canSettle}
             canReverse={canReverse}
             canEdit={canEdit}
-            recurringRule={
-              document.sourceType === "recurring_rule" && document.sourceId
-                ? recurringById.get(document.sourceId) ?? null
-                : null
-            }
             onSettle={onSettle}
             onReverse={onReverse}
             onVoid={onVoid}
             onEdit={onEdit}
-            onOpenDetails={onOpenDetails}
-            onCancelRecurring={onCancelRecurring}
           />
         ))
       ) : (
@@ -2788,25 +2495,19 @@ function ReceivablesTitleRow({
   canSettle,
   canReverse,
   canEdit,
-  recurringRule,
   onSettle,
   onReverse,
   onVoid,
   onEdit,
-  onOpenDetails,
-  onCancelRecurring,
 }: {
   document: FinancialDocumentDetails;
   canSettle: boolean;
   canReverse: boolean;
   canEdit: boolean;
-  recurringRule: FinancialRecurringRule | null;
   onSettle: (d: FinancialDocumentDetails, i: FinancialInstallment) => void;
   onReverse: (s: FinancialSettlement) => void;
   onVoid: (d: FinancialDocumentDetails) => void;
   onEdit: (d: FinancialDocumentDetails) => void;
-  onOpenDetails: (d: FinancialDocumentDetails) => void;
-  onCancelRecurring: (rule: FinancialRecurringRule) => void;
 }) {
   const installment = firstOpenInstallment(document);
   const state = visualStatus(document);
@@ -2819,22 +2520,13 @@ function ReceivablesTitleRow({
     (canReverse && activeSettlements.length > 0);
 
   return (
-    <article
-      className="financial-receivables-row cursor-pointer"
-      onClick={() => onOpenDetails(document)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") onOpenDetails(document);
-      }}
-    >
+    <article className="financial-receivables-row">
       <div className="financial-receivables-title-cell">
         <strong>{document.partnerName || "Cliente não informado"}</strong>
         <span>{document.description}</span>
         <small>
           {document.documentNumber || "Sem número"} ·{" "}
-          {originLabels[documentOrigin(document.sourceType)]} Â·{" "}
-          {recurringRule ? "Recorrente" : "Nao recorrente"}
+          {originLabels[documentOrigin(document.sourceType)]}
         </small>
       </div>
       <div className="financial-receivables-due-cell">
@@ -2854,13 +2546,7 @@ function ReceivablesTitleRow({
       </div>
       <div className="hidden financial-receivables-actions md:flex">
         {installment && canSettle && !["draft", "voided"].includes(document.status) && (
-          <Button
-            size="sm"
-            onClick={(event) => {
-              event.stopPropagation();
-              onSettle(document, installment);
-            }}
-          >
+          <Button size="sm" onClick={() => onSettle(document, installment)}>
             Receber
           </Button>
         )}
@@ -2870,36 +2556,14 @@ function ReceivablesTitleRow({
               size="icon"
               variant="outline"
               title="Editar rascunho"
-              onClick={(event) => {
-                event.stopPropagation();
-                onEdit(document);
-              }}
+              onClick={() => onEdit(document)}
             >
               <Pencil className="size-4" />
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={(event) => {
-                event.stopPropagation();
-                onVoid(document);
-              }}
-            >
+            <Button size="sm" variant="outline" onClick={() => onVoid(document)}>
               Cancelar
             </Button>
           </>
-        )}
-        {recurringRule?.status === "active" && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={(event) => {
-              event.stopPropagation();
-              onCancelRecurring(recurringRule);
-            }}
-          >
-            Cancelar recorrencia
-          </Button>
         )}
         {canReverse &&
           activeSettlements.map((settlement) => (
@@ -2908,10 +2572,7 @@ function ReceivablesTitleRow({
               size="icon"
               variant="ghost"
               title="Estornar baixa"
-              onClick={(event) => {
-                event.stopPropagation();
-                onReverse(settlement);
-              }}
+              onClick={() => onReverse(settlement)}
             >
               <RotateCcw className="size-4" />
             </Button>
@@ -3228,7 +2889,6 @@ function PayablesTitleList({
   canSettle,
   canReverse,
   canEdit,
-  recurringById,
   filtersActive,
   canCreate,
   onNew,
@@ -3236,14 +2896,11 @@ function PayablesTitleList({
   onReverse,
   onVoid,
   onEdit,
-  onOpenDetails,
-  onCancelRecurring,
 }: {
   documents: FinancialDocumentDetails[];
   canSettle: boolean;
   canReverse: boolean;
   canEdit: boolean;
-  recurringById: Map<string, FinancialRecurringRule>;
   filtersActive: boolean;
   canCreate: boolean;
   onNew: () => void;
@@ -3251,8 +2908,6 @@ function PayablesTitleList({
   onReverse: (s: FinancialSettlement) => void;
   onVoid: (d: FinancialDocumentDetails) => void;
   onEdit: (d: FinancialDocumentDetails) => void;
-  onOpenDetails: (d: FinancialDocumentDetails) => void;
-  onCancelRecurring: (rule: FinancialRecurringRule) => void;
 }) {
   const supplierCounts = documents.reduce<Record<string, number>>((acc, document) => {
     const key = document.partnerName || "Fornecedor não informado";
@@ -3306,17 +2961,10 @@ function PayablesTitleList({
                   canSettle={canSettle}
                   canReverse={canReverse}
                   canEdit={canEdit}
-                  recurringRule={
-                    document.sourceType === "recurring_rule" && document.sourceId
-                      ? recurringById.get(document.sourceId) ?? null
-                      : null
-                  }
                   onSettle={onSettle}
                   onReverse={onReverse}
                   onVoid={onVoid}
                   onEdit={onEdit}
-                  onOpenDetails={onOpenDetails}
-                  onCancelRecurring={onCancelRecurring}
                 />
               ))}
             </div>
@@ -3351,26 +2999,20 @@ function PayablesTitleRow({
   canSettle,
   canReverse,
   canEdit,
-  recurringRule,
   onSettle,
   onReverse,
   onVoid,
   onEdit,
-  onOpenDetails,
-  onCancelRecurring,
 }: {
   document: FinancialDocumentDetails;
   supplierCount: number;
   canSettle: boolean;
   canReverse: boolean;
   canEdit: boolean;
-  recurringRule: FinancialRecurringRule | null;
   onSettle: (d: FinancialDocumentDetails, i: FinancialInstallment) => void;
   onReverse: (s: FinancialSettlement) => void;
   onVoid: (d: FinancialDocumentDetails) => void;
   onEdit: (d: FinancialDocumentDetails) => void;
-  onOpenDetails: (d: FinancialDocumentDetails) => void;
-  onCancelRecurring: (rule: FinancialRecurringRule) => void;
 }) {
   const installment = firstOpenInstallment(document);
   const state = visualStatus(document);
@@ -3383,23 +3025,13 @@ function PayablesTitleRow({
     (canReverse && activeSettlements.length > 0);
 
   return (
-    <article
-      className="financial-payables-row cursor-pointer"
-      onClick={() => onOpenDetails(document)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") onOpenDetails(document);
-      }}
-    >
+    <article className="financial-payables-row">
       <div className="financial-payables-partner-cell">
         <strong>{document.partnerName || "Fornecedor não informado"}</strong>
         <span>{document.description}</span>
         <small>
           {document.documentNumber || "Sem número"} ·{" "}
           {originLabels[documentOrigin(document.sourceType)]}
-          {" Â· "}
-          {recurringRule ? "Recorrente" : "Nao recorrente"}
           {supplierCount > 1 ? ` · ${supplierCount} títulos na lista` : ""}
         </small>
       </div>
@@ -3420,13 +3052,7 @@ function PayablesTitleRow({
       </div>
       <div className="hidden financial-payables-actions md:flex">
         {installment && canSettle && !["draft", "voided"].includes(document.status) && (
-          <Button
-            size="sm"
-            onClick={(event) => {
-              event.stopPropagation();
-              onSettle(document, installment);
-            }}
-          >
+          <Button size="sm" onClick={() => onSettle(document, installment)}>
             Pagar
           </Button>
         )}
@@ -3436,36 +3062,14 @@ function PayablesTitleRow({
               size="icon"
               variant="outline"
               title="Editar rascunho"
-              onClick={(event) => {
-                event.stopPropagation();
-                onEdit(document);
-              }}
+              onClick={() => onEdit(document)}
             >
               <Pencil className="size-4" />
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={(event) => {
-                event.stopPropagation();
-                onVoid(document);
-              }}
-            >
+            <Button size="sm" variant="outline" onClick={() => onVoid(document)}>
               Cancelar
             </Button>
           </>
-        )}
-        {recurringRule?.status === "active" && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={(event) => {
-              event.stopPropagation();
-              onCancelRecurring(recurringRule);
-            }}
-          >
-            Cancelar recorrencia
-          </Button>
         )}
         {canReverse &&
           activeSettlements.map((settlement) => (
@@ -3474,10 +3078,7 @@ function PayablesTitleRow({
               size="icon"
               variant="ghost"
               title="Estornar baixa"
-              onClick={(event) => {
-                event.stopPropagation();
-                onReverse(settlement);
-              }}
+              onClick={() => onReverse(settlement)}
             >
               <RotateCcw className="size-4" />
             </Button>
@@ -3519,142 +3120,6 @@ function PayablesTitleRow({
         </div>
       )}
     </article>
-  );
-}
-
-function TitleDetailsDialog({
-  document,
-  recurringRule,
-  chart,
-  centers,
-  vehicles,
-  drivers,
-  onOpenChange,
-}: {
-  document: FinancialDocumentDetails | null;
-  recurringRule: FinancialRecurringRule | null;
-  chart: ChartAccount[];
-  centers: CostCenter[];
-  vehicles: Array<{ id: string; plate: string }>;
-  drivers: Array<{ id: string; name: string }>;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const chartAccount = chart.find((item) => item.id === document?.chartAccountId);
-  const center = centers.find((item) => item.id === document?.costCenterId);
-  const vehicle = vehicles.find((item) => item.id === document?.vehicleId);
-  const driver = drivers.find((item) => item.id === document?.driverId);
-  const settlements = document ? effectiveSettlements(document) : [];
-
-  return (
-    <Dialog open={Boolean(document)} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{document?.description || "Titulo financeiro"}</DialogTitle>
-          <DialogDescription>
-            Resumo completo do titulo, apropriacao, recorrencia e baixas relacionadas.
-          </DialogDescription>
-        </DialogHeader>
-        {document ? (
-          <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <InfoTile label="Valor original" value={money.format(document.originalAmount)} />
-              <InfoTile label="Saldo aberto" value={money.format(documentBalance(document))} />
-              <InfoTile label="Parceiro" value={document.partnerName || "Nao informado"} />
-              <InfoTile label="Status" value={statusLabel(visualStatus(document), document.direction)} />
-              <InfoTile
-                label="Competencia"
-                value={
-                  document.competenceDate
-                    ? date.format(new Date(`${document.competenceDate}T12:00:00`))
-                    : "-"
-                }
-              />
-              <InfoTile
-                label="Emissao"
-                value={
-                  document.issueDate
-                    ? date.format(new Date(`${document.issueDate}T12:00:00`))
-                    : "-"
-                }
-              />
-              <InfoTile
-                label="Data de lancamento"
-                value={
-                  document.entryDate
-                    ? date.format(new Date(`${document.entryDate}T12:00:00`))
-                    : "-"
-                }
-              />
-              <InfoTile
-                label="Vencimento"
-                value={
-                  document.installments[0]?.dueDate
-                    ? date.format(new Date(`${document.installments[0].dueDate}T12:00:00`))
-                    : "-"
-                }
-              />
-            </div>
-            <div className="rounded-lg border border-border p-4">
-              <p className="financial-section-kicker">Gerencial e apropriacao</p>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <InfoTile
-                  label="Gerencial"
-                  value={chartAccount ? `${chartAccount.code} - ${chartAccount.name}` : "Nao informado"}
-                />
-                <InfoTile label="Empresa / setor" value={center?.name || "Empresa inteira"} />
-                <InfoTile label="Caminhao" value={vehicle?.plate || "Nao apropriado"} />
-                <InfoTile label="Funcionario" value={driver?.name || "Nao apropriado"} />
-              </div>
-            </div>
-            <div className="rounded-lg border border-border p-4">
-              <p className="financial-section-kicker">Recorrencia</p>
-              <p className="mt-2 text-sm font-semibold">
-                {recurringRule
-                  ? `${recurringFrequencyLabel[recurringRule.frequency]} - dia ${recurringRule.dueDay} - ${recurringStatusLabel[recurringRule.status]}`
-                  : "Nao recorrente"}
-              </p>
-              {recurringRule ? (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Cancelar a recorrencia encerra novas geracoes e preserva titulos anteriores.
-                </p>
-              ) : null}
-            </div>
-            <div className="rounded-lg border border-border p-4">
-              <p className="financial-section-kicker">Baixas relacionadas</p>
-              <div className="mt-3 space-y-2">
-                {settlements.length ? (
-                  settlements.map((settlement) => (
-                    <div
-                      key={settlement.id}
-                      className="flex items-center justify-between gap-3 rounded-md bg-muted/35 p-3 text-sm"
-                    >
-                      <span>
-                        {date.format(new Date(`${settlement.settledOn}T12:00:00`))} -{" "}
-                        {settlement.paymentMethod}
-                      </span>
-                      <strong>{money.format(settlement.netAmount)}</strong>
-                    </div>
-                  ))
-                ) : (
-                  <span className="text-sm text-muted-foreground">Nenhuma baixa registrada.</span>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function InfoTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-md border border-border bg-muted/25 p-3">
-      <span className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-        {label}
-      </span>
-      <p className="mt-1 text-sm font-extrabold text-foreground">{value}</p>
-    </div>
   );
 }
 
@@ -4006,7 +3471,6 @@ function DocumentDialog({
   centers,
   freights,
   vehicles,
-  drivers,
   products,
   saving,
   document,
@@ -4022,11 +3486,10 @@ function DocumentDialog({
   centers: CostCenter[];
   freights: CanonicalFreight[];
   vehicles: Array<{ id: string; plate: string }>;
-  drivers: Array<{ id: string; name: string }>;
   products: Array<{ id: string; name: string }>;
   saving: boolean;
   document: FinancialDocumentDetails | null;
-  onSave: (i: FinancialDocumentInput, recurring?: FinancialRecurringRuleInput) => void;
+  onSave: (i: FinancialDocumentInput) => void;
   onPartnerCreated: () => void;
 }) {
   const [partnerOpen, setPartnerOpen] = useState(false);
@@ -4040,22 +3503,16 @@ function DocumentDialog({
     documentNumber: "",
     issueDate: today(),
     competenceDate: today(),
-    entryDate: today(),
     amount: "",
     dueDate: today(),
     installments: "1",
     chartAccountId: "",
     costCenterId: "",
     vehicleId: "",
-    driverId: "",
     freightId: "",
     productId: "",
     notes: "",
     status: "posted",
-    recurring: "no",
-    recurringDueDay: "5",
-    recurringStartMonth: nextCompetenceMonthFrom(today()),
-    recurringAutoPost: "true",
   });
   const set = (k: string, v: string) => setForm({ ...form, [k]: v });
   useEffect(() => {
@@ -4067,22 +3524,16 @@ function DocumentDialog({
         documentNumber: document.documentNumber || "",
         issueDate: document.issueDate || today(),
         competenceDate: document.competenceDate || today(),
-        entryDate: document.entryDate || today(),
         amount: String(document.originalAmount),
         dueDate: document.installments[0]?.dueDate || today(),
         installments: String(document.installments.length || 1),
         chartAccountId: document.chartAccountId || "",
         costCenterId: document.costCenterId || "",
         vehicleId: document.vehicleId || "",
-        driverId: document.driverId || "",
         freightId: document.freightId || "",
         productId: document.productId || "",
         notes: document.notes || "",
         status: "draft",
-        recurring: "no",
-        recurringDueDay: "5",
-        recurringStartMonth: nextCompetenceMonthFrom(document.installments[0]?.dueDate || today()),
-        recurringAutoPost: "true",
       });
       setCustomMode(true);
       setCustomInstallments(
@@ -4099,22 +3550,16 @@ function DocumentDialog({
       documentNumber: "",
       issueDate: today(),
       competenceDate: today(),
-      entryDate: today(),
       amount: "",
       dueDate: today(),
       installments: "1",
       chartAccountId: "",
       costCenterId: "",
       vehicleId: "",
-      driverId: "",
       freightId: "",
       productId: "",
       notes: "",
       status: "posted",
-      recurring: "no",
-      recurringDueDay: "5",
-      recurringStartMonth: nextCompetenceMonthFrom(today()),
-      recurringAutoPost: "true",
     });
     setCustomMode(false);
     setCustomInstallments([]);
@@ -4194,13 +3639,6 @@ function DocumentDialog({
                 type="date"
                 value={form.competenceDate}
                 onChange={(e) => set("competenceDate", e.target.value)}
-              />
-            </Field>
-            <Field label="Data de lancamento">
-              <Input
-                type="date"
-                value={form.entryDate}
-                onChange={(e) => set("entryDate", e.target.value)}
               />
             </Field>
             <Field label="Valor">
@@ -4285,70 +3723,6 @@ function DocumentDialog({
                 </div>
               </div>
             )}
-            <div className="rounded-md border border-border p-3 sm:col-span-2">
-              <div className="grid gap-3 sm:grid-cols-4">
-                <Field label="Recorrencia">
-                  <Select
-                    value={form.recurring}
-                    onValueChange={(value) =>
-                      setForm({
-                        ...form,
-                        recurring: value,
-                        recurringStartMonth:
-                          form.recurringStartMonth || nextCompetenceMonthFrom(form.dueDate),
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="no">Nao recorrente</SelectItem>
-                      <SelectItem value="yes">Recorrente</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
-                {form.recurring === "yes" && (
-                  <>
-                    <Field label="Dia mensal">
-                      <Input
-                        type="number"
-                        min="1"
-                        max="31"
-                        value={form.recurringDueDay}
-                        onChange={(e) => set("recurringDueDay", e.target.value)}
-                      />
-                    </Field>
-                    <Field label="Inicio">
-                      <Input
-                        type="month"
-                        value={form.recurringStartMonth}
-                        onChange={(e) => set("recurringStartMonth", e.target.value)}
-                      />
-                    </Field>
-                    <Field label="Gerar lancado">
-                      <Select
-                        value={form.recurringAutoPost}
-                        onValueChange={(value) => set("recurringAutoPost", value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="true">Sim</SelectItem>
-                          <SelectItem value="false">Rascunho</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                  </>
-                )}
-              </div>
-              {form.recurring === "yes" && (
-                <p className="mt-2 text-xs font-semibold text-muted-foreground">
-                  A regra gera os proximos titulos e preserva historico quando cancelada.
-                </p>
-              )}
-            </div>
             <Field label="Categoria">
               <SimpleSelect
                 value={form.chartAccountId || "all"}
@@ -4359,32 +3733,32 @@ function DocumentDialog({
                   .map((a) => [a.id, `${a.code} · ${a.name}`])}
               />
             </Field>
-            <Field label="Setor / gerencial">
+            <Field label="Apropriação">
               <SimpleSelect
                 value={form.costCenterId || "all"}
                 onChange={(v) => set("costCenterId", v === "all" ? "" : v)}
-                all="Empresa inteira"
+                all="Não alocado"
                 items={centers.filter((c) => c.active).map((c) => [c.id, c.name])}
               />
             </Field>
-            <Field label="Caminhao / placa">
+            <Field label="Caminhão (opcional)">
               <SimpleSelect
                 value={form.vehicleId || "all"}
-                onChange={(v) =>
-                  setForm({ ...form, vehicleId: v === "all" ? "" : v, driverId: "", freightId: "" })
-                }
-                all="Nao apropriar por caminhao"
+                onChange={(v) => set("vehicleId", v === "all" ? "" : v)}
+                all="Sem caminhão"
                 items={vehicles.map((v) => [v.id, v.plate])}
               />
             </Field>
-            <Field label="Funcionario">
+            <Field label="Frete (opcional)">
               <SimpleSelect
-                value={form.driverId || "all"}
-                onChange={(v) =>
-                  setForm({ ...form, driverId: v === "all" ? "" : v, vehicleId: "", freightId: "" })
-                }
-                all="Nao apropriar por funcionario"
-                items={drivers.filter((d) => d.active).map((d) => [d.id, d.name])}
+                value={form.freightId || "all"}
+                onChange={(v) => set("freightId", v === "all" ? "" : v)}
+                all="Sem frete"
+                items={freights
+                  .slice(0, 100)
+                  .map(
+                    (f) => [f.id, `${f.id.slice(0, 8)} · ${f.lifecycleStatus}`] as [string, string],
+                  )}
               />
             </Field>
             <Field label="Produto (opcional)">
@@ -4417,67 +3791,39 @@ function DocumentDialog({
             <Button
               disabled={
                 saving ||
+                !form.description ||
                 !form.amount ||
                 !form.dueDate ||
-                (form.recurring === "yes" && (!form.chartAccountId || !form.recurringStartMonth)) ||
                 !customInstallmentsValid
               }
               onClick={() =>
-                onSave(
-                  {
-                    id: document?.id,
-                    workspaceId: access.workspaceId,
-                    direction,
-                    partnerId: form.partnerId,
-                    documentType: "manual",
-                    documentNumber: form.documentNumber,
-                    description: form.description,
-                    originalAmount: Number(form.amount),
-                    competenceDate: form.competenceDate,
-                    issueDate: form.issueDate,
-                    entryDate: form.entryDate,
-                    chartAccountId: form.chartAccountId,
-                    costCenterId: form.costCenterId,
-                    vehicleId: form.vehicleId,
-                    driverId: form.driverId,
-                    freightId: form.freightId,
-                    productId: form.productId,
-                    notes: form.notes,
-                    status: form.status as "draft" | "posted",
-                    installmentCount: Number(form.installments),
-                    firstDueDate: form.dueDate,
-                    installments: customMode
-                      ? customInstallments.map((item) => ({
-                          amount: Number(item.amount),
-                          dueDate: item.dueDate,
-                        }))
-                      : undefined,
-                  },
-                  form.recurring === "yes" && !document
-                    ? {
-                        workspaceId: access.workspaceId,
-                        kind:
-                          direction === "receivable" ? "recurring_income" : "recurring_expense",
-                        name:
-                          form.description ||
-                          (direction === "receivable"
-                            ? "Titulo recorrente a receber"
-                            : "Titulo recorrente a pagar"),
-                        partnerId: form.partnerId,
-                        driverId: form.driverId,
-                        vehicleId: form.vehicleId,
-                        costCenterId: form.costCenterId,
-                        chartAccountId: form.chartAccountId,
-                        amount: Number(form.amount),
-                        frequency: "MONTHLY",
-                        dueDay: Number(form.recurringDueDay || 1),
-                        startMonth: normalizeMonth(form.recurringStartMonth),
-                        autoPost: form.recurringAutoPost === "true",
-                        status: "active",
-                        notes: form.notes,
-                      }
+                onSave({
+                  id: document?.id,
+                  workspaceId: access.workspaceId,
+                  direction,
+                  partnerId: form.partnerId,
+                  documentType: "manual",
+                  documentNumber: form.documentNumber,
+                  description: form.description,
+                  originalAmount: Number(form.amount),
+                  competenceDate: form.competenceDate,
+                  issueDate: form.issueDate,
+                  chartAccountId: form.chartAccountId,
+                  costCenterId: form.costCenterId,
+                  vehicleId: form.vehicleId,
+                  freightId: form.freightId,
+                  productId: form.productId,
+                  notes: form.notes,
+                  status: form.status as "draft" | "posted",
+                  installmentCount: Number(form.installments),
+                  firstDueDate: form.dueDate,
+                  installments: customMode
+                    ? customInstallments.map((item) => ({
+                        amount: Number(item.amount),
+                        dueDate: item.dueDate,
+                      }))
                     : undefined,
-                )
+                })
               }
             >
               {saving && <LoaderCircle className="size-4 animate-spin" />}Salvar título
@@ -4726,7 +4072,6 @@ function SettlementDialog({
 
 const recurringKindLabel: Record<FinancialRecurringKind, string> = {
   salary: "Salario",
-  recurring_income: "Receita recorrente",
   recurring_expense: "Despesa recorrente",
   fixed_cost: "Custo fixo",
 };
@@ -4745,12 +4090,6 @@ const recurringFrequencyLabel: Record<FinancialRecurringFrequency, string> = {
 
 function currentCompetenceMonth() {
   return today().slice(0, 7);
-}
-
-function nextCompetenceMonthFrom(dateValue: string) {
-  const base = dateValue ? new Date(`${dateValue}T12:00:00`) : new Date();
-  base.setMonth(base.getMonth() + 1, 1);
-  return base.toISOString().slice(0, 7);
 }
 
 function normalizeMonth(value: string) {
