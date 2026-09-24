@@ -401,6 +401,15 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" })
       const context = await resolveFrotakAiContext(data.accessToken);
       const snapshot = await buildFrotakAiOperationalSnapshot(context);
       const model = process.env.GEMINI_LIVE_MODEL || FROTAK_AI_LIVE_MODEL;
+      const liveSystemInstruction = frotakAiSystemInstruction(
+        `${createFrotakAiContextSummary(context)} Snapshot atual: ${JSON.stringify(snapshot)}.`,
+      );
+      const liveSetupConfig = {
+        tools: [{ functionDeclarations: FROTAK_AI_TOOL_DECLARATIONS }],
+        systemInstruction: {
+          parts: [{ text: liveSystemInstruction }],
+        },
+      };
       const ai = new GoogleGenAI({
         apiKey: geminiApiKey(),
         httpOptions: { apiVersion: "v1beta" },
@@ -426,16 +435,8 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" })
               inputAudioTranscription: {},
               outputAudioTranscription: {},
               sessionResumption: {},
-              tools: [{ functionDeclarations: FROTAK_AI_TOOL_DECLARATIONS }],
-              systemInstruction: {
-                parts: [
-                  {
-                    text: frotakAiSystemInstruction(
-                      `${createFrotakAiContextSummary(context)} Snapshot atual: ${JSON.stringify(snapshot)}.`,
-                    ),
-                  },
-                ],
-              },
+              tools: liveSetupConfig.tools,
+              systemInstruction: liveSetupConfig.systemInstruction,
             },
           },
           lockAdditionalFields: [],
@@ -443,7 +444,7 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" })
       });
 
       if (!token.name) throw new Error("Token efemero vazio");
-      return { token: token.name, model };
+      return { token: token.name, model, setupConfig: liveSetupConfig };
     } catch (error) {
       console.error("[frotakAi] live token failed", {
         message: error instanceof Error ? error.message : String(error),

@@ -170,6 +170,7 @@ function FrotakIaPage() {
       const session = new FrotakLiveSession({
         token: liveToken.token,
         model: liveToken.model,
+        setupConfig: liveToken.setupConfig,
         stream,
         onStatus: setLiveStatus,
         onText: (text) => {

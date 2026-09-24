@@ -2,7 +2,7 @@ import { Type, type FunctionCall, type FunctionDeclaration } from "@google/genai
 import {
   canReadFinancial,
   type FrotakAiContext,
-  getSupabaseAdminClient,
+  getSupabaseServerClient,
 } from "@/lib/frotakAiContext";
 
 export type FrotakAiToolName =
@@ -19,7 +19,7 @@ export type FrotakAiToolCall = {
   args?: Record<string, unknown>;
 };
 
-type SupabaseAdmin = ReturnType<typeof getSupabaseAdminClient>;
+type SupabaseServer = ReturnType<typeof getSupabaseServerClient>;
 
 const LIMIT_DEFAULT = 20;
 const LIMIT_MAX = 80;
@@ -171,7 +171,7 @@ export async function executeFrotakAiTool(
   name: FrotakAiToolName,
   args: Record<string, unknown> = {},
 ) {
-  const supabase = getSupabaseAdminClient();
+  const supabase = getSupabaseServerClient(context.accessToken);
   switch (name) {
     case "consultar_veiculos":
       return queryVehicles(supabase, context, args);
@@ -191,7 +191,7 @@ export async function executeFrotakAiTool(
 }
 
 export async function buildFrotakAiOperationalSnapshot(context: FrotakAiContext) {
-  const supabase = getSupabaseAdminClient();
+  const supabase = getSupabaseServerClient(context.accessToken);
   const [vehicles, drivers, fuel, activeFreights, financial] = await Promise.all([
     supabase
       .from("vehicles")
@@ -232,7 +232,7 @@ export async function buildFrotakAiOperationalSnapshot(context: FrotakAiContext)
 }
 
 async function queryVehicles(
-  supabase: SupabaseAdmin,
+  supabase: SupabaseServer,
   context: FrotakAiContext,
   args: Record<string, unknown>,
 ) {
@@ -276,7 +276,7 @@ async function queryVehicles(
 }
 
 async function queryDrivers(
-  supabase: SupabaseAdmin,
+  supabase: SupabaseServer,
   context: FrotakAiContext,
   args: Record<string, unknown>,
 ) {
@@ -313,7 +313,7 @@ async function queryDrivers(
 }
 
 async function queryFreights(
-  supabase: SupabaseAdmin,
+  supabase: SupabaseServer,
   context: FrotakAiContext,
   args: Record<string, unknown>,
 ) {
@@ -399,7 +399,7 @@ async function queryFreights(
 }
 
 async function queryFinancial(
-  supabase: SupabaseAdmin,
+  supabase: SupabaseServer,
   context: FrotakAiContext,
   args: Record<string, unknown>,
 ) {
@@ -459,7 +459,7 @@ async function queryFinancial(
 }
 
 async function queryFuelRecords(
-  supabase: SupabaseAdmin,
+  supabase: SupabaseServer,
   context: FrotakAiContext,
   args: Record<string, unknown>,
 ) {
@@ -499,7 +499,7 @@ async function queryFuelRecords(
 }
 
 async function queryPositions(
-  supabase: SupabaseAdmin,
+  supabase: SupabaseServer,
   context: FrotakAiContext,
   args: Record<string, unknown>,
 ) {

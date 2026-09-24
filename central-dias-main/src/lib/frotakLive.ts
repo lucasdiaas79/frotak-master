@@ -12,13 +12,18 @@ export type FrotakLiveStatus =
 export type FrotakLiveSessionOptions = {
   token: string;
   model: string;
+  setupConfig?: Record<string, unknown>;
   stream: MediaStream;
   onStatus?: (status: FrotakLiveStatus) => void;
   onText?: (text: string) => void;
   onInputText?: (text: string) => void;
   onPartialText?: (text: string) => void;
   onError?: (message: string) => void;
-  refreshToken?: () => Promise<{ token: string; model: string }>;
+  refreshToken?: () => Promise<{
+    token: string;
+    model: string;
+    setupConfig?: Record<string, unknown>;
+  }>;
   onToolCall?: (call: {
     id?: string;
     name: string;
@@ -282,6 +287,7 @@ export class FrotakLiveSession {
         const next = await this.options.refreshToken();
         this.options.token = next.token;
         this.options.model = next.model;
+        this.options.setupConfig = next.setupConfig;
       }
     } else {
       this.options.onStatus?.("connecting");
@@ -318,6 +324,7 @@ export class FrotakLiveSession {
       JSON.stringify({
         setup: {
           model: `models/${this.options.model}`,
+          ...(this.options.setupConfig ?? {}),
           generationConfig: {
             responseModalities: ["AUDIO"],
             temperature: 0.2,

@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 export type FrotakAiContext = {
+  accessToken: string;
   userId: string;
   membershipId: string;
   workspaceId: string;
@@ -46,17 +47,43 @@ function requiredEnv(name: string) {
   return value;
 }
 
+function supabaseUrl() {
+  return readEnv("SUPABASE_URL") || requiredEnv("VITE_SUPABASE_URL");
+}
+
+function supabaseAnonKey() {
+  return readEnv("SUPABASE_ANON_KEY") || requiredEnv("VITE_SUPABASE_ANON_KEY");
+}
+
+function supabaseServiceRoleKey() {
+  return readEnv("SUPABASE_SERVICE_ROLE_KEY");
+}
+
 export function getSupabaseAdminClient() {
-  return createClient(
-    readEnv("SUPABASE_URL") || requiredEnv("VITE_SUPABASE_URL"),
-    requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
+  const serviceRole = supabaseServiceRoleKey();
+  if (!serviceRole) throw new Error("SUPABASE_SERVICE_ROLE_KEY ausente");
+  return createClient(supabaseUrl(), serviceRole, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
     },
-  );
+  });
+}
+
+export function getSupabaseServerClient(accessToken?: string) {
+  return createClient(supabaseUrl(), supabaseAnonKey(), {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    global: accessToken
+      ? {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      : undefined,
+  });
 }
 
 function normalizeText(value: unknown) {
@@ -64,7 +91,7 @@ function normalizeText(value: unknown) {
 }
 
 async function readMembershipPermissions(
-  supabase: ReturnType<typeof getSupabaseAdminClient>,
+  supabase: ReturnType<typeof getSupabaseServerClient>,
   membershipId: string,
 ) {
   const { data, error } = await supabase
@@ -102,7 +129,7 @@ async function readMembershipPermissions(
 export async function resolveFrotakAiContext(accessToken: string): Promise<FrotakAiContext> {
   if (!normalizeText(accessToken)) throw new Error("unauthorized");
 
-  const supabase = getSupabaseAdminClient();
+  const supabase = getSupabaseServerClient(accessToken);
   const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
   if (authError || !authData.user) throw new Error("unauthorized");
 
@@ -144,6 +171,7 @@ export async function resolveFrotakAiContext(accessToken: string): Promise<Frota
   if (!["active", "trial"].includes(tenantRow.status)) throw new Error("tenant inativo");
 
   return {
+    accessToken,
     userId: authData.user.id,
     membershipId: membership.id,
     workspaceId: membership.workspace_id,
