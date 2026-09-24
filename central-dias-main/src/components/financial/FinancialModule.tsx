@@ -166,7 +166,7 @@ function useFinancialAccess() {
   useEffect(() => {
     getFinancialAccess()
       .then(setAccess)
-      .catch(() => setError("VocÃª nÃ£o possui acesso ao mÃ³dulo Financeiro."))
+      .catch(() => setError("Você não possui acesso ao módulo Financeiro."))
       .finally(() => setLoading(false));
   }, []);
   return { access, loading, error };
@@ -187,7 +187,7 @@ function FinancialBoundary({ children }: { children: (access: FinancialAccess) =
           <Landmark className="mx-auto mb-3 size-8 text-muted-foreground" />
           <h2 className="text-lg font-bold">Acesso restrito</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {error || "Solicite uma permissÃ£o financeira ao owner."}
+            {error || "Solicite uma permissão financeira ao owner."}
           </p>
         </div>
       </div>
@@ -272,7 +272,7 @@ function LegacyOverviewContent() {
         setDocuments(d);
         setAccounts(a);
       })
-      .catch(() => toast.error("NÃ£o foi possÃ­vel carregar a visÃ£o financeira."));
+      .catch(() => toast.error("Não foi possível carregar a visão financeira."));
   }, []);
   const open = documents.filter((d) => !["draft", "voided", "settled"].includes(d.status));
   const received = documents
@@ -312,23 +312,23 @@ function LegacyOverviewContent() {
             .reduce((s, d) => s + d.installments.reduce((a, i) => a + i.balance, 0), 0)}
           icon={ArrowUpRight}
         />
-        <Stat label="Recebido no mÃªs" value={received} icon={CircleDollarSign} tone="success" />
-        <Stat label="Pago no mÃªs" value={paid} icon={ReceiptText} />
+        <Stat label="Recebido no mês" value={received} icon={CircleDollarSign} tone="success" />
+        <Stat label="Pago no mês" value={paid} icon={ReceiptText} />
         <Stat
           label="Saldo financeiro"
           value={accounts.reduce((s, a) => s + a.currentBalance, 0)}
           icon={Landmark}
           tone="success"
         />
-        <Stat label="TÃ­tulos vencidos" value={overdue.length} icon={CalendarClock} tone="danger" />
+        <Stat label="Títulos vencidos" value={overdue.length} icon={CalendarClock} tone="danger" />
       </div>
       <div className="grid gap-3 px-3 lg:grid-cols-2 md:px-0">
         <Upcoming
-          title="PrÃ³ximos recebimentos"
+          title="Próximos recebimentos"
           documents={documents.filter((d) => d.direction === "receivable")}
         />
         <Upcoming
-          title="PrÃ³ximos pagamentos"
+          title="Próximos pagamentos"
           documents={documents.filter((d) => d.direction === "payable")}
         />
       </div>
@@ -355,7 +355,7 @@ function Upcoming({ title, documents }: { title: string; documents: FinancialDoc
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-bold">{i.description}</div>
                 <div className="text-xs text-muted-foreground">
-                  {i.partner || "Sem parceiro"} Â· {date.format(new Date(`${i.dueDate}T12:00:00`))}
+                  {i.partner || "Sem parceiro"} · {date.format(new Date(`${i.dueDate}T12:00:00`))}
                 </div>
               </div>
               <strong className="text-sm">{money.format(i.balance)}</strong>
@@ -363,7 +363,7 @@ function Upcoming({ title, documents }: { title: string; documents: FinancialDoc
           ))
         ) : (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            Nenhum vencimento prÃ³ximo.
+            Nenhum vencimento próximo.
           </p>
         )}
       </div>
@@ -1070,7 +1070,7 @@ function DreStatement({
           <h2>DRE Gerencial</h2>
         </div>
         <Badge variant={summary.reconciliation.ok ? "outline" : "destructive"}>
-          {summary.reconciliation.ok ? "Reconciliado" : "DiferenÃ§a"}
+          {summary.reconciliation.ok ? "Reconciliado" : "Diferença"}
         </Badge>
       </div>
       <div className="financial-dre-sheet">
@@ -1104,7 +1104,7 @@ function DreStatement({
         {hasRevenueGroup && (
           <div className="financial-dre-row financial-dre-subtotal">
             <div className="financial-dre-row-label">
-              <span>Receita lÃ­quida</span>
+              <span>Receita líquida</span>
             </div>
             <strong>{money.format(summary.totals.netRevenue)}</strong>
           </div>
@@ -1143,11 +1143,11 @@ function DreStatement({
         <div className="financial-dre-notes">
           {summary.totals.unclassified_amount > 0 && (
             <span>
-              {money.format(summary.totals.unclassified_amount)} pendentes de classificaÃ§Ã£o.
+              {money.format(summary.totals.unclassified_amount)} pendentes de classificação.
             </span>
           )}
           {summary.totals.unallocated_amount > 0 && (
-            <span>ResÃ­duo nÃ£o alocado: {money.format(summary.totals.unallocated_amount)}.</span>
+            <span>Resíduo não alocado: {money.format(summary.totals.unallocated_amount)}.</span>
           )}
         </div>
       )}
@@ -1179,8 +1179,8 @@ function DreDetailPanel({
               <div className="min-w-0">
                 <strong>{document.description}</strong>
                 <span>
-                  {date.format(new Date(`${document.competence_date}T12:00:00`))} Â·{" "}
-                  {document.partner_name || "Sem parceiro"} Â· {document.source_type || "manual"}
+                  {date.format(new Date(`${document.competence_date}T12:00:00`))} ·{" "}
+                  {document.partner_name || "Sem parceiro"} · {document.source_type || "manual"}
                 </span>
               </div>
               <strong className={cn(document.signed_amount < 0 && "text-destructive")}>
@@ -1204,7 +1204,7 @@ function DreDetailPanel({
               <div className="min-w-0">
                 <strong>{account.name}</strong>
                 <span>
-                  {account.code} Â· {account.document_count} documentos
+                  {account.code} · {account.document_count} documentos
                 </span>
               </div>
               <div className="financial-dre-account-value">
@@ -1279,8 +1279,8 @@ function CashFlowForecastPanel({ summary }: { summary: CashFlowSummary }) {
     <section className="financial-cashflow-forecast">
       <div className="flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="financial-section-kicker">PrevisÃ£o de Caixa</p>
-          <h2 className="mt-1 text-lg font-black">PrÃ³ximos compromissos</h2>
+          <p className="financial-section-kicker">Previsão de Caixa</p>
+          <h2 className="mt-1 text-lg font-black">Próximos compromissos</h2>
         </div>
         <CalendarClock className="size-5 shrink-0 text-primary" />
       </div>
@@ -1291,7 +1291,7 @@ function CashFlowForecastPanel({ summary }: { summary: CashFlowSummary }) {
             value={summary.forecast.expected_inflows}
             tone="success"
           />
-          <MiniMetric label="SaÃ­das previstas" value={summary.forecast.expected_outflows} />
+          <MiniMetric label="Saídas previstas" value={summary.forecast.expected_outflows} />
           <MiniMetric
             label="Vencido"
             value={summary.forecast.overdue_amount}
@@ -1324,8 +1324,8 @@ function CashFlowTimeline({
     <section className="financial-cashflow-temporal">
       <div className="flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="financial-section-kicker">VisÃ£o Temporal</p>
-          <h2 className="mt-1 text-lg font-black">EvoluÃ§Ã£o do perÃ­odo</h2>
+          <p className="financial-section-kicker">Visão Temporal</p>
+          <h2 className="mt-1 text-lg font-black">Evolução do período</h2>
         </div>
         <TrendingUp className="size-5 shrink-0 text-primary" />
       </div>
@@ -1337,7 +1337,7 @@ function CashFlowTimeline({
                 <div>
                   <strong>{date.format(new Date(`${group.date}T12:00:00`))}</strong>
                   <span>
-                    {group.count} movimentaÃ§Ã£o{group.count === 1 ? "" : "Ãµes"}
+                    {group.count} movimentação{group.count === 1 ? "" : "ões"}
                   </span>
                 </div>
                 <strong className={cn(group.net < 0 && "text-destructive")}>
@@ -1358,7 +1358,7 @@ function CashFlowTimeline({
           ))
         ) : (
           <div className="financial-cashflow-empty">
-            Nenhuma movimentaÃ§Ã£o temporal para os filtros selecionados.
+            Nenhuma movimentação temporal para os filtros selecionados.
           </div>
         )}
       </div>
@@ -1372,7 +1372,7 @@ function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
       <div className="flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="financial-section-kicker">Operacional</p>
-          <h2 className="mt-1 text-lg font-black">MovimentaÃ§Ãµes do perÃ­odo</h2>
+          <h2 className="mt-1 text-lg font-black">Movimentações do período</h2>
         </div>
         <ReceiptText className="size-5 shrink-0 text-primary" />
       </div>
@@ -1395,7 +1395,7 @@ function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
                 </div>
               </div>
               <div className="financial-cashflow-row-value">
-                <span>{entry.direction === "receivable" ? "Entrada" : "SaÃ­da"}</span>
+                <span>{entry.direction === "receivable" ? "Entrada" : "Saída"}</span>
                 <strong className={cn(entry.signed_amount < 0 && "text-destructive")}>
                   {signedMoney(entry.signed_amount)}
                 </strong>
@@ -1403,7 +1403,7 @@ function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
             </div>
           ))
         ) : (
-          <div className="financial-cashflow-empty">Nenhum lanÃ§amento no perÃ­odo.</div>
+          <div className="financial-cashflow-empty">Nenhum lançamento no período.</div>
         )}
       </div>
     </section>
@@ -1502,7 +1502,7 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
     <div className="financial-shell financial-cashflow-shell space-y-4">
       <PageHeader
         title="Fluxo de Caixa"
-        subtitle="MovimentaÃ§Ãµes realizadas e compromissos previstos"
+        subtitle="Movimentações realizadas e compromissos previstos"
         actions={
           <Button
             variant="outline"
@@ -1540,7 +1540,7 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
           compact
         />
         <div className="financial-cashflow-filter-grid">
-          <Field label="VisÃ£o">
+          <Field label="Visão">
             <Select
               value={view}
               onValueChange={(value) => setView(value as "realized" | "forecast")}
@@ -1554,15 +1554,15 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
               </SelectContent>
             </Select>
           </Field>
-          <Field label="DireÃ§Ã£o">
+          <Field label="Direção">
             <Select value={direction} onValueChange={setDirection}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Entradas e saÃ­das</SelectItem>
+                <SelectItem value="all">Entradas e saídas</SelectItem>
                 <SelectItem value="receivable">Entradas</SelectItem>
-                <SelectItem value="payable">SaÃ­das</SelectItem>
+                <SelectItem value="payable">Saídas</SelectItem>
               </SelectContent>
             </Select>
           </Field>
@@ -1596,7 +1596,7 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
               tone="success"
             />
             <ChevronRight className="financial-cashflow-arrow" />
-            <CashFlowMovementStep label="SaÃ­das" value={summary.realized.outflows} tone="outflow" />
+            <CashFlowMovementStep label="Saídas" value={summary.realized.outflows} tone="outflow" />
             <ChevronRight className="financial-cashflow-arrow" />
             <CashFlowMovementStep
               label="Saldo final"
@@ -1896,8 +1896,8 @@ function TitlesContent({
         title={receiving ? "Contas a Receber" : "Contas a Pagar"}
         subtitle={
           receiving
-            ? "Clientes, vencimentos e recebimentos do perÃ­odo"
-            : "Fornecedores, vencimentos e pagamentos do perÃ­odo"
+            ? "Clientes, vencimentos e recebimentos do período"
+            : "Fornecedores, vencimentos e pagamentos do período"
         }
         actions={
           canCreate ? (
@@ -1908,7 +1908,7 @@ function TitlesContent({
               }}
             >
               <Plus className="size-4" />
-              Novo tÃ­tulo
+              Novo título
             </Button>
           ) : undefined
         }
@@ -1953,9 +1953,9 @@ function TitlesContent({
               </SheetTrigger>
               <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-lg">
                 <SheetHeader className="text-left">
-                  <SheetTitle>Filtrar tÃ­tulos</SheetTitle>
+                  <SheetTitle>Filtrar títulos</SheetTitle>
                   <SheetDescription>
-                    Refine a consulta por perÃ­odo, parceiro e situaÃ§Ã£o.
+                    Refine a consulta por período, parceiro e situação.
                   </SheetDescription>
                 </SheetHeader>
                 <ReceivablesFilterPanel
@@ -2005,7 +2005,7 @@ function TitlesContent({
                 toast.success("Baixa estornada.");
                 await loadDocuments();
               } catch {
-                toast.error("NÃ£o foi possÃ­vel estornar a baixa.");
+                toast.error("Não foi possível estornar a baixa.");
               }
             }}
             onVoid={async (document) => {
@@ -2013,10 +2013,10 @@ function TitlesContent({
               if (!reason) return;
               try {
                 await voidFinancialDocument(document.id, reason);
-                toast.success("TÃ­tulo cancelado.");
+                toast.success("Título cancelado.");
                 await loadDocuments();
               } catch {
-                toast.error("NÃ£o foi possÃ­vel cancelar o tÃ­tulo.");
+                toast.error("Não foi possível cancelar o título.");
               }
             }}
           />
@@ -2055,9 +2055,9 @@ function TitlesContent({
               </SheetTrigger>
               <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-lg">
                 <SheetHeader className="text-left">
-                  <SheetTitle>Filtrar tÃ­tulos</SheetTitle>
+                  <SheetTitle>Filtrar títulos</SheetTitle>
                   <SheetDescription>
-                    Refine a consulta por perÃ­odo, fornecedor e situaÃ§Ã£o.
+                    Refine a consulta por período, fornecedor e situação.
                   </SheetDescription>
                 </SheetHeader>
                 <PayablesFilterPanel
@@ -2107,7 +2107,7 @@ function TitlesContent({
                 toast.success("Baixa estornada.");
                 await loadDocuments();
               } catch {
-                toast.error("NÃ£o foi possÃ­vel estornar a baixa.");
+                toast.error("Não foi possível estornar a baixa.");
               }
             }}
             onVoid={async (document) => {
@@ -2115,10 +2115,10 @@ function TitlesContent({
               if (!reason) return;
               try {
                 await voidFinancialDocument(document.id, reason);
-                toast.success("TÃ­tulo cancelado.");
+                toast.success("Título cancelado.");
                 await loadDocuments();
               } catch {
-                toast.error("NÃ£o foi possÃ­vel cancelar o tÃ­tulo.");
+                toast.error("Não foi possível cancelar o título.");
               }
             }}
           />
@@ -2153,12 +2153,12 @@ function TitlesContent({
             } else {
               await saveFinancialDocument(input);
             }
-            toast.success("TÃ­tulo salvo com sucesso.");
+            toast.success("Título salvo com sucesso.");
             setFormOpen(false);
             setEditingDocument(null);
             await Promise.all([loadDocuments(), loadAuxiliaryData()]);
           } catch (e) {
-            toast.error(e instanceof Error ? e.message : "NÃ£o foi possÃ­vel salvar.");
+            toast.error(e instanceof Error ? e.message : "Não foi possível salvar.");
           } finally {
             setSaving(false);
           }
@@ -2274,7 +2274,7 @@ function receivableDueState(document: FinancialDocumentDetails) {
   const limit = new Date();
   limit.setDate(limit.getDate() + 7);
   if (installment.dueDate <= limit.toISOString().slice(0, 10)) {
-    return { label: "PrÃ³x. 7 dias", tone: "warning" as const };
+    return { label: "Próx. 7 dias", tone: "warning" as const };
   }
   return { label: "No prazo", tone: "muted" as const };
 }
@@ -2299,8 +2299,8 @@ function ReceivablesSummary({
       </article>
       <div className="financial-receivables-side-metrics">
         <ReceivableMiniMetric label="Vencido" value={overdue} tone="danger" />
-        <ReceivableMiniMetric label="Recebido no perÃ­odo" value={settledPeriod} tone="success" />
-        <ReceivableMiniMetric label="PrÃ³ximos 7 dias" value={upcoming} tone="future" />
+        <ReceivableMiniMetric label="Recebido no período" value={settledPeriod} tone="success" />
+        <ReceivableMiniMetric label="Próximos 7 dias" value={upcoming} tone="future" />
       </div>
     </section>
   );
@@ -2337,22 +2337,22 @@ function ReceivablesPriority({
   return (
     <section className="financial-receivables-priority">
       <div>
-        <p className="financial-section-kicker">AtenÃ§Ã£o</p>
-        <h2>Prioridades de cobranÃ§a</h2>
+        <p className="financial-section-kicker">Atenção</p>
+        <h2>Prioridades de cobrança</h2>
       </div>
       <div className="financial-receivables-priority-items">
         <div>
           <ShieldAlert className="size-4" />
           <span>Vencidos</span>
           <strong>
-            {overdueCount} tÃ­tulos Â· {money.format(overdueAmount)}
+            {overdueCount} títulos · {money.format(overdueAmount)}
           </strong>
         </div>
         <div>
           <CalendarClock className="size-4" />
           <span>Vencendo em 7 dias</span>
           <strong>
-            {upcomingCount} tÃ­tulos Â· {money.format(upcomingAmount)}
+            {upcomingCount} títulos · {money.format(upcomingAmount)}
           </strong>
         </div>
       </div>
@@ -2388,7 +2388,7 @@ function ReceivablesFilterPanel({
           <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
           <Input
             className="pl-9"
-            placeholder="Buscar tÃ­tulo, documento ou parceiro"
+            placeholder="Buscar título, documento ou parceiro"
             value={filters.search}
             onChange={(event) => set("search", event.target.value)}
           />
@@ -2429,7 +2429,7 @@ function ReceivablesFilterPanel({
           all="Todas as categorias"
           items={chart
             .filter((account) => account.isPostable)
-            .map((account) => [account.id, `${account.code} Â· ${account.name}`])}
+            .map((account) => [account.id, `${account.code} · ${account.name}`])}
         />
         <SimpleSelect
           value={filters.center}
@@ -2439,13 +2439,13 @@ function ReceivablesFilterPanel({
         />
         <Input
           type="number"
-          placeholder="Valor mÃ­nimo"
+          placeholder="Valor mínimo"
           value={filters.min}
           onChange={(event) => set("min", event.target.value)}
         />
         <Input
           type="number"
-          placeholder="Valor mÃ¡ximo"
+          placeholder="Valor máximo"
           value={filters.max}
           onChange={(event) => set("max", event.target.value)}
         />
@@ -2495,17 +2495,17 @@ function ReceivablesTitleList({
     <section className="financial-receivables-list">
       <div className="financial-receivables-list-head">
         <div>
-          <p className="financial-section-kicker">TÃ­tulos</p>
-          <h2>Carteira de recebÃ­veis</h2>
+          <p className="financial-section-kicker">Títulos</p>
+          <h2>Carteira de recebíveis</h2>
         </div>
         <span>{total} encontrados</span>
       </div>
       <div className="hidden financial-receivables-table-head md:grid">
-        <span>Cliente e tÃ­tulo</span>
+        <span>Cliente e título</span>
         <span>Vencimento</span>
         <span>Valor</span>
-        <span>SituaÃ§Ã£o</span>
-        <span>AÃ§Ã£o</span>
+        <span>Situação</span>
+        <span>Ação</span>
       </div>
       {documents.length ? (
         documents.map((document) => (
@@ -2530,16 +2530,16 @@ function ReceivablesTitleList({
         ))
       ) : (
         <div className="financial-receivables-empty">
-          <strong>Nenhum tÃ­tulo encontrado</strong>
+          <strong>Nenhum título encontrado</strong>
           <span>
             {filtersActive
-              ? "Nenhum tÃ­tulo encontrado para os filtros atuais."
-              : "Cadastre um novo tÃ­tulo para comeÃ§ar."}
+              ? "Nenhum título encontrado para os filtros atuais."
+              : "Cadastre um novo título para começar."}
           </span>
           {!filtersActive && canCreate && (
             <Button size="sm" variant="outline" onClick={onNew}>
               <Plus className="size-4" />
-              Novo tÃ­tulo
+              Novo título
             </Button>
           )}
         </div>
@@ -2594,11 +2594,11 @@ function ReceivablesTitleRow({
       }}
     >
       <div className="financial-receivables-title-cell">
-        <strong>{document.partnerName || "Cliente nÃ£o informado"}</strong>
+        <strong>{document.partnerName || "Cliente não informado"}</strong>
         <span>{document.description}</span>
         <small>
-          {document.documentNumber || "Sem nÃºmero"} Â·{" "}
-          {originLabels[documentOrigin(document.sourceType)]} Ã‚Â·{" "}
+          {document.documentNumber || "Sem número"} ·{" "}
+          {originLabels[documentOrigin(document.sourceType)]} ·{" "}
           {recurringRule ? "Recorrente" : "Nao recorrente"}
         </small>
       </div>
@@ -2686,7 +2686,7 @@ function ReceivablesTitleRow({
         <div className="financial-receivables-mobile-action md:hidden">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="outline" aria-label="AÃ§Ãµes do tÃ­tulo">
+              <Button size="icon" variant="outline" aria-label="Ações do título">
                 <MoreVertical className="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -2704,7 +2704,7 @@ function ReceivablesTitleRow({
               )}
               {document.status === "draft" && canEdit && (
                 <DropdownMenuItem onSelect={() => onVoid(document)}>
-                  <ReceiptText /> Cancelar tÃ­tulo
+                  <ReceiptText /> Cancelar título
                 </DropdownMenuItem>
               )}
               {canReverse &&
@@ -2754,18 +2754,18 @@ function payableBucketForDays(days: number) {
 
 const payablePressureBuckets = [
   { key: "overdue", label: "Vencido", tone: "danger" },
-  { key: "week", label: "AtÃ© 7 dias", tone: "warning" },
+  { key: "week", label: "Até 7 dias", tone: "warning" },
   { key: "halfMonth", label: "8-15 dias", tone: "neutral" },
   { key: "month", label: "16-30 dias", tone: "neutral" },
-  { key: "later", label: "ApÃ³s 30 dias", tone: "muted" },
+  { key: "later", label: "Após 30 dias", tone: "muted" },
 ] as const;
 
 const payableAgendaGroups = [
   { key: "overdue", label: "Vencidos" },
   { key: "today", label: "Vencem hoje" },
-  { key: "week", label: "PrÃ³ximos 7 dias" },
+  { key: "week", label: "Próximos 7 dias" },
   { key: "later", label: "Mais adiante" },
-  { key: "closed", label: "ConcluÃ­dos ou sem vencimento" },
+  { key: "closed", label: "Concluídos ou sem vencimento" },
 ] as const;
 
 function summarizePayablePressure(documents: FinancialDocumentDetails[]) {
@@ -2819,7 +2819,7 @@ function PayablesSummary({
       </article>
       <div className="financial-payables-secondary-board">
         <PayableMiniMetric label="Vencido" value={overdue} tone="danger" />
-        <PayableMiniMetric label="Pago no perÃ­odo" value={settledPeriod} tone="success" />
+        <PayableMiniMetric label="Pago no período" value={settledPeriod} tone="success" />
       </div>
     </section>
   );
@@ -2850,14 +2850,14 @@ function PayablesPressure({ summary }: { summary: FinancialDocumentsPageSummary 
     <section className="financial-payables-pressure">
       <div className="financial-payables-pressure-title">
         <p className="financial-section-kicker">Agenda Financeira</p>
-        <h2>PressÃ£o de caixa</h2>
-        <span>DistribuiÃ§Ã£o por vencimento dos compromissos em aberto.</span>
+        <h2>Pressão de caixa</h2>
+        <span>Distribuição por vencimento dos compromissos em aberto.</span>
       </div>
       <article className="financial-payables-week-focus">
-        <span>Comprometido nos prÃ³ximos 7 dias</span>
+        <span>Comprometido nos próximos 7 dias</span>
         <strong>{money.format(week.amount)}</strong>
         <small>
-          {week.count} {week.count === 1 ? "parcela" : "parcelas"} exigem programaÃ§Ã£o imediata
+          {week.count} {week.count === 1 ? "parcela" : "parcelas"} exigem programação imediata
         </small>
       </article>
       <article className="financial-payables-overdue-alert">
@@ -2918,7 +2918,7 @@ function PayablesFilterPanel({
           <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
           <Input
             className="pl-9"
-            placeholder="Buscar tÃ­tulo, documento ou fornecedor"
+            placeholder="Buscar título, documento ou fornecedor"
             value={filters.search}
             onChange={(event) => set("search", event.target.value)}
           />
@@ -2959,7 +2959,7 @@ function PayablesFilterPanel({
           all="Todas as categorias"
           items={chart
             .filter((account) => account.isPostable)
-            .map((account) => [account.id, `${account.code} Â· ${account.name}`])}
+            .map((account) => [account.id, `${account.code} · ${account.name}`])}
         />
         <SimpleSelect
           value={filters.center}
@@ -2969,13 +2969,13 @@ function PayablesFilterPanel({
         />
         <Input
           type="number"
-          placeholder="Valor mÃ­nimo"
+          placeholder="Valor mínimo"
           value={filters.min}
           onChange={(event) => set("min", event.target.value)}
         />
         <Input
           type="number"
-          placeholder="Valor mÃ¡ximo"
+          placeholder="Valor máximo"
           value={filters.max}
           onChange={(event) => set("max", event.target.value)}
         />
@@ -3022,7 +3022,7 @@ function PayablesTitleList({
   onCancelRecurring: (rule: FinancialRecurringRule) => void;
 }) {
   const supplierCounts = documents.reduce<Record<string, number>>((acc, document) => {
-    const key = document.partnerName || "Fornecedor nÃ£o informado";
+    const key = document.partnerName || "Fornecedor não informado";
     acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
@@ -3043,17 +3043,17 @@ function PayablesTitleList({
     <section className="financial-payables-list">
       <div className="financial-payables-list-head">
         <div>
-          <p className="financial-section-kicker">ObrigaÃ§Ãµes</p>
+          <p className="financial-section-kicker">Obrigações</p>
           <h2>Agenda de pagamentos</h2>
         </div>
         <span>{total} encontrados</span>
       </div>
       <div className="hidden financial-payables-table-head md:grid">
-        <span>Fornecedor e tÃ­tulo</span>
+        <span>Fornecedor e título</span>
         <span>Vencimento</span>
         <span>Valor</span>
-        <span>SituaÃ§Ã£o</span>
-        <span>AÃ§Ã£o</span>
+        <span>Situação</span>
+        <span>Ação</span>
       </div>
       {documents.length ? (
         grouped
@@ -3069,7 +3069,7 @@ function PayablesTitleList({
                 <PayablesTitleRow
                   key={document.id}
                   document={document}
-                  supplierCount={supplierCounts[document.partnerName || "Fornecedor nÃ£o informado"]}
+                  supplierCount={supplierCounts[document.partnerName || "Fornecedor não informado"]}
                   canSettle={canSettle}
                   canReverse={canReverse}
                   canEdit={canEdit}
@@ -3092,18 +3092,18 @@ function PayablesTitleList({
         <div className="financial-payables-empty">
           <strong>
             {filtersActive
-              ? "Nenhuma obrigaÃ§Ã£o encontrada para os filtros atuais"
-              : "Nenhuma obrigaÃ§Ã£o em aberto"}
+              ? "Nenhuma obrigação encontrada para os filtros atuais"
+              : "Nenhuma obrigação em aberto"}
           </strong>
           <span>
             {filtersActive
-              ? "Ajuste perÃ­odo, fornecedor, status ou valor para ampliar a agenda."
-              : "Cadastre um novo tÃ­tulo para iniciar a programaÃ§Ã£o de pagamentos."}
+              ? "Ajuste período, fornecedor, status ou valor para ampliar a agenda."
+              : "Cadastre um novo título para iniciar a programação de pagamentos."}
           </span>
           {!filtersActive && canCreate && (
             <Button size="sm" variant="outline" onClick={onNew}>
               <Plus className="size-4" />
-              Novo tÃ­tulo
+              Novo título
             </Button>
           )}
         </div>
@@ -3160,14 +3160,14 @@ function PayablesTitleRow({
       }}
     >
       <div className="financial-payables-partner-cell">
-        <strong>{document.partnerName || "Fornecedor nÃ£o informado"}</strong>
+        <strong>{document.partnerName || "Fornecedor não informado"}</strong>
         <span>{document.description}</span>
         <small>
-          {document.documentNumber || "Sem nÃºmero"} Â·{" "}
+          {document.documentNumber || "Sem número"} ·{" "}
           {originLabels[documentOrigin(document.sourceType)]}
-          {" Ã‚Â· "}
+          {" · "}
           {recurringRule ? "Recorrente" : "Nao recorrente"}
-          {supplierCount > 1 ? ` Â· ${supplierCount} tÃ­tulos na lista` : ""}
+          {supplierCount > 1 ? ` · ${supplierCount} títulos na lista` : ""}
         </small>
       </div>
       <div className="financial-payables-due-cell">
@@ -3254,7 +3254,7 @@ function PayablesTitleRow({
         <div className="financial-payables-mobile-action md:hidden">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="outline" aria-label="AÃ§Ãµes do tÃ­tulo">
+              <Button size="icon" variant="outline" aria-label="Ações do título">
                 <MoreVertical className="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -3272,7 +3272,7 @@ function PayablesTitleRow({
               )}
               {document.status === "draft" && canEdit && (
                 <DropdownMenuItem onSelect={() => onVoid(document)}>
-                  <ReceiptText /> Cancelar tÃ­tulo
+                  <ReceiptText /> Cancelar título
                 </DropdownMenuItem>
               )}
               {canReverse &&
@@ -3495,7 +3495,7 @@ function FilterPanel({
         <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
         <Input
           className="pl-9"
-          placeholder="Buscar tÃ­tulo, documento ou parceiro"
+          placeholder="Buscar título, documento ou parceiro"
           value={filters.search}
           onChange={(e) => set("search", e.target.value)}
         />
@@ -3524,7 +3524,7 @@ function FilterPanel({
         value={filters.category}
         onChange={(v) => set("category", v)}
         all="Todas as categorias"
-        items={chart.filter((a) => a.isPostable).map((a) => [a.id, `${a.code} Â· ${a.name}`])}
+        items={chart.filter((a) => a.isPostable).map((a) => [a.id, `${a.code} · ${a.name}`])}
       />
       <SimpleSelect
         value={filters.center}
@@ -3534,13 +3534,13 @@ function FilterPanel({
       />
       <Input
         type="number"
-        placeholder="Valor mÃ­nimo"
+        placeholder="Valor mínimo"
         value={filters.min}
         onChange={(e) => set("min", e.target.value)}
       />
       <Input
         type="number"
-        placeholder="Valor mÃ¡ximo"
+        placeholder="Valor máximo"
         value={filters.max}
         onChange={(e) => set("max", e.target.value)}
       />
@@ -3603,13 +3603,13 @@ function TitleList({
   return (
     <section className="premium-card mx-3 overflow-hidden md:mx-0">
       <div className="hidden grid-cols-[1.4fr_1fr_0.8fr_1fr_1fr_1fr_auto] gap-3 border-b border-border financial-table-head px-4 py-3 md:grid">
-        <span>TÃ­tulo</span>
+        <span>Título</span>
         <span>Parceiro</span>
         <span>Origem</span>
         <span>Vencimento</span>
         <span>Valor</span>
-        <span>SituaÃ§Ã£o</span>
-        <span>AÃ§Ã£o</span>
+        <span>Situação</span>
+        <span>Ação</span>
       </div>
       {documents.length ? (
         documents.map((d) => (
@@ -3668,12 +3668,12 @@ function TitleRow({
       <div>
         <div className="text-sm font-extrabold">{d.description}</div>
         <div className="text-xs text-muted-foreground">
-          {d.documentNumber || "Sem nÃºmero"} Â· {d.installments.length} parcela(s)
+          {d.documentNumber || "Sem número"} · {d.installments.length} parcela(s)
         </div>
       </div>
       <div className="text-sm">
-        <span className="md:hidden text-xs text-muted-foreground">Parceiro Â· </span>
-        {d.partnerName || "NÃ£o informado"}
+        <span className="md:hidden text-xs text-muted-foreground">Parceiro · </span>
+        {d.partnerName || "Não informado"}
       </div>
       <div>
         <FinancialStatusBadge state="muted">
@@ -3681,7 +3681,7 @@ function TitleRow({
         </FinancialStatusBadge>
       </div>
       <div className="text-sm">
-        <span className="md:hidden text-xs text-muted-foreground">Vencimento Â· </span>
+        <span className="md:hidden text-xs text-muted-foreground">Vencimento · </span>
         {installment ? date.format(new Date(`${installment.dueDate}T12:00:00`)) : "-"}
       </div>
       <div>
@@ -3728,7 +3728,7 @@ function TitleRow({
         <div className="absolute right-4 top-4 md:hidden">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="outline" aria-label="AÃ§Ãµes do tÃ­tulo">
+              <Button size="icon" variant="outline" aria-label="Ações do título">
                 <MoreVertical className="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -3746,7 +3746,7 @@ function TitleRow({
               )}
               {d.status === "draft" && canEdit && (
                 <DropdownMenuItem onSelect={() => onVoid(d)}>
-                  <ReceiptText /> Cancelar tÃ­tulo
+                  <ReceiptText /> Cancelar título
                 </DropdownMenuItem>
               )}
               {canReverse &&
@@ -3911,11 +3911,11 @@ function DocumentDialog({
               {document
                 ? "Editar rascunho"
                 : direction === "receivable"
-                  ? "Novo tÃ­tulo a receber"
-                  : "Novo tÃ­tulo a pagar"}
+                  ? "Novo título a receber"
+                  : "Novo título a pagar"}
             </DialogTitle>
             <DialogDescription>
-              Cadastre o fato financeiro e seus vencimentos sem alterar a operaÃ§Ã£o.
+              Cadastre o fato financeiro e seus vencimentos sem alterar a operação.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -3937,26 +3937,26 @@ function DocumentDialog({
                 </Button>
               </div>
             </Field>
-            <Field label="NÃºmero / documento">
+            <Field label="Número / documento">
               <Input
                 value={form.documentNumber}
                 onChange={(e) => set("documentNumber", e.target.value)}
               />
             </Field>
-            <Field label="DescriÃ§Ã£o" className="sm:col-span-2">
+            <Field label="Descrição" className="sm:col-span-2">
               <Input
                 value={form.description}
                 onChange={(e) => set("description", e.target.value)}
               />
             </Field>
-            <Field label="EmissÃ£o">
+            <Field label="Emissão">
               <Input
                 type="date"
                 value={form.issueDate}
                 onChange={(e) => set("issueDate", e.target.value)}
               />
             </Field>
-            <Field label="CompetÃªncia">
+            <Field label="Competência">
               <Input
                 type="date"
                 value={form.competenceDate}
@@ -3986,7 +3986,7 @@ function DocumentDialog({
                 onChange={(e) => set("dueDate", e.target.value)}
               />
             </Field>
-            <Field label="NÃºmero de parcelas">
+            <Field label="Número de parcelas">
               <Input
                 type="number"
                 min="1"
@@ -3995,7 +3995,7 @@ function DocumentDialog({
                 onChange={(e) => setInstallmentCount(e.target.value)}
               />
             </Field>
-            <Field label="DistribuiÃ§Ã£o das parcelas">
+            <Field label="Distribuição das parcelas">
               <Select
                 value={customMode ? "custom" : "equal"}
                 onValueChange={(value) => {
@@ -4019,7 +4019,7 @@ function DocumentDialog({
                 </div>
                 {customInstallments.map((item, index) => (
                   <div key={index} className="grid grid-cols-[52px_1fr_1fr] items-center gap-2">
-                    <span className="text-xs font-bold text-muted-foreground">{index + 1}Âª</span>
+                    <span className="text-xs font-bold text-muted-foreground">{index + 1}ª</span>
                     <Input
                       type="number"
                       min="0.01"
@@ -4123,7 +4123,7 @@ function DocumentDialog({
                 all="Selecionar categoria"
                 items={chart
                   .filter((a) => a.isPostable && a.active)
-                  .map((a) => [a.id, `${a.code} Â· ${a.name}`])}
+                  .map((a) => [a.id, `${a.code} · ${a.name}`])}
               />
             </Field>
             <Field label="Setor / gerencial">
@@ -4162,18 +4162,18 @@ function DocumentDialog({
                 items={products.map((p) => [p.id, p.name])}
               />
             </Field>
-            <Field label="SituaÃ§Ã£o">
+            <Field label="Situação">
               <Select value={form.status} onValueChange={(v) => set("status", v)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="draft">Rascunho</SelectItem>
-                  <SelectItem value="posted">LanÃ§ado</SelectItem>
+                  <SelectItem value="posted">Lançado</SelectItem>
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="ObservaÃ§Ã£o" className="sm:col-span-2">
+            <Field label="Observação" className="sm:col-span-2">
               <Textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} />
             </Field>
           </div>
@@ -4247,7 +4247,7 @@ function DocumentDialog({
                 )
               }
             >
-              {saving && <LoaderCircle className="size-4 animate-spin" />}Salvar tÃ­tulo
+              {saving && <LoaderCircle className="size-4 animate-spin" />}Salvar título
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -4294,7 +4294,7 @@ function PartnerDialog({
           <Input value={tax} onChange={(e) => setTax(e.target.value)} />
         </Field>
         <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Prazo padrÃ£o a receber">
+          <Field label="Prazo padrão a receber">
             <Input
               type="number"
               min="0"
@@ -4303,7 +4303,7 @@ function PartnerDialog({
               placeholder="Opcional"
             />
           </Field>
-          <Field label="Prazo padrÃ£o a pagar">
+          <Field label="Prazo padrão a pagar">
             <Input
               type="number"
               min="0"
@@ -4387,7 +4387,7 @@ function SettlementDialog({
         <DialogHeader>
           <DialogTitle>{actionLabel} parcela</DialogTitle>
           <DialogDescription>
-            Saldo disponÃ­vel: {money.format(target?.installment.balance || 0)}. A baixa nÃ£o altera o
+            Saldo disponível: {money.format(target?.installment.balance || 0)}. A baixa não altera o
             valor original.
           </DialogDescription>
         </DialogHeader>
@@ -4412,7 +4412,7 @@ function SettlementDialog({
               value={form.account || "all"}
               onChange={(v) => setForm({ ...form, account: v === "all" ? "" : v })}
               all="Selecionar conta"
-              items={accounts.map((a) => [a.id, `${a.name} Â· ${money.format(a.currentBalance)}`])}
+              items={accounts.map((a) => [a.id, `${a.name} · ${money.format(a.currentBalance)}`])}
             />
           </Field>
           <Field label="Juros">
@@ -4446,15 +4446,15 @@ function SettlementDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="pix">PIX</SelectItem>
-                <SelectItem value="bank_transfer">TransferÃªncia</SelectItem>
+                <SelectItem value="bank_transfer">Transferência</SelectItem>
                 <SelectItem value="cash">Dinheiro</SelectItem>
-                <SelectItem value="card">CartÃ£o</SelectItem>
+                <SelectItem value="card">Cartão</SelectItem>
                 <SelectItem value="boleto">Boleto</SelectItem>
                 <SelectItem value="other">Outro</SelectItem>
               </SelectContent>
             </Select>
           </Field>
-          <Field label="ObservaÃ§Ã£o" className="sm:col-span-2">
+          <Field label="Observação" className="sm:col-span-2">
             <Textarea
               value={form.notes}
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
@@ -4927,7 +4927,7 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
                   .map((account) => [account.id, `${account.code} - ${account.name}`])}
               />
             </Field>
-            <Field label="ApropriaÃ§Ã£o">
+            <Field label="Apropriação">
               <SimpleSelect
                 value={form.costCenterId || "all"}
                 onChange={(value) =>
@@ -5511,7 +5511,7 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
                   .map((account) => [account.id, `${account.code} - ${account.name}`])}
               />
             </Field>
-            <Field label="ApropriaÃ§Ã£o">
+            <Field label="Apropriação">
               <SimpleSelect
                 value={employeeForm.defaultCostCenterId || "all"}
                 onChange={(value) =>
@@ -5778,7 +5778,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
     <div className="financial-shell space-y-4">
       <PageHeader
         title="Bancos e Caixas"
-        subtitle="Saldos calculados por movimentaÃ§Ãµes"
+        subtitle="Saldos calculados por movimentações"
         actions={
           can ? (
             <Button onClick={openNewAccount}>
@@ -5796,7 +5796,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
               <div>
                 <div className="text-sm font-extrabold">{a.name}</div>
                 <div className="text-xs text-muted-foreground">
-                  {a.bankName || "Conta interna"} {a.accountNumber && `Â· ${a.accountNumber}`}
+                  {a.bankName || "Conta interna"} {a.accountNumber && `· ${a.accountNumber}`}
                 </div>
               </div>
               <Landmark className="size-5 text-primary" />
@@ -5825,7 +5825,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
               {form.id ? "Editar conta financeira" : "Nova conta financeira"}
             </DialogTitle>
             <DialogDescription>
-              O saldo futuro serÃ¡ calculado pelas baixas registradas.
+              O saldo futuro será calculado pelas baixas registradas.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -5842,7 +5842,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="checking">Conta corrente</SelectItem>
-                  <SelectItem value="savings">PoupanÃ§a</SelectItem>
+                  <SelectItem value="savings">Poupança</SelectItem>
                   <SelectItem value="cash">Caixa</SelectItem>
                   <SelectItem value="wallet">Carteira</SelectItem>
                   <SelectItem value="other">Outros</SelectItem>
@@ -5855,7 +5855,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
                 onChange={(e) => setForm({ ...form, bank: e.target.value })}
               />
             </Field>
-            <Field label="AgÃªncia">
+            <Field label="Agência">
               <Input
                 value={form.agency}
                 onChange={(e) => setForm({ ...form, agency: e.target.value })}
@@ -5884,7 +5884,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
                 onChange={(e) => setForm({ ...form, date: e.target.value })}
               />
             </Field>
-            <Field label="SituaÃ§Ã£o">
+            <Field label="Situação">
               <Select
                 value={form.active}
                 onValueChange={(value) => setForm({ ...form, active: value })}
@@ -6002,11 +6002,11 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
   return (
     <div className="financial-shell space-y-4">
       <PageHeader
-        title={kind === "chart" ? "Gerenciais" : "ApropriaÃ§Ãµes"}
+        title={kind === "chart" ? "Gerenciais" : "Apropriações"}
         subtitle={
           kind === "chart"
-            ? "Categorias hierÃ¡rquicas e classificaÃ§Ã£o gerencial"
-            : "Estrutura organizacional para alocaÃ§Ãµes"
+            ? "Categorias hierárquicas e classificação gerencial"
+            : "Estrutura organizacional para alocações"
         }
         actions={
           can ? (
@@ -6029,13 +6029,13 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-sm font-extrabold">
-                {item.code} Â· {item.name}
+                {item.code} · {item.name}
               </div>
               <div className="text-xs text-muted-foreground">
-                {item.parentId ? "NÃ­vel vinculado" : "Conta raiz"} Â·{" "}
+                {item.parentId ? "Nível vinculado" : "Conta raiz"} ·{" "}
                 {item.active ? "Ativo" : "Inativo"}
                 {kind === "chart" && "dreGroup" in item && item.dreGroup
-                  ? ` Â· ${item.dreGroup}`
+                  ? ` · ${item.dreGroup}`
                   : ""}
               </div>
             </div>
@@ -6063,14 +6063,14 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
                 ? "Editar estrutura"
                 : kind === "chart"
                   ? "Nova conta"
-                  : "Nova apropriaÃ§Ã£o"}
+                  : "Nova apropriação"}
             </DialogTitle>
             <DialogDescription>
-              Crie um item personalizado sem alterar as estruturas obrigatÃ³rias.
+              Crie um item personalizado sem alterar as estruturas obrigatórias.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="CÃ³digo">
+            <Field label="Código">
               <Input
                 value={form.code}
                 onChange={(e) => setForm({ ...form, code: e.target.value })}
@@ -6087,7 +6087,7 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
                 value={form.parent || "all"}
                 onChange={(v) => setForm({ ...form, parent: v === "all" ? "" : v })}
                 all="Sem pai"
-                items={items.map((i) => [i.id, `${i.code} Â· ${i.name}`])}
+                items={items.map((i) => [i.id, `${i.code} · ${i.name}`])}
               />
             </Field>
             {kind === "chart" && (
@@ -6105,17 +6105,17 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
                     </SelectContent>
                   </Select>
                 </Field>
-                <Field label="ClassificaÃ§Ã£o DRE">
+                <Field label="Classificação DRE">
                   <SimpleSelect
                     value={form.dre}
                     onChange={(v) => setForm({ ...form, dre: v })}
-                    all="Sem classificaÃ§Ã£o"
+                    all="Sem classificação"
                     items={[
                       ["gross_revenue", "Receita bruta"],
-                      ["revenue_deduction", "DeduÃ§Ãµes"],
-                      ["variable_cost", "Custos variÃ¡veis"],
+                      ["revenue_deduction", "Deduções"],
+                      ["variable_cost", "Custos variáveis"],
                       ["operating_expense", "Despesas operacionais"],
-                      ["depreciation_amortization", "DepreciaÃ§Ã£o"],
+                      ["depreciation_amortization", "Depreciação"],
                       ["financial_result", "Resultado financeiro"],
                       ["income_tax", "Impostos"],
                       ["other_result", "Outros resultados"],
@@ -6124,7 +6124,7 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
                 </Field>
               </>
             )}
-            <Field label="SituaÃ§Ã£o">
+            <Field label="Situação">
               <Select
                 value={form.active}
                 onValueChange={(value) => setForm({ ...form, active: value })}
