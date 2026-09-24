@@ -28,7 +28,7 @@ function mapRule(row: Record<string, unknown>): FinancialRecurringRule {
     driverName: row.driver_name ? String(row.driver_name) : null,
     vehicleId: row.vehicle_id ? String(row.vehicle_id) : null,
     vehiclePlate: row.vehicle_plate ? String(row.vehicle_plate) : null,
-    costCenterId: String(row.cost_center_id),
+    costCenterId: row.cost_center_id ? String(row.cost_center_id) : null,
     costCenterName: row.cost_center_name ? String(row.cost_center_name) : null,
     chartAccountId: String(row.chart_account_id),
     chartAccountName: row.chart_account_name ? String(row.chart_account_name) : null,
@@ -67,6 +67,21 @@ export async function saveFinancialRecurringRule(input: FinancialRecurringRuleIn
   return data as string;
 }
 
+export async function saveFinancialDocumentWithRecurring(input: {
+  document: Record<string, unknown>;
+  recurring: FinancialRecurringRuleInput;
+}) {
+  const { data, error } = await supabase.rpc("save_financial_document_with_recurring", {
+    p_payload: input,
+  });
+  fail("Nao foi possivel salvar o titulo recorrente", error);
+  const row = (data ?? {}) as Record<string, unknown>;
+  return {
+    documentId: String(row.documentId ?? row.document_id ?? ""),
+    ruleId: String(row.ruleId ?? row.rule_id ?? ""),
+  };
+}
+
 export async function setFinancialRecurringRuleStatus(
   id: string,
   workspaceId: string,
@@ -90,6 +105,23 @@ export async function generateFinancialRecurringDocuments(
     p_rule_id: ruleId ?? null,
   });
   fail("Nao foi possivel gerar os titulos recorrentes", error);
+  const row = (data ?? {}) as Record<string, unknown>;
+  return {
+    generated: numberValue(row.generated),
+    skipped: numberValue(row.skipped),
+    documentIds: Array.isArray(row.documentIds) ? row.documentIds.map(String) : [],
+  };
+}
+
+export async function generateDueFinancialRecurringDocuments(
+  workspaceId: string,
+  untilMonth: string,
+): Promise<FinancialRecurringGenerationResult> {
+  const { data, error } = await supabase.rpc("generate_due_financial_recurring_documents", {
+    p_workspace_id: workspaceId,
+    p_until_month: untilMonth,
+  });
+  fail("Nao foi possivel atualizar os titulos recorrentes", error);
   const row = (data ?? {}) as Record<string, unknown>;
   return {
     generated: numberValue(row.generated),
