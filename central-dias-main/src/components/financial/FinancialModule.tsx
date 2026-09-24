@@ -2168,6 +2168,9 @@ function TitlesContent({
       <SettlementDialog
         target={settleTarget}
         accounts={accounts.filter((a) => a.active)}
+        centers={centers}
+        vehicles={vehicles}
+        drivers={drivers}
         saving={saving}
         actionLabel={receiving ? "Receber" : "Pagar"}
         onOpenChange={(open) => !open && setSettleTarget(null)}
@@ -4346,6 +4349,9 @@ function PartnerDialog({
 function SettlementDialog({
   target,
   accounts,
+  centers,
+  vehicles,
+  drivers,
   saving,
   actionLabel,
   onOpenChange,
@@ -4353,6 +4359,9 @@ function SettlementDialog({
 }: {
   target: { document: FinancialDocumentDetails; installment: FinancialInstallment } | null;
   accounts: FinancialAccount[];
+  centers: CostCenter[];
+  vehicles: Array<{ id: string; plate: string }>;
+  drivers: Array<{ id: string; name: string }>;
   saving: boolean;
   actionLabel: string;
   onOpenChange: (v: boolean) => void;
@@ -4366,6 +4375,12 @@ function SettlementDialog({
     settledOn: string;
     paymentMethod: string;
     notes: string;
+    adjustmentAllocation?: {
+      scope: "company" | "cost_center" | "vehicle" | "driver";
+      costCenterId?: string | null;
+      vehicleId?: string | null;
+      driverId?: string | null;
+    };
   }) => void;
 }) {
   const [form, setForm] = useState({
@@ -4377,10 +4392,41 @@ function SettlementDialog({
     date: today(),
     method: "pix",
     notes: "",
+    allocationScope: "company",
+    costCenterId: "",
+    vehicleId: "",
+    driverId: "",
   });
   useEffect(() => {
-    if (target) setForm((f) => ({ ...f, amount: String(target.installment.balance) }));
+    if (target) {
+      setForm((f) => ({
+        ...f,
+        amount: String(target.installment.balance),
+        allocationScope: "company",
+        costCenterId: "",
+        vehicleId: "",
+        driverId: "",
+      }));
+    }
   }, [target]);
+  const hasAdjustments =
+    Number(form.interest || 0) > 0 || Number(form.penalty || 0) > 0 || Number(form.discount || 0) > 0;
+  const requiresAdjustmentAllocation =
+    Boolean(target) && hasAdjustments && (target?.document.allocationCount ?? 0) === 0;
+  const adjustmentAllocationMissing =
+    requiresAdjustmentAllocation &&
+    ((form.allocationScope === "cost_center" && !form.costCenterId) ||
+      (form.allocationScope === "vehicle" && !form.vehicleId) ||
+      (form.allocationScope === "driver" && !form.driverId));
+  const buildAdjustmentAllocation = () => {
+    if (!requiresAdjustmentAllocation) return undefined;
+    return {
+      scope: form.allocationScope as "company" | "cost_center" | "vehicle" | "driver",
+      costCenterId: form.allocationScope === "cost_center" ? form.costCenterId : null,
+      vehicleId: form.allocationScope === "vehicle" ? form.vehicleId : null,
+      driverId: form.allocationScope === "driver" ? form.driverId : null,
+    };
+  };
   return (
     <Dialog open={Boolean(target)} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -4454,6 +4500,77 @@ function SettlementDialog({
               </SelectContent>
             </Select>
           </Field>
+          {requiresAdjustmentAllocation && (
+            <div className="space-y-3 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 sm:col-span-2">
+              <div>
+                <div className="text-sm font-bold">Apropriação dos ajustes</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Este título não possui apropriação. Para lançar juros, multa ou desconto, informe
+                  onde esses ajustes devem entrar no gerencial.
+                </p>
+              </div>
+              <Field label="Tipo de apropriação">
+                <Select
+                  value={form.allocationScope}
+                  onValueChange={(value) =>
+                    setForm({
+                      ...form,
+                      allocationScope: value,
+                      costCenterId: "",
+                      vehicleId: "",
+                      driverId: "",
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="company">Empresa inteira</SelectItem>
+                    <SelectItem value="cost_center">Setor / gerencial</SelectItem>
+                    <SelectItem value="vehicle">Caminhão</SelectItem>
+                    <SelectItem value="driver">Funcionário</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              {form.allocationScope === "cost_center" && (
+                <Field label="Setor / gerencial">
+                  <SimpleSelect
+                    value={form.costCenterId || "all"}
+                    onChange={(value) =>
+                      setForm({ ...form, costCenterId: value === "all" ? "" : value })
+                    }
+                    all="Selecionar apropriação"
+                    items={centers.filter((center) => center.active).map((center) => [center.id, center.name])}
+                  />
+                </Field>
+              )}
+              {form.allocationScope === "vehicle" && (
+                <Field label="Caminhão">
+                  <SimpleSelect
+                    value={form.vehicleId || "all"}
+                    onChange={(value) =>
+                      setForm({ ...form, vehicleId: value === "all" ? "" : value })
+                    }
+                    all="Selecionar caminhão"
+                    items={vehicles.map((vehicle) => [vehicle.id, vehicle.plate])}
+                  />
+                </Field>
+              )}
+              {form.allocationScope === "driver" && (
+                <Field label="Funcionário">
+                  <SimpleSelect
+                    value={form.driverId || "all"}
+                    onChange={(value) =>
+                      setForm({ ...form, driverId: value === "all" ? "" : value })
+                    }
+                    all="Selecionar funcionário"
+                    items={drivers.map((driver) => [driver.id, driver.name])}
+                  />
+                </Field>
+              )}
+            </div>
+          )}
           <Field label="Observação" className="sm:col-span-2">
             <Textarea
               value={form.notes}
@@ -4466,7 +4583,13 @@ function SettlementDialog({
             Cancelar
           </Button>
           <Button
-            disabled={saving || !target || !form.account || Number(form.amount) <= 0}
+            disabled={
+              saving ||
+              !target ||
+              !form.account ||
+              Number(form.amount) <= 0 ||
+              adjustmentAllocationMissing
+            }
             onClick={() =>
               target &&
               onSave({
@@ -4479,6 +4602,7 @@ function SettlementDialog({
                 settledOn: form.date,
                 paymentMethod: form.method,
                 notes: form.notes,
+                adjustmentAllocation: buildAdjustmentAllocation(),
               })
             }
           >

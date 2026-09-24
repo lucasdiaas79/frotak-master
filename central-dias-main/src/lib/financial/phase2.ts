@@ -74,6 +74,7 @@ export async function listFinancialDocuments(
     notes: row.notes,
     partnerName: row.business_partners?.trade_name ?? null,
     accountName: row.chart_of_accounts?.name ?? null,
+    allocationCount: row.financial_allocations?.length ?? 0,
     costCenterId: row.financial_allocations?.[0]?.cost_center_id ?? null,
     vehicleId: row.financial_allocations?.[0]?.vehicle_id ?? null,
     driverId: row.financial_allocations?.[0]?.driver_id ?? null,
@@ -143,6 +144,9 @@ function mapFinancialDocumentDetails(row: Record<string, any>): FinancialDocumen
       row.outstanding_balance !== undefined || row.outstandingBalance !== undefined
         ? numberValue(row.outstanding_balance ?? row.outstandingBalance)
         : undefined,
+    allocationCount: Array.isArray(row.financial_allocations)
+      ? row.financial_allocations.length
+      : numberValue(row.allocation_count ?? row.allocationCount),
     costCenterId:
       row.financial_allocations?.[0]?.cost_center_id ?? row.cost_center_id ?? row.costCenterId ?? null,
     vehicleId: row.financial_allocations?.[0]?.vehicle_id ?? row.vehicle_id ?? row.vehicleId ?? null,
