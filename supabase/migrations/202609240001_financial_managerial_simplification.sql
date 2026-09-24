@@ -100,6 +100,137 @@ as $$
   end;
 $$;
 
+create or replace function private.require_financial_payload_refs(
+  p_workspace_id uuid,
+  p_tenant_id uuid,
+  p_payload jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public
+as $$
+declare
+  v_id uuid;
+begin
+  v_id := nullif(p_payload->>'partnerId', '')::uuid;
+  if v_id is not null and not exists (
+    select 1 from public.business_partners where id = v_id and tenant_id = p_tenant_id
+  ) then raise exception 'FINANCIAL_INVALID_PARTNER_TENANT'; end if;
+
+  v_id := nullif(p_payload->>'chartAccountId', '')::uuid;
+  if v_id is not null and not exists (
+    select 1 from public.chart_of_accounts where id = v_id and tenant_id = p_tenant_id
+  ) then raise exception 'FINANCIAL_INVALID_CHART_ACCOUNT_TENANT'; end if;
+
+  v_id := nullif(p_payload->>'costCenterId', '')::uuid;
+  if v_id is not null and not exists (
+    select 1 from public.cost_centers where id = v_id and workspace_id = p_workspace_id and tenant_id = p_tenant_id
+  ) then raise exception 'FINANCIAL_INVALID_COST_CENTER_WORKSPACE'; end if;
+
+  v_id := nullif(p_payload->>'vehicleId', '')::uuid;
+  if v_id is not null and not exists (
+    select 1 from public.vehicles where id = v_id and tenant_id = p_tenant_id
+  ) then raise exception 'FINANCIAL_INVALID_VEHICLE_TENANT'; end if;
+
+  v_id := nullif(p_payload->>'driverId', '')::uuid;
+  if v_id is not null and not exists (
+    select 1 from public.drivers where id = v_id and tenant_id = p_tenant_id
+  ) then raise exception 'FINANCIAL_INVALID_DRIVER_TENANT'; end if;
+
+  v_id := nullif(p_payload->>'freightId', '')::uuid;
+  if v_id is not null and not exists (
+    select 1 from public.freights where id = v_id and tenant_id = p_tenant_id and workspace_id = p_workspace_id
+  ) then raise exception 'FINANCIAL_INVALID_FREIGHT_WORKSPACE'; end if;
+
+  v_id := nullif(p_payload->>'productId', '')::uuid;
+  if v_id is not null and not exists (
+    select 1 from public.products where id = v_id and tenant_id = p_tenant_id
+  ) then raise exception 'FINANCIAL_INVALID_PRODUCT_TENANT'; end if;
+end;
+$$;
+
+create or replace function public.get_dre_detail(p_payload jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private
+as $$
+declare
+  v_workspace_id uuid := (p_payload->>'workspaceId')::uuid;
+  v_start date := (p_payload->>'startDate')::date;
+  v_end date := (p_payload->>'endDate')::date;
+  v_cost_center_id uuid := nullif(p_payload->>'costCenterId', '')::uuid;
+  v_group text := nullif(p_payload->>'dreGroup', '');
+  v_chart_account_id uuid := nullif(p_payload->>'chartAccountId', '')::uuid;
+  v_can_payroll boolean;
+  v_result jsonb;
+begin
+  perform * from private.require_report_permission(v_workspace_id, 'financial.dre.view');
+  v_can_payroll := private.is_workspace_owner(v_workspace_id)
+    or private.has_permission(v_workspace_id, 'financial.payroll.view');
+
+  with facts as (
+    select * from private.financial_dre_facts(v_workspace_id, v_start, v_end, v_cost_center_id)
+    where (v_group is null or coalesce(dre_group, 'unclassified') = v_group)
+      and (v_chart_account_id is null or chart_account_id = v_chart_account_id)
+  ),
+  dimensions as (
+    select
+      fa.document_id,
+      string_agg(distinct cc.name, ', ') filter (where cc.name is not null) as cost_center_name,
+      string_agg(distinct v.plate, ', ') filter (where v.plate is not null) as vehicle_plate,
+      string_agg(distinct d.name, ', ') filter (where d.name is not null) as driver_name
+    from public.financial_allocations fa
+    left join public.cost_centers cc on cc.id = fa.cost_center_id and cc.workspace_id = fa.workspace_id
+    left join public.vehicles v on v.id = fa.vehicle_id and v.tenant_id = fa.tenant_id
+    left join public.drivers d on d.id = fa.driver_id and d.tenant_id = fa.tenant_id
+    where fa.workspace_id = v_workspace_id
+    group by fa.document_id
+  ),
+  accounts as (
+    select
+      chart_account_id,
+      coalesce(chart_account_code, 'SEM-CONTA') as code,
+      coalesce(chart_account_name, 'Pendente de Classificacao') as name,
+      coalesce(dre_group, 'unclassified') as dre_group,
+      sum(signed_amount)::numeric(18,2) as signed_amount,
+      sum(abs(signed_amount))::numeric(18,2) as movement_amount,
+      count(distinct document_id) as document_count
+    from facts
+    group by chart_account_id, chart_account_code, chart_account_name, coalesce(dre_group, 'unclassified')
+  ),
+  documents as (
+    select
+      f.document_id,
+      max(f.competence_date) as competence_date,
+      max(f.direction) as direction,
+      max(case when f.source_type = 'payroll' and not v_can_payroll then null else f.document_id::text end) as visible_document_id,
+      max(case when f.source_type = 'payroll' and not v_can_payroll then 'Folha gerencial (restrito)' else f.description end) as description,
+      max(case when f.source_type = 'payroll' and not v_can_payroll then null else f.document_number end) as document_number,
+      max(case when f.source_type = 'payroll' and not v_can_payroll then null else f.partner_name end) as partner_name,
+      max(dims.cost_center_name) as cost_center_name,
+      max(dims.vehicle_plate) as vehicle_plate,
+      max(dims.driver_name) as driver_name,
+      max(f.source_type) as source_type,
+      max(f.source_event) as source_event,
+      sum(f.signed_amount)::numeric(18,2) as signed_amount,
+      sum(abs(f.signed_amount))::numeric(18,2) as movement_amount,
+      bool_or(f.is_unallocated) as has_unallocated,
+      bool_or(f.is_unclassified) as is_unclassified
+    from facts f
+    left join dimensions dims on dims.document_id = f.document_id
+    group by f.document_id
+  )
+  select jsonb_build_object(
+    'accounts', coalesce((select jsonb_agg(to_jsonb(a) order by abs(a.signed_amount) desc) from accounts a), '[]'::jsonb),
+    'documents', coalesce((select jsonb_agg(to_jsonb(d) order by d.competence_date desc, abs(d.signed_amount) desc) from documents d), '[]'::jsonb)
+  ) into v_result;
+
+  return v_result;
+end;
+$$;
+
 create or replace function public.save_financial_document(p_payload jsonb)
 returns uuid
 language plpgsql
@@ -130,6 +261,7 @@ begin
   );
   select tenant_id into v_tenant_id from public.workspaces where id = v_workspace_id and status = 'active';
   if v_tenant_id is null then raise exception 'FINANCIAL_INVALID_WORKSPACE'; end if;
+  perform private.require_financial_payload_refs(v_workspace_id, v_tenant_id, p_payload);
   if v_amount <= 0 then raise exception 'FINANCIAL_INVALID_AMOUNT'; end if;
   if v_status not in ('draft', 'posted') then raise exception 'FINANCIAL_INVALID_STATUS'; end if;
 
@@ -231,6 +363,127 @@ begin
 end;
 $$;
 
+create or replace function public.save_financial_recurring_rule(p_payload jsonb)
+returns uuid
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private
+as $$
+declare
+  v_id uuid := nullif(p_payload->>'id', '')::uuid;
+  v_workspace_id uuid := (p_payload->>'workspaceId')::uuid;
+  v_tenant_id uuid;
+  v_status text := coalesce(nullif(p_payload->>'status', ''), 'active');
+  v_frequency text := coalesce(nullif(p_payload->>'frequency', ''), 'MONTHLY');
+begin
+  perform private.require_financial_permission(v_workspace_id, 'financial.manage_recurring');
+  select tenant_id into v_tenant_id
+  from public.workspaces
+  where id = v_workspace_id and status = 'active';
+  if v_tenant_id is null then raise exception 'FINANCIAL_INVALID_WORKSPACE'; end if;
+  if v_status not in ('active', 'paused', 'ended') then
+    raise exception 'FINANCIAL_RECURRING_INVALID_STATUS';
+  end if;
+  if v_frequency not in ('MONTHLY', 'WEEKLY', 'YEARLY') then
+    raise exception 'FINANCIAL_RECURRING_INVALID_FREQUENCY';
+  end if;
+
+  if v_id is not null and not (p_payload ? 'name') then
+    update public.financial_recurring_rules
+    set status = v_status
+    where id = v_id and workspace_id = v_workspace_id
+    returning id into v_id;
+    if v_id is null then raise exception 'FINANCIAL_RECURRING_RULE_NOT_FOUND'; end if;
+    return v_id;
+  end if;
+
+  perform private.require_financial_payload_refs(v_workspace_id, v_tenant_id, p_payload);
+  if coalesce((p_payload->>'amount')::numeric, 0) <= 0 then
+    raise exception 'FINANCIAL_INVALID_AMOUNT';
+  end if;
+  if coalesce((p_payload->>'dueDay')::integer, 0) not between 1 and 31 then
+    raise exception 'FINANCIAL_RECURRING_INVALID_DUE_DAY';
+  end if;
+
+  if v_id is null then
+    insert into public.financial_recurring_rules (
+      tenant_id, workspace_id, kind, name, partner_id, employee_name, driver_id,
+      vehicle_id, cost_center_id, chart_account_id, amount, due_day,
+      start_month, end_month, auto_post, status, notes, frequency
+    ) values (
+      v_tenant_id, v_workspace_id, p_payload->>'kind', p_payload->>'name',
+      nullif(p_payload->>'partnerId', '')::uuid,
+      nullif(p_payload->>'employeeName', ''),
+      nullif(p_payload->>'driverId', '')::uuid,
+      nullif(p_payload->>'vehicleId', '')::uuid,
+      nullif(p_payload->>'costCenterId', '')::uuid,
+      (p_payload->>'chartAccountId')::uuid,
+      (p_payload->>'amount')::numeric,
+      (p_payload->>'dueDay')::integer,
+      date_trunc('month', (p_payload->>'startMonth')::date)::date,
+      case when nullif(p_payload->>'endMonth', '') is null then null
+        else date_trunc('month', (p_payload->>'endMonth')::date)::date end,
+      coalesce((p_payload->>'autoPost')::boolean, true),
+      v_status,
+      nullif(p_payload->>'notes', ''),
+      v_frequency
+    ) returning id into v_id;
+  else
+    update public.financial_recurring_rules
+    set kind = p_payload->>'kind',
+        name = p_payload->>'name',
+        partner_id = nullif(p_payload->>'partnerId', '')::uuid,
+        employee_name = nullif(p_payload->>'employeeName', ''),
+        driver_id = nullif(p_payload->>'driverId', '')::uuid,
+        vehicle_id = nullif(p_payload->>'vehicleId', '')::uuid,
+        cost_center_id = nullif(p_payload->>'costCenterId', '')::uuid,
+        chart_account_id = (p_payload->>'chartAccountId')::uuid,
+        amount = (p_payload->>'amount')::numeric,
+        due_day = (p_payload->>'dueDay')::integer,
+        start_month = date_trunc('month', (p_payload->>'startMonth')::date)::date,
+        end_month = case when nullif(p_payload->>'endMonth', '') is null then null
+          else date_trunc('month', (p_payload->>'endMonth')::date)::date end,
+        auto_post = coalesce((p_payload->>'autoPost')::boolean, true),
+        status = v_status,
+        notes = nullif(p_payload->>'notes', ''),
+        frequency = v_frequency
+    where id = v_id and workspace_id = v_workspace_id
+    returning id into v_id;
+    if v_id is null then raise exception 'FINANCIAL_RECURRING_RULE_NOT_FOUND'; end if;
+  end if;
+
+  return v_id;
+end;
+$$;
+
+create or replace function public.save_financial_document_with_recurring(p_payload jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private
+as $$
+declare
+  v_document_id uuid;
+  v_rule_id uuid;
+  v_workspace_id uuid := (p_payload->'document'->>'workspaceId')::uuid;
+begin
+  perform private.require_financial_permission(v_workspace_id, 'financial.create');
+  perform private.require_financial_permission(v_workspace_id, 'financial.manage_recurring');
+
+  v_document_id := public.save_financial_document(p_payload->'document');
+  v_rule_id := public.save_financial_recurring_rule(p_payload->'recurring');
+
+  update public.financial_documents
+  set source_type = 'recurring_rule',
+      source_id = v_rule_id,
+      source_event = 'recurring:initial'
+  where id = v_document_id
+    and workspace_id = v_workspace_id;
+
+  return jsonb_build_object('documentId', v_document_id, 'ruleId', v_rule_id);
+end;
+$$;
+
 create or replace function public.generate_financial_recurring_documents(
   p_workspace_id uuid,
   p_competence_month date,
@@ -328,22 +581,25 @@ begin
       v_tenant_id, p_workspace_id, v_document_id, 1, v_rule.amount, v_due_date
     );
 
-    insert into public.financial_allocations (
-      tenant_id, workspace_id, document_id, vehicle_id, driver_id, business_partner_id,
-      cost_center_id, chart_account_id, amount, percentage, description
-    ) values (
-      v_tenant_id,
-      p_workspace_id,
-      v_document_id,
-      v_rule.vehicle_id,
-      v_rule.driver_id,
-      v_rule.partner_id,
-      v_rule.cost_center_id,
-      v_rule.chart_account_id,
-      v_rule.amount,
-      100,
-      'Alocacao automatica de recorrencia financeira'
-    );
+    if v_rule.vehicle_id is not null or v_rule.driver_id is not null
+      or v_rule.partner_id is not null or v_rule.cost_center_id is not null then
+      insert into public.financial_allocations (
+        tenant_id, workspace_id, document_id, vehicle_id, driver_id, business_partner_id,
+        cost_center_id, chart_account_id, amount, percentage, description
+      ) values (
+        v_tenant_id,
+        p_workspace_id,
+        v_document_id,
+        v_rule.vehicle_id,
+        v_rule.driver_id,
+        v_rule.partner_id,
+        v_rule.cost_center_id,
+        v_rule.chart_account_id,
+        v_rule.amount,
+        100,
+        'Alocacao automatica de recorrencia financeira'
+      );
+    end if;
 
     if v_rule.auto_post then
       update public.financial_documents
@@ -353,6 +609,64 @@ begin
 
     v_generated := v_generated + 1;
     v_document_ids := array_append(v_document_ids, v_document_id);
+  end loop;
+
+  return jsonb_build_object(
+    'generated', v_generated,
+    'skipped', v_skipped,
+    'documentIds', coalesce(to_jsonb(v_document_ids), '[]'::jsonb)
+  );
+end;
+$$;
+
+create or replace function public.generate_due_financial_recurring_documents(
+  p_workspace_id uuid,
+  p_until_month date default current_date
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private
+as $$
+declare
+  v_tenant_id uuid;
+  v_start_month date;
+  v_month date;
+  v_until date := date_trunc('month', coalesce(p_until_month, current_date))::date;
+  v_result jsonb;
+  v_generated integer := 0;
+  v_skipped integer := 0;
+  v_document_ids uuid[] := '{}'::uuid[];
+begin
+  perform private.require_financial_permission(p_workspace_id, 'financial.manage_recurring');
+  select tenant_id into v_tenant_id
+  from public.workspaces
+  where id = p_workspace_id and status = 'active';
+  if v_tenant_id is null then raise exception 'FINANCIAL_INVALID_WORKSPACE'; end if;
+
+  select min(start_month) into v_start_month
+  from public.financial_recurring_rules
+  where workspace_id = p_workspace_id
+    and tenant_id = v_tenant_id
+    and status = 'active'
+    and start_month <= v_until
+    and (end_month is null or end_month >= v_until);
+
+  if v_start_month is null then
+    return jsonb_build_object('generated', 0, 'skipped', 0, 'documentIds', '[]'::jsonb);
+  end if;
+
+  for v_month in
+    select gs::date
+    from generate_series(date_trunc('month', v_start_month)::date, v_until, interval '1 month') gs
+  loop
+    v_result := public.generate_financial_recurring_documents(p_workspace_id, v_month, null);
+    v_generated := v_generated + coalesce((v_result->>'generated')::integer, 0);
+    v_skipped := v_skipped + coalesce((v_result->>'skipped')::integer, 0);
+    v_document_ids := v_document_ids || coalesce(
+      array(select jsonb_array_elements_text(v_result->'documentIds')::uuid),
+      '{}'::uuid[]
+    );
   end loop;
 
   return jsonb_build_object(
@@ -377,6 +691,76 @@ as $$
   from public.chart_of_accounts
   where tenant_id = p_tenant_id and code = p_code and active = true
   limit 1;
+$$;
+
+create or replace function private.copy_financial_adjustment_allocations(
+  p_source_document_id uuid,
+  p_adjustment_document_id uuid,
+  p_adjustment_amount numeric,
+  p_chart_account_id uuid,
+  p_description text
+)
+returns void
+language plpgsql
+security definer
+set search_path = pg_catalog, public, private
+as $$
+declare
+  v_source public.financial_documents;
+begin
+  select * into v_source
+  from public.financial_documents
+  where id = p_source_document_id;
+  if not found then raise exception 'FINANCIAL_DOCUMENT_NOT_FOUND'; end if;
+
+  with source_allocations as (
+    select
+      a.*,
+      sum(a.amount) over () as total_amount,
+      row_number() over (order by a.amount desc, a.id) as rn
+    from public.financial_allocations a
+    where a.document_id = p_source_document_id
+  ),
+  calculated as (
+    select
+      *,
+      case
+        when total_amount = 0 then 0
+        else round((amount / total_amount) * p_adjustment_amount, 2)
+      end as calculated_amount
+    from source_allocations
+  ),
+  balanced as (
+    select
+      *,
+      case
+        when rn = 1 then p_adjustment_amount - coalesce(sum(calculated_amount) over () - calculated_amount, 0)
+        else calculated_amount
+      end::numeric(18,2) as final_amount
+    from calculated
+  )
+  insert into public.financial_allocations (
+    tenant_id, workspace_id, document_id, freight_id, vehicle_id, driver_id,
+    business_partner_id, cost_center_id, product_id, chart_account_id, amount, percentage,
+    description
+  )
+  select
+    v_source.tenant_id,
+    v_source.workspace_id,
+    p_adjustment_document_id,
+    freight_id,
+    vehicle_id,
+    driver_id,
+    business_partner_id,
+    cost_center_id,
+    product_id,
+    p_chart_account_id,
+    final_amount,
+    case when p_adjustment_amount = 0 then 0 else round((final_amount / p_adjustment_amount) * 100, 6) end,
+    p_description
+  from balanced
+  where final_amount <> 0;
+end;
 $$;
 
 create or replace function public.settle_financial_installment(p_payload jsonb)
@@ -405,6 +789,15 @@ begin
     v_installment.workspace_id,
     case when v_document.direction = 'receivable' then 'financial.receive' else 'financial.pay' end
   );
+  if not exists (
+    select 1 from public.financial_accounts
+    where id = (p_payload->>'financialAccountId')::uuid
+      and workspace_id = v_installment.workspace_id
+      and tenant_id = v_installment.tenant_id
+      and active = true
+  ) then
+    raise exception 'FINANCIAL_INVALID_ACCOUNT_WORKSPACE';
+  end if;
   if v_document.status in ('draft', 'voided') then raise exception 'FINANCIAL_DOCUMENT_NOT_POSTED'; end if;
   if v_principal <= 0 or v_principal > v_installment.balance then
     raise exception 'FINANCIAL_INVALID_SETTLEMENT_AMOUNT';
@@ -450,15 +843,9 @@ begin
       (p_payload->>'settledOn')::date, (p_payload->>'settledOn')::date, 'BRL', 'posted',
       v_chart_account_id, 'Gerado pela baixa do titulo ' || v_document.id
     ) returning id into v_adjustment_document_id;
-    insert into public.financial_allocations (
-      tenant_id, workspace_id, document_id, freight_id, vehicle_id, driver_id,
-      business_partner_id, cost_center_id, product_id, chart_account_id, amount, percentage,
-      description
-    ) values (
-      v_installment.tenant_id, v_installment.workspace_id, v_adjustment_document_id,
-      v_allocation.freight_id, v_allocation.vehicle_id, v_allocation.driver_id,
-      v_document.partner_id, v_allocation.cost_center_id, v_allocation.product_id,
-      v_chart_account_id, v_interest, 100, 'Apropriacao de juros da baixa'
+    perform private.copy_financial_adjustment_allocations(
+      v_document.id, v_adjustment_document_id, v_interest, v_chart_account_id,
+      'Apropriacao de juros da baixa'
     );
   end if;
 
@@ -475,15 +862,9 @@ begin
       (p_payload->>'settledOn')::date, (p_payload->>'settledOn')::date, 'BRL', 'posted',
       v_chart_account_id, 'Gerado pela baixa do titulo ' || v_document.id
     ) returning id into v_adjustment_document_id;
-    insert into public.financial_allocations (
-      tenant_id, workspace_id, document_id, freight_id, vehicle_id, driver_id,
-      business_partner_id, cost_center_id, product_id, chart_account_id, amount, percentage,
-      description
-    ) values (
-      v_installment.tenant_id, v_installment.workspace_id, v_adjustment_document_id,
-      v_allocation.freight_id, v_allocation.vehicle_id, v_allocation.driver_id,
-      v_document.partner_id, v_allocation.cost_center_id, v_allocation.product_id,
-      v_chart_account_id, v_penalty, 100, 'Apropriacao de multa da baixa'
+    perform private.copy_financial_adjustment_allocations(
+      v_document.id, v_adjustment_document_id, v_penalty, v_chart_account_id,
+      'Apropriacao de multa da baixa'
     );
   end if;
 
@@ -511,15 +892,9 @@ begin
       (p_payload->>'settledOn')::date, 'BRL', 'posted', v_chart_account_id,
       'Gerado pela baixa do titulo ' || v_document.id
     ) returning id into v_adjustment_document_id;
-    insert into public.financial_allocations (
-      tenant_id, workspace_id, document_id, freight_id, vehicle_id, driver_id,
-      business_partner_id, cost_center_id, product_id, chart_account_id, amount, percentage,
-      description
-    ) values (
-      v_installment.tenant_id, v_installment.workspace_id, v_adjustment_document_id,
-      v_allocation.freight_id, v_allocation.vehicle_id, v_allocation.driver_id,
-      v_document.partner_id, v_allocation.cost_center_id, v_allocation.product_id,
-      v_chart_account_id, v_discount, 100, 'Apropriacao de desconto da baixa'
+    perform private.copy_financial_adjustment_allocations(
+      v_document.id, v_adjustment_document_id, v_discount, v_chart_account_id,
+      'Apropriacao de desconto da baixa'
     );
   end if;
 
@@ -532,3 +907,11 @@ begin
   return v_id;
 end;
 $$;
+
+revoke all on function private.require_financial_payload_refs(uuid, uuid, jsonb) from public, anon, authenticated;
+revoke all on function private.copy_financial_adjustment_allocations(uuid, uuid, numeric, uuid, text) from public, anon, authenticated;
+revoke all on function public.save_financial_document_with_recurring(jsonb) from public, anon;
+revoke all on function public.generate_due_financial_recurring_documents(uuid, date) from public, anon;
+
+grant execute on function public.save_financial_document_with_recurring(jsonb) to authenticated;
+grant execute on function public.generate_due_financial_recurring_documents(uuid, date) to authenticated;

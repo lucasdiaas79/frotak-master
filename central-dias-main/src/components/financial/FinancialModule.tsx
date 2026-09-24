@@ -95,9 +95,11 @@ import {
   voidFinancialDocument,
 } from "@/lib/financial/phase2";
 import {
+  generateDueFinancialRecurringDocuments,
   generateFinancialRecurringDocuments,
   listFinancialRecurringRules,
   saveFinancialRecurringRule,
+  saveFinancialDocumentWithRecurring,
   setFinancialRecurringRuleStatus,
 } from "@/lib/financial/phase5";
 import {
@@ -412,6 +414,73 @@ function exportCsv(filename: string, rows: Array<Record<string, string | number 
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function downloadHtmlTable(filename: string, title: string, rows: Array<Record<string, unknown>>) {
+  if (!rows.length) {
+    toast.info("Nao ha dados para exportar.");
+    return;
+  }
+  const headers = Object.keys(rows[0]);
+  const html = `<!doctype html><html><head><meta charset="utf-8" /></head><body><h1>${escapeHtml(
+    title,
+  )}</h1><table border="1"><thead><tr>${headers
+    .map((header) => `<th>${escapeHtml(header)}</th>`)
+    .join("")}</tr></thead><tbody>${rows
+    .map(
+      (row) =>
+        `<tr>${headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`,
+    )
+    .join("")}</tbody></table></body></html>`;
+  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+function openPrintableDre(title: string, subtitle: string, rows: Array<Record<string, unknown>>) {
+  if (!rows.length) {
+    toast.info("Nao ha dados para exportar.");
+    return;
+  }
+  const headers = Object.keys(rows[0]);
+  const popup = window.open("", "_blank", "noopener,noreferrer,width=1120,height=800");
+  if (!popup) {
+    toast.error("Nao foi possivel abrir a janela de impressao.");
+    return;
+  }
+  popup.document.write(`<!doctype html><html><head><meta charset="utf-8" />
+    <title>${escapeHtml(title)}</title>
+    <style>
+      body{font-family:Inter,Arial,sans-serif;margin:40px;color:#111827}
+      h1{font-size:28px;margin:0 0 6px} p{margin:0 0 24px;color:#4b5563}
+      table{width:100%;border-collapse:collapse;font-size:12px}
+      th{background:#111827;color:#fff;text-align:left;padding:10px}
+      td{border-bottom:1px solid #e5e7eb;padding:9px}
+      tr:nth-child(even) td{background:#f9fafb}
+    </style>
+  </head><body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(
+    subtitle,
+  )}</p><table><thead><tr>${headers
+    .map((header) => `<th>${escapeHtml(header)}</th>`)
+    .join("")}</tr></thead><tbody>${rows
+    .map(
+      (row) =>
+        `<tr>${headers.map((header) => `<td>${escapeHtml(row[header])}</td>`).join("")}</tr>`,
+    )
+    .join("")}</tbody></table><script>window.onload=()=>window.print()</script></body></html>`);
+  popup.document.close();
 }
 
 function ReportPeriodControls({
@@ -1251,7 +1320,11 @@ function DreContent({ access }: { access: FinancialAccess }) {
   const [detail, setDetail] = useState<DreDetail | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportScopeType, setExportScopeType] = useState<"company" | "center" | "vehicle" | "driver">("company");
+  const [exportScope, setExportScope] = useState("all");
   const [loading, setLoading] = useState(true);
+  const { vehicles, drivers } = useFleet();
   const canDre = hasFinancialPermission(access, "financial.dre.view");
   const payload = useMemo(
     () => ({
@@ -1297,6 +1370,70 @@ function DreContent({ access }: { access: FinancialAccess }) {
       }),
     );
   };
+  const dreRows = (nextSummary = summary) =>
+    nextSummary
+      ? [
+          ...nextSummary.groups.map((group) => ({
+            linha: group.label,
+            documentos: group.document_count,
+            valor: group.signed_amount,
+          })),
+          {
+            linha: "Resultado gerencial",
+            documentos: nextSummary.totals.document_count,
+            valor: nextSummary.totals.managerial_result,
+          },
+        ]
+      : [];
+  const collectAnalyticRows = async () => {
+    if (!summary) return [];
+    const details = await Promise.all(
+      summary.groups.map(async (group) => ({
+        group,
+        detail: await getDreDetail({ ...payload, dreGroup: group.dre_group }),
+      })),
+    );
+    const rows = details.flatMap(({ group, detail: groupDetail }) =>
+      groupDetail.documents.map((document) => ({
+        grupo: group.label,
+        competencia: document.competence_date,
+        apropriacao: document.cost_center_name || "Empresa inteira",
+        caminhao: document.vehicle_plate || "",
+        funcionario: document.driver_name || "",
+        parceiro: document.partner_name || "",
+        titulo: document.description,
+        documento: document.document_number || "",
+        valor: document.signed_amount,
+      })),
+    );
+    if (exportScopeType === "center" && exportScope !== "all") {
+      const name = centers.find((center) => center.id === exportScope)?.name;
+      return rows.filter((row) => row.apropriacao === name);
+    }
+    if (exportScopeType === "vehicle" && exportScope !== "all") {
+      const plate = vehicles.find((vehicle) => vehicle.id === exportScope)?.plate;
+      return rows.filter((row) => row.caminhao === plate);
+    }
+    if (exportScopeType === "driver" && exportScope !== "all") {
+      const name = drivers.find((driver) => driver.id === exportScope)?.name;
+      return rows.filter((row) => row.funcionario === name);
+    }
+    return rows;
+  };
+  const rowsToDreLines = (rows: Array<Record<string, unknown>>) => {
+    const grouped = new Map<string, { documentos: number; valor: number }>();
+    rows.forEach((row) => {
+      const key = String(row.grupo || "Pendente");
+      const current = grouped.get(key) || { documentos: 0, valor: 0 };
+      grouped.set(key, {
+        documentos: current.documentos + 1,
+        valor: current.valor + Number(row.valor || 0),
+      });
+    });
+    const lines = Array.from(grouped.entries()).map(([linha, row]) => ({ linha, ...row }));
+    const total = lines.reduce((sum, row) => sum + row.valor, 0);
+    return [...lines, { linha: "Resultado gerencial", documentos: rows.length, valor: total }];
+  };
 
   if (!canDre) {
     return (
@@ -1315,23 +1452,9 @@ function DreContent({ access }: { access: FinancialAccess }) {
         subtitle="Visão gerencial por regime de competência"
         actions={
           summary ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                exportCsv(
-                  `dre-${start}-${end}.csv`,
-                  summary.groups.map((group) => ({
-                    grupo: group.label,
-                    valor_assinado: group.signed_amount,
-                    movimento: group.movement_amount,
-                    documentos: group.document_count,
-                  })),
-                )
-              }
-            >
+            <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}>
               <Download className="size-4" />
-              CSV
+              Exportar
             </Button>
           ) : undefined
         }
@@ -1384,6 +1507,102 @@ function DreContent({ access }: { access: FinancialAccess }) {
           </div>
         </>
       )}
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Exportar DRE</DialogTitle>
+            <DialogDescription>Mesma fonte, período e filtros da DRE exibida.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <Button
+              variant="outline"
+              onClick={() =>
+                openPrintableDre(
+                  "DRE Gerencial",
+                  `${date.format(new Date(`${start}T12:00:00`))} a ${date.format(new Date(`${end}T12:00:00`))}`,
+                  dreRows(),
+                )
+              }
+            >
+              DRE Gerencial — PDF
+            </Button>
+            <Button
+              variant="outline"
+              onClick={async () =>
+                downloadHtmlTable(
+                  `dre-analitico-${start}-${end}.xls`,
+                  "DRE Analítico",
+                  await collectAnalyticRows(),
+                )
+              }
+            >
+              DRE Analítico — Excel
+            </Button>
+            <div className="rounded-md border border-border p-3">
+              <div className="mb-2 text-sm font-bold">DRE por Apropriação</div>
+              <Select
+                value={exportScopeType}
+                onValueChange={(value) => {
+                  setExportScopeType(value as "company" | "center" | "vehicle" | "driver");
+                  setExportScope("all");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="company">Empresa inteira</SelectItem>
+                  <SelectItem value="center">Setor/gerencial</SelectItem>
+                  <SelectItem value="vehicle">Caminhão</SelectItem>
+                  <SelectItem value="driver">Funcionário</SelectItem>
+                </SelectContent>
+              </Select>
+              {exportScopeType !== "company" && (
+                <div className="mt-2">
+                  <SimpleSelect
+                    value={exportScope}
+                    onChange={setExportScope}
+                    all="Todos"
+                    items={
+                      exportScopeType === "center"
+                        ? centers.map((center) => [center.id, center.name])
+                        : exportScopeType === "vehicle"
+                          ? vehicles.map((vehicle) => [vehicle.id, vehicle.plate])
+                          : drivers.map((driver) => [driver.id, driver.name])
+                    }
+                  />
+                </div>
+              )}
+              <div className="mt-3 flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={async () =>
+                    openPrintableDre(
+                      "DRE por Apropriação",
+                      `${start} a ${end}`,
+                      rowsToDreLines(await collectAnalyticRows()),
+                    )
+                  }
+                >
+                  PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={async () =>
+                    downloadHtmlTable(
+                      `dre-apropriacao-${start}-${end}.xls`,
+                      "DRE por Apropriação",
+                      await collectAnalyticRows(),
+                    )
+                  }
+                >
+                  Excel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1840,7 +2059,11 @@ function TitlesContent({
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const { vehicles, drivers, products } = useFleet();
+  const canManageRecurring = hasFinancialPermission(access, "financial.manage_recurring");
   const load = useCallback(async () => {
+    if (canManageRecurring) {
+      await generateDueFinancialRecurringDocuments(access.workspaceId, today().slice(0, 7));
+    }
     const [
       documentsResult,
       partnersResult,
@@ -1887,7 +2110,7 @@ function TitlesContent({
     applyAuxiliaryResult(centersResult, setCenters, "apropriações");
     applyAuxiliaryResult(freightsResult, setFreights, "fretes financeiros");
     applyAuxiliaryResult(recurringResult, setRecurringRules, "recorrencias financeiras");
-  }, [access.tenantId, access.workspaceId, direction]);
+  }, [access.tenantId, access.workspaceId, canManageRecurring, direction]);
   useEffect(() => {
     load().catch((error) => {
       console.error("[financeiro] Falha inesperada ao carregar contas a receber/pagar", error);
@@ -2213,8 +2436,11 @@ function TitlesContent({
         onSave={async (input, recurring) => {
           setSaving(true);
           try {
-            await saveFinancialDocument(input);
-            if (recurring) await saveFinancialRecurringRule(recurring);
+            if (recurring) {
+              await saveFinancialDocumentWithRecurring({ document: input, recurring });
+            } else {
+              await saveFinancialDocument(input);
+            }
             toast.success("Título salvo com sucesso.");
             setFormOpen(false);
             setEditingDocument(null);
@@ -4133,40 +4359,32 @@ function DocumentDialog({
                   .map((a) => [a.id, `${a.code} · ${a.name}`])}
               />
             </Field>
-            <Field label="Apropriação">
+            <Field label="Setor / gerencial">
               <SimpleSelect
                 value={form.costCenterId || "all"}
                 onChange={(v) => set("costCenterId", v === "all" ? "" : v)}
-                all="Não alocado"
+                all="Empresa inteira"
                 items={centers.filter((c) => c.active).map((c) => [c.id, c.name])}
               />
             </Field>
-            <Field label="Caminhão (opcional)">
+            <Field label="Caminhao / placa">
               <SimpleSelect
                 value={form.vehicleId || "all"}
-                onChange={(v) => set("vehicleId", v === "all" ? "" : v)}
-                all="Sem caminhão"
+                onChange={(v) =>
+                  setForm({ ...form, vehicleId: v === "all" ? "" : v, driverId: "", freightId: "" })
+                }
+                all="Nao apropriar por caminhao"
                 items={vehicles.map((v) => [v.id, v.plate])}
               />
             </Field>
-            <Field label="Funcionario (opcional)">
+            <Field label="Funcionario">
               <SimpleSelect
                 value={form.driverId || "all"}
-                onChange={(v) => set("driverId", v === "all" ? "" : v)}
-                all="Sem funcionario"
+                onChange={(v) =>
+                  setForm({ ...form, driverId: v === "all" ? "" : v, vehicleId: "", freightId: "" })
+                }
+                all="Nao apropriar por funcionario"
                 items={drivers.filter((d) => d.active).map((d) => [d.id, d.name])}
-              />
-            </Field>
-            <Field label="Frete (opcional)">
-              <SimpleSelect
-                value={form.freightId || "all"}
-                onChange={(v) => set("freightId", v === "all" ? "" : v)}
-                all="Sem frete"
-                items={freights
-                  .slice(0, 100)
-                  .map(
-                    (f) => [f.id, `${f.id.slice(0, 8)} · ${f.lifecycleStatus}`] as [string, string],
-                  )}
               />
             </Field>
             <Field label="Produto (opcional)">
@@ -4201,8 +4419,7 @@ function DocumentDialog({
                 saving ||
                 !form.amount ||
                 !form.dueDate ||
-                (form.recurring === "yes" &&
-                  (!form.chartAccountId || !form.costCenterId || !form.recurringStartMonth)) ||
+                (form.recurring === "yes" && (!form.chartAccountId || !form.recurringStartMonth)) ||
                 !customInstallmentsValid
               }
               onClick={() =>

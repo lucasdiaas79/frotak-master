@@ -286,7 +286,7 @@ export interface FinancialRecurringRule {
   driverName: string | null;
   vehicleId: string | null;
   vehiclePlate: string | null;
-  costCenterId: string;
+  costCenterId: string | null;
   costCenterName: string | null;
   chartAccountId: string;
   chartAccountName: string | null;
@@ -313,7 +313,7 @@ export interface FinancialRecurringRuleInput {
   employeeName?: string;
   driverId?: string;
   vehicleId?: string;
-  costCenterId: string;
+  costCenterId?: string;
   chartAccountId: string;
   amount: number;
   frequency: FinancialRecurringFrequency;
@@ -530,6 +530,9 @@ export interface DreDetailDocument {
   description: string;
   document_number: string | null;
   partner_name: string | null;
+  cost_center_name?: string | null;
+  vehicle_plate?: string | null;
+  driver_name?: string | null;
   source_type: string | null;
   source_event: string | null;
   signed_amount: number;
