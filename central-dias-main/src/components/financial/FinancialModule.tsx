@@ -398,7 +398,199 @@ function marginLabel(value: number | null) {
   return `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
 }
 
-function signedMoney(value: number) {   return `${value >= 0 ? "+" : "-"} ${money.format(Math.abs(value))}`; }  function exportCsv(filename: string, rows: Array<Record<string, string | number | null>>) {   if (!rows.length) {     toast.info("Nao ha dados para exportar.");     return;   }   const headers = Object.keys(rows[0]);   const csv = [     headers.join(";"),     ...rows.map((row) =>       headers.map((header) => `"${String(row[header] ?? "").replaceAll('"', '""')}"`).join(";"),     ),   ].join("\n");   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });   const url = URL.createObjectURL(blob);   const link = document.createElement("a");   link.href = url;   link.download = filename;   link.click();   URL.revokeObjectURL(url); }  function ReportPeriodControls({
+function signedMoney(value: number) {
+  return `${value >= 0 ? "+" : "-"} ${money.format(Math.abs(value))}`;
+}
+
+function exportCsv(filename: string, rows: Array<Record<string, string | number | null>>) {
+  if (!rows.length) {
+    toast.info("Nao ha dados para exportar.");
+    return;
+  }
+  const headers = Object.keys(rows[0]);
+  const csv = [
+    headers.join(";"),
+    ...rows.map((row) =>
+      headers.map((header) => `"${String(row[header] ?? "").replaceAll('"', '""')}"`).join(";"),
+    ),
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+async function imageUrlToDataUrl(src: string) {
+  const response = await fetch(src);
+  const blob = await response.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function exportDrePdf({
+  filename,
+  summary,
+  statement,
+  periodLabel,
+  costCenterLabel,
+}: {
+  filename: string;
+  summary: DreSummary | null;
+  statement: Dre12MonthStatementData | null;
+  periodLabel: string;
+  costCenterLabel: string;
+}) {
+  if (!summary && !statement) {
+    toast.info("Nao ha dados para exportar.");
+    return;
+  }
+
+  const [{ jsPDF }, logoDataUrl] = await Promise.all([
+    import("jspdf"),
+    imageUrlToDataUrl(frotakLogo),
+  ]);
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 12;
+  const contentWidth = pageWidth - margin * 2;
+  let y = margin;
+
+  const addHeader = (subtitle?: string) => {
+    doc.setFillColor(13, 18, 16);
+    doc.rect(0, 0, pageWidth, 30, "F");
+    doc.addImage(logoDataUrl, "PNG", margin, 8, 32, 12);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("DRE Gerencial", margin + 40, 13);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.text(subtitle ?? periodLabel, margin + 40, 20);
+    doc.text(`Apropriacao: ${costCenterLabel}`, pageWidth - margin, 13, { align: "right" });
+    doc.text(`Gerado em ${date.format(new Date())}`, pageWidth - margin, 20, { align: "right" });
+    y = 40;
+  };
+
+  const addPageIfNeeded = (height = 12) => {
+    if (y + height <= pageHeight - margin) return;
+    doc.addPage();
+    addHeader();
+  };
+
+  const drawMetric = (label: string, value: string, x: number, w: number, tone: "dark" | "green" = "dark") => {
+    doc.setDrawColor(220, 226, 222);
+    doc.setFillColor(tone === "green" ? 232 : 248, tone === "green" ? 247 : 249, tone === "green" ? 237 : 248);
+    doc.roundedRect(x, y, w, 22, 2, 2, "FD");
+    doc.setTextColor(88, 96, 92);
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.text(label.toUpperCase(), x + 4, y + 7);
+    doc.setTextColor(tone === "green" ? 9 : 20, tone === "green" ? 126 : 24, tone === "green" ? 64 : 22);
+    doc.setFontSize(13);
+    doc.text(value, x + 4, y + 16);
+  };
+
+  addHeader(statement?.basisLabel ? `Base: ${statement.basisLabel} | ${periodLabel}` : periodLabel);
+
+  if (summary) {
+    const metricWidth = (contentWidth - 9) / 4;
+    drawMetric("Receita liquida", money.format(summary.totals.netRevenue), margin, metricWidth);
+    drawMetric("Custos variaveis", money.format(summary.totals.variable_costs), margin + metricWidth + 3, metricWidth);
+    drawMetric("Resultado operacional", money.format(summary.totals.operatingResult), margin + (metricWidth + 3) * 2, metricWidth);
+    drawMetric("Resultado gerencial", money.format(summary.totals.managerial_result), margin + (metricWidth + 3) * 3, metricWidth, "green");
+    y += 32;
+
+    doc.setTextColor(20, 24, 22);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text("Resumo por grupo", margin, y);
+    y += 7;
+    doc.setFontSize(8.5);
+    doc.setDrawColor(220, 226, 222);
+    doc.line(margin, y, pageWidth - margin, y);
+    y += 5;
+    summary.groups.forEach((group) => {
+      addPageIfNeeded(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(32, 38, 35);
+      doc.text(group.label, margin, y);
+      doc.text(String(group.document_count), margin + 135, y, { align: "right" });
+      doc.text(money.format(group.movement_amount), pageWidth - margin, y, { align: "right" });
+      y += 7;
+    });
+    y += 6;
+  }
+
+  if (statement) {
+    addPageIfNeeded(40);
+    doc.setTextColor(20, 24, 22);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(statement.title, margin, y);
+    y += 7;
+
+    const accountWidth = 60;
+    const totalWidth = 23;
+    const averageWidth = 23;
+    const monthWidth = (contentWidth - accountWidth - totalWidth - averageWidth) / 12;
+    const rowHeight = 6;
+    const drawStatementHeader = () => {
+      doc.setFillColor(237, 243, 239);
+      doc.rect(margin, y - 4, contentWidth, rowHeight + 2, "F");
+      doc.setTextColor(68, 75, 71);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.8);
+      doc.text("Conta", margin + 1, y);
+      statement.months.forEach((month, index) => {
+        doc.text(month.label.slice(0, 3), margin + accountWidth + monthWidth * index + monthWidth - 1, y, {
+          align: "right",
+        });
+      });
+      doc.text("Total", pageWidth - margin - averageWidth - 2, y, { align: "right" });
+      doc.text("Media", pageWidth - margin - 1, y, { align: "right" });
+      y += rowHeight + 1;
+    };
+
+    drawStatementHeader();
+    statement.rows.forEach((row) => {
+      addPageIfNeeded(rowHeight + 3);
+      if (y < 42) drawStatementHeader();
+      if (row.level === 0) {
+        doc.setFillColor(247, 249, 248);
+        doc.rect(margin, y - 4, contentWidth, rowHeight + 1, "F");
+      }
+      doc.setFont("helvetica", row.level <= 1 ? "bold" : "normal");
+      doc.setTextColor(28, 34, 31);
+      doc.setFontSize(row.level === 0 ? 6.8 : 6.2);
+      const accountName = `${row.code} ${row.name}`;
+      doc.text(accountName.slice(0, 47), margin + 1 + row.level * 3, y);
+      row.monthly.forEach((value, index) => {
+        doc.text(value ? money.format(value).replace("R$", "").trim() : "-", margin + accountWidth + monthWidth * index + monthWidth - 1, y, {
+          align: "right",
+        });
+      });
+      doc.text(money.format(row.total).replace("R$", "").trim(), pageWidth - margin - averageWidth - 2, y, {
+        align: "right",
+      });
+      doc.text(money.format(row.average).replace("R$", "").trim(), pageWidth - margin - 1, y, {
+        align: "right",
+      });
+      y += rowHeight;
+    });
+  }
+
+  doc.save(filename);
+}
+
+function ReportPeriodControls({
   mode,
   start,
   end,
@@ -1348,6 +1540,7 @@ function DreContent({ access }: { access: FinancialAccess }) {
   const [dre12Basis, setDre12Basis] = useState<Dre12MonthBasis>("accrual");
   const [dre12Statement, setDre12Statement] = useState<Dre12MonthStatementData | null>(null);
   const [dre12Loading, setDre12Loading] = useState(true);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const canDre = hasFinancialPermission(access, "financial.dre.view");
   const parsedDreYear = Number(dreYearInput);
   const dreYearIsValid =
@@ -1367,6 +1560,20 @@ function DreContent({ access }: { access: FinancialAccess }) {
     }),
     [access.workspaceId, costCenterId, end, start],
   );
+  const selectedCostCenterLabel =
+    costCenterId === "all"
+      ? "Consolidado"
+      : centers.find((center) => center.id === costCenterId)?.name || "Apropriacao selecionada";
+  const drePeriodLabel = `${date.format(new Date(`${start}T12:00:00`))} a ${date.format(
+    new Date(`${end}T12:00:00`),
+  )}`;
+  const csvRows =
+    summary?.groups.map((group) => ({
+      grupo: group.label,
+      valor_assinado: group.signed_amount,
+      movimento: group.movement_amount,
+      documentos: group.document_count,
+    })) ?? [];
 
   const loadSummary = useCallback(async () => {
     if (!canDre) return;
@@ -1443,25 +1650,43 @@ function DreContent({ access }: { access: FinancialAccess }) {
         title="DRE Gerencial"
         subtitle={dreSubtitle}
         actions={
-          summary ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                exportCsv(
-                  'dre-' + start + '-' + end + '.csv',
-                  summary.groups.map((group) => ({
-                    grupo: group.label,
-                    valor_assinado: group.signed_amount,
-                    movimento: group.movement_amount,
-                    documentos: group.document_count,
-                  })),
-                )
-              }
-            >
-              <Download className="size-4" />
-              CSV
-            </Button>
+          summary || dre12Statement ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={exportingPdf}>
+                  {exportingPdf ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <Download className="size-4" />
+                  )}
+                  Exportar
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() =>
+                    exportDrePdf({
+                      filename: 'dre-gerencial-' + start + '-' + end + '.pdf',
+                      summary,
+                      statement: dre12Statement,
+                      periodLabel: drePeriodLabel,
+                      costCenterLabel: selectedCostCenterLabel,
+                    })
+                      .catch(() => toast.error("Nao foi possivel gerar o PDF."))
+                      .finally(() => setExportingPdf(false))
+                  }
+                  onSelect={() => setExportingPdf(true)}
+                >
+                  PDF com logo Frotak
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => exportCsv('dre-' + start + '-' + end + '.csv', csvRows)}
+                  disabled={!csvRows.length}
+                >
+                  CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : undefined
         }
       />
