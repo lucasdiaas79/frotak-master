@@ -1334,7 +1334,7 @@ function Dre12MonthStatement({
 }
 
 function DreContent({ access }: { access: FinancialAccess }) {
-  const [dreYear, setDreYear] = useState(() => new Date().getFullYear());
+  const [dreYearInput, setDreYearInput] = useState(() => String(new Date().getFullYear()));
   const [costCenterId, setCostCenterId] = useState("all");
   const [centers, setCenters] = useState<CostCenter[]>([]);
   const [summary, setSummary] = useState<DreSummary | null>(null);
@@ -1346,8 +1346,16 @@ function DreContent({ access }: { access: FinancialAccess }) {
   const [dre12Statement, setDre12Statement] = useState<Dre12MonthStatementData | null>(null);
   const [dre12Loading, setDre12Loading] = useState(true);
   const canDre = hasFinancialPermission(access, "financial.dre.view");
-  const dreYearStart = `${dreYear}-01-01`;
-  const dreYearEnd = `${dreYear}-12-31`;
+  const parsedDreYear = Number(dreYearInput);
+  const dreYearIsValid =
+    /^\d{4}$/.test(dreYearInput) && parsedDreYear >= 2000 && parsedDreYear <= 2100;
+  const dreYear = dreYearIsValid ? parsedDreYear : null;
+  const dreYearStart = dreYear ? `${dreYear}-01-01` : "";
+  const dreYearEnd = dreYear ? `${dreYear}-12-31` : "";
+  const dreSubtitle =
+    dre12Basis === "cash"
+      ? "Visão gerencial por pagamentos e recebimentos conciliados"
+      : "Visão gerencial por lançamento/competência";
 
   const payload = useMemo(
     () => ({
@@ -1361,6 +1369,16 @@ function DreContent({ access }: { access: FinancialAccess }) {
 
   const loadSummary = useCallback(async () => {
     if (!canDre) return;
+    if (!dreYear) {
+      setSummary(null);
+      setDre12Statement(null);
+      setDetail(null);
+      setSelectedGroup(null);
+      setSelectedAccount(null);
+      setLoading(false);
+      setDre12Loading(false);
+      return;
+    }
     setLoading(true);
     setDre12Loading(true);
     const [nextSummary, nextCenters, nextStatement] = await Promise.all([
@@ -1411,7 +1429,7 @@ function DreContent({ access }: { access: FinancialAccess }) {
   if (!canDre) {
     return (
       <div className="financial-shell space-y-4">
-        <PageHeader title="DRE Gerencial" subtitle="Visao gerencial por regime de competencia" />
+        <PageHeader title="DRE Gerencial" subtitle={dreSubtitle} />
         <FinancialNav />
         <RestrictedReport permission="financial.dre.view" />
       </div>
@@ -1422,7 +1440,7 @@ function DreContent({ access }: { access: FinancialAccess }) {
     <div className="financial-shell financial-dre-shell space-y-4">
       <PageHeader
         title="DRE Gerencial"
-        subtitle="Visao gerencial por regime de competencia"
+        subtitle={dreSubtitle}
         actions={
           summary ? (
             <Button
@@ -1453,14 +1471,12 @@ function DreContent({ access }: { access: FinancialAccess }) {
             type="number"
             min={2000}
             max={2100}
-            value={dreYear}
-            onChange={(event) => {
-              const nextYear = Number(event.target.value);
-              if (Number.isFinite(nextYear)) {
-                setDreYear(nextYear);
-              }
-            }}
+            value={dreYearInput}
+            onChange={(event) => setDreYearInput(event.target.value)}
           />
+          {!dreYearIsValid ? (
+            <span className="text-xs text-destructive">Informe um ano entre 2000 e 2100.</span>
+          ) : null}
         </Field>
         <Field label="Apropriacao">
           <Select value={costCenterId} onValueChange={setCostCenterId}>
