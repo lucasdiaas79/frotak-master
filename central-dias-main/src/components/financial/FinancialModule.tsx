@@ -4485,6 +4485,14 @@ function SettlementDialog({
               onChange={(e) => setForm({ ...form, discount: e.target.value })}
             />
           </Field>
+          {hasAdjustments && (
+            <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground sm:col-span-2">
+              <strong className="mb-1 block text-foreground">Classificacao gerencial dos ajustes</strong>
+              <span className="block">Juros entram no gerencial 7.03 - Juros e aparecem no DRE em Resultado Financeiro.</span>
+              <span className="block">Multas entram no gerencial 7.04 - Multas e aparecem no DRE em Resultado Financeiro.</span>
+              <span className="block">Descontos seguem a categoria propria de descontos da baixa.</span>
+            </div>
+          )}
           <Field label="Forma">
             <Select value={form.method} onValueChange={(v) => setForm({ ...form, method: v })}>
               <SelectTrigger>
