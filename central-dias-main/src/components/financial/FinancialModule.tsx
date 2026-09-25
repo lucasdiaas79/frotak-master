@@ -120,6 +120,7 @@ import {
 import {
   getCashFlowEntries,
   getCashFlowSummary,
+  getDre12MonthStatement,
   getDreDetail,
   getDreSummary,
   getFinancialDashboard,
@@ -131,6 +132,8 @@ import type {
   CanonicalFreight,
   ChartAccount,
   CostCenter,
+  Dre12MonthBasis,
+  Dre12MonthStatement as Dre12MonthStatementData,
   DreDetail,
   DreGroupRow,
   DreSummary,
@@ -1222,120 +1225,22 @@ function DreDetailPanel({
   );
 }
 
-type Dre12MonthRow = {
-  id: string;
-  code: string;
-  name: string;
-  level: number;
-  monthly: number[];
-  total: number;
-  average: number;
-};
-
-const dreMonthLabels = Array.from({ length: 12 }, (_, index) =>
-  new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(new Date(2026, index, 1)),
-);
-
 function dreYearFromDate(value: string) {
   const parsed = Number(value.slice(0, 4));
   return Number.isFinite(parsed) ? parsed : new Date().getFullYear();
 }
 
-function dreMonthBounds(year: number, monthIndex: number) {
-  const month = String(monthIndex + 1).padStart(2, "0");
-  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
-  return {
-    startDate: `${year}-${month}-01`,
-    endDate: `${year}-${month}-${String(lastDay).padStart(2, "0")}`,
-  };
-}
-
-function dreAccountLevel(code: string) {
-  return Math.max(0, code.split(".").length - 1);
-}
-
-function buildDre12MonthRows(chart: ChartAccount[], details: DreDetail[]) {
-  const modelAccounts = chart
-    .filter((account) => account.active && /^(1|2|5)(\.|$)/.test(account.code))
-    .sort((a, b) => a.code.localeCompare(b.code, "pt-BR", { numeric: true }));
-  const children = new Map<string | null, ChartAccount[]>();
-  for (const account of modelAccounts) {
-    const list = children.get(account.parentId) ?? [];
-    list.push(account);
-    children.set(account.parentId, list);
-  }
-
-  const ownMonthly = new Map<string, number[]>();
-  for (const account of modelAccounts) ownMonthly.set(account.id, Array(12).fill(0));
-  details.forEach((detail, monthIndex) => {
-    for (const account of detail.accounts) {
-      if (!account.chart_account_id) continue;
-      const current = ownMonthly.get(account.chart_account_id);
-      if (current) current[monthIndex] += account.signed_amount;
-    }
-  });
-
-  const totalCache = new Map<string, number[]>();
-  const sumAccount = (account: ChartAccount): number[] => {
-    const cached = totalCache.get(account.id);
-    if (cached) return cached;
-    const values = [...(ownMonthly.get(account.id) ?? Array(12).fill(0))];
-    for (const child of children.get(account.id) ?? []) {
-      const childValues = sumAccount(child);
-      childValues.forEach((value, index) => {
-        values[index] += value;
-      });
-    }
-    totalCache.set(account.id, values);
-    return values;
-  };
-
-  return modelAccounts
-    .map((account): Dre12MonthRow => {
-      const monthly = sumAccount(account).map((value) => Number(value.toFixed(2)));
-      const total = Number(monthly.reduce((sum, value) => sum + value, 0).toFixed(2));
-      return {
-        id: account.id,
-        code: account.code,
-        name: account.name,
-        level: dreAccountLevel(account.code),
-        monthly,
-        total,
-        average: Number((total / 12).toFixed(2)),
-      };
-    })
-    .filter((row) => Math.abs(row.total) >= 0.01);
-}
-
-async function loadDre12MonthRows(
-  workspaceId: string,
-  tenantId: string,
-  year: number,
-  costCenterId: string | null,
-) {
-  const chartPromise = listFinancialChart(tenantId);
-  const detailPromises = Array.from({ length: 12 }, (_, monthIndex) => {
-    const bounds = dreMonthBounds(year, monthIndex);
-    return getDreDetail({
-      workspaceId,
-      startDate: bounds.startDate,
-      endDate: bounds.endDate,
-      costCenterId,
-    });
-  });
-  const [chart, ...details] = await Promise.all([chartPromise, ...detailPromises]);
-  return buildDre12MonthRows(chart, details);
-}
-
 function Dre12MonthStatement({
-  year,
-  rows,
+  statement,
   loading,
 }: {
-  year: number;
-  rows: Dre12MonthRow[];
+  statement: Dre12MonthStatementData | null;
   loading: boolean;
 }) {
+  const rows = statement?.rows ?? [];
+  const months = statement?.months ?? [];
+  const basis = statement?.basis ?? "accrual";
+
   return (
     <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
       <div className="mb-4 flex flex-col gap-4 border-b border-border pb-4 lg:flex-row lg:items-start lg:justify-between">
@@ -1345,14 +1250,18 @@ function Dre12MonthStatement({
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
               Demonstrativo gerencial 12 meses
             </p>
-            <h2 className="text-xl font-black">Frotak - Caixa</h2>
-            <span className="text-sm text-muted-foreground">Ano base: {year}</span>
+            <h2 className="text-xl font-black">
+              {statement?.title ?? "Demonstrativo gerencial 12 meses"}
+            </h2>
+            <span className="text-sm text-muted-foreground">
+              Ano base: {statement?.year ?? new Date().getFullYear()} · Base: {statement?.basisLabel ?? "Lancamento"}
+            </span>
           </div>
         </div>
         <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2 lg:text-right">
-          <span>Data base: lançamentos</span>
-          <span>Previsões: realizadas e previstas</span>
-          <span>Exibe zeradas: não</span>
+          <span>Base: {basis === "cash" ? "Conciliacao" : "Lancamento"}</span>
+          <span>{basis === "cash" ? "Data da baixa/conciliacao" : "Competencia do motor financeiro"}</span>
+          <span>{basis === "cash" ? "Somente pago/recebido" : "Independe de pagamento"}</span>
           <span>Gerado em {date.format(new Date())}</span>
         </div>
       </div>
@@ -1362,13 +1271,13 @@ function Dre12MonthStatement({
           <thead>
             <tr className="border-b border-border text-left text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
               <th className="w-[360px] py-2 pr-3">Conta</th>
-              {dreMonthLabels.map((label) => (
-                <th key={label} className="px-2 py-2 text-right">
-                  {label.slice(0, 3)}
+              {months.map((month) => (
+                <th key={month.index} className="px-2 py-2 text-right">
+                  {month.label.slice(0, 3)}
                 </th>
               ))}
               <th className="px-2 py-2 text-right">Total</th>
-              <th className="py-2 pl-2 text-right">Média</th>
+              <th className="py-2 pl-2 text-right">Media</th>
             </tr>
           </thead>
           <tbody>
@@ -1418,7 +1327,7 @@ function Dre12MonthStatement({
             ) : (
               <tr>
                 <td colSpan={15} className="py-8 text-center text-muted-foreground">
-                  Nenhum lançamento gerencial encontrado para o ano selecionado.
+                  Nenhum lancamento gerencial encontrado para o ano selecionado.
                 </td>
               </tr>
             )}
@@ -1440,7 +1349,8 @@ function DreContent({ access }: { access: FinancialAccess }) {
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dre12Rows, setDre12Rows] = useState<Dre12MonthRow[]>([]);
+  const [dre12Basis, setDre12Basis] = useState<Dre12MonthBasis>("accrual");
+  const [dre12Statement, setDre12Statement] = useState<Dre12MonthStatementData | null>(null);
   const [dre12Loading, setDre12Loading] = useState(true);
   const canDre = hasFinancialPermission(access, "financial.dre.view");
   const dreYear = dreYearFromDate(start);
@@ -1459,25 +1369,25 @@ function DreContent({ access }: { access: FinancialAccess }) {
     if (!canDre) return;
     setLoading(true);
     setDre12Loading(true);
-    const [nextSummary, nextCenters, nextRows] = await Promise.all([
+    const [nextSummary, nextCenters, nextStatement] = await Promise.all([
       getDreSummary(payload),
-      listFinancialCostCenters(),
-      loadDre12MonthRows(
-        access.workspaceId,
-        access.tenantId,
-        dreYear,
-        costCenterId === "all" ? null : costCenterId,
-      ),
+      listFinancialCostCenters(access.workspaceId),
+      getDre12MonthStatement({
+        workspaceId: access.workspaceId,
+        year: dreYear,
+        basis: dre12Basis,
+        costCenterId: costCenterId === "all" ? null : costCenterId,
+      }),
     ]);
     setSummary(nextSummary);
     setCenters(nextCenters);
-    setDre12Rows(nextRows);
+    setDre12Statement(nextStatement);
     setDetail(null);
     setSelectedGroup(null);
     setSelectedAccount(null);
     setLoading(false);
     setDre12Loading(false);
-  }, [access.tenantId, access.workspaceId, canDre, costCenterId, dreYear, payload]);
+  }, [access.workspaceId, canDre, costCenterId, dre12Basis, dreYear, payload]);
 
   useEffect(() => {
     loadSummary().catch(() => {
@@ -1568,13 +1478,24 @@ function DreContent({ access }: { access: FinancialAccess }) {
             </SelectContent>
           </Select>
         </Field>
+        <Field label="Base">
+          <Select value={dre12Basis} onValueChange={(value) => setDre12Basis(value as Dre12MonthBasis)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="accrual">Lançamento</SelectItem>
+              <SelectItem value="cash">Conciliação</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
       </section>
       {loading || !summary ? (
         <LoadingReport />
       ) : (
         <>
           <DreExecutiveSummary summary={summary} />
-          <Dre12MonthStatement year={dreYear} rows={dre12Rows} loading={dre12Loading} />
+          <Dre12MonthStatement statement={dre12Statement} loading={dre12Loading} />
           <div className="financial-dre-layout">
             <DreStatement
               summary={summary}
