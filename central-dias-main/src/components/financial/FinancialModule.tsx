@@ -1370,7 +1370,7 @@ function DreContent({ access }: { access: FinancialAccess }) {
     setLoading(true);
     setDre12Loading(true);
     const [nextSummary, nextCenters, nextStatement] = await Promise.all([
-      getDreSummary(payload),
+      dre12Basis === "accrual" ? getDreSummary(payload) : Promise.resolve(null),
       listFinancialCostCenters(access.workspaceId),
       getDre12MonthStatement({
         workspaceId: access.workspaceId,
@@ -1490,26 +1490,38 @@ function DreContent({ access }: { access: FinancialAccess }) {
           </Select>
         </Field>
       </section>
-      {loading || !summary ? (
+      {loading || !dre12Statement ? (
         <LoadingReport />
       ) : (
         <>
-          <DreExecutiveSummary summary={summary} />
           <Dre12MonthStatement statement={dre12Statement} loading={dre12Loading} />
-          <div className="financial-dre-layout">
-            <DreStatement
-              summary={summary}
-              selectedGroup={selectedGroup}
-              onGroup={(group) => openGroup(group).catch(() => toast.error("Falha no drilldown."))}
-            />
-            <DreDetailPanel
-              detail={detail}
-              selectedAccount={selectedAccount}
-              onAccount={(account) =>
-                openAccount(account).catch(() => toast.error("Falha no detalhe."))
-              }
-            />
-          </div>
+          {dre12Basis === "accrual" && summary ? (
+            <>
+              <DreExecutiveSummary summary={summary} />
+              <div className="financial-dre-layout">
+                <DreStatement
+                  summary={summary}
+                  selectedGroup={selectedGroup}
+                  onGroup={(group) =>
+                    openGroup(group).catch(() => toast.error("Falha no drilldown."))
+                  }
+                />
+                <DreDetailPanel
+                  detail={detail}
+                  selectedAccount={selectedAccount}
+                  onAccount={(account) =>
+                    openAccount(account).catch(() => toast.error("Falha no detalhe."))
+                  }
+                />
+              </div>
+            </>
+          ) : (
+            <section className="premium-card mx-3 p-4 text-sm text-muted-foreground md:mx-0">
+              Resumo executivo e drilldown analítico ocultos nesta base para evitar comparar
+              lançamentos com conciliação. O demonstrativo acima já está calculado por baixas,
+              estornos e ajustes conciliados.
+            </section>
+          )}
         </>
       )}
     </div>

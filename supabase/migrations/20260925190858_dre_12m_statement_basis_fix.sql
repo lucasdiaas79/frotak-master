@@ -147,13 +147,17 @@ begin
     join public.financial_documents fd on fd.id = se.document_id
     where fd.status in ('posted', 'partially_settled', 'settled')
   ),
+  settlement_document_ids as (
+    select distinct document_id
+    from settlement_docs
+  ),
   settlement_alloc_totals as (
     select
       a.document_id,
       sum(a.amount)::numeric(18,2) as allocated_total,
       count(*) as allocation_count
     from public.financial_allocations a
-    join settlement_docs d on d.document_id = a.document_id
+    join settlement_document_ids d on d.document_id = a.document_id
     group by a.document_id
   ),
   settlement_allocated as (
@@ -214,7 +218,6 @@ begin
         order by r.is_unallocated desc, abs(r.fact_amount) desc, r.chart_account_id nulls last
       ) as rn
     from settlement_facts_raw r
-    where v_cost_center_id is null or r.cost_center_id = v_cost_center_id
   ),
   settlement_facts as (
     select
@@ -233,6 +236,7 @@ begin
       )::numeric(18,2) as signed_amount
     from settlement_rounded sr
     left join public.chart_of_accounts coa on coa.id = sr.chart_account_id and coa.tenant_id = sr.tenant_id
+    where v_cost_center_id is null or sr.cost_center_id = v_cost_center_id
   ),
   adjustment_events as (
     select
@@ -275,13 +279,17 @@ begin
       and rev.settlement_type = 'reversal'
       and rev.settled_on between v_start and v_end
   ),
+  adjustment_document_ids as (
+    select distinct document_id
+    from adjustment_events
+  ),
   adjustment_alloc_totals as (
     select
       a.document_id,
       sum(a.amount)::numeric(18,2) as allocated_total,
       count(*) as allocation_count
     from public.financial_allocations a
-    join adjustment_events e on e.document_id = a.document_id
+    join adjustment_document_ids e on e.document_id = a.document_id
     group by a.document_id
   ),
   adjustment_allocated as (
@@ -334,7 +342,6 @@ begin
         order by r.is_unallocated desc, abs(r.fact_amount) desc, r.chart_account_id nulls last
       ) as rn
     from adjustment_facts_raw r
-    where v_cost_center_id is null or r.cost_center_id = v_cost_center_id
   ),
   adjustment_facts as (
     select
@@ -353,6 +360,7 @@ begin
       )::numeric(18,2) as signed_amount
     from adjustment_rounded ar
     left join public.chart_of_accounts coa on coa.id = ar.chart_account_id and coa.tenant_id = ar.tenant_id
+    where v_cost_center_id is null or ar.cost_center_id = v_cost_center_id
   ),
   facts as (
     select * from accrual_facts
@@ -365,7 +373,8 @@ begin
     select
       month_index,
       chart_account_code,
-      sum(signed_amount)::numeric(18,2) as signed_amount
+      sum(signed_amount)::numeric(18,2) as signed_amount,
+      sum(abs(signed_amount))::numeric(18,2) as movement_amount
     from facts
     where chart_account_code is not null
     group by month_index, chart_account_code
@@ -394,7 +403,8 @@ begin
       c.dre_group,
       c.level,
       m.month_index,
-      coalesce(sum(f.signed_amount), 0)::numeric(18,2) as signed_amount
+      coalesce(sum(f.signed_amount), 0)::numeric(18,2) as signed_amount,
+      coalesce(sum(f.movement_amount), 0)::numeric(18,2) as movement_amount
     from chart c
     cross join months m
     left join facts_by_account f
@@ -418,8 +428,13 @@ begin
       jsonb_agg(am.signed_amount order by am.month_index) as signed_monthly,
       sum(case when am.account_type = 'revenue' then am.signed_amount else -am.signed_amount end)::numeric(18,2) as total,
       sum(am.signed_amount)::numeric(18,2) as signed_total,
-      coalesce(avg(nullif(case when am.account_type = 'revenue' then am.signed_amount else -am.signed_amount end, 0)), 0)::numeric(18,2) as average,
-      count(*) filter (where abs(am.signed_amount) >= 0.01) as movement_months
+      case
+        when count(*) filter (where abs(am.movement_amount) >= 0.01) > 0
+          then (sum(case when am.account_type = 'revenue' then am.signed_amount else -am.signed_amount end)
+            / count(*) filter (where abs(am.movement_amount) >= 0.01))::numeric(18,2)
+        else 0::numeric(18,2)
+      end as average,
+      count(*) filter (where abs(am.movement_amount) >= 0.01) as movement_months
     from account_months am
     group by am.id, am.code, am.name, am.account_type, am.normal_balance, am.dre_group, am.level
   ),
@@ -441,7 +456,20 @@ begin
     'months', (
       select jsonb_agg(jsonb_build_object(
         'index', m.month_index,
-        'label', to_char(m.start_date, 'TMMonth'),
+        'label', case m.month_index
+          when 1 then 'Janeiro'
+          when 2 then 'Fevereiro'
+          when 3 then 'Março'
+          when 4 then 'Abril'
+          when 5 then 'Maio'
+          when 6 then 'Junho'
+          when 7 then 'Julho'
+          when 8 then 'Agosto'
+          when 9 then 'Setembro'
+          when 10 then 'Outubro'
+          when 11 then 'Novembro'
+          when 12 then 'Dezembro'
+        end,
         'startDate', m.start_date,
         'endDate', m.end_date
       ) order by m.month_index)
