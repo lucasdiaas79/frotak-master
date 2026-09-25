@@ -42,6 +42,7 @@ import {
 } from "recharts";
 import { PageHeader } from "@/components/PageHeader";
 import { FinancialNav } from "@/components/financial/FinancialNav";
+import frotakLogo from "@/assets/logo-central.png";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -1221,7 +1222,380 @@ function DreDetailPanel({
   );
 }
 
-function DreContent({ access }: { access: FinancialAccess }) {   const [mode, setMode] = useState<PeriodMode>("month");   const [start, setStart] = useState(() => periodBounds("month")[0]);   const [end, setEnd] = useState(() => periodBounds("month")[1]);   const [costCenterId, setCostCenterId] = useState("all");   const [centers, setCenters] = useState<CostCenter[]>([]);   const [summary, setSummary] = useState<DreSummary | null>(null);   const [detail, setDetail] = useState<DreDetail | null>(null);   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);   const [selectedAccount, setSelectedAccount] = useState<string | null>(null);   const [loading, setLoading] = useState(true);   const canDre = hasFinancialPermission(access, "financial.dre.view");   const payload = useMemo(     () => ({       workspaceId: access.workspaceId,       startDate: start,       endDate: end,       costCenterId: costCenterId === "all" ? null : costCenterId,     }),     [access.workspaceId, costCenterId, end, start],   );   const loadSummary = useCallback(async () => {     if (!canDre) return;     setLoading(true);     const [nextSummary, nextCenters] = await Promise.all([       getDreSummary(payload),       listFinancialCostCenters(),     ]);     setSummary(nextSummary);     setCenters(nextCenters);     setDetail(null);     setSelectedGroup(null);     setSelectedAccount(null);     setLoading(false);   }, [canDre, payload]);   useEffect(() => {     loadSummary().catch(() => {       setLoading(false);       toast.error("Nao foi possivel carregar a DRE gerencial.");     });   }, [loadSummary]);   const openGroup = async (group: DreGroupRow) => {     setSelectedGroup(group.dre_group);     setSelectedAccount(null);     setDetail(await getDreDetail({ ...payload, dreGroup: group.dre_group }));   };   const openAccount = async (account: string | null) => {     setSelectedAccount(account);     setDetail(       await getDreDetail({         ...payload,         dreGroup: selectedGroup,         chartAccountId: account,       }),     );   };    if (!canDre) {     return (       <div className="financial-shell space-y-4">         <PageHeader title="DRE Gerencial" subtitle="Visão gerencial por regime de competência" />         <FinancialNav />         <RestrictedReport permission="financial.dre.view" />       </div>     );   }    return (     <div className="financial-shell financial-dre-shell space-y-4">       <PageHeader         title="DRE Gerencial"         subtitle="Visão gerencial por regime de competência"         actions={           summary ? (             <Button               variant="outline"               size="sm"               onClick={() =>                 exportCsv(                   `dre-${start}-${end}.csv`,                   summary.groups.map((group) => ({                     grupo: group.label,                     valor_assinado: group.signed_amount,                     movimento: group.movement_amount,                     documentos: group.document_count,                   })),                 )               }             >               <Download className="size-4" />               CSV             </Button>           ) : undefined         }       />       <FinancialNav />       <section className="financial-dre-control-bar">         <ReportPeriodControls           mode={mode}           start={start}           end={end}           onMode={setMode}           onStart={setStart}           onEnd={setEnd}           compact         />         <Field label="Apropriação">           <Select value={costCenterId} onValueChange={setCostCenterId}>             <SelectTrigger>               <SelectValue />             </SelectTrigger>             <SelectContent>               <SelectItem value="all">Consolidado</SelectItem>               {centers.map((center) => (                 <SelectItem key={center.id} value={center.id}>                   {center.name}                 </SelectItem>               ))}             </SelectContent>           </Select>         </Field>       </section>       {loading || !summary ? (         <LoadingReport />       ) : (         <>           <DreExecutiveSummary summary={summary} />           <div className="financial-dre-layout">             <DreStatement               summary={summary}               selectedGroup={selectedGroup}               onGroup={(group) => openGroup(group).catch(() => toast.error("Falha no drilldown."))}             />             <DreDetailPanel               detail={detail}               selectedAccount={selectedAccount}               onAccount={(account) =>                 openAccount(account).catch(() => toast.error("Falha no detalhe."))               }             />           </div>         </>       )}     </div>   ); } export function FinancialCashFlowPage() {
+type Dre12MonthRow = {
+  id: string;
+  code: string;
+  name: string;
+  level: number;
+  monthly: number[];
+  total: number;
+  average: number;
+};
+
+const dreMonthLabels = Array.from({ length: 12 }, (_, index) =>
+  new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(new Date(2026, index, 1)),
+);
+
+function dreYearFromDate(value: string) {
+  const parsed = Number(value.slice(0, 4));
+  return Number.isFinite(parsed) ? parsed : new Date().getFullYear();
+}
+
+function dreMonthBounds(year: number, monthIndex: number) {
+  const month = String(monthIndex + 1).padStart(2, "0");
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  return {
+    startDate: `${year}-${month}-01`,
+    endDate: `${year}-${month}-${String(lastDay).padStart(2, "0")}`,
+  };
+}
+
+function dreAccountLevel(code: string) {
+  return Math.max(0, code.split(".").length - 1);
+}
+
+function buildDre12MonthRows(chart: ChartAccount[], details: DreDetail[]) {
+  const modelAccounts = chart
+    .filter((account) => account.active && /^(1|2|5)(\.|$)/.test(account.code))
+    .sort((a, b) => a.code.localeCompare(b.code, "pt-BR", { numeric: true }));
+  const children = new Map<string | null, ChartAccount[]>();
+  for (const account of modelAccounts) {
+    const list = children.get(account.parentId) ?? [];
+    list.push(account);
+    children.set(account.parentId, list);
+  }
+
+  const ownMonthly = new Map<string, number[]>();
+  for (const account of modelAccounts) ownMonthly.set(account.id, Array(12).fill(0));
+  details.forEach((detail, monthIndex) => {
+    for (const account of detail.accounts) {
+      if (!account.chart_account_id) continue;
+      const current = ownMonthly.get(account.chart_account_id);
+      if (current) current[monthIndex] += account.signed_amount;
+    }
+  });
+
+  const totalCache = new Map<string, number[]>();
+  const sumAccount = (account: ChartAccount): number[] => {
+    const cached = totalCache.get(account.id);
+    if (cached) return cached;
+    const values = [...(ownMonthly.get(account.id) ?? Array(12).fill(0))];
+    for (const child of children.get(account.id) ?? []) {
+      const childValues = sumAccount(child);
+      childValues.forEach((value, index) => {
+        values[index] += value;
+      });
+    }
+    totalCache.set(account.id, values);
+    return values;
+  };
+
+  return modelAccounts
+    .map((account): Dre12MonthRow => {
+      const monthly = sumAccount(account).map((value) => Number(value.toFixed(2)));
+      const total = Number(monthly.reduce((sum, value) => sum + value, 0).toFixed(2));
+      return {
+        id: account.id,
+        code: account.code,
+        name: account.name,
+        level: dreAccountLevel(account.code),
+        monthly,
+        total,
+        average: Number((total / 12).toFixed(2)),
+      };
+    })
+    .filter((row) => Math.abs(row.total) >= 0.01);
+}
+
+async function loadDre12MonthRows(
+  workspaceId: string,
+  tenantId: string,
+  year: number,
+  costCenterId: string | null,
+) {
+  const chartPromise = listFinancialChart(tenantId);
+  const detailPromises = Array.from({ length: 12 }, (_, monthIndex) => {
+    const bounds = dreMonthBounds(year, monthIndex);
+    return getDreDetail({
+      workspaceId,
+      startDate: bounds.startDate,
+      endDate: bounds.endDate,
+      costCenterId,
+    });
+  });
+  const [chart, ...details] = await Promise.all([chartPromise, ...detailPromises]);
+  return buildDre12MonthRows(chart, details);
+}
+
+function Dre12MonthStatement({
+  year,
+  rows,
+  loading,
+}: {
+  year: number;
+  rows: Dre12MonthRow[];
+  loading: boolean;
+}) {
+  return (
+    <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
+      <div className="mb-4 flex flex-col gap-4 border-b border-border pb-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex min-w-0 items-center gap-4">
+          <img src={frotakLogo} alt="Frotak" className="h-12 w-24 rounded-md object-cover" />
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+              Demonstrativo gerencial 12 meses
+            </p>
+            <h2 className="text-xl font-black">Frotak - Caixa</h2>
+            <span className="text-sm text-muted-foreground">Ano base: {year}</span>
+          </div>
+        </div>
+        <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2 lg:text-right">
+          <span>Data base: lançamentos</span>
+          <span>Previsões: realizadas e previstas</span>
+          <span>Exibe zeradas: não</span>
+          <span>Gerado em {date.format(new Date())}</span>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1080px] border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+              <th className="w-[360px] py-2 pr-3">Conta</th>
+              {dreMonthLabels.map((label) => (
+                <th key={label} className="px-2 py-2 text-right">
+                  {label.slice(0, 3)}
+                </th>
+              ))}
+              <th className="px-2 py-2 text-right">Total</th>
+              <th className="py-2 pl-2 text-right">Média</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={15} className="py-8 text-center text-muted-foreground">
+                  Carregando demonstrativo...
+                </td>
+              </tr>
+            ) : rows.length ? (
+              rows.map((row) => {
+                const isRoot = row.level === 0;
+                return (
+                  <tr
+                    key={row.id}
+                    className={cn(
+                      "border-b border-border/70",
+                      isRoot && "bg-muted/35 font-black",
+                      row.level === 1 && "font-bold",
+                    )}
+                  >
+                    <td className="py-2 pr-3">
+                      <div style={{ paddingLeft: row.level * 14 }} className="flex min-w-0 gap-2">
+                        <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                          {row.code}
+                        </span>
+                        <span className="truncate">{row.name}</span>
+                      </div>
+                    </td>
+                    {row.monthly.map((value, index) => (
+                      <td
+                        key={`${row.id}-${index}`}
+                        className={cn("px-2 py-2 text-right", value < 0 && "text-destructive")}
+                      >
+                        {value ? money.format(value) : "-"}
+                      </td>
+                    ))}
+                    <td className={cn("px-2 py-2 text-right font-bold", row.total < 0 && "text-destructive")}>
+                      {money.format(row.total)}
+                    </td>
+                    <td className={cn("py-2 pl-2 text-right", row.average < 0 && "text-destructive")}>
+                      {money.format(row.average)}
+                    </td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr>
+                <td colSpan={15} className="py-8 text-center text-muted-foreground">
+                  Nenhum lançamento gerencial encontrado para o ano selecionado.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function DreContent({ access }: { access: FinancialAccess }) {
+  const [mode, setMode] = useState<PeriodMode>("month");
+  const [start, setStart] = useState(() => periodBounds("month")[0]);
+  const [end, setEnd] = useState(() => periodBounds("month")[1]);
+  const [costCenterId, setCostCenterId] = useState("all");
+  const [centers, setCenters] = useState<CostCenter[]>([]);
+  const [summary, setSummary] = useState<DreSummary | null>(null);
+  const [detail, setDetail] = useState<DreDetail | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [dre12Rows, setDre12Rows] = useState<Dre12MonthRow[]>([]);
+  const [dre12Loading, setDre12Loading] = useState(true);
+  const canDre = hasFinancialPermission(access, "financial.dre.view");
+  const dreYear = dreYearFromDate(start);
+
+  const payload = useMemo(
+    () => ({
+      workspaceId: access.workspaceId,
+      startDate: start,
+      endDate: end,
+      costCenterId: costCenterId === "all" ? null : costCenterId,
+    }),
+    [access.workspaceId, costCenterId, end, start],
+  );
+
+  const loadSummary = useCallback(async () => {
+    if (!canDre) return;
+    setLoading(true);
+    setDre12Loading(true);
+    const [nextSummary, nextCenters, nextRows] = await Promise.all([
+      getDreSummary(payload),
+      listFinancialCostCenters(),
+      loadDre12MonthRows(
+        access.workspaceId,
+        access.tenantId,
+        dreYear,
+        costCenterId === "all" ? null : costCenterId,
+      ),
+    ]);
+    setSummary(nextSummary);
+    setCenters(nextCenters);
+    setDre12Rows(nextRows);
+    setDetail(null);
+    setSelectedGroup(null);
+    setSelectedAccount(null);
+    setLoading(false);
+    setDre12Loading(false);
+  }, [access.tenantId, access.workspaceId, canDre, costCenterId, dreYear, payload]);
+
+  useEffect(() => {
+    loadSummary().catch(() => {
+      setLoading(false);
+      setDre12Loading(false);
+      toast.error("Nao foi possivel carregar a DRE gerencial.");
+    });
+  }, [loadSummary]);
+
+  const openGroup = async (group: DreGroupRow) => {
+    setSelectedGroup(group.dre_group);
+    setSelectedAccount(null);
+    setDetail(await getDreDetail({ ...payload, dreGroup: group.dre_group }));
+  };
+
+  const openAccount = async (account: string | null) => {
+    setSelectedAccount(account);
+    setDetail(
+      await getDreDetail({
+        ...payload,
+        dreGroup: selectedGroup,
+        chartAccountId: account,
+      }),
+    );
+  };
+
+  if (!canDre) {
+    return (
+      <div className="financial-shell space-y-4">
+        <PageHeader title="DRE Gerencial" subtitle="Visao gerencial por regime de competencia" />
+        <FinancialNav />
+        <RestrictedReport permission="financial.dre.view" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="financial-shell financial-dre-shell space-y-4">
+      <PageHeader
+        title="DRE Gerencial"
+        subtitle="Visao gerencial por regime de competencia"
+        actions={
+          summary ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                exportCsv(
+                  'dre-' + start + '-' + end + '.csv',
+                  summary.groups.map((group) => ({
+                    grupo: group.label,
+                    valor_assinado: group.signed_amount,
+                    movimento: group.movement_amount,
+                    documentos: group.document_count,
+                  })),
+                )
+              }
+            >
+              <Download className="size-4" />
+              CSV
+            </Button>
+          ) : undefined
+        }
+      />
+      <FinancialNav />
+      <section className="financial-dre-control-bar">
+        <ReportPeriodControls
+          mode={mode}
+          start={start}
+          end={end}
+          onMode={setMode}
+          onStart={setStart}
+          onEnd={setEnd}
+          compact
+        />
+        <Field label="Apropriacao">
+          <Select value={costCenterId} onValueChange={setCostCenterId}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Consolidado</SelectItem>
+              {centers.map((center) => (
+                <SelectItem key={center.id} value={center.id}>
+                  {center.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      </section>
+      {loading || !summary ? (
+        <LoadingReport />
+      ) : (
+        <>
+          <DreExecutiveSummary summary={summary} />
+          <Dre12MonthStatement year={dreYear} rows={dre12Rows} loading={dre12Loading} />
+          <div className="financial-dre-layout">
+            <DreStatement
+              summary={summary}
+              selectedGroup={selectedGroup}
+              onGroup={(group) => openGroup(group).catch(() => toast.error("Falha no drilldown."))}
+            />
+            <DreDetailPanel
+              detail={detail}
+              selectedAccount={selectedAccount}
+              onAccount={(account) =>
+                openAccount(account).catch(() => toast.error("Falha no detalhe."))
+              }
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function FinancialCashFlowPage() {
   return <FinancialBoundary>{(access) => <CashFlowContent access={access} />}</FinancialBoundary>;
 }
 
