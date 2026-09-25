@@ -1225,11 +1225,6 @@ function DreDetailPanel({
   );
 }
 
-function dreYearFromDate(value: string) {
-  const parsed = Number(value.slice(0, 4));
-  return Number.isFinite(parsed) ? parsed : new Date().getFullYear();
-}
-
 function Dre12MonthStatement({
   statement,
   loading,
@@ -1339,9 +1334,7 @@ function Dre12MonthStatement({
 }
 
 function DreContent({ access }: { access: FinancialAccess }) {
-  const [mode, setMode] = useState<PeriodMode>("month");
-  const [start, setStart] = useState(() => periodBounds("month")[0]);
-  const [end, setEnd] = useState(() => periodBounds("month")[1]);
+  const [dreYear, setDreYear] = useState(() => new Date().getFullYear());
   const [costCenterId, setCostCenterId] = useState("all");
   const [centers, setCenters] = useState<CostCenter[]>([]);
   const [summary, setSummary] = useState<DreSummary | null>(null);
@@ -1353,16 +1346,17 @@ function DreContent({ access }: { access: FinancialAccess }) {
   const [dre12Statement, setDre12Statement] = useState<Dre12MonthStatementData | null>(null);
   const [dre12Loading, setDre12Loading] = useState(true);
   const canDre = hasFinancialPermission(access, "financial.dre.view");
-  const dreYear = dreYearFromDate(start);
+  const dreYearStart = `${dreYear}-01-01`;
+  const dreYearEnd = `${dreYear}-12-31`;
 
   const payload = useMemo(
     () => ({
       workspaceId: access.workspaceId,
-      startDate: start,
-      endDate: end,
+      startDate: dreYearStart,
+      endDate: dreYearEnd,
       costCenterId: costCenterId === "all" ? null : costCenterId,
     }),
-    [access.workspaceId, costCenterId, end, start],
+    [access.workspaceId, costCenterId, dreYearEnd, dreYearStart],
   );
 
   const loadSummary = useCallback(async () => {
@@ -1436,7 +1430,7 @@ function DreContent({ access }: { access: FinancialAccess }) {
               size="sm"
               onClick={() =>
                 exportCsv(
-                  'dre-' + start + '-' + end + '.csv',
+                  'dre-' + dreYearStart + '-' + dreYearEnd + '.csv',
                   summary.groups.map((group) => ({
                     grupo: group.label,
                     valor_assinado: group.signed_amount,
@@ -1454,15 +1448,20 @@ function DreContent({ access }: { access: FinancialAccess }) {
       />
       <FinancialNav />
       <section className="financial-dre-control-bar">
-        <ReportPeriodControls
-          mode={mode}
-          start={start}
-          end={end}
-          onMode={setMode}
-          onStart={setStart}
-          onEnd={setEnd}
-          compact
-        />
+        <Field label="Ano Base">
+          <Input
+            type="number"
+            min={2000}
+            max={2100}
+            value={dreYear}
+            onChange={(event) => {
+              const nextYear = Number(event.target.value);
+              if (Number.isFinite(nextYear)) {
+                setDreYear(nextYear);
+              }
+            }}
+          />
+        </Field>
         <Field label="Apropriacao">
           <Select value={costCenterId} onValueChange={setCostCenterId}>
             <SelectTrigger>

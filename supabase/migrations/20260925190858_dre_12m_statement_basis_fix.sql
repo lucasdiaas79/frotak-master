@@ -80,6 +80,177 @@ from discount_documents dd
 where fa.document_id = dd.id
   and fa.chart_account_id is distinct from dd.target_account_id;
 
+with legacy_components as (
+  select
+    fs.id as settlement_id,
+    fs.tenant_id,
+    fs.workspace_id,
+    fd.id as source_document_id,
+    fd.partner_id,
+    fd.description as source_description,
+    fs.settled_on,
+    component.source_event,
+    component.document_type,
+    component.direction,
+    component.account_code,
+    component.description_prefix,
+    component.amount
+  from public.financial_settlements fs
+  join public.financial_documents fd on fd.id = fs.document_id
+  cross join lateral (
+    values
+      ('interest', 'settlement_interest', 'payable', '2.003.001', 'Juros - ', fs.interest_amount),
+      ('penalty', 'settlement_penalty', 'payable', '2.003.009', 'Multa - ', fs.penalty_amount),
+      (
+        'discount',
+        case when fd.direction = 'payable' then 'discount_obtained' else 'discount_granted' end,
+        case when fd.direction = 'payable' then 'receivable' else 'payable' end,
+        case when fd.direction = 'payable' then '1.003.0003.7' else '2.003.002' end,
+        case when fd.direction = 'payable' then 'Receita - Descontos Obtidos - ' else 'Desconto concedido - ' end,
+        fs.discount_amount
+      )
+  ) as component(source_event, document_type, direction, account_code, description_prefix, amount)
+  where fs.settlement_type = 'settlement'
+    and component.amount > 0
+),
+legacy_adjustment_targets as (
+  select lc.*, coa.id as chart_account_id
+  from legacy_components lc
+  join public.chart_of_accounts coa
+    on coa.tenant_id = lc.tenant_id
+   and coa.code = lc.account_code
+   and coa.active = true
+),
+inserted_legacy_adjustments as (
+  insert into public.financial_documents (
+    tenant_id, workspace_id, direction, partner_id, document_type, source_type, source_id,
+    source_event, description, original_amount, competence_date, issue_date, entry_date,
+    currency, status, chart_account_id, notes
+  )
+  select
+    lat.tenant_id,
+    lat.workspace_id,
+    lat.direction,
+    lat.partner_id,
+    lat.document_type,
+    'settlement_adjustment',
+    lat.settlement_id,
+    lat.source_event,
+    lat.description_prefix || lat.source_description,
+    lat.amount,
+    lat.settled_on,
+    lat.settled_on,
+    lat.settled_on,
+    'BRL',
+    'posted',
+    lat.chart_account_id,
+    'Backfill canonico de ajuste historico da baixa ' || lat.source_document_id
+  from legacy_adjustment_targets lat
+  where not exists (
+    select 1
+    from public.financial_documents existing
+    where existing.tenant_id = lat.tenant_id
+      and existing.source_type = 'settlement_adjustment'
+      and existing.source_id = lat.settlement_id
+      and existing.source_event = lat.source_event
+  )
+  returning id, tenant_id, workspace_id, source_id, source_event, original_amount, chart_account_id
+),
+legacy_adjustment_documents as (
+  select
+    fd.id,
+    fd.tenant_id,
+    fd.workspace_id,
+    fd.source_id as settlement_id,
+    fd.source_event,
+    fd.original_amount,
+    fd.chart_account_id,
+    lat.source_document_id
+  from public.financial_documents fd
+  join legacy_adjustment_targets lat
+    on lat.tenant_id = fd.tenant_id
+   and lat.settlement_id = fd.source_id
+   and lat.source_event = fd.source_event
+  where fd.source_type = 'settlement_adjustment'
+
+  union all
+
+  select
+    inserted.id,
+    inserted.tenant_id,
+    inserted.workspace_id,
+    inserted.source_id as settlement_id,
+    inserted.source_event,
+    inserted.original_amount,
+    inserted.chart_account_id,
+    lat.source_document_id
+  from inserted_legacy_adjustments inserted
+  join legacy_adjustment_targets lat
+    on lat.tenant_id = inserted.tenant_id
+   and lat.settlement_id = inserted.source_id
+   and lat.source_event = inserted.source_event
+),
+source_allocations as (
+  select
+    lad.id as adjustment_document_id,
+    lad.tenant_id,
+    lad.workspace_id,
+    lad.original_amount as adjustment_amount,
+    lad.chart_account_id as adjustment_chart_account_id,
+    a.freight_id,
+    a.vehicle_id,
+    a.driver_id,
+    a.business_partner_id,
+    a.cost_center_id,
+    a.product_id,
+    a.amount,
+    sum(a.amount) over (partition by lad.id) as total_amount,
+    row_number() over (partition by lad.id order by a.amount desc, a.id) as rn
+  from legacy_adjustment_documents lad
+  join public.financial_allocations a on a.document_id = lad.source_document_id
+  where not exists (
+    select 1
+    from public.financial_allocations existing
+    where existing.document_id = lad.id
+  )
+),
+calculated_allocations as (
+  select
+    *,
+    round((amount / nullif(total_amount, 0)) * adjustment_amount, 2) as calculated_amount
+  from source_allocations
+),
+balanced_allocations as (
+  select
+    *,
+    case
+      when rn = 1 then adjustment_amount - coalesce(sum(calculated_amount) over (partition by adjustment_document_id) - calculated_amount, 0)
+      else calculated_amount
+    end::numeric(18,2) as final_amount
+  from calculated_allocations
+)
+insert into public.financial_allocations (
+  tenant_id, workspace_id, document_id, freight_id, vehicle_id, driver_id,
+  business_partner_id, cost_center_id, product_id, chart_account_id, amount,
+  percentage, description
+)
+select
+  tenant_id,
+  workspace_id,
+  adjustment_document_id,
+  freight_id,
+  vehicle_id,
+  driver_id,
+  business_partner_id,
+  cost_center_id,
+  product_id,
+  adjustment_chart_account_id,
+  final_amount,
+  case when adjustment_amount = 0 then 0 else round((final_amount / adjustment_amount) * 100, 6) end,
+  'Apropriacao de ajuste historico da baixa'
+from balanced_allocations
+where final_amount > 0;
+
 create or replace function public.get_dre_12_month_statement(p_payload jsonb)
 returns jsonb
 language plpgsql
@@ -441,7 +612,11 @@ begin
   filtered_rows as (
     select *
     from account_rows
-    where abs(total) >= 0.01 or abs(signed_total) >= 0.01
+    where exists (
+      select 1
+      from jsonb_array_elements_text(account_rows.signed_monthly) as month_amount(value)
+      where abs(month_amount.value::numeric) >= 0.01
+    )
   )
   select jsonb_build_object(
     'year', v_year,
