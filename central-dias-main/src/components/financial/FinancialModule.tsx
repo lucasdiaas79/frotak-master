@@ -6494,9 +6494,9 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
     setOpen(true);
   };
   const load = useCallback(async () => {
-    if (kind === "chart") setChart(await listFinancialChart());
-    else setCenters(await listFinancialCostCenters());
-  }, [kind]);
+    if (kind === "chart") setChart(await listFinancialChart(access.tenantId));
+    else setCenters(await listFinancialCostCenters(access.workspaceId));
+  }, [access.tenantId, access.workspaceId, kind]);
   useEffect(() => {
     load().catch(() => toast.error("Falha ao carregar estrutura."));
   }, [load]);
@@ -6505,6 +6505,8 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
     kind === "chart" ? "financial.manage_chart" : "financial.manage_cost_centers",
   );
   const items = kind === "chart" ? chart : centers;
+  const itemLevel = (item: ChartAccount | CostCenter) =>
+    Math.max(0, item.code.split(".").length - 1);
   return (
     <div className="financial-shell space-y-4">
       <PageHeader
@@ -6525,17 +6527,26 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
       />
       <FinancialNav />
       <section className="premium-card mx-3 overflow-hidden md:mx-0">
+        {!items.length && (
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+            Nenhuma estrutura cadastrada para este workspace.
+          </div>
+        )}
         {items.map((item) => (
           <div
             key={item.id}
             className="flex items-center gap-3 border-b border-border px-4 py-3 last:border-0"
+            style={{ paddingLeft: `${16 + itemLevel(item) * 20}px` }}
           >
             <div className="flex size-9 items-center justify-center rounded-md bg-primary/10 text-primary">
               {kind === "chart" ? <Tags className="size-4" /> : <Building2 className="size-4" />}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-extrabold">
-                {item.code} · {item.name}
+              <div className="flex flex-wrap items-center gap-2 text-sm font-extrabold">
+                <span className="rounded-md border border-border bg-muted px-2 py-1 font-mono text-xs">
+                  {item.code}
+                </span>
+                <span>{item.name}</span>
               </div>
               <div className="text-xs text-muted-foreground">
                 {item.parentId ? "Nível vinculado" : "Conta raiz"} ·{" "}
