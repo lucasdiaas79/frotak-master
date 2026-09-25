@@ -1334,6 +1334,9 @@ function Dre12MonthStatement({
 }
 
 function DreContent({ access }: { access: FinancialAccess }) {
+  const [mode, setMode] = useState<PeriodMode>("month");
+  const [start, setStart] = useState(() => periodBounds("month")[0]);
+  const [end, setEnd] = useState(() => periodBounds("month")[1]);
   const [dreYearInput, setDreYearInput] = useState(() => String(new Date().getFullYear()));
   const [costCenterId, setCostCenterId] = useState("all");
   const [centers, setCenters] = useState<CostCenter[]>([]);
@@ -1350,8 +1353,6 @@ function DreContent({ access }: { access: FinancialAccess }) {
   const dreYearIsValid =
     /^\d{4}$/.test(dreYearInput) && parsedDreYear >= 2000 && parsedDreYear <= 2100;
   const dreYear = dreYearIsValid ? parsedDreYear : null;
-  const dreYearStart = dreYear ? `${dreYear}-01-01` : "";
-  const dreYearEnd = dreYear ? `${dreYear}-12-31` : "";
   const dreSubtitle =
     dre12Basis === "cash"
       ? "Visão gerencial por pagamentos e recebimentos conciliados"
@@ -1360,11 +1361,11 @@ function DreContent({ access }: { access: FinancialAccess }) {
   const payload = useMemo(
     () => ({
       workspaceId: access.workspaceId,
-      startDate: dreYearStart,
-      endDate: dreYearEnd,
+      startDate: start,
+      endDate: end,
       costCenterId: costCenterId === "all" ? null : costCenterId,
     }),
-    [access.workspaceId, costCenterId, dreYearEnd, dreYearStart],
+    [access.workspaceId, costCenterId, end, start],
   );
 
   const loadSummary = useCallback(async () => {
@@ -1448,7 +1449,7 @@ function DreContent({ access }: { access: FinancialAccess }) {
               size="sm"
               onClick={() =>
                 exportCsv(
-                  'dre-' + dreYearStart + '-' + dreYearEnd + '.csv',
+                  'dre-' + start + '-' + end + '.csv',
                   summary.groups.map((group) => ({
                     grupo: group.label,
                     valor_assinado: group.signed_amount,
@@ -1466,6 +1467,15 @@ function DreContent({ access }: { access: FinancialAccess }) {
       />
       <FinancialNav />
       <section className="financial-dre-control-bar">
+        <ReportPeriodControls
+          mode={mode}
+          start={start}
+          end={end}
+          onMode={setMode}
+          onStart={setStart}
+          onEnd={setEnd}
+          compact
+        />
         <Field label="Ano Base">
           <Input
             type="number"
