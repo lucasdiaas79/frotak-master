@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import type {
   CashFlowEntry,
   CashFlowSummary,
+  Dre12MonthStatement,
   DreDetail,
   DreSummary,
   FinancialDashboard,
@@ -39,6 +40,17 @@ export async function getDreDetail(
   const { data, error } = await supabase.rpc("get_dre_detail", { p_payload: input });
   fail("Nao foi possivel carregar o detalhe da DRE", error);
   return numberify(data as DreDetail);
+}
+
+export async function getDre12MonthStatement(input: {
+  workspaceId: string;
+  year: number;
+  basis: "accrual" | "cash";
+  costCenterId?: string | null;
+}): Promise<Dre12MonthStatement> {
+  const { data, error } = await supabase.rpc("get_dre_12_month_statement", { p_payload: input });
+  fail("Nao foi possivel carregar o demonstrativo gerencial", error);
+  return numberify(data as Dre12MonthStatement);
 }
 
 export async function getCashFlowSummary(

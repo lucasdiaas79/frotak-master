@@ -592,6 +592,40 @@ export interface DreDetail {
   documents: DreDetailDocument[];
 }
 
+export type Dre12MonthBasis = "accrual" | "cash";
+
+export interface Dre12MonthRow {
+  id: string;
+  code: string;
+  name: string;
+  account_type: string;
+  normal_balance: string;
+  dre_group: DreGroup | "unclassified" | null;
+  level: number;
+  monthly: number[];
+  signed_monthly: number[];
+  total: number;
+  signed_total: number;
+  average: number;
+  movement_months: number;
+}
+
+export interface Dre12MonthStatement {
+  year: number;
+  basis: Dre12MonthBasis;
+  basisLabel: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  months: Array<{
+    index: number;
+    label: string;
+    startDate: string;
+    endDate: string;
+  }>;
+  rows: Dre12MonthRow[];
+}
+
 export interface CashFlowSummary {
   startDate: string;
   endDate: string;
