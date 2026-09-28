@@ -130,7 +130,11 @@ function PreviewLogin() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
       <section className="w-full max-w-sm rounded-lg border border-border bg-card p-6 shadow-sm">
-        <img src={logoCentral} alt="Frotak" className="mb-8 h-9 w-auto object-contain" />
+        <img
+          src={logoCentral}
+          alt="Frotak"
+          className="mb-8 h-10 w-auto rounded bg-[#171918] px-3 py-2 object-contain"
+        />
         <p className="mb-1 text-xs font-bold uppercase text-muted-foreground">
           Ambiente de Preview
         </p>
