@@ -196,24 +196,7 @@ export async function acceptMasterSsoFromUrl(search: string) {
   return session;
 }
 
-export function isVercelPreviewHost() {
-  if (typeof window === "undefined") return false;
-
-  const hostname = window.location.hostname.toLowerCase();
-  return (
-    hostname.endsWith(".vercel.app") &&
-    hostname.startsWith("central-dias-git-") &&
-    hostname !== "central-dias.vercel.app"
-  );
-}
-
 export function getMasterLoginUrl() {
-  if (isVercelPreviewHost()) {
-    const currentPath = `${window.location.pathname}${window.location.search}`;
-    const redirectPath = window.location.pathname === "/login" ? "/" : currentPath;
-    return `/login?redirect=${encodeURIComponent(redirectPath)}`;
-  }
-
   const configuredUrl = import.meta.env.VITE_FROTAK_MASTER_LOGIN_URL;
   if (typeof configuredUrl === "string" && configuredUrl.trim()) return configuredUrl.trim();
 
