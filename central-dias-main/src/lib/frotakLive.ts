@@ -670,13 +670,14 @@ function isFrotakFactualTurn(text: string) {
   return domain && factual;
 }
 
-function hasToolError(value: unknown) {
-  return Boolean(
-    value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    typeof (value as Record<string, unknown>).error === "string",
-  );
+function hasToolError(value: unknown, depth = 0): boolean {
+  if (depth > 6 || value === null || value === undefined) return false;
+  if (Array.isArray(value)) return value.some((item) => hasToolError(item, depth + 1));
+  if (typeof value !== "object") return false;
+
+  const record = value as Record<string, unknown>;
+  if (record.ok === false || typeof record.error === "string") return true;
+  return Object.values(record).some((item) => hasToolError(item, depth + 1));
 }
 
 function calculateRms(input: Float32Array) {

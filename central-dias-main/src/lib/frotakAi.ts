@@ -2,6 +2,7 @@ import {
   FunctionCallingConfigMode,
   FunctionResponseScheduling,
   GoogleGenAI,
+  Modality,
   type Content,
   type FunctionCall,
   type FunctionResponse,
@@ -25,6 +26,14 @@ type FrotakAiMessage = {
   text: string;
 };
 
+type SerializableValue =
+  | null
+  | boolean
+  | number
+  | string
+  | SerializableValue[]
+  | { [key: string]: SerializableValue };
+
 const MAX_HISTORY_MESSAGES = 40;
 const MAX_HISTORY_CHARS = 16_000;
 
@@ -38,6 +47,10 @@ function trimText(value: unknown, max = 2400) {
   if (typeof value !== "string") return "";
   const text = value.trim();
   return text.length > max ? `${text.slice(0, max)}...` : text;
+}
+
+function toSerializableValue(value: unknown): SerializableValue {
+  return JSON.parse(JSON.stringify(value ?? null)) as SerializableValue;
 }
 
 function historyToContents(history: FrotakAiMessage[]) {
@@ -324,13 +337,6 @@ async function answerDeterministicTenantQuestion(
           : `Sua empresa atual e ${tenantName}. Workspace: ${workspaceName}.`,
       tools: ["consultar_frotak"],
     };
-    const sameName = context.tenantName === context.workspaceName;
-    return {
-      text: sameName
-        ? `Sua empresa atual é ${context.tenantName}.`
-        : `Sua empresa atual é ${context.tenantName}. Workspace: ${context.workspaceName}.`,
-      tools: ["consultar_frotak"],
-    };
   }
 
   if (asksVehicle && asksCount) {
@@ -431,7 +437,10 @@ async function answerDeterministicTenantQuestion(
     };
   }
 
-  if (asksFreight && (asksList || /\b(em rota|andamento|ativos|abertos|status)\b/.test(normalized))) {
+  if (
+    asksFreight &&
+    (asksList || /\b(em rota|andamento|ativos|abertos|status)\b/.test(normalized))
+  ) {
     const result = await executeFrotakAiTool(context, "consultar_frotak", {
       pergunta: message,
       limit: Math.max(limit, 20),
@@ -528,7 +537,9 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" })
     try {
       context = await resolveFrotakAiContext(data.accessToken, data.workspaceId);
       const model = process.env.GEMINI_LIVE_MODEL || FROTAK_AI_LIVE_MODEL;
-      const liveSystemInstruction = frotakAiSystemInstruction(createFrotakAiContextSummary(context));
+      const liveSystemInstruction = frotakAiSystemInstruction(
+        createFrotakAiContextSummary(context),
+      );
       const liveSetupConfig = {
         tools: [{ functionDeclarations: FROTAK_AI_TOOL_DECLARATIONS }],
         systemInstruction: {
@@ -548,7 +559,7 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" })
           liveConnectConstraints: {
             model,
             config: {
-              responseModalities: ["AUDIO"],
+              responseModalities: [Modality.AUDIO],
               temperature: 0.2,
               speechConfig: {
                 voiceConfig: {
@@ -602,7 +613,7 @@ export const executeFrotakAiToolCall = createServerFn({ method: "POST" })
     try {
       context = await resolveFrotakAiContext(data.accessToken, data.workspaceId);
       if (!isFrotakAiToolName(data.name)) throw new Error("Ferramenta indisponivel.");
-      return await executeFrotakAiTool(context, data.name, data.args);
+      return toSerializableValue(await executeFrotakAiTool(context, data.name, data.args));
     } catch (error) {
       logFrotakAiStage(context ? "tool" : "context", error, {
         workspaceId: data.workspaceId,
@@ -637,8 +648,9 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
       const message = data.message.trim();
       if (!message) throw new Error("Mensagem vazia");
 
-      context = await resolveFrotakAiContext(data.accessToken, data.workspaceId);
-      const deterministicAnswer = await answerDeterministicTenantQuestion(context, message);
+      const resolvedContext = await resolveFrotakAiContext(data.accessToken, data.workspaceId);
+      context = resolvedContext;
+      const deterministicAnswer = await answerDeterministicTenantQuestion(resolvedContext, message);
       if (deterministicAnswer) {
         return {
           text: deterministicAnswer.text,
@@ -647,8 +659,10 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
         };
       }
 
-      const mandatoryTenantData = await buildMandatoryTenantData(context, message);
-      const systemInstruction = frotakAiSystemInstruction(createFrotakAiContextSummary(context));
+      const mandatoryTenantData = await buildMandatoryTenantData(resolvedContext, message);
+      const systemInstruction = frotakAiSystemInstruction(
+        createFrotakAiContextSummary(resolvedContext),
+      );
       const ai = new GoogleGenAI({ apiKey: geminiApiKey() });
       const contents = [
         ...historyToContents(data.history),
@@ -666,7 +680,7 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
       if (toolCalls.length > 0) {
         const toolResponses = await Promise.all(
           toolCalls.map(async (call) => {
-            const result = await executeFrotakAiTool(context, call.name, call.args ?? {});
+            const result = await executeFrotakAiTool(resolvedContext, call.name, call.args ?? {});
             return {
               ...toolResponsePart(call, result),
               scheduling: FunctionResponseScheduling.WHEN_IDLE,

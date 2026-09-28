@@ -54,21 +54,6 @@ function supabaseAnonKey() {
   return readEnv("SUPABASE_ANON_KEY") || requiredEnv("VITE_SUPABASE_ANON_KEY");
 }
 
-function supabaseServiceRoleKey() {
-  return readEnv("SUPABASE_SERVICE_ROLE_KEY");
-}
-
-export function getSupabaseAdminClient() {
-  const serviceRole = supabaseServiceRoleKey();
-  if (!serviceRole) throw new Error("SUPABASE_SERVICE_ROLE_KEY ausente");
-  return createClient(supabaseUrl(), serviceRole, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  });
-}
-
 export function getSupabaseServerClient(accessToken?: string) {
   return createClient(supabaseUrl(), supabaseAnonKey(), {
     auth: {
@@ -223,7 +208,15 @@ export async function resolveFrotakAiContext(
 
 export function canReadFinancial(context: FrotakAiContext) {
   if (context.isOwner) return true;
-  return context.permissions.some((permission) => permission.startsWith("financial."));
+  return context.permissions.some((permission) =>
+    [
+      "financial.view",
+      "financial.dashboard.view",
+      "financial.dashboard.read",
+      "financial.transactions.read",
+      "financial.transactions.manage",
+    ].includes(permission),
+  );
 }
 
 export function createFrotakAiContextSummary(context: FrotakAiContext) {

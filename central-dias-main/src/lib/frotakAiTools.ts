@@ -34,12 +34,6 @@ function numberValue(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function dateDaysAgo(days: number) {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date.toISOString();
-}
-
 function compactRows(rows: Array<Record<string, unknown>>, fields: string[]) {
   return rows.map((row) => {
     const item: Record<string, unknown> = {};
@@ -50,7 +44,7 @@ function compactRows(rows: Array<Record<string, unknown>>, fields: string[]) {
   });
 }
 
-export const FROTAK_AI_TOOL_DECLARATIONS: FunctionDeclaration[] = [
+export const FROTAK_AI_TOOL_DECLARATIONS = [
   {
     name: "consultar_frotak",
     description:
@@ -94,7 +88,7 @@ export const FROTAK_AI_TOOL_DECLARATIONS: FunctionDeclaration[] = [
       },
     },
   },
-];
+] satisfies FunctionDeclaration[];
 
 export function normalizeFrotakAiToolCall(call: FunctionCall): FrotakAiToolCall | null {
   if (!call.name || !isFrotakAiToolName(call.name)) return null;
@@ -164,7 +158,12 @@ function addTopic(topics: FrotakConsultaTopico[], topic: FrotakConsultaTopico) {
 
 function detectTopics(args: Record<string, unknown>) {
   const text = normalizeIntentText(
-    [textArg(args, "pergunta"), textArg(args, "question"), textArg(args, "topico"), textArg(args, "query")]
+    [
+      textArg(args, "pergunta"),
+      textArg(args, "question"),
+      textArg(args, "topico"),
+      textArg(args, "query"),
+    ]
       .filter(Boolean)
       .join(" "),
   );
@@ -173,8 +172,7 @@ function detectTopics(args: Record<string, unknown>) {
   if (/\b(empresa|companhia|tenant|workspace|cliente)\b/.test(text)) addTopic(topics, "empresa");
   if (/\b(caminhao|caminhoes|veiculo|veiculos|frota|placa|placas)\b/.test(text))
     addTopic(topics, "veiculos");
-  if (/\b(motorista|motoristas|condutor|condutores)\b/.test(text))
-    addTopic(topics, "motoristas");
+  if (/\b(motorista|motoristas|condutor|condutores)\b/.test(text)) addTopic(topics, "motoristas");
   if (/\b(frete|fretes|viagem|viagens|rota|rotas|carga|descarga)\b/.test(text))
     addTopic(topics, "fretes");
   if (
@@ -255,7 +253,9 @@ async function executeConsultarFrotak(
           : "all");
     const financialStatus =
       textArg(args, "status") ??
-      (/\b(tenho|aberto|abertos|pendente|pendentes|carteira)\b/.test(text) ? "open" : undefined);
+      (/\b(vencido|vencidos|vencida|vencidas|atrasado|atrasados)\b/.test(text)
+        ? "overdue"
+        : undefined);
     consultas.financeiro = await queryFinancial(supabase, context, {
       limit,
       direction,
@@ -509,72 +509,67 @@ async function queryFinancial(
 
   const direction = textArg(args, "direction");
   const status = textArg(args, "status");
-  const days = Math.max(1, Math.min(365, Number(args.days ?? 90)));
+  const directions: Array<"receivable" | "payable"> =
+    direction === "receivable" || direction === "payable" ? [direction] : ["receivable", "payable"];
+  const pageSize = limitFromArgs(args);
 
-  let totalsQuery = supabase
-    .from("financial_documents")
-    .select("direction, original_amount")
-    .eq("workspace_id", context.workspaceId)
-    .gte("created_at", dateDaysAgo(Number.isFinite(days) ? days : 90));
-
-  let query = supabase
-    .from("financial_documents")
-    .select(
-      "id, direction, description, original_amount, competence_date, issue_date, status, source_type, created_at",
-      { count: "exact" },
-    )
-    .eq("workspace_id", context.workspaceId)
-    .gte("created_at", dateDaysAgo(Number.isFinite(days) ? days : 90))
-    .order("created_at", { ascending: false })
-    .limit(limitFromArgs(args));
-
-  if (direction === "receivable" || direction === "payable") {
-    totalsQuery = totalsQuery.eq("direction", direction);
-    query = query.eq("direction", direction);
-  }
-  if (status) {
-    totalsQuery = totalsQuery.eq("status", status);
-    query = query.eq("status", status);
-  }
-
-  const [{ data, error, count }, { data: totalsData, error: totalsError }] = await Promise.all([
-    query,
-    totalsQuery,
-  ]);
-  if (error) return { error: error.message, code: error.code };
-  if (totalsError) return { error: totalsError.message, code: totalsError.code };
-
-  const rows = ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-    ...row,
-    original_amount: numberValue(row.original_amount),
-  }));
-  const totalRows = ((totalsData ?? []) as Array<Record<string, unknown>>).map((row) => ({
-    ...row,
-    original_amount: numberValue(row.original_amount),
-  }));
-  const totals = totalRows.reduce(
-    (acc, row) => {
-      const amount = numberValue(row.original_amount);
-      if (row.direction === "receivable") acc.receivable += amount;
-      if (row.direction === "payable") acc.payable += amount;
-      return acc;
-    },
-    { receivable: 0, payable: 0 },
+  const pages = await Promise.all(
+    directions.map(async (itemDirection) => {
+      const { data, error } = await supabase.rpc("list_financial_documents_page", {
+        p_payload: {
+          workspaceId: context.workspaceId,
+          direction: itemDirection,
+          status: status ?? "all",
+          page: 1,
+          pageSize,
+        },
+      });
+      return { direction: itemDirection, data, error };
+    }),
   );
+
+  const failedPage = pages.find((page) => page.error);
+  if (failedPage?.error) {
+    return { error: failedPage.error.message, code: failedPage.error.code };
+  }
+
+  const totals = { receivable: 0, payable: 0 };
+  let totalCount = 0;
+  const rows: Array<Record<string, unknown>> = [];
+
+  pages.forEach((page) => {
+    const payload =
+      page.data && typeof page.data === "object" && !Array.isArray(page.data)
+        ? (page.data as Record<string, unknown>)
+        : {};
+    const summary =
+      payload.summary && typeof payload.summary === "object" && !Array.isArray(payload.summary)
+        ? (payload.summary as Record<string, unknown>)
+        : {};
+    totals[page.direction] = numberValue(summary.openBalance);
+    totalCount += numberValue(payload.total);
+
+    const pageRows = Array.isArray(payload.rows)
+      ? (payload.rows as Array<Record<string, unknown>>)
+      : [];
+    pageRows.forEach((row) => rows.push({ direction: page.direction, ...row }));
+  });
 
   return {
     count: rows.length,
-    totalCount: count ?? rows.length,
+    totalCount,
     totals,
+    basis: "open_installment_balance",
     items: compactRows(rows, [
       "direction",
       "description",
-      "original_amount",
-      "competence_date",
-      "issue_date",
+      "originalAmount",
+      "outstandingBalance",
+      "competenceDate",
+      "issueDate",
       "status",
-      "source_type",
-      "created_at",
+      "sourceType",
+      "partnerName",
     ]),
   };
 }

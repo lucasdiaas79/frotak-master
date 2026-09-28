@@ -83,6 +83,12 @@ async function requireAccessToken() {
 }
 
 async function requireWorkspaceId() {
+  const storedWorkspaceId =
+    typeof window !== "undefined"
+      ? window.localStorage.getItem("frotak-active-workspace-id")?.trim()
+      : undefined;
+  if (storedWorkspaceId) return storedWorkspaceId;
+
   const user = await getCurrentUser();
   if (!user) throw new Error("Sessao expirada. Entre novamente para usar a Frotak IA.");
 
