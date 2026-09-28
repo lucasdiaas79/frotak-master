@@ -4,6 +4,7 @@ import type {
   CashFlowSummary,
   Dre12MonthStatement,
   DreDetail,
+  DrePeriodStatement,
   DreSummary,
   FinancialDashboard,
   FinancialReportPeriod,
@@ -51,6 +52,19 @@ export async function getDre12MonthStatement(input: {
   const { data, error } = await supabase.rpc("get_dre_12_month_statement", { p_payload: input });
   fail("Nao foi possivel carregar o demonstrativo gerencial", error);
   return numberify(data as Dre12MonthStatement);
+}
+
+export async function getDrePeriodStatement(input: {
+  workspaceId: string;
+  startDate: string;
+  endDate: string;
+  basis: "accrual" | "cash";
+  costCenterId?: string | null;
+  vehicleId?: string | null;
+}): Promise<DrePeriodStatement> {
+  const { data, error } = await supabase.rpc("get_dre_period_statement", { p_payload: input });
+  fail("Nao foi possivel carregar a DRE do periodo", error);
+  return numberify(data as DrePeriodStatement);
 }
 
 export async function getCashFlowSummary(

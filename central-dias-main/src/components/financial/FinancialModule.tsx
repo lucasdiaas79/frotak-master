@@ -69,6 +69,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Sheet,
   SheetContent,
@@ -121,8 +122,8 @@ import {
 import {
   getCashFlowEntries,
   getCashFlowSummary,
-  getDre12MonthStatement,
   getDreDetail,
+  getDrePeriodStatement,
   getDreSummary,
   getFinancialDashboard,
 } from "@/lib/financial/reports";
@@ -134,9 +135,9 @@ import type {
   ChartAccount,
   CostCenter,
   Dre12MonthBasis,
-  Dre12MonthStatement as Dre12MonthStatementData,
   DreDetail,
   DreGroupRow,
+  DrePeriodStatement as DrePeriodStatementData,
   DreSummary,
   EmployeeFinancialProfile,
   FinancialAccess,
@@ -481,18 +482,16 @@ async function imageUrlToDataUrl(src: string) {
 
 async function exportDrePdf({
   filename,
-  summary,
   statement,
   periodLabel,
-  costCenterLabel,
+  scopeLabel,
 }: {
   filename: string;
-  summary: DreSummary | null;
-  statement: Dre12MonthStatementData | null;
+  statement: DrePeriodStatementData | null;
   periodLabel: string;
-  costCenterLabel: string;
+  scopeLabel: string;
 }) {
-  if (!summary && !statement) {
+  if (!statement) {
     toast.info("Nao ha dados para exportar.");
     return;
   }
@@ -519,7 +518,7 @@ async function exportDrePdf({
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
     doc.text(subtitle ?? periodLabel, margin + 40, 20);
-    doc.text(`Apropriacao: ${costCenterLabel}`, pageWidth - margin, 13, { align: "right" });
+    doc.text(`Escopo: ${scopeLabel}`, pageWidth - margin, 13, { align: "right" });
     doc.text(`Gerado em ${date.format(new Date())}`, pageWidth - margin, 20, { align: "right" });
     y = 40;
   };
@@ -530,107 +529,93 @@ async function exportDrePdf({
     addHeader();
   };
 
-  const drawMetric = (label: string, value: string, x: number, w: number, tone: "dark" | "green" = "dark") => {
+  const drawMetric = (
+    label: string,
+    value: string,
+    x: number,
+    w: number,
+    tone: "dark" | "green" = "dark",
+  ) => {
     doc.setDrawColor(220, 226, 222);
-    doc.setFillColor(tone === "green" ? 232 : 248, tone === "green" ? 247 : 249, tone === "green" ? 237 : 248);
+    doc.setFillColor(
+      tone === "green" ? 232 : 248,
+      tone === "green" ? 247 : 249,
+      tone === "green" ? 237 : 248,
+    );
     doc.roundedRect(x, y, w, 22, 2, 2, "FD");
     doc.setTextColor(88, 96, 92);
     doc.setFontSize(7.5);
     doc.setFont("helvetica", "bold");
     doc.text(label.toUpperCase(), x + 4, y + 7);
-    doc.setTextColor(tone === "green" ? 9 : 20, tone === "green" ? 126 : 24, tone === "green" ? 64 : 22);
+    doc.setTextColor(
+      tone === "green" ? 9 : 20,
+      tone === "green" ? 126 : 24,
+      tone === "green" ? 64 : 22,
+    );
     doc.setFontSize(13);
     doc.text(value, x + 4, y + 16);
   };
 
-  addHeader(statement?.basisLabel ? `Base: ${statement.basisLabel} | ${periodLabel}` : periodLabel);
+  addHeader(`Base: ${statement.basisLabel} | ${periodLabel}`);
 
-  if (summary) {
-    const metricWidth = (contentWidth - 9) / 4;
-    drawMetric("Receita liquida", money.format(summary.totals.netRevenue), margin, metricWidth);
-    drawMetric("Custos variaveis", money.format(summary.totals.variable_costs), margin + metricWidth + 3, metricWidth);
-    drawMetric("Resultado operacional", money.format(summary.totals.operatingResult), margin + (metricWidth + 3) * 2, metricWidth);
-    drawMetric("Resultado gerencial", money.format(summary.totals.managerial_result), margin + (metricWidth + 3) * 3, metricWidth, "green");
-    y += 32;
+  const metricWidth = (contentWidth - 9) / 4;
+  drawMetric("Receita liquida", money.format(statement.totals.netRevenue), margin, metricWidth);
+  drawMetric(
+    "Custos variaveis",
+    money.format(Math.abs(statement.totals.variable_costs)),
+    margin + metricWidth + 3,
+    metricWidth,
+  );
+  drawMetric(
+    "Resultado operacional",
+    money.format(statement.totals.operatingResult),
+    margin + (metricWidth + 3) * 2,
+    metricWidth,
+  );
+  drawMetric(
+    "Resultado gerencial",
+    money.format(statement.totals.managerial_result),
+    margin + (metricWidth + 3) * 3,
+    metricWidth,
+    "green",
+  );
+  y += 32;
 
-    doc.setTextColor(20, 24, 22);
+  doc.setTextColor(20, 24, 22);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text(statement.title, margin, y);
+  y += 8;
+
+  const rowHeight = 7;
+  const drawStatementHeader = () => {
+    doc.setFillColor(237, 243, 239);
+    doc.rect(margin, y - 4, contentWidth, rowHeight + 2, "F");
+    doc.setTextColor(68, 75, 71);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text("Resumo por grupo", margin, y);
-    y += 7;
-    doc.setFontSize(8.5);
-    doc.setDrawColor(220, 226, 222);
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 5;
-    summary.groups.forEach((group) => {
-      addPageIfNeeded(8);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(32, 38, 35);
-      doc.text(group.label, margin, y);
-      doc.text(String(group.document_count), margin + 135, y, { align: "right" });
-      doc.text(money.format(group.movement_amount), pageWidth - margin, y, { align: "right" });
-      y += 7;
-    });
-    y += 6;
-  }
+    doc.setFontSize(7.5);
+    doc.text("Conta gerencial", margin + 1, y);
+    doc.text("Documentos", pageWidth - margin - 48, y, { align: "right" });
+    doc.text("Valor no periodo", pageWidth - margin - 1, y, { align: "right" });
+    y += rowHeight + 1;
+  };
 
-  if (statement) {
-    addPageIfNeeded(40);
-    doc.setTextColor(20, 24, 22);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text(statement.title, margin, y);
-    y += 7;
-
-    const accountWidth = 60;
-    const totalWidth = 23;
-    const averageWidth = 23;
-    const monthWidth = (contentWidth - accountWidth - totalWidth - averageWidth) / 12;
-    const rowHeight = 6;
-    const drawStatementHeader = () => {
-      doc.setFillColor(237, 243, 239);
-      doc.rect(margin, y - 4, contentWidth, rowHeight + 2, "F");
-      doc.setTextColor(68, 75, 71);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(6.8);
-      doc.text("Conta", margin + 1, y);
-      statement.months.forEach((month, index) => {
-        doc.text(month.label.slice(0, 3), margin + accountWidth + monthWidth * index + monthWidth - 1, y, {
-          align: "right",
-        });
-      });
-      doc.text("Total", pageWidth - margin - averageWidth - 2, y, { align: "right" });
-      doc.text("Media", pageWidth - margin - 1, y, { align: "right" });
-      y += rowHeight + 1;
-    };
-
-    drawStatementHeader();
-    statement.rows.forEach((row) => {
-      addPageIfNeeded(rowHeight + 3);
-      if (y < 42) drawStatementHeader();
-      if (row.level === 0) {
-        doc.setFillColor(247, 249, 248);
-        doc.rect(margin, y - 4, contentWidth, rowHeight + 1, "F");
-      }
-      doc.setFont("helvetica", row.level <= 1 ? "bold" : "normal");
-      doc.setTextColor(28, 34, 31);
-      doc.setFontSize(row.level === 0 ? 6.8 : 6.2);
-      const accountName = `${row.code} ${row.name}`;
-      doc.text(accountName.slice(0, 47), margin + 1 + row.level * 3, y);
-      row.monthly.forEach((value, index) => {
-        doc.text(value ? money.format(value).replace("R$", "").trim() : "-", margin + accountWidth + monthWidth * index + monthWidth - 1, y, {
-          align: "right",
-        });
-      });
-      doc.text(money.format(row.total).replace("R$", "").trim(), pageWidth - margin - averageWidth - 2, y, {
-        align: "right",
-      });
-      doc.text(money.format(row.average).replace("R$", "").trim(), pageWidth - margin - 1, y, {
-        align: "right",
-      });
-      y += rowHeight;
-    });
-  }
+  drawStatementHeader();
+  statement.rows.forEach((row) => {
+    addPageIfNeeded(rowHeight + 3);
+    if (y < 42) drawStatementHeader();
+    if (row.level === 0) {
+      doc.setFillColor(247, 249, 248);
+      doc.rect(margin, y - 4, contentWidth, rowHeight + 1, "F");
+    }
+    doc.setFont("helvetica", row.level <= 1 ? "bold" : "normal");
+    doc.setTextColor(row.amount < 0 ? 190 : 28, row.amount < 0 ? 48 : 34, row.amount < 0 ? 48 : 31);
+    doc.setFontSize(row.level === 0 ? 7.5 : 7);
+    doc.text(`${row.code} ${row.name}`.slice(0, 90), margin + 1 + row.level * 3, y);
+    doc.text(String(row.document_count), pageWidth - margin - 48, y, { align: "right" });
+    doc.text(money.format(row.amount), pageWidth - margin - 1, y, { align: "right" });
+    y += rowHeight;
+  });
 
   doc.save(filename);
 }
@@ -1462,16 +1447,20 @@ function DreDetailPanel({
   );
 }
 
-function Dre12MonthStatement({
+function DrePeriodStatement({
   statement,
   loading,
 }: {
-  statement: Dre12MonthStatementData | null;
+  statement: DrePeriodStatementData | null;
   loading: boolean;
 }) {
   const rows = statement?.rows ?? [];
-  const months = statement?.months ?? [];
   const basis = statement?.basis ?? "accrual";
+  const period = statement
+    ? `${date.format(new Date(`${statement.startDate}T12:00:00`))} a ${date.format(
+        new Date(`${statement.endDate}T12:00:00`),
+      )}`
+    : "Periodo selecionado";
 
   return (
     <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
@@ -1480,42 +1469,36 @@ function Dre12MonthStatement({
           <img src={frotakLogo} alt="Frotak" className="h-12 w-24 rounded-md object-cover" />
           <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
-              Demonstrativo gerencial 12 meses
+              Demonstrativo gerencial do periodo
             </p>
-            <h2 className="text-xl font-black">
-              {statement?.title ?? "Demonstrativo gerencial 12 meses"}
-            </h2>
-            <span className="text-sm text-muted-foreground">
-              Ano base: {statement?.year ?? new Date().getFullYear()} · Base: {statement?.basisLabel ?? "Lancamento"}
-            </span>
+            <h2 className="text-xl font-black">{statement?.title ?? "DRE Gerencial"}</h2>
+            <span className="text-sm text-muted-foreground">{period}</span>
           </div>
         </div>
         <div className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-2 lg:text-right">
           <span>Base: {basis === "cash" ? "Conciliacao" : "Lancamento"}</span>
-          <span>{basis === "cash" ? "Data da baixa/conciliacao" : "Competencia do motor financeiro"}</span>
+          <span>
+            {basis === "cash" ? "Data da baixa/conciliacao" : "Competencia do motor financeiro"}
+          </span>
           <span>{basis === "cash" ? "Somente pago/recebido" : "Independe de pagamento"}</span>
+          {statement?.vehiclePlate ? <span>Caminhao: {statement.vehiclePlate}</span> : null}
           <span>Gerado em {date.format(new Date())}</span>
         </div>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1080px] border-collapse text-sm">
+        <table className="w-full min-w-[680px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-border text-left text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-              <th className="w-[360px] py-2 pr-3">Conta</th>
-              {months.map((month) => (
-                <th key={month.index} className="px-2 py-2 text-right">
-                  {month.label.slice(0, 3)}
-                </th>
-              ))}
-              <th className="px-2 py-2 text-right">Total</th>
-              <th className="py-2 pl-2 text-right">Media</th>
+              <th className="py-2 pr-3">Conta gerencial</th>
+              <th className="px-2 py-2 text-right">Documentos</th>
+              <th className="py-2 pl-2 text-right">Valor no periodo</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={15} className="py-8 text-center text-muted-foreground">
+                <td colSpan={3} className="py-8 text-center text-muted-foreground">
                   Carregando demonstrativo...
                 </td>
               </tr>
@@ -1539,27 +1522,24 @@ function Dre12MonthStatement({
                         <span className="truncate">{row.name}</span>
                       </div>
                     </td>
-                    {row.monthly.map((value, index) => (
-                      <td
-                        key={`${row.id}-${index}`}
-                        className={cn("px-2 py-2 text-right", value < 0 && "text-destructive")}
-                      >
-                        {value ? money.format(value) : "-"}
-                      </td>
-                    ))}
-                    <td className={cn("px-2 py-2 text-right font-bold", row.total < 0 && "text-destructive")}>
-                      {money.format(row.total)}
+                    <td className="px-2 py-2 text-right text-muted-foreground">
+                      {row.document_count}
                     </td>
-                    <td className={cn("py-2 pl-2 text-right", row.average < 0 && "text-destructive")}>
-                      {money.format(row.average)}
+                    <td
+                      className={cn(
+                        "py-2 pl-2 text-right font-bold",
+                        row.amount < 0 && "text-destructive",
+                      )}
+                    >
+                      {money.format(row.amount)}
                     </td>
                   </tr>
                 );
               })
             ) : (
               <tr>
-                <td colSpan={15} className="py-8 text-center text-muted-foreground">
-                  Nenhum lancamento gerencial encontrado para o ano selecionado.
+                <td colSpan={3} className="py-8 text-center text-muted-foreground">
+                  Nenhum lancamento gerencial encontrado no periodo selecionado.
                 </td>
               </tr>
             )}
@@ -1570,114 +1550,110 @@ function Dre12MonthStatement({
   );
 }
 
+function DrePeriodSummary({ statement }: { statement: DrePeriodStatementData }) {
+  return (
+    <section className="financial-dre-summary">
+      <article className="financial-dre-result-card">
+        <p className="financial-eyebrow">Resultado gerencial</p>
+        <strong
+          className={cn(
+            "financial-dre-result-value",
+            statement.totals.managerial_result < 0 && "text-destructive",
+          )}
+        >
+          {money.format(statement.totals.managerial_result)}
+        </strong>
+      </article>
+      <article className="financial-dre-margin-card">
+        <p className="financial-eyebrow">Margem</p>
+        <strong>{marginLabel(statement.totals.managerialMargin)}</strong>
+      </article>
+      <div className="financial-dre-secondary-metrics">
+        <MiniMetric label="Receita liquida" value={statement.totals.netRevenue} tone="success" />
+        <MiniMetric label="Custos" value={Math.abs(statement.totals.variable_costs)} />
+        <MiniMetric label="Despesas" value={Math.abs(statement.totals.operating_expenses)} />
+      </div>
+    </section>
+  );
+}
+
 function DreContent({ access }: { access: FinancialAccess }) {
   const [mode, setMode] = useState<PeriodMode>("month");
   const [start, setStart] = useState(() => periodBounds("month")[0]);
   const [end, setEnd] = useState(() => periodBounds("month")[1]);
-  const [dreYearInput, setDreYearInput] = useState(() => String(new Date().getFullYear()));
   const [costCenterId, setCostCenterId] = useState("all");
   const [centers, setCenters] = useState<CostCenter[]>([]);
-  const [summary, setSummary] = useState<DreSummary | null>(null);
-  const [detail, setDetail] = useState<DreDetail | null>(null);
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
-  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [view, setView] = useState<"general" | "vehicle">("general");
+  const [vehicleId, setVehicleId] = useState("");
+  const [basis, setBasis] = useState<Dre12MonthBasis>("accrual");
+  const [statement, setStatement] = useState<DrePeriodStatementData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dre12Basis, setDre12Basis] = useState<Dre12MonthBasis>("accrual");
-  const [dre12Statement, setDre12Statement] = useState<Dre12MonthStatementData | null>(null);
-  const [dre12Loading, setDre12Loading] = useState(true);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const { vehicles } = useFleet();
   const canDre = hasFinancialPermission(access, "financial.dre.view");
-  const parsedDreYear = Number(dreYearInput);
-  const dreYearIsValid =
-    /^\d{4}$/.test(dreYearInput) && parsedDreYear >= 2000 && parsedDreYear <= 2100;
-  const dreYear = dreYearIsValid ? parsedDreYear : null;
+  const selectedVehicle = vehicles.find((vehicle) => vehicle.id === vehicleId);
   const dreSubtitle =
-    dre12Basis === "cash"
+    basis === "cash"
       ? "Visão gerencial por pagamentos e recebimentos conciliados"
       : "Visão gerencial por lançamento/competência";
-
-  const payload = useMemo(
-    () => ({
-      workspaceId: access.workspaceId,
-      startDate: start,
-      endDate: end,
-      costCenterId: costCenterId === "all" ? null : costCenterId,
-    }),
-    [access.workspaceId, costCenterId, end, start],
-  );
   const selectedCostCenterLabel =
     costCenterId === "all"
-      ? "Consolidado"
+      ? "Empresa inteira"
       : centers.find((center) => center.id === costCenterId)?.name || "Apropriacao selecionada";
+  const scopeLabel =
+    view === "vehicle" && selectedVehicle
+      ? `Caminhao ${selectedVehicle.plate}`
+      : selectedCostCenterLabel;
   const drePeriodLabel = `${date.format(new Date(`${start}T12:00:00`))} a ${date.format(
     new Date(`${end}T12:00:00`),
   )}`;
   const csvRows =
-    summary?.groups.map((group) => ({
-      grupo: group.label,
-      valor_assinado: group.signed_amount,
-      movimento: group.movement_amount,
-      documentos: group.document_count,
+    statement?.rows.map((row) => ({
+      codigo: row.code,
+      gerencial: row.name,
+      documentos: row.document_count,
+      valor_periodo: row.amount,
+      base: statement.basisLabel,
+      escopo: scopeLabel,
     })) ?? [];
 
-  const loadSummary = useCallback(async () => {
+  useEffect(() => {
     if (!canDre) return;
-    if (!dreYear) {
-      setSummary(null);
-      setDre12Statement(null);
-      setDetail(null);
-      setSelectedGroup(null);
-      setSelectedAccount(null);
+    listFinancialCostCenters(access.workspaceId)
+      .then(setCenters)
+      .catch(() => toast.error("Nao foi possivel carregar as apropriacoes."));
+  }, [access.workspaceId, canDre]);
+
+  const loadStatement = useCallback(async () => {
+    if (!canDre) return;
+    if (view === "vehicle" && !vehicleId) {
+      setStatement(null);
       setLoading(false);
-      setDre12Loading(false);
       return;
     }
     setLoading(true);
-    setDre12Loading(true);
-    const [nextSummary, nextCenters, nextStatement] = await Promise.all([
-      dre12Basis === "accrual" ? getDreSummary(payload) : Promise.resolve(null),
-      listFinancialCostCenters(access.workspaceId),
-      getDre12MonthStatement({
-        workspaceId: access.workspaceId,
-        year: dreYear,
-        basis: dre12Basis,
-        costCenterId: costCenterId === "all" ? null : costCenterId,
-      }),
-    ]);
-    setSummary(nextSummary);
-    setCenters(nextCenters);
-    setDre12Statement(nextStatement);
-    setDetail(null);
-    setSelectedGroup(null);
-    setSelectedAccount(null);
-    setLoading(false);
-    setDre12Loading(false);
-  }, [access.workspaceId, canDre, costCenterId, dre12Basis, dreYear, payload]);
+    try {
+      setStatement(
+        await getDrePeriodStatement({
+          workspaceId: access.workspaceId,
+          startDate: start,
+          endDate: end,
+          basis,
+          costCenterId: costCenterId === "all" ? null : costCenterId,
+          vehicleId: view === "vehicle" ? vehicleId : null,
+        }),
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [access.workspaceId, basis, canDre, costCenterId, end, start, vehicleId, view]);
 
   useEffect(() => {
-    loadSummary().catch(() => {
-      setLoading(false);
-      setDre12Loading(false);
+    loadStatement().catch(() => {
+      setStatement(null);
       toast.error("Nao foi possivel carregar a DRE gerencial.");
     });
-  }, [loadSummary]);
-
-  const openGroup = async (group: DreGroupRow) => {
-    setSelectedGroup(group.dre_group);
-    setSelectedAccount(null);
-    setDetail(await getDreDetail({ ...payload, dreGroup: group.dre_group }));
-  };
-
-  const openAccount = async (account: string | null) => {
-    setSelectedAccount(account);
-    setDetail(
-      await getDreDetail({
-        ...payload,
-        dreGroup: selectedGroup,
-        chartAccountId: account,
-      }),
-    );
-  };
+  }, [loadStatement]);
 
   if (!canDre) {
     return (
@@ -1695,7 +1671,7 @@ function DreContent({ access }: { access: FinancialAccess }) {
         title="DRE Gerencial"
         subtitle={dreSubtitle}
         actions={
-          summary || dre12Statement ? (
+          statement ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={exportingPdf}>
@@ -1711,11 +1687,10 @@ function DreContent({ access }: { access: FinancialAccess }) {
                 <DropdownMenuItem
                   onClick={() =>
                     exportDrePdf({
-                      filename: 'dre-gerencial-' + start + '-' + end + '.pdf',
-                      summary,
-                      statement: dre12Statement,
+                      filename: `dre-${view}-${start}-${end}.pdf`,
+                      statement,
                       periodLabel: drePeriodLabel,
-                      costCenterLabel: selectedCostCenterLabel,
+                      scopeLabel,
                     })
                       .catch(() => toast.error("Nao foi possivel gerar o PDF."))
                       .finally(() => setExportingPdf(false))
@@ -1725,7 +1700,7 @@ function DreContent({ access }: { access: FinancialAccess }) {
                   PDF com logo Frotak
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => exportCsv('dre-' + start + '-' + end + '.csv', csvRows)}
+                  onClick={() => exportCsv(`dre-${view}-${start}-${end}.csv`, csvRows)}
                   disabled={!csvRows.length}
                 >
                   CSV
@@ -1736,6 +1711,15 @@ function DreContent({ access }: { access: FinancialAccess }) {
         }
       />
       <FinancialNav />
+      <Tabs value={view} onValueChange={(value) => setView(value as "general" | "vehicle")}>
+        <TabsList className="ml-3 md:ml-0">
+          <TabsTrigger value="general">DRE Geral</TabsTrigger>
+          <TabsTrigger value="vehicle">
+            <Truck className="mr-2 size-4" />
+            DRE por caminhão
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
       <section className="financial-dre-control-bar">
         <ReportPeriodControls
           mode={mode}
@@ -1746,25 +1730,35 @@ function DreContent({ access }: { access: FinancialAccess }) {
           onEnd={setEnd}
           compact
         />
-        <Field label="Ano Base">
-          <Input
-            type="number"
-            min={2000}
-            max={2100}
-            value={dreYearInput}
-            onChange={(event) => setDreYearInput(event.target.value)}
-          />
-          {!dreYearIsValid ? (
-            <span className="text-xs text-destructive">Informe um ano entre 2000 e 2100.</span>
-          ) : null}
-        </Field>
+        {view === "vehicle" ? (
+          <Field label="Caminhao">
+            <Select
+              value={vehicleId || "none"}
+              onValueChange={(value) => setVehicleId(value === "none" ? "" : value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a placa" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Selecione a placa</SelectItem>
+                {[...vehicles]
+                  .sort((a, b) => a.plate.localeCompare(b.plate))
+                  .map((vehicle) => (
+                    <SelectItem key={vehicle.id} value={vehicle.id}>
+                      {vehicle.plate} {vehicle.model ? `- ${vehicle.model}` : ""}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        ) : null}
         <Field label="Apropriacao">
           <Select value={costCenterId} onValueChange={setCostCenterId}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Consolidado</SelectItem>
+              <SelectItem value="all">Empresa inteira</SelectItem>
               {centers.map((center) => (
                 <SelectItem key={center.id} value={center.id}>
                   {center.name}
@@ -1774,7 +1768,7 @@ function DreContent({ access }: { access: FinancialAccess }) {
           </Select>
         </Field>
         <Field label="Base">
-          <Select value={dre12Basis} onValueChange={(value) => setDre12Basis(value as Dre12MonthBasis)}>
+          <Select value={basis} onValueChange={(value) => setBasis(value as Dre12MonthBasis)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
@@ -1785,38 +1779,17 @@ function DreContent({ access }: { access: FinancialAccess }) {
           </Select>
         </Field>
       </section>
-      {loading || !dre12Statement ? (
+      {view === "vehicle" && !vehicleId ? (
+        <section className="premium-card mx-3 p-6 text-sm text-muted-foreground md:mx-0">
+          Selecione uma placa para visualizar receitas, custos, despesas e resultado daquele
+          caminhão.
+        </section>
+      ) : loading || !statement ? (
         <LoadingReport />
       ) : (
         <>
-          <Dre12MonthStatement statement={dre12Statement} loading={dre12Loading} />
-          {dre12Basis === "accrual" && summary ? (
-            <>
-              <DreExecutiveSummary summary={summary} />
-              <div className="financial-dre-layout">
-                <DreStatement
-                  summary={summary}
-                  selectedGroup={selectedGroup}
-                  onGroup={(group) =>
-                    openGroup(group).catch(() => toast.error("Falha no drilldown."))
-                  }
-                />
-                <DreDetailPanel
-                  detail={detail}
-                  selectedAccount={selectedAccount}
-                  onAccount={(account) =>
-                    openAccount(account).catch(() => toast.error("Falha no detalhe."))
-                  }
-                />
-              </div>
-            </>
-          ) : (
-            <section className="premium-card mx-3 p-4 text-sm text-muted-foreground md:mx-0">
-              Resumo executivo e drilldown analítico ocultos nesta base para evitar comparar
-              lançamentos com conciliação. O demonstrativo acima já está calculado por baixas,
-              estornos e ajustes conciliados.
-            </section>
-          )}
+          <DrePeriodSummary statement={statement} />
+          <DrePeriodStatement statement={statement} loading={loading} />
         </>
       )}
     </div>
@@ -2353,15 +2326,21 @@ function TitlesContent({
   ]);
 
   const loadAuxiliaryData = useCallback(async () => {
-    const [partnersResult, accountsResult, chartResult, centersResult, freightsResult, recurringResult] =
-      await Promise.allSettled([
-        listFinancialPartners(access.tenantId),
-        listFinancialAccounts(access.workspaceId),
-        listFinancialChart(access.tenantId),
-        listFinancialCostCenters(access.workspaceId),
-        listCanonicalFreights(access.workspaceId),
-        listFinancialRecurringRules(),
-      ]);
+    const [
+      partnersResult,
+      accountsResult,
+      chartResult,
+      centersResult,
+      freightsResult,
+      recurringResult,
+    ] = await Promise.allSettled([
+      listFinancialPartners(access.tenantId),
+      listFinancialAccounts(access.workspaceId),
+      listFinancialChart(access.tenantId),
+      listFinancialCostCenters(access.workspaceId),
+      listCanonicalFreights(access.workspaceId),
+      listFinancialRecurringRules(),
+    ]);
 
     const applyAuxiliaryResult = <T,>(
       result: PromiseSettledResult<T[]>,
@@ -2794,7 +2773,7 @@ function TitlesContent({
         document={detailDocument}
         recurringRule={
           detailDocument?.sourceType === "recurring_rule" && detailDocument.sourceId
-            ? recurringById.get(detailDocument.sourceId) ?? null
+            ? (recurringById.get(detailDocument.sourceId) ?? null)
             : null
         }
         chart={chart}
@@ -3122,7 +3101,7 @@ function ReceivablesTitleList({
             canEdit={canEdit}
             recurringRule={
               document.sourceType === "recurring_rule" && document.sourceId
-                ? recurringById.get(document.sourceId) ?? null
+                ? (recurringById.get(document.sourceId) ?? null)
                 : null
             }
             onSettle={onSettle}
@@ -3680,7 +3659,7 @@ function PayablesTitleList({
                   canEdit={canEdit}
                   recurringRule={
                     document.sourceType === "recurring_rule" && document.sourceId
-                      ? recurringById.get(document.sourceId) ?? null
+                      ? (recurringById.get(document.sourceId) ?? null)
                       : null
                   }
                   onSettle={onSettle}
@@ -3932,7 +3911,10 @@ function TitleDetailsDialog({
               <InfoTile label="Valor original" value={money.format(document.originalAmount)} />
               <InfoTile label="Saldo aberto" value={money.format(documentBalance(document))} />
               <InfoTile label="Parceiro" value={document.partnerName || "Nao informado"} />
-              <InfoTile label="Status" value={statusLabel(visualStatus(document), document.direction)} />
+              <InfoTile
+                label="Status"
+                value={statusLabel(visualStatus(document), document.direction)}
+              />
               <InfoTile
                 label="Competencia"
                 value={
@@ -3944,17 +3926,13 @@ function TitleDetailsDialog({
               <InfoTile
                 label="Emissao"
                 value={
-                  document.issueDate
-                    ? date.format(new Date(`${document.issueDate}T12:00:00`))
-                    : "-"
+                  document.issueDate ? date.format(new Date(`${document.issueDate}T12:00:00`)) : "-"
                 }
               />
               <InfoTile
                 label="Data de lancamento"
                 value={
-                  document.entryDate
-                    ? date.format(new Date(`${document.entryDate}T12:00:00`))
-                    : "-"
+                  document.entryDate ? date.format(new Date(`${document.entryDate}T12:00:00`)) : "-"
                 }
               />
               <InfoTile
@@ -3971,7 +3949,9 @@ function TitleDetailsDialog({
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <InfoTile
                   label="Gerencial"
-                  value={chartAccount ? `${chartAccount.code} - ${chartAccount.name}` : "Nao informado"}
+                  value={
+                    chartAccount ? `${chartAccount.code} - ${chartAccount.name}` : "Nao informado"
+                  }
                 />
                 <InfoTile label="Empresa / setor" value={center?.name || "Empresa inteira"} />
                 <InfoTile label="Caminhao" value={vehicle?.plate || "Nao apropriado"} />
@@ -4828,8 +4808,7 @@ function DocumentDialog({
                   form.recurring === "yes" && !document
                     ? {
                         workspaceId: access.workspaceId,
-                        kind:
-                          direction === "receivable" ? "recurring_income" : "recurring_expense",
+                        kind: direction === "receivable" ? "recurring_income" : "recurring_expense",
                         name:
                           form.description ||
                           (direction === "receivable"
@@ -5012,7 +4991,9 @@ function SettlementDialog({
     }
   }, [target]);
   const hasAdjustments =
-    Number(form.interest || 0) > 0 || Number(form.penalty || 0) > 0 || Number(form.discount || 0) > 0;
+    Number(form.interest || 0) > 0 ||
+    Number(form.penalty || 0) > 0 ||
+    Number(form.discount || 0) > 0;
   const requiresAdjustmentAllocation =
     Boolean(target) && hasAdjustments && (target?.document.allocationCount ?? 0) === 0;
   const adjustmentAllocationMissing =
@@ -5089,10 +5070,18 @@ function SettlementDialog({
           </Field>
           {hasAdjustments && (
             <div className="rounded-md border border-border/70 bg-muted/30 p-3 text-xs text-muted-foreground sm:col-span-2">
-              <strong className="mb-1 block text-foreground">Classificacao gerencial dos ajustes</strong>
-              <span className="block">Juros entram no gerencial 7.03 - Juros e aparecem no DRE em Resultado Financeiro.</span>
-              <span className="block">Multas entram no gerencial 7.04 - Multas e aparecem no DRE em Resultado Financeiro.</span>
-              <span className="block">Descontos seguem a categoria propria de descontos da baixa.</span>
+              <strong className="mb-1 block text-foreground">
+                Classificacao gerencial dos ajustes
+              </strong>
+              <span className="block">
+                Juros entram no gerencial 7.03 - Juros e aparecem no DRE em Resultado Financeiro.
+              </span>
+              <span className="block">
+                Multas entram no gerencial 7.04 - Multas e aparecem no DRE em Resultado Financeiro.
+              </span>
+              <span className="block">
+                Descontos seguem a categoria propria de descontos da baixa.
+              </span>
             </div>
           )}
           <Field label="Forma">
@@ -5151,7 +5140,9 @@ function SettlementDialog({
                       setForm({ ...form, costCenterId: value === "all" ? "" : value })
                     }
                     all="Selecionar apropriação"
-                    items={centers.filter((center) => center.active).map((center) => [center.id, center.name])}
+                    items={centers
+                      .filter((center) => center.active)
+                      .map((center) => [center.id, center.name])}
                   />
                 </Field>
               )}
@@ -6804,11 +6795,7 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {form.id
-                ? "Editar estrutura"
-                : kind === "chart"
-                  ? "Nova conta"
-                  : "Nova apropriação"}
+              {form.id ? "Editar estrutura" : kind === "chart" ? "Nova conta" : "Nova apropriação"}
             </DialogTitle>
             <DialogDescription>
               Crie um item personalizado sem alterar as estruturas obrigatórias.
