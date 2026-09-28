@@ -4,7 +4,6 @@ import {
   GoogleGenAI,
   Modality,
   type Content,
-  type FunctionCall,
   type FunctionResponse,
 } from "@google/genai";
 import { createServerFn } from "@tanstack/react-start";
@@ -220,13 +219,6 @@ function toolResponsePart(call: FrotakAiToolCall, result: unknown): FunctionResp
     name: call.name,
     response: { output: result as Record<string, unknown> },
   };
-}
-
-function functionCallContent(calls: FunctionCall[]): Content {
-  return {
-    role: "model",
-    parts: calls.map((call) => ({ functionCall: call })),
-  } as Content;
 }
 
 function functionResponseContent(responses: FunctionResponse[]): Content {
@@ -672,11 +664,13 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
       ] as Content[];
 
       const first = await generateWithFallback(ai, { contents, systemInstruction });
+      const modelContent = first.response.candidates?.[0]?.content;
       const toolCalls = (first.response.functionCalls ?? [])
         .map(normalizeFrotakAiToolCall)
         .filter((call): call is FrotakAiToolCall => Boolean(call));
 
       if (toolCalls.length > 0) {
+        if (!modelContent) throw new Error("Resposta de ferramenta sem conteudo do modelo");
         const toolResponses = await Promise.all(
           toolCalls.map(async (call) => {
             const result = await executeFrotakAiTool(resolvedContext, call.name, call.args ?? {});
@@ -689,11 +683,7 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
 
         const second = await ai.models.generateContent({
           model: first.model,
-          contents: [
-            ...contents,
-            functionCallContent(first.response.functionCalls ?? []),
-            functionResponseContent(toolResponses),
-          ],
+          contents: [...contents, modelContent, functionResponseContent(toolResponses)],
           config: {
             temperature: 0.2,
             maxOutputTokens: 1600,
