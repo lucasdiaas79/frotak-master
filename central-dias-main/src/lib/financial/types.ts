@@ -635,6 +635,35 @@ export interface Dre12MonthStatement {
   rows: Dre12MonthRow[];
 }
 
+export interface DrePeriodRow {
+  id: string;
+  code: string;
+  name: string;
+  account_type: string;
+  normal_balance: string;
+  dre_group: DreGroup | "unclassified" | null;
+  level: number;
+  signed_amount: number;
+  movement_amount: number;
+  document_count: number;
+  amount: number;
+}
+
+export interface DrePeriodStatement {
+  basis: Dre12MonthBasis;
+  basisLabel: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  costCenterId: string | null;
+  costCenterName: string | null;
+  vehicleId: string | null;
+  vehiclePlate: string | null;
+  rows: DrePeriodRow[];
+  groups: DreGroupRow[];
+  totals: DreTotals;
+}
+
 export interface CashFlowSummary {
   startDate: string;
   endDate: string;
