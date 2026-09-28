@@ -12,6 +12,7 @@ import type {
   FinancialDocumentsPageInput,
   FinancialDocumentInput,
   FinancialIntegrationJob,
+  FinancialIntegrationHealth,
   FinancialIntegrationProcessResult,
   FinancialIntegrationSettings,
   FinancialSettlement,
@@ -470,4 +471,14 @@ export async function processFinancialIntegrations(
   });
   fail("Não foi possível processar as integrações financeiras", error);
   return data as FinancialIntegrationProcessResult;
+}
+
+export async function getFinancialIntegrationHealth(
+  workspaceId: string,
+): Promise<FinancialIntegrationHealth> {
+  const { data, error } = await supabase.rpc("get_financial_integration_health", {
+    p_workspace_id: workspaceId,
+  });
+  fail("Não foi possível verificar as integrações financeiras", error);
+  return data as FinancialIntegrationHealth;
 }

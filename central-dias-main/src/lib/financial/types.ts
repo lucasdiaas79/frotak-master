@@ -311,6 +311,15 @@ export interface FinancialIntegrationProcessResult {
   failed: number;
 }
 
+export interface FinancialIntegrationHealth {
+  workspaceId: string;
+  retrying: number;
+  exhausted: number;
+  needsReview: number;
+  requiresAttention: number;
+  oldestAttentionAt: string | null;
+}
+
 export type FinancialRecurringKind =
   | "salary"
   | "recurring_expense"

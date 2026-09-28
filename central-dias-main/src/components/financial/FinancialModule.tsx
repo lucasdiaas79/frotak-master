@@ -80,6 +80,7 @@ import {
 import { listCanonicalFreights } from "@/lib/financial/foundation";
 import {
   getFinancialAccess,
+  getFinancialIntegrationHealth,
   getFinancialDocumentDetails,
   hasFinancialPermission,
   listFinancialAccounts,
@@ -147,6 +148,7 @@ import type {
   FinancialDocumentInput,
   FinancialRecurringFrequency,
   FinancialInstallment,
+  FinancialIntegrationHealth,
   FinancialRecurringKind,
   FinancialRecurringRule,
   FinancialRecurringRuleInput,
@@ -196,7 +198,50 @@ function FinancialBoundary({ children }: { children: (access: FinancialAccess) =
         </div>
       </div>
     );
-  return <>{children(access)}</>;
+  return (
+    <>
+      <FinancialIntegrationHealthBanner access={access} />
+      {children(access)}
+    </>
+  );
+}
+
+function FinancialIntegrationHealthBanner({ access }: { access: FinancialAccess }) {
+  const [health, setHealth] = useState<FinancialIntegrationHealth | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    getFinancialIntegrationHealth(access.workspaceId)
+      .then((result) => {
+        if (active) setHealth(result);
+      })
+      .catch(() => {
+        if (active) setHealth(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [access.workspaceId]);
+
+  if (!health?.requiresAttention) return null;
+
+  const pendingMessage =
+    health.requiresAttention === 1
+      ? "Há 1 integração financeira que não foi concluída automaticamente."
+      : `Há ${health.requiresAttention} integrações financeiras que não foram concluídas automaticamente.`;
+
+  return (
+    <div className="mx-3 mb-3 flex items-start gap-3 rounded-lg border border-alert/35 bg-alert/10 px-4 py-3 text-sm md:mx-0">
+      <ShieldAlert className="mt-0.5 size-5 shrink-0 text-alert" />
+      <div className="min-w-0">
+        <p className="font-bold text-foreground">Lançamentos financeiros precisam de atenção</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {pendingMessage} Erros temporários continuam sendo reprocessados a cada 5 minutos; itens
+          persistentes permanecem sinalizados sem bloquear a operação do motorista.
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function Stat({
