@@ -1,6 +1,33 @@
 import { supabase } from "@/lib/supabase";
 import type { FreightHistory, VehicleFreightStage, VehicleStatus } from "@/lib/types";
 
+export interface LongTripHistoryMovement {
+  id: string;
+  type: "entry" | "expense";
+  label: string;
+  amount: number;
+  notes?: string;
+  recordedAt: string;
+}
+
+export interface LongTripHistory {
+  id: string;
+  driverId: string;
+  driverName: string;
+  vehicleId?: string;
+  vehiclePlate: string;
+  trailerIdentifier?: string;
+  startedAt: string;
+  closedAt: string;
+  closeReason?: string;
+  totalEntries: number;
+  totalExpenses: number;
+  closingBalance: number;
+  freightCount: number;
+  completedFreightCount: number;
+  movements: LongTripHistoryMovement[];
+}
+
 type FreightHistoryRow = {
   id: string;
   freight_id: string | null;
@@ -118,6 +145,83 @@ export async function listFreightHistory(): Promise<FreightHistory[]> {
       ),
     })),
   );
+}
+
+function relatedValue<T>(value: T | T[] | null | undefined): T | undefined {
+  return Array.isArray(value) ? value[0] : value ?? undefined;
+}
+
+export async function listLongTripHistory(): Promise<LongTripHistory[]> {
+  const { data, error } = await supabase
+    .from("driver_trip_cycles")
+    .select(`
+      id,
+      driver_id,
+      vehicle_id,
+      started_at,
+      closed_at,
+      close_reason,
+      total_cash_entries,
+      total_expenses,
+      closing_balance,
+      freight_count,
+      completed_freight_count,
+      driver:drivers(name),
+      vehicle:vehicles(plate),
+      trailer:trailers(identifier),
+      entries:freight_cash_entries(id, origin, amount, notes, recorded_at),
+      expenses:freight_expenses(id, category, description, amount, notes, recorded_at)
+    `)
+    .eq("status", "closed")
+    .order("closed_at", { ascending: false });
+
+  if (error) throw error;
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => {
+    const driver = relatedValue(row.driver as { name?: string } | Array<{ name?: string }> | null);
+    const vehicle = relatedValue(row.vehicle as { plate?: string } | Array<{ plate?: string }> | null);
+    const trailer = relatedValue(
+      row.trailer as { identifier?: string } | Array<{ identifier?: string }> | null,
+    );
+    const entries = (row.entries ?? []) as Array<Record<string, unknown>>;
+    const expenses = (row.expenses ?? []) as Array<Record<string, unknown>>;
+    const movements: LongTripHistoryMovement[] = [
+      ...entries.map((entry) => ({
+        id: String(entry.id),
+        type: "entry" as const,
+        label: String(entry.origin || "Entrada"),
+        amount: Number(entry.amount || 0),
+        notes: typeof entry.notes === "string" ? entry.notes : undefined,
+        recordedAt: String(entry.recorded_at),
+      })),
+      ...expenses.map((expense) => ({
+        id: String(expense.id),
+        type: "expense" as const,
+        label: String(expense.description || expense.category || "Despesa"),
+        amount: Number(expense.amount || 0),
+        notes: typeof expense.notes === "string" ? expense.notes : undefined,
+        recordedAt: String(expense.recorded_at),
+      })),
+    ].sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
+
+    return {
+      id: String(row.id),
+      driverId: String(row.driver_id),
+      driverName: driver?.name || "Motorista nao informado",
+      vehicleId: typeof row.vehicle_id === "string" ? row.vehicle_id : undefined,
+      vehiclePlate: vehicle?.plate || "Sem placa",
+      trailerIdentifier: trailer?.identifier,
+      startedAt: String(row.started_at),
+      closedAt: String(row.closed_at),
+      closeReason: typeof row.close_reason === "string" ? row.close_reason : undefined,
+      totalEntries: Number(row.total_cash_entries || 0),
+      totalExpenses: Number(row.total_expenses || 0),
+      closingBalance: Number(row.closing_balance || 0),
+      freightCount: Number(row.freight_count || 0),
+      completedFreightCount: Number(row.completed_freight_count || 0),
+      movements,
+    };
+  });
 }
 
 export async function deleteFreightHistory(ids: string[]): Promise<void> {

@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  Banknote,
   CalendarClock,
   CheckSquare,
   Download,
@@ -10,6 +11,8 @@ import {
   Trash2,
   Search,
   Square,
+  TrendingDown,
+  TrendingUp,
   Truck,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -33,7 +36,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { deleteFreightHistory, listFreightHistory } from "@/lib/services/freight-history";
+import {
+  deleteFreightHistory,
+  listFreightHistory,
+  listLongTripHistory,
+  type LongTripHistory,
+} from "@/lib/services/freight-history";
 import type { FreightHistory } from "@/lib/types";
 import { toast } from "sonner";
 
@@ -137,6 +145,7 @@ function downloadBlob(blob: Blob, fileName: string) {
 
 function HistoricosPage() {
   const [items, setItems] = useState<FreightHistory[]>([]);
+  const [longTrips, setLongTrips] = useState<LongTripHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [plateFilter, setPlateFilter] = useState("");
@@ -145,6 +154,7 @@ function HistoricosPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [selectedItem, setSelectedItem] = useState<FreightHistory | null>(null);
+  const [selectedLongTrip, setSelectedLongTrip] = useState<LongTripHistory | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -152,9 +162,11 @@ function HistoricosPage() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    listFreightHistory()
-      .then((records) => {
-        if (active) setItems(records);
+    Promise.all([listFreightHistory(), listLongTripHistory()])
+      .then(([records, tripRecords]) => {
+        if (!active) return;
+        setItems(records);
+        setLongTrips(tripRecords);
       })
       .catch((err) => {
         if (active) setError(err instanceof Error ? err.message : "Erro ao carregar historicos.");
@@ -195,6 +207,22 @@ function HistoricosPage() {
       return matchesPlate && matchesState && matchesDocument && matchesFrom && matchesTo;
     });
   }, [items, plateFilter, stateFilter, documentFilter, dateFrom, dateTo]);
+
+  const filteredLongTrips = useMemo(() => {
+    const plate = plateFilter.trim().toUpperCase();
+    const fromDate = dateFrom ? new Date(`${dateFrom}T00:00:00`) : undefined;
+    const toDate = dateTo ? new Date(`${dateTo}T23:59:59`) : undefined;
+
+    return longTrips.filter((trip) => {
+      const closedAt = new Date(trip.closedAt);
+      const validDate = !Number.isNaN(closedAt.getTime());
+      return (
+        (!plate || trip.vehiclePlate.toUpperCase().includes(plate)) &&
+        (!fromDate || (validDate && closedAt >= fromDate)) &&
+        (!toDate || (validDate && closedAt <= toDate))
+      );
+    });
+  }, [longTrips, plateFilter, dateFrom, dateTo]);
 
   const selectedCount = selectedIds.length;
   const allFilteredSelected = filtered.length > 0 && filtered.every((item) => selectedIds.includes(item.id));
@@ -423,6 +451,45 @@ function HistoricosPage() {
         </CardContent>
       </Card>
 
+      {!loading && !error && filteredLongTrips.length > 0 ? (
+        <section className="overflow-hidden rounded-lg border border-border bg-surface/70">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Fechamentos de Tiro Longo</p>
+              <p className="text-xs text-muted-foreground">Saldo consolidado quando o motorista retorna ao patio</p>
+            </div>
+            <Badge variant="secondary">{filteredLongTrips.length}</Badge>
+          </div>
+          <div className="divide-y divide-border">
+            {filteredLongTrips.map((trip) => (
+              <button
+                key={trip.id}
+                type="button"
+                onClick={() => setSelectedLongTrip(trip)}
+                className="grid w-full gap-3 px-4 py-3 text-left transition hover:bg-accent/35 md:grid-cols-[minmax(180px,1fr)_repeat(3,minmax(120px,auto))] md:items-center"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary" className="gap-1">
+                      <Truck className="size-3.5" />
+                      {trip.vehiclePlate}
+                    </Badge>
+                    <Badge variant="outline">{trip.completedFreightCount} fretes</Badge>
+                  </div>
+                  <p className="mt-2 truncate text-sm font-semibold">{trip.driverName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDate(trip.startedAt)} ate {formatDate(trip.closedAt)}
+                  </p>
+                </div>
+                <TripMetric icon={TrendingUp} label="Entradas" value={trip.totalEntries} tone="positive" />
+                <TripMetric icon={TrendingDown} label="Despesas" value={trip.totalExpenses} tone="negative" />
+                <TripMetric icon={Banknote} label="Saldo final" value={trip.closingBalance} tone="balance" />
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       {loading ? (
         <Card>
           <CardContent className="p-6 text-sm text-muted-foreground">Carregando historicos...</CardContent>
@@ -589,6 +656,117 @@ function HistoricosPage() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!selectedLongTrip} onOpenChange={(open) => !open && setSelectedLongTrip(null)}>
+        <DialogContent className="max-w-3xl overflow-y-auto">
+          {selectedLongTrip ? (
+            <>
+              <DialogHeader>
+                <DialogTitle>Tiro Longo {selectedLongTrip.vehiclePlate}</DialogTitle>
+                <DialogDescription>
+                  {selectedLongTrip.driverName} - encerrado em {formatDate(selectedLongTrip.closedAt)}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <TripSummary label="Entradas" value={selectedLongTrip.totalEntries} tone="positive" />
+                  <TripSummary label="Despesas" value={selectedLongTrip.totalExpenses} tone="negative" />
+                  <TripSummary label="Saldo final" value={selectedLongTrip.closingBalance} tone="balance" />
+                </div>
+
+                <div className="grid gap-3 text-sm sm:grid-cols-3">
+                  <Detail label="Inicio" value={formatDate(selectedLongTrip.startedAt)} />
+                  <Detail label="Finalizacao" value={formatDate(selectedLongTrip.closedAt)} />
+                  <Detail
+                    label="Fretes concluidos"
+                    value={`${selectedLongTrip.completedFreightCount} de ${selectedLongTrip.freightCount}`}
+                  />
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center gap-2 text-sm font-medium">
+                    <History className="size-4" />
+                    Movimentacoes do ciclo
+                  </div>
+                  <div className="overflow-hidden rounded-lg border border-border">
+                    {selectedLongTrip.movements.map((movement) => (
+                      <div
+                        key={`${movement.type}-${movement.id}`}
+                        className="flex items-start justify-between gap-4 border-b border-border px-3 py-2.5 last:border-b-0"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{movement.label}</p>
+                          <p className="text-xs text-muted-foreground">{formatDate(movement.recordedAt)}</p>
+                          {movement.notes ? (
+                            <p className="mt-1 text-xs text-muted-foreground">{movement.notes}</p>
+                          ) : null}
+                        </div>
+                        <span
+                          className={
+                            movement.type === "entry"
+                              ? "shrink-0 text-sm font-semibold text-success"
+                              : "shrink-0 text-sm font-semibold text-destructive"
+                          }
+                        >
+                          {movement.type === "entry" ? "+" : "-"}
+                          {moneyFormatter.format(movement.amount)}
+                        </span>
+                      </div>
+                    ))}
+                    {selectedLongTrip.movements.length === 0 ? (
+                      <p className="p-4 text-sm text-muted-foreground">Nenhuma movimentacao registrada.</p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function TripMetric({
+  icon: Icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: typeof Banknote;
+  label: string;
+  value: number;
+  tone: "positive" | "negative" | "balance";
+}) {
+  const valueClass =
+    tone === "positive" ? "text-success" : tone === "negative" ? "text-destructive" : value >= 0 ? "text-success" : "text-destructive";
+  return (
+    <div className="flex items-center gap-2 md:justify-end">
+      <Icon className="size-4 text-muted-foreground" />
+      <div className="md:text-right">
+        <p className="text-[11px] text-muted-foreground">{label}</p>
+        <p className={`text-sm font-semibold ${valueClass}`}>{moneyFormatter.format(value)}</p>
+      </div>
+    </div>
+  );
+}
+
+function TripSummary({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "positive" | "negative" | "balance";
+}) {
+  const valueClass =
+    tone === "positive" ? "text-success" : tone === "negative" ? "text-destructive" : value >= 0 ? "text-success" : "text-destructive";
+  return (
+    <div className="rounded-lg border border-border bg-surface/50 p-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className={`mt-1 text-lg font-semibold ${valueClass}`}>{moneyFormatter.format(value)}</p>
     </div>
   );
 }
