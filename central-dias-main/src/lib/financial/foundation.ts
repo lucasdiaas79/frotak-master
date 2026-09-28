@@ -81,7 +81,11 @@ export async function listBusinessPartners(): Promise<BusinessPartner[]> {
 }
 
 export async function listChartOfAccounts(): Promise<ChartAccount[]> {
-  const { data, error } = await supabase.from("chart_of_accounts").select("*").order("code");
+  const { data, error } = await supabase
+    .from("chart_of_accounts")
+    .select("*")
+    .eq("active", true)
+    .order("code");
   return requireData(data, error, "Não foi possível consultar os gerenciais").map((row) => ({
     id: row.id,
     tenantId: row.tenant_id,

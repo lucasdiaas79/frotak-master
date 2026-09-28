@@ -364,7 +364,7 @@ export async function saveBusinessPartner(payload: Record<string, unknown>) {
 }
 
 export async function listFinancialChart(tenantId?: string): Promise<ChartAccount[]> {
-  let query = supabase.from("chart_of_accounts").select("*").order("code");
+  let query = supabase.from("chart_of_accounts").select("*").eq("active", true).order("code");
   if (tenantId) query = query.eq("tenant_id", tenantId);
   const { data, error } = await query;
   fail("Não foi possível carregar os gerenciais", error);
