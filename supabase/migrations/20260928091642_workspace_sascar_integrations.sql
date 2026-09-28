@@ -66,34 +66,36 @@ create trigger workspace_integrations_validate_tenant
 
 alter table public.workspace_integrations enable row level security;
 
+grant select, insert, update, delete on table public.workspace_integrations to authenticated;
+
 drop policy if exists "tenant admins can read workspace integrations" on public.workspace_integrations;
 create policy "tenant admins can read workspace integrations"
   on public.workspace_integrations
   for select
   to authenticated
-  using (tenant_id = public.current_tenant_id() and public.is_admin());
+  using (private.is_platform_user() or private.is_workspace_owner(workspace_id));
 
 drop policy if exists "tenant admins can insert workspace integrations" on public.workspace_integrations;
 create policy "tenant admins can insert workspace integrations"
   on public.workspace_integrations
   for insert
   to authenticated
-  with check (tenant_id = public.current_tenant_id() and public.is_admin());
+  with check (private.is_platform_user() or private.is_workspace_owner(workspace_id));
 
 drop policy if exists "tenant admins can update workspace integrations" on public.workspace_integrations;
 create policy "tenant admins can update workspace integrations"
   on public.workspace_integrations
   for update
   to authenticated
-  using (tenant_id = public.current_tenant_id() and public.is_admin())
-  with check (tenant_id = public.current_tenant_id() and public.is_admin());
+  using (private.is_platform_user() or private.is_workspace_owner(workspace_id))
+  with check (private.is_platform_user() or private.is_workspace_owner(workspace_id));
 
 drop policy if exists "tenant admins can delete workspace integrations" on public.workspace_integrations;
 create policy "tenant admins can delete workspace integrations"
   on public.workspace_integrations
   for delete
   to authenticated
-  using (tenant_id = public.current_tenant_id() and public.is_admin());
+  using (private.is_platform_user() or private.is_workspace_owner(workspace_id));
 
 comment on table public.workspace_integrations is
   'Tenant/workspace scoped integration configuration. Sensitive provider credentials must live in server-side env/secret manager and be referenced by secret_ref.';
