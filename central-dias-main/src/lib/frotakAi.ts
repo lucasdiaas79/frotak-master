@@ -575,7 +575,6 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" })
               systemInstruction: liveSetupConfig.systemInstruction,
             },
           },
-          lockAdditionalFields: [],
         },
       });
 
