@@ -74,8 +74,6 @@ const DEFAULT_CURRENT_HISTORY_STALE_MINUTES = 15;
 const DEFAULT_CURRENT_HISTORY_LOOKBACK_HOURS = 3;
 const DEFAULT_MAX_RECOVERY_PAGES = 2;
 
-let inFlight = false;
-
 function normalizePlate(plate: string) {
   return plate
     .replace(/[^A-Z0-9]/gi, "")
@@ -371,11 +369,6 @@ async function collectInitialCoveragePackets(
 }
 
 export async function runSascarSync(input: SascarSyncInput = {}): Promise<SascarSyncResponse> {
-  if (inFlight) {
-    throw new Error("A sincronizacao Sascar ja esta em andamento.");
-  }
-
-  inFlight = true;
   let lockAcquired = false;
   let lockKey = "sascar-sync";
   const supabase = getSupabaseAdmin();
@@ -742,6 +735,5 @@ export async function runSascarSync(input: SascarSyncInput = {}): Promise<Sascar
         console.error("[sascar-sync] failed to release lock", error);
       }
     }
-    inFlight = false;
   }
 }
