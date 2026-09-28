@@ -5,10 +5,12 @@ import {
   getLatestPositionPackets,
   getPositionPacketsByRange,
   getVehiclePositionHistory,
+  type SascarCredentials,
   type SascarPositionPacket,
 } from "./sascar.ts";
 
 export interface SascarSyncInput {
+  workspaceId?: string;
   quantity?: number;
   forceFull?: boolean;
   includeCurrentHistory?: boolean;
@@ -48,6 +50,21 @@ interface LocalVehicleRow {
 interface SascarSyncStateRow {
   synced_at: string | null;
   metadata: Record<string, unknown> | null;
+}
+
+interface WorkspaceIntegrationRow {
+  workspace_id: string;
+  tenant_id: string;
+  provider: string;
+  status: string;
+  secret_ref: string | null;
+  config: Record<string, unknown> | null;
+}
+
+interface SascarSyncTarget {
+  workspaceId: string | null;
+  tenantId: string | null;
+  credentials?: SascarCredentials;
 }
 
 const POSITION_BATCH_LIMIT = 3000;
@@ -136,6 +153,105 @@ function readBooleanEnv(name: string, fallback = false) {
   return ["1", "true", "yes", "sim"].includes(value);
 }
 
+function readEnv(name: string): string | undefined {
+  const value = process.env[name];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeSecretRef(value: string) {
+  return value
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase();
+}
+
+function readSascarCredentials(secretRef?: string | null, config?: Record<string, unknown> | null) {
+  const normalized = secretRef ? normalizeSecretRef(secretRef) : "";
+  const prefix = normalized ? `SASCAR_${normalized}_` : "SASCAR_";
+  const user = readEnv(`${prefix}USER`) ?? readEnv("SASCAR_USER");
+  const password = readEnv(`${prefix}PASSWORD`) ?? readEnv("SASCAR_PASSWORD");
+  if (!user || !password) {
+    throw new Error(
+      secretRef
+        ? `Credenciais Sascar ausentes para secret_ref ${secretRef}.`
+        : "Credenciais Sascar globais ausentes.",
+    );
+  }
+
+  const timeoutMs = Number(config?.timeoutMs ?? config?.timeout_ms);
+  return {
+    user,
+    password,
+    wsdlUrl:
+      (typeof config?.wsdlUrl === "string" && config.wsdlUrl) ||
+      (typeof config?.wsdl_url === "string" && config.wsdl_url) ||
+      readEnv(`${prefix}WSDL_URL`) ||
+      null,
+    soapUrl:
+      (typeof config?.soapUrl === "string" && config.soapUrl) ||
+      (typeof config?.soap_url === "string" && config.soap_url) ||
+      readEnv(`${prefix}SOAP_URL`) ||
+      null,
+    timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : null,
+  } satisfies SascarCredentials;
+}
+
+async function resolveWorkspaceTarget(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  workspaceId?: string | null,
+): Promise<SascarSyncTarget> {
+  if (!workspaceId) {
+    return {
+      workspaceId: null,
+      tenantId: null,
+      credentials: readSascarCredentials(),
+    };
+  }
+
+  const { data: workspace, error: workspaceError } = await supabase
+    .from("workspaces")
+    .select("id, tenant_id")
+    .eq("id", workspaceId)
+    .maybeSingle();
+  if (workspaceError) throw workspaceError;
+  if (!workspace?.tenant_id) throw new Error("Workspace Sascar nao encontrado.");
+
+  const { data: integration, error: integrationError } = await supabase
+    .from("workspace_integrations")
+    .select("workspace_id, tenant_id, provider, status, secret_ref, config")
+    .eq("workspace_id", workspaceId)
+    .eq("provider", "sascar")
+    .maybeSingle();
+
+  if (integrationError) {
+    if (integrationError.code === "42P01") {
+      return {
+        workspaceId,
+        tenantId: workspace.tenant_id,
+        credentials: readSascarCredentials(),
+      };
+    }
+    throw integrationError;
+  }
+
+  const row = integration as WorkspaceIntegrationRow | null;
+  if (!row) {
+    throw new Error("Integração Sascar não configurada para este workspace.");
+  }
+  if (row.status !== "active") {
+    throw new Error("Integração Sascar inativa para este workspace.");
+  }
+  if (row.tenant_id !== workspace.tenant_id) {
+    throw new Error("Integração Sascar pertence a outro tenant.");
+  }
+
+  return {
+    workspaceId,
+    tenantId: workspace.tenant_id,
+    credentials: readSascarCredentials(row.secret_ref, row.config),
+  };
+}
+
 function dedupeLatestPacketByVehicle(packets: SascarPositionPacket[]) {
   const latest = new Map<string, SascarPositionPacket>();
 
@@ -201,6 +317,7 @@ async function collectInitialCoveragePackets(
   localByPlate: Map<string, LocalVehicleRow>,
   quantity: number,
   enrich: (packets: SascarPositionPacket[]) => SascarPositionPacket[],
+  credentials?: SascarCredentials,
 ) {
   if (!sortedLatestPackets.length) return sortedLatestPackets;
 
@@ -226,7 +343,12 @@ async function collectInitialCoveragePackets(
 
   for (let page = 0; page < INITIAL_BACKFILL_PAGES && rangeEnd > 0; page += 1) {
     const rangeStart = Math.max(rangeEnd - (POSITION_BATCH_LIMIT - 1), 1);
-    const batch = await getPositionPacketsByRange(rangeStart, rangeEnd, POSITION_BATCH_LIMIT);
+    const batch = await getPositionPacketsByRange(
+      rangeStart,
+      rangeEnd,
+      POSITION_BATCH_LIMIT,
+      credentials,
+    );
     const enrichedBatch = enrich(batch).sort(sortByPacketIdAsc);
 
     if (!enrichedBatch.length) break;
@@ -254,16 +376,18 @@ export async function runSascarSync(input: SascarSyncInput = {}): Promise<Sascar
   }
 
   inFlight = true;
-  const lockKey = "sascar-sync";
   let lockAcquired = false;
+  let lockKey = "sascar-sync";
   const supabase = getSupabaseAdmin();
 
   try {
+    const target = await resolveWorkspaceTarget(supabase, input.workspaceId);
     const quantity = Math.min(Math.max(Number(input.quantity ?? 3000), 1), POSITION_BATCH_LIMIT);
     const forceFull = Boolean(input.forceFull);
     const source = input.source ?? "manual";
     const includeCurrentHistory =
       input.includeCurrentHistory ?? readBooleanEnv("SASCAR_INCLUDE_CURRENT_HISTORY_DEFAULT");
+    lockKey = target.workspaceId ? `sascar-sync:${target.workspaceId}` : "sascar-sync";
 
     const { data: lockData, error: lockError } = await supabase.rpc("acquire_integration_lock", {
       p_key: lockKey,
@@ -273,15 +397,22 @@ export async function runSascarSync(input: SascarSyncInput = {}): Promise<Sascar
     lockAcquired = Boolean(lockData);
     if (!lockAcquired) throw new Error("A sincronizacao Sascar ja esta em andamento.");
 
-    const { data: localVehicles, error: localVehiclesError } = await supabase
+    let localVehiclesQuery = supabase
       .from("vehicles")
       .select("id, tenant_id, plate, sascar_id, last_position_at");
+    if (target.tenantId) {
+      localVehiclesQuery = localVehiclesQuery.eq("tenant_id", target.tenantId);
+    }
+
+    const { data: localVehicles, error: localVehiclesError } = await localVehiclesQuery;
 
     if (localVehiclesError) throw localVehiclesError;
 
     const localRows = (localVehicles ?? []) as LocalVehicleRow[];
-    const tenantIds = Array.from(new Set(localRows.map((vehicle) => vehicle.tenant_id).filter(Boolean)));
-    const primaryTenantId = tenantIds[0] ?? null;
+    const tenantIds = target.tenantId
+      ? [target.tenantId]
+      : Array.from(new Set(localRows.map((vehicle) => vehicle.tenant_id).filter(Boolean)));
+    const primaryTenantId = target.tenantId ?? tenantIds[0] ?? null;
     let syncState: SascarSyncStateRow | null = null;
 
     if (primaryTenantId) {
@@ -305,7 +436,7 @@ export async function runSascarSync(input: SascarSyncInput = {}): Promise<Sascar
         .map((vehicle) => [String(vehicle.sascar_id), vehicle]),
     );
 
-    const sascarVehicles = await getAllVehicles();
+    const sascarVehicles = await getAllVehicles(target.credentials);
     const sascarVehiclesById = new Map(
       sascarVehicles.map((vehicle) => [vehicle.vehicleId, vehicle]),
     );
@@ -342,7 +473,7 @@ export async function runSascarSync(input: SascarSyncInput = {}): Promise<Sascar
       }
     }
 
-    const latestPackets = await getLatestPositionPackets(quantity);
+    const latestPackets = await getLatestPositionPackets(quantity, target.credentials);
     const sortedLatestPackets = enrich(latestPackets).sort(sortByPacketIdAsc);
 
     const lastPacketId = forceFull
@@ -364,6 +495,7 @@ export async function runSascarSync(input: SascarSyncInput = {}): Promise<Sascar
         localByPlate,
         quantity,
         enrich,
+        target.credentials,
       );
     } else if (
       oldestPacketId != null &&
@@ -380,7 +512,12 @@ export async function runSascarSync(input: SascarSyncInput = {}): Promise<Sascar
 
       while (cursor <= newestPacketId && pagesRecovered < maxRecoveryPages) {
         const end = Math.min(cursor + (POSITION_BATCH_LIMIT - 1), newestPacketId);
-        const batch = await getPositionPacketsByRange(cursor, end, POSITION_BATCH_LIMIT);
+        const batch = await getPositionPacketsByRange(
+          cursor,
+          end,
+          POSITION_BATCH_LIMIT,
+          target.credentials,
+        );
         recoveredPackets.push(...enrich(batch));
         cursor = end + 1;
         pagesRecovered += 1;
@@ -477,6 +614,7 @@ export async function runSascarSync(input: SascarSyncInput = {}): Promise<Sascar
             vehicle.sascar_id as string,
             currentHistoryStart,
             currentHistoryEnd,
+            target.credentials,
           );
           const latest = dedupeLatestPacketByVehicle(
             history.filter((packet) => packet.gps !== 0),
@@ -557,6 +695,7 @@ export async function runSascarSync(input: SascarSyncInput = {}): Promise<Sascar
           metadata: {
             source,
             runtime: "nitro-api",
+            workspaceId: target.workspaceId,
             quantityRequested: quantity,
             includeCurrentHistory,
             packetsFetched: packetsToProcess.length,

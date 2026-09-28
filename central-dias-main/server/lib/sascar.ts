@@ -6,6 +6,14 @@ const VEHICLE_BATCH_LIMIT = 1000;
 const SASCAR_LOCAL_TIME_OFFSET = "-03:00";
 const DEFAULT_SOAP_TIMEOUT_MS = 20000;
 
+export interface SascarCredentials {
+  user: string;
+  password: string;
+  wsdlUrl?: string | null;
+  soapUrl?: string | null;
+  timeoutMs?: number | null;
+}
+
 export interface SascarVehicle {
   vehicleId: string;
   licensePlate: string;
@@ -104,15 +112,18 @@ function buildEnvelope(method: string, params: Record<string, string | number>) 
 </soapenv:Envelope>`;
 }
 
-function getSoapUrl() {
-  const explicitSoapUrl = readEnv("SASCAR_SOAP_URL");
+function getSoapUrl(credentials?: SascarCredentials) {
+  const explicitSoapUrl = credentials?.soapUrl?.trim() || readEnv("SASCAR_SOAP_URL");
   if (explicitSoapUrl) return explicitSoapUrl;
 
-  const wsdlUrl = readEnv("SASCAR_WSDL_URL") ?? DEFAULT_WSDL_URL;
+  const wsdlUrl = credentials?.wsdlUrl?.trim() || readEnv("SASCAR_WSDL_URL") || DEFAULT_WSDL_URL;
   return wsdlUrl.replace(/\?wsdl$/i, "");
 }
 
-function getSoapTimeoutMs() {
+function getSoapTimeoutMs(credentials?: SascarCredentials) {
+  if (credentials?.timeoutMs && Number.isFinite(credentials.timeoutMs) && credentials.timeoutMs > 0) {
+    return credentials.timeoutMs;
+  }
   const configured = Number(readEnv("SASCAR_SOAP_TIMEOUT_MS"));
   return Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_SOAP_TIMEOUT_MS;
 }
@@ -174,13 +185,17 @@ function parsePositionXmlReturns(xml: string) {
   }));
 }
 
-async function callSoap(method: string, params: Record<string, string | number>) {
+async function callSoap(
+  method: string,
+  params: Record<string, string | number>,
+  credentials?: SascarCredentials,
+) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), getSoapTimeoutMs());
+  const timeoutId = setTimeout(() => controller.abort(), getSoapTimeoutMs(credentials));
 
   let response: Response;
   try {
-    response = await fetch(getSoapUrl(), {
+    response = await fetch(getSoapUrl(credentials), {
       method: "POST",
       headers: {
         "Content-Type": "text/xml; charset=utf-8",
@@ -372,25 +387,29 @@ function normalizeHistoricalPosition(
   };
 }
 
-export async function getVehiclesPage(cursor = 0, quantity = VEHICLE_BATCH_LIMIT) {
+export async function getVehiclesPage(
+  cursor = 0,
+  quantity = VEHICLE_BATCH_LIMIT,
+  credentials?: SascarCredentials,
+) {
   const xml = await callSoap("getVehiclesJSON", {
-    user: requiredEnv("SASCAR_USER"),
-    password: requiredEnv("SASCAR_PASSWORD"),
+    user: credentials?.user ?? requiredEnv("SASCAR_USER"),
+    password: credentials?.password ?? requiredEnv("SASCAR_PASSWORD"),
     quantity,
     vehicleId: cursor,
-  });
+  }, credentials);
 
   return parseJsonReturns<Record<string, unknown>>(xml)
     .map(normalizeVehicle)
     .filter((item): item is SascarVehicle => Boolean(item));
 }
 
-export async function getAllVehicles() {
+export async function getAllVehicles(credentials?: SascarCredentials) {
   const vehicles: SascarVehicle[] = [];
   let cursor = 0;
 
   while (true) {
-    const page = await getVehiclesPage(cursor, VEHICLE_BATCH_LIMIT);
+    const page = await getVehiclesPage(cursor, VEHICLE_BATCH_LIMIT, credentials);
     if (!page.length) break;
 
     vehicles.push(...page);
@@ -402,26 +421,34 @@ export async function getAllVehicles() {
   return vehicles;
 }
 
-export async function getLatestPositionPackets(quantity = POSITION_BATCH_LIMIT) {
+export async function getLatestPositionPackets(
+  quantity = POSITION_BATCH_LIMIT,
+  credentials?: SascarCredentials,
+) {
   const xml = await callSoap("getPositionPacketWithLicensePlateJSON", {
-    user: requiredEnv("SASCAR_USER"),
-    password: requiredEnv("SASCAR_PASSWORD"),
+    user: credentials?.user ?? requiredEnv("SASCAR_USER"),
+    password: credentials?.password ?? requiredEnv("SASCAR_PASSWORD"),
     quantity: Math.min(Math.max(quantity, 1), POSITION_BATCH_LIMIT),
-  });
+  }, credentials);
 
   return parseJsonReturns<Record<string, unknown>>(xml)
     .map(normalizePosition)
     .filter((item): item is SascarPositionPacket => Boolean(item));
 }
 
-export async function getPositionPacketsByRange(startId: number, endId: number, quantity = 3000) {
+export async function getPositionPacketsByRange(
+  startId: number,
+  endId: number,
+  quantity = 3000,
+  credentials?: SascarCredentials,
+) {
   const xml = await callSoap("getPositionPacketByRangeJSON", {
-    user: requiredEnv("SASCAR_USER"),
-    password: requiredEnv("SASCAR_PASSWORD"),
+    user: credentials?.user ?? requiredEnv("SASCAR_USER"),
+    password: credentials?.password ?? requiredEnv("SASCAR_PASSWORD"),
     startId,
     endId,
     quantity: Math.min(Math.max(quantity, 1), POSITION_BATCH_LIMIT),
-  });
+  }, credentials);
 
   return parseJsonReturns<Record<string, unknown>>(xml)
     .map(normalizePosition)
@@ -432,14 +459,15 @@ export async function getVehiclePositionHistory(
   vehicleId: string | number,
   start: string,
   end: string,
+  credentials?: SascarCredentials,
 ) {
   const xml = await callSoap("obterPacotePosicaoHistorico", {
-    usuario: requiredEnv("SASCAR_USER"),
-    senha: requiredEnv("SASCAR_PASSWORD"),
+    usuario: credentials?.user ?? requiredEnv("SASCAR_USER"),
+    senha: credentials?.password ?? requiredEnv("SASCAR_PASSWORD"),
     dataInicio: start,
     dataFinal: end,
     idVeiculo: vehicleId,
-  });
+  }, credentials);
 
   return parsePositionXmlReturns(xml)
     .map(normalizeHistoricalPosition)

@@ -1,5 +1,5 @@
 import { hasSupabaseConfig, supabase } from "@/lib/supabase";
-import { getActiveTenantId } from "@/lib/auth";
+import { getActiveTenantId, getCurrentAccessToken, getCurrentUser, getProfile } from "@/lib/auth";
 import { getLocalSascarSyncState, saveLocalSascarSyncState } from "@/lib/localFleetData";
 
 export type SascarSyncSource = "cron" | "manual";
@@ -102,12 +102,18 @@ export async function syncSascarPositions(
     };
   }
 
+  const user = await getCurrentUser();
+  const profile = user ? await getProfile(user.id) : null;
+  const accessToken = await getCurrentAccessToken();
+
   const response = await fetch("/api/sascar/sync", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
     },
     body: JSON.stringify({
+      workspaceId: profile?.workspaceId,
       quantity: Number(input.quantity ?? 3000),
       forceFull: Boolean(input.forceFull),
     }),
