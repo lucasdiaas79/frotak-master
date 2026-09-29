@@ -168,24 +168,45 @@ function normalizeIntentText(text: string) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+export function classifyFrotakQuestion(question: string) {
+  const normalized = normalizeIntentText(question);
+  const mentionsTenant = /\b(empresa|companhia|tenant|workspace)\b/.test(normalized);
+  const asksProfitability =
+    /\b(lucro|rentabilidade|margem|resultado|faturamento|rentavel|rentaveis)\b/.test(normalized);
+  const mentionsCounterparty =
+    /\b(empresa|empresas|companhia|companhias|cliente|clientes|parceiro|parceiros|pagador|pagadores)\b/.test(
+      normalized,
+    );
+
+  return {
+    normalized,
+    asksPartnerProfitability:
+      asksProfitability &&
+      (mentionsCounterparty || /\b(quem|qual|quais|maior|melhor)\b/.test(normalized)),
+    asksTenantIdentity:
+      mentionsTenant &&
+      !asksProfitability &&
+      /\b(nome|qual|quais|minha|meu|atual|logada|logado|cadastrada|cadastrado)\b/.test(normalized),
+  };
+}
+
 function addTopic(topics: FrotakConsultaTopico[], topic: FrotakConsultaTopico) {
   if (!topics.includes(topic)) topics.push(topic);
 }
 
 function detectTopics(args: Record<string, unknown>) {
-  const text = normalizeIntentText(
-    [
-      textArg(args, "pergunta"),
-      textArg(args, "question"),
-      textArg(args, "topico"),
-      textArg(args, "query"),
-    ]
-      .filter(Boolean)
-      .join(" "),
-  );
+  const rawText = [
+    textArg(args, "pergunta"),
+    textArg(args, "question"),
+    textArg(args, "topico"),
+    textArg(args, "query"),
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const { normalized: text, asksTenantIdentity } = classifyFrotakQuestion(rawText);
   const topics: FrotakConsultaTopico[] = [];
 
-  if (/\b(empresa|companhia|tenant|workspace)\b/.test(text)) addTopic(topics, "empresa");
+  if (asksTenantIdentity) addTopic(topics, "empresa");
   if (/\b(caminhao|caminhoes|veiculo|veiculos|frota|placa|placas)\b/.test(text))
     addTopic(topics, "veiculos");
   if (/\b(motorista|motoristas|condutor|condutores)\b/.test(text)) addTopic(topics, "motoristas");
@@ -531,10 +552,7 @@ async function queryFinancial(
   const directions: Array<"receivable" | "payable"> =
     direction === "receivable" || direction === "payable" ? [direction] : ["receivable", "payable"];
   const pageSize = limitFromArgs(args);
-  const question = normalizeIntentText(textArg(args, "question") ?? "");
-  const asksPartnerProfitability =
-    /\b(cliente|clientes|parceiro|parceiros|pagador|pagadores)\b/.test(question) &&
-    /\b(lucro|rentabilidade|margem|resultado|faturamento|rentavel|rentaveis)\b/.test(question);
+  const { asksPartnerProfitability } = classifyFrotakQuestion(textArg(args, "question") ?? "");
 
   let partnerProfitability: Record<string, unknown> | null = null;
   if (asksPartnerProfitability) {

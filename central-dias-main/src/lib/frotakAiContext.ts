@@ -226,6 +226,7 @@ export function createFrotakAiContextSummary(context: FrotakAiContext) {
     context.isOwner
       ? "Perfil autenticado: proprietario da empresa."
       : "Perfil autenticado: membro da empresa com permissoes limitadas pelo servidor.",
+    "Toda pergunta operacional ou financeira do usuario se refere a este tenant/workspace, salvo pedido explicitamente geral.",
     "Nunca consulte, revele, compare ou misture dados de outro tenant/workspace.",
     "As ferramentas disponiveis sao somente leitura e aplicam filtros de tenant/workspace e permissoes no servidor.",
   ].join(" ");

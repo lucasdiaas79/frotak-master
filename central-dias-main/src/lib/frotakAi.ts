@@ -9,6 +9,7 @@ import {
 import { createServerFn } from "@tanstack/react-start";
 import { createFrotakAiContextSummary, resolveFrotakAiContext } from "@/lib/frotakAiContext";
 import {
+  classifyFrotakQuestion,
   executeFrotakAiTool,
   FROTAK_AI_TOOL_DECLARATIONS,
   isFrotakAiToolName,
@@ -154,6 +155,10 @@ function frotakAiSystemInstruction(contextSummary?: string) {
     "Responda sempre em portugues do Brasil, com linguagem clara para operadores, gestores e expedicao.",
     "Se a pergunta pedir numero, status, lista, valor ou localizacao, comece pelo resultado objetivo.",
     "Quando o usuario pedir explicacao, analise, causa ou plano, entregue uma resposta completa e estruturada.",
+    "Considere toda pergunta sobre operacao, clientes, parceiros, frota ou financeiro como referente ao tenant/workspace atual, salvo quando o usuario pedir explicitamente uma explicacao geral.",
+    "Palavras como meu, minha, nossos e nossa sempre se referem ao tenant/workspace autenticado.",
+    "Em perguntas comparativas como qual empresa da mais lucro, empresa significa cliente ou parceiro comercial do tenant atual; nao responda apenas o nome do tenant.",
+    "So informe o nome do tenant quando o usuario perguntar diretamente qual e, qual o nome ou em qual empresa/workspace esta conectado.",
     "Para qualquer pergunta sobre a empresa atual, frota, caminhoes, veiculos, motoristas, fretes, financeiro, abastecimentos ou posicoes, chame a ferramenta consultar_frotak antes de responder ou use apenas o bloco de dados reais consultados pelo servidor.",
     "Nunca invente dados operacionais, financeiros, posicoes, fretes, motoristas ou veiculos.",
     "Nunca use conhecimento proprio, exemplos, memoria antiga ou inferencia para responder fatos da Frotak.",
@@ -291,10 +296,8 @@ async function answerDeterministicTenantQuestion(
   message: string,
 ) {
   const normalized = normalizeIntentText(message);
+  const { asksTenantIdentity, asksPartnerProfitability } = classifyFrotakQuestion(message);
   const limit = requestedLimit(normalized, 5);
-  const asksCompany =
-    /\b(empresa|companhia|tenant|workspace)\b/.test(normalized) &&
-    /\b(nome|qual|minha|meu|atual)\b/.test(normalized);
   const asksVehicle = /\b(caminhao|caminhoes|veiculo|veiculos|frota|placa|placas)\b/.test(
     normalized,
   );
@@ -306,33 +309,8 @@ async function answerDeterministicTenantQuestion(
     /\b(financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|receitas|despesa|despesas|saldo|valor|valores|lucro|rentabilidade|margem|resultado|faturamento|cliente|clientes|parceiro|parceiros|pagador|pagadores)\b/.test(
       normalized,
     );
-  const asksPartnerProfitability =
-    /\b(cliente|clientes|parceiro|parceiros|pagador|pagadores)\b/.test(normalized) &&
-    /\b(lucro|rentabilidade|margem|resultado|faturamento|rentavel|rentaveis)\b/.test(normalized);
   const asksCount = /\b(quantos|quantas|qtd|quantidade|total|numero)\b/.test(normalized);
   const asksList = /\b(cite|listar|liste|mostre|quais|nomes|nome)\b/.test(normalized);
-
-  if (asksCompany) {
-    const result = await executeFrotakAiTool(context, "consultar_frotak", {
-      pergunta: message,
-      limit: 1,
-    });
-    if (hasError(result))
-      return {
-        text: `Nao consegui consultar a empresa atual: ${errorMessage(result)}.`,
-        tools: ["consultar_frotak"],
-      };
-    const empresa = nestedRecord(nestedRecord(result, "consultas"), "empresa");
-    const tenantName = String(empresa.tenant_nome ?? context.tenantName);
-    const workspaceName = String(empresa.workspace_nome ?? context.workspaceName);
-    return {
-      text:
-        tenantName === workspaceName
-          ? `Sua empresa atual e ${tenantName}.`
-          : `Sua empresa atual e ${tenantName}. Workspace: ${workspaceName}.`,
-      tools: ["consultar_frotak"],
-    };
-  }
 
   if (asksPartnerProfitability) {
     const result = await executeFrotakAiTool(context, "consultar_frotak", {
@@ -363,6 +341,28 @@ async function answerDeterministicTenantQuestion(
     const period = asRecord(profitability.period);
     return {
       text: `${String(top.partnerName ?? "Cliente nao identificado")} foi o cliente com maior lucro no periodo de ${String(period.startDate ?? "-")} a ${String(period.endDate ?? "-")}: resultado de ${moneyBRL(top.result)}, receita de ${moneyBRL(top.revenue)}, custos de ${moneyBRL(top.costs)}, margem de ${Number(top.margin ?? 0).toLocaleString("pt-BR")}% e ${Number(top.freightCount ?? 0)} fretes.`,
+      tools: ["consultar_frotak"],
+    };
+  }
+
+  if (asksTenantIdentity) {
+    const result = await executeFrotakAiTool(context, "consultar_frotak", {
+      pergunta: message,
+      limit: 1,
+    });
+    if (hasError(result))
+      return {
+        text: `Nao consegui consultar a empresa atual: ${errorMessage(result)}.`,
+        tools: ["consultar_frotak"],
+      };
+    const empresa = nestedRecord(nestedRecord(result, "consultas"), "empresa");
+    const tenantName = String(empresa.tenant_nome ?? context.tenantName);
+    const workspaceName = String(empresa.workspace_nome ?? context.workspaceName);
+    return {
+      text:
+        tenantName === workspaceName
+          ? `Sua empresa atual e ${tenantName}.`
+          : `Sua empresa atual e ${tenantName}. Workspace: ${workspaceName}.`,
       tools: ["consultar_frotak"],
     };
   }
