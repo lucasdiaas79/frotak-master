@@ -223,7 +223,10 @@ export function createFrotakAiContextSummary(context: FrotakAiContext) {
   return [
     `Tenant atual: ${context.tenantName} (${context.tenantId}).`,
     `Workspace atual: ${context.workspaceName} (${context.workspaceId}).`,
+    context.isOwner
+      ? "Perfil autenticado: proprietario da empresa."
+      : "Perfil autenticado: membro da empresa com permissoes limitadas pelo servidor.",
     "Nunca consulte, revele, compare ou misture dados de outro tenant/workspace.",
-    "As ferramentas disponiveis sao somente leitura e ja aplicam filtros de tenant/workspace.",
+    "As ferramentas disponiveis sao somente leitura e aplicam filtros de tenant/workspace e permissoes no servidor.",
   ].join(" ");
 }

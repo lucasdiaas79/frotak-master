@@ -293,7 +293,7 @@ async function answerDeterministicTenantQuestion(
   const normalized = normalizeIntentText(message);
   const limit = requestedLimit(normalized, 5);
   const asksCompany =
-    /\b(empresa|companhia|tenant|workspace|cliente)\b/.test(normalized) &&
+    /\b(empresa|companhia|tenant|workspace)\b/.test(normalized) &&
     /\b(nome|qual|minha|meu|atual)\b/.test(normalized);
   const asksVehicle = /\b(caminhao|caminhoes|veiculo|veiculos|frota|placa|placas)\b/.test(
     normalized,
@@ -303,9 +303,12 @@ async function answerDeterministicTenantQuestion(
     normalized,
   );
   const asksFinancial =
-    /\b(financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|despesa|saldo|valor|valores)\b/.test(
+    /\b(financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|receitas|despesa|despesas|saldo|valor|valores|lucro|rentabilidade|margem|resultado|faturamento|cliente|clientes|parceiro|parceiros|pagador|pagadores)\b/.test(
       normalized,
     );
+  const asksPartnerProfitability =
+    /\b(cliente|clientes|parceiro|parceiros|pagador|pagadores)\b/.test(normalized) &&
+    /\b(lucro|rentabilidade|margem|resultado|faturamento|rentavel|rentaveis)\b/.test(normalized);
   const asksCount = /\b(quantos|quantas|qtd|quantidade|total|numero)\b/.test(normalized);
   const asksList = /\b(cite|listar|liste|mostre|quais|nomes|nome)\b/.test(normalized);
 
@@ -327,6 +330,39 @@ async function answerDeterministicTenantQuestion(
         tenantName === workspaceName
           ? `Sua empresa atual e ${tenantName}.`
           : `Sua empresa atual e ${tenantName}. Workspace: ${workspaceName}.`,
+      tools: ["consultar_frotak"],
+    };
+  }
+
+  if (asksPartnerProfitability) {
+    const result = await executeFrotakAiTool(context, "consultar_frotak", {
+      pergunta: message,
+      topico: "financeiro",
+      days: 365,
+      limit: 80,
+    });
+    const financial = nestedRecord(nestedRecord(result, "consultas"), "financeiro");
+    const profitability = nestedRecord(financial, "partnerProfitability");
+    if (hasError(result) || hasError(financial) || hasError(profitability)) {
+      const failed = hasError(result) ? result : hasError(financial) ? financial : profitability;
+      return {
+        text: `Nao consegui consultar a rentabilidade por cliente: ${errorMessage(failed)}.`,
+        tools: ["consultar_frotak"],
+      };
+    }
+
+    const rows = resultItems(profitability);
+    const top = rows[0];
+    if (!top) {
+      return {
+        text: `Nao encontrei dados de rentabilidade por cliente no tenant ${context.tenantName} para o periodo consultado.`,
+        tools: ["consultar_frotak"],
+      };
+    }
+
+    const period = asRecord(profitability.period);
+    return {
+      text: `${String(top.partnerName ?? "Cliente nao identificado")} foi o cliente com maior lucro no periodo de ${String(period.startDate ?? "-")} a ${String(period.endDate ?? "-")}: resultado de ${moneyBRL(top.result)}, receita de ${moneyBRL(top.revenue)}, custos de ${moneyBRL(top.costs)}, margem de ${Number(top.margin ?? 0).toLocaleString("pt-BR")}% e ${Number(top.freightCount ?? 0)} fretes.`,
       tools: ["consultar_frotak"],
     };
   }
@@ -501,7 +537,7 @@ async function buildMandatoryTenantData(
   const normalized = normalizeIntentText(message);
   const limit = requestedLimit(normalized);
   const isFrotakDataQuestion =
-    /\b(empresa|companhia|tenant|workspace|cliente|caminhao|caminhoes|veiculo|veiculos|frota|placa|placas|motorista|motoristas|condutor|condutores|frete|fretes|viagem|viagens|rota|rotas|carga|descarga|financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|despesa|saldo|valor|valores|abastecimento|abastecimentos|diesel|arla|posto|combustivel|posicao|posicoes|localizacao|sascar|telemetria|mapa|onde)\b/.test(
+    /\b(empresa|companhia|tenant|workspace|cliente|clientes|parceiro|parceiros|pagador|pagadores|caminhao|caminhoes|veiculo|veiculos|frota|placa|placas|motorista|motoristas|condutor|condutores|frete|fretes|viagem|viagens|rota|rotas|carga|descarga|financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|receitas|despesa|despesas|saldo|valor|valores|lucro|rentabilidade|margem|resultado|faturamento|abastecimento|abastecimentos|diesel|arla|posto|combustivel|posicao|posicoes|localizacao|sascar|telemetria|mapa|onde)\b/.test(
       normalized,
     );
 

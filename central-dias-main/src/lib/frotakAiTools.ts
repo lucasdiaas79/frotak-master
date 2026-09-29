@@ -29,6 +29,14 @@ function textArg(args: Record<string, unknown> | undefined, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function dateArg(args: Record<string, unknown> | undefined, key: string) {
+  const value = textArg(args, key);
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+
+  const parsed = new Date(`${value}T12:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) ? undefined : value;
+}
+
 function numberValue(value: unknown) {
   const parsed = typeof value === "number" ? value : Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -76,6 +84,14 @@ export const FROTAK_AI_TOOL_DECLARATIONS = [
         days: {
           type: Type.INTEGER,
           description: "Janela em dias a partir de hoje para consulta por competencia/criacao.",
+        },
+        start_date: {
+          type: Type.STRING,
+          description: "Data inicial no formato YYYY-MM-DD quando a pergunta definir um periodo.",
+        },
+        end_date: {
+          type: Type.STRING,
+          description: "Data final no formato YYYY-MM-DD quando a pergunta definir um periodo.",
         },
         fuel_type: {
           type: Type.STRING,
@@ -169,14 +185,14 @@ function detectTopics(args: Record<string, unknown>) {
   );
   const topics: FrotakConsultaTopico[] = [];
 
-  if (/\b(empresa|companhia|tenant|workspace|cliente)\b/.test(text)) addTopic(topics, "empresa");
+  if (/\b(empresa|companhia|tenant|workspace)\b/.test(text)) addTopic(topics, "empresa");
   if (/\b(caminhao|caminhoes|veiculo|veiculos|frota|placa|placas)\b/.test(text))
     addTopic(topics, "veiculos");
   if (/\b(motorista|motoristas|condutor|condutores)\b/.test(text)) addTopic(topics, "motoristas");
   if (/\b(frete|fretes|viagem|viagens|rota|rotas|carga|descarga)\b/.test(text))
     addTopic(topics, "fretes");
   if (
-    /\b(financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|despesa|saldo|valor|valores)\b/.test(
+    /\b(financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|receitas|despesa|despesas|saldo|valor|valores|lucro|rentabilidade|margem|resultado|faturamento|cliente|clientes|parceiro|parceiros|pagador|pagadores)\b/.test(
       text,
     )
   )
@@ -261,6 +277,9 @@ async function executeConsultarFrotak(
       direction,
       status: financialStatus,
       days: args.days ?? 365,
+      start_date: args.start_date,
+      end_date: args.end_date,
+      question: text,
     });
   }
 
@@ -512,6 +531,52 @@ async function queryFinancial(
   const directions: Array<"receivable" | "payable"> =
     direction === "receivable" || direction === "payable" ? [direction] : ["receivable", "payable"];
   const pageSize = limitFromArgs(args);
+  const question = normalizeIntentText(textArg(args, "question") ?? "");
+  const asksPartnerProfitability =
+    /\b(cliente|clientes|parceiro|parceiros|pagador|pagadores)\b/.test(question) &&
+    /\b(lucro|rentabilidade|margem|resultado|faturamento|rentavel|rentaveis)\b/.test(question);
+
+  let partnerProfitability: Record<string, unknown> | null = null;
+  if (asksPartnerProfitability) {
+    const requestedDays = Number(args.days ?? 365);
+    const days = Number.isFinite(requestedDays)
+      ? Math.max(1, Math.min(3650, Math.trunc(requestedDays)))
+      : 365;
+    const endDate = dateArg(args, "end_date") ?? new Date().toISOString().slice(0, 10);
+    const startFallback = new Date(`${endDate}T12:00:00.000Z`);
+    startFallback.setUTCDate(startFallback.getUTCDate() - (days - 1));
+    const startDate = dateArg(args, "start_date") ?? startFallback.toISOString().slice(0, 10);
+    if (startDate > endDate) {
+      return { error: "Periodo financeiro invalido.", code: "INVALID_FINANCIAL_PERIOD" };
+    }
+    const { data, error } = await supabase.rpc("get_partner_profitability", {
+      p_workspace_id: context.workspaceId,
+      p_start_date: startDate,
+      p_end_date: endDate,
+      p_vehicle_id: null,
+      p_billing_partner_id: null,
+      p_sender_id: null,
+      p_recipient_id: null,
+      p_product_id: null,
+      p_implement_model: null,
+      p_payment_type: null,
+    });
+    if (error) return { error: error.message, code: error.code };
+
+    const rows = Array.isArray(data) ? (data as Array<Record<string, unknown>>) : [];
+    partnerProfitability = {
+      period: { startDate, endDate },
+      count: rows.length,
+      items: compactRows(rows, [
+        "partnerName",
+        "revenue",
+        "costs",
+        "result",
+        "margin",
+        "freightCount",
+      ]),
+    };
+  }
 
   const pages = await Promise.all(
     directions.map(async (itemDirection) => {
@@ -560,6 +625,7 @@ async function queryFinancial(
     totalCount,
     totals,
     basis: "open_installment_balance",
+    ...(partnerProfitability ? { partnerProfitability } : {}),
     items: compactRows(rows, [
       "direction",
       "description",
