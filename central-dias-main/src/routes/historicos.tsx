@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
+import { DailyAllowancePanel } from "@/components/daily-allowances/DailyAllowancePanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -451,6 +452,8 @@ function HistoricosPage() {
         </CardContent>
       </Card>
 
+      <DailyAllowancePanel />
+
       {!loading && !error && filteredLongTrips.length > 0 ? (
         <section className="overflow-hidden rounded-lg border border-border bg-surface/70">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -483,7 +486,13 @@ function HistoricosPage() {
                 </div>
                 <TripMetric icon={TrendingUp} label="Entradas" value={trip.totalEntries} tone="positive" />
                 <TripMetric icon={TrendingDown} label="Despesas" value={trip.totalExpenses} tone="negative" />
-                <TripMetric icon={Banknote} label="Saldo final" value={trip.closingBalance} tone="balance" />
+                <TripMetric
+                  icon={Banknote}
+                  label={trip.dailyAllowance ? "Saldo caixa / Diarias" : "Saldo final"}
+                  value={trip.closingBalance}
+                  tone="balance"
+                  complement={trip.dailyAllowance ? moneyFormatter.format(trip.dailyAllowance.totalAmount) : undefined}
+                />
               </button>
             ))}
           </div>
@@ -675,6 +684,28 @@ function HistoricosPage() {
                   <TripSummary label="Saldo final" value={selectedLongTrip.closingBalance} tone="balance" />
                 </div>
 
+                {selectedLongTrip.dailyAllowance ? (
+                  <div className="rounded-lg border border-border bg-accent/20 p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Diarias da frota</p>
+                        <p className="text-sm font-semibold">
+                          {selectedLongTrip.dailyAllowance.quantity} x {moneyFormatter.format(selectedLongTrip.dailyAllowance.unitAmount)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant="outline">{selectedLongTrip.dailyAllowance.status}</Badge>
+                        <p className="mt-1 text-sm font-semibold">
+                          {moneyFormatter.format(selectedLongTrip.dailyAllowance.totalAmount)}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Custo da empresa separado do saldo em dinheiro do motorista.
+                    </p>
+                  </div>
+                ) : null}
+
                 <div className="grid gap-3 text-sm sm:grid-cols-3">
                   <Detail label="Inicio" value={formatDate(selectedLongTrip.startedAt)} />
                   <Detail label="Finalizacao" value={formatDate(selectedLongTrip.closedAt)} />
@@ -733,11 +764,13 @@ function TripMetric({
   label,
   value,
   tone,
+  complement,
 }: {
   icon: typeof Banknote;
   label: string;
   value: number;
   tone: "positive" | "negative" | "balance";
+  complement?: string;
 }) {
   const valueClass =
     tone === "positive" ? "text-success" : tone === "negative" ? "text-destructive" : value >= 0 ? "text-success" : "text-destructive";
@@ -747,6 +780,7 @@ function TripMetric({
       <div className="md:text-right">
         <p className="text-[11px] text-muted-foreground">{label}</p>
         <p className={`text-sm font-semibold ${valueClass}`}>{moneyFormatter.format(value)}</p>
+        {complement ? <p className="text-[10px] text-muted-foreground">{complement}</p> : null}
       </div>
     </div>
   );

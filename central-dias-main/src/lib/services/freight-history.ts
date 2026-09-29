@@ -25,6 +25,12 @@ export interface LongTripHistory {
   closingBalance: number;
   freightCount: number;
   completedFreightCount: number;
+  dailyAllowance?: {
+    quantity: number;
+    unitAmount: number;
+    totalAmount: number;
+    status: "submitted" | "approved" | "rejected" | "cancelled";
+  };
   movements: LongTripHistoryMovement[];
 }
 
@@ -169,6 +175,7 @@ export async function listLongTripHistory(): Promise<LongTripHistory[]> {
       driver:drivers(name),
       vehicle:vehicles(plate),
       trailer:trailers(identifier),
+      allowance:driver_trip_daily_allowances(quantity, unit_amount, total_amount, status),
       entries:freight_cash_entries(id, origin, amount, notes, recorded_at),
       expenses:freight_expenses(id, category, description, amount, notes, recorded_at)
     `)
@@ -182,6 +189,12 @@ export async function listLongTripHistory(): Promise<LongTripHistory[]> {
     const vehicle = relatedValue(row.vehicle as { plate?: string } | Array<{ plate?: string }> | null);
     const trailer = relatedValue(
       row.trailer as { identifier?: string } | Array<{ identifier?: string }> | null,
+    );
+    const allowance = relatedValue(
+      row.allowance as
+        | { quantity?: number; unit_amount?: number; total_amount?: number; status?: string }
+        | Array<{ quantity?: number; unit_amount?: number; total_amount?: number; status?: string }>
+        | null,
     );
     const entries = (row.entries ?? []) as Array<Record<string, unknown>>;
     const expenses = (row.expenses ?? []) as Array<Record<string, unknown>>;
@@ -219,6 +232,14 @@ export async function listLongTripHistory(): Promise<LongTripHistory[]> {
       closingBalance: Number(row.closing_balance || 0),
       freightCount: Number(row.freight_count || 0),
       completedFreightCount: Number(row.completed_freight_count || 0),
+      dailyAllowance: allowance?.status
+        ? {
+            quantity: Number(allowance.quantity || 0),
+            unitAmount: Number(allowance.unit_amount || 0),
+            totalAmount: Number(allowance.total_amount || 0),
+            status: allowance.status as "submitted" | "approved" | "rejected" | "cancelled",
+          }
+        : undefined,
       movements,
     };
   });
