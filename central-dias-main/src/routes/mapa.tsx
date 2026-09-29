@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { LoaderCircle, MapPin, Maximize2, RefreshCw, Search, Truck, X } from "lucide-react";
 import { FleetMap } from "@/components/FleetMap";
@@ -27,6 +27,7 @@ import { hasSupabaseConfig, supabase } from "@/lib/supabase";
 import { useFleet } from "@/lib/store";
 import { ALL_STATUSES, STATUS_HEX, VEHICLE_STATUS_LABEL, statusGroup } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { perfRender } from "@/lib/performance";
 
 type MapaSearch = { focus?: string };
 
@@ -72,7 +73,8 @@ export const Route = createFileRoute("/mapa")({
 });
 
 function MapaPage() {
-  const { vehicles, drivers, senders, recipients, products, loadAll } = useFleet();
+  perfRender("map");
+  const { vehicles, drivers, senders, recipients, products, refreshDomain } = useFleet();
   const { focus } = Route.useSearch();
   const [search, setSearch] = useState("");
   const [statusF, setStatusF] = useState("all");
@@ -86,6 +88,9 @@ function MapaPage() {
   });
   const syncInFlightRef = useRef(false);
   const lastRealtimeSyncAtRef = useRef<string | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [listScrollTop, setListScrollTop] = useState(0);
+  const [listHeight, setListHeight] = useState(480);
 
   useEffect(() => {
     if (focus) setSelectedId(focus);
@@ -129,14 +134,12 @@ function MapaPage() {
           };
           if (row.integration !== "sascar") return;
 
-          const state = mapSascarSyncStateRow(
-            row,
-          );
+          const state = mapSascarSyncStateRow(row);
           if (!state.syncedAt || state.syncedAt === lastRealtimeSyncAtRef.current) return;
 
           lastRealtimeSyncAtRef.current = state.syncedAt;
           setSascarSyncState(state);
-          void loadAll();
+          void refreshDomain("vehicles", { force: true, silent: true });
 
           if (state.source === "cron") {
             showSascarSyncToast(state);
@@ -149,7 +152,7 @@ function MapaPage() {
       cancelled = true;
       void supabase.removeChannel(channel);
     };
-  }, [loadAll]);
+  }, [refreshDomain]);
 
   const filtered = useMemo(
     () =>
@@ -185,19 +188,65 @@ function MapaPage() {
     }
   }, [filtered, selectedId]);
 
-  const selected = vehicles.find((vehicle) => vehicle.id === selectedId) ?? null;
-  const driverName = (id?: string) => drivers.find((driver) => driver.id === id)?.name ?? "-";
-  const senderName = (id?: string) => senders.find((sender) => sender.id === id)?.name ?? "-";
-  const recipientName = (id?: string) =>
-    recipients.find((recipient) => recipient.id === id)?.name ?? "-";
-  const productName = (id?: string) => products.find((product) => product.id === id)?.name ?? "-";
-  const getTooltipHtml = (vehicle: (typeof vehicles)[number]) =>
-    buildMapTooltip({
-      plate: vehicle.plate,
-      cargoType: productName(vehicle.productId),
-      route: `${senderName(vehicle.senderId)} - ${recipientName(vehicle.recipientId)}`,
-      status: VEHICLE_STATUS_LABEL[vehicle.status],
-    });
+  useEffect(() => {
+    const element = listRef.current;
+    if (!element) return;
+    const updateHeight = () => setListHeight(element.clientHeight);
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  const listItemHeight = 112;
+  const listOverscan = 3;
+  const listStart = Math.max(0, Math.floor(listScrollTop / listItemHeight) - listOverscan);
+  const listEnd = Math.min(
+    filtered.length,
+    Math.ceil((listScrollTop + listHeight) / listItemHeight) + listOverscan,
+  );
+  const visibleListVehicles = filtered.slice(listStart, listEnd);
+
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0;
+    setListScrollTop(0);
+  }, [search, stateF, statusF]);
+
+  const vehiclesById = useMemo(
+    () => new Map(vehicles.map((vehicle) => [vehicle.id, vehicle])),
+    [vehicles],
+  );
+  const driverNames = useMemo(
+    () => new Map(drivers.map((driver) => [driver.id, driver.name])),
+    [drivers],
+  );
+  const senderNames = useMemo(
+    () => new Map(senders.map((sender) => [sender.id, sender.name])),
+    [senders],
+  );
+  const recipientNames = useMemo(
+    () => new Map(recipients.map((recipient) => [recipient.id, recipient.name])),
+    [recipients],
+  );
+  const productNames = useMemo(
+    () => new Map(products.map((product) => [product.id, product.name])),
+    [products],
+  );
+  const selected = selectedId ? (vehiclesById.get(selectedId) ?? null) : null;
+  const driverName = useCallback(
+    (id?: string) => (id ? driverNames.get(id) : undefined) ?? "-",
+    [driverNames],
+  );
+  const getTooltipHtml = useCallback(
+    (vehicle: (typeof vehicles)[number]) =>
+      buildMapTooltip({
+        plate: vehicle.plate,
+        cargoType: (vehicle.productId ? productNames.get(vehicle.productId) : undefined) ?? "-",
+        route: `${(vehicle.senderId ? senderNames.get(vehicle.senderId) : undefined) ?? "-"} - ${(vehicle.recipientId ? recipientNames.get(vehicle.recipientId) : undefined) ?? "-"}`,
+        status: VEHICLE_STATUS_LABEL[vehicle.status],
+      }),
+    [productNames, recipientNames, senderNames],
+  );
 
   async function handleSyncSascar() {
     if (syncInFlightRef.current) return;
@@ -206,7 +255,7 @@ function MapaPage() {
     setSyncing(true);
     try {
       const result = await syncSascarPositions({ quantity: 3000, forceFull: false });
-      await loadAll();
+      await refreshDomain("vehicles", { force: true, silent: true });
       const syncedAt = new Date().toISOString();
       const state: SascarSyncState = {
         syncedAt,
@@ -310,51 +359,62 @@ function MapaPage() {
             </Select>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
-            {filtered.map((vehicle) => {
-              const active = selectedId === vehicle.id;
-              return (
-                <button
-                  key={vehicle.id}
-                  type="button"
-                  onClick={() => setSelectedId(vehicle.id)}
-                  className={cn(
-                    "group mb-2 flex w-full flex-col gap-2 rounded-2xl border p-3 text-left transition-all",
-                    active
-                      ? "border-primary/40 bg-primary/10 shadow-[inset_3px_0_0_var(--color-primary)]"
-                      : "border-border bg-surface/45 hover:border-primary/25 hover:bg-primary/5",
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-sans text-[15px] font-black text-foreground">
-                        {vehicle.plate}
+          <div
+            ref={listRef}
+            onScroll={(event) => setListScrollTop(event.currentTarget.scrollTop)}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2"
+          >
+            <div
+              className="relative"
+              style={{ height: filtered.length ? filtered.length * listItemHeight : undefined }}
+            >
+              {visibleListVehicles.map((vehicle, visibleIndex) => {
+                const active = selectedId === vehicle.id;
+                const index = listStart + visibleIndex;
+                return (
+                  <button
+                    key={vehicle.id}
+                    type="button"
+                    onClick={() => setSelectedId(vehicle.id)}
+                    className={cn(
+                      "group absolute inset-x-0 flex h-[104px] w-full flex-col gap-2 rounded-2xl border p-3 text-left transition-all",
+                      active
+                        ? "border-primary/40 bg-primary/10 shadow-[inset_3px_0_0_var(--color-primary)]"
+                        : "border-border bg-surface/45 hover:border-primary/25 hover:bg-primary/5",
+                    )}
+                    style={{ transform: `translateY(${index * listItemHeight}px)` }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="font-sans text-[15px] font-black text-foreground">
+                          {vehicle.plate}
+                        </div>
+                        <div className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
+                          <MapPin className="size-3.5 text-primary" />
+                          <span className="truncate">
+                            {vehicle.city}/{vehicle.state}
+                          </span>
+                        </div>
                       </div>
-                      <div className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground">
-                        <MapPin className="size-3.5 text-primary" />
-                        <span className="truncate">
-                          {vehicle.city}/{vehicle.state}
-                        </span>
-                      </div>
+                      <span className="font-sans text-[10.5px] text-muted-foreground">
+                        {formatRelative(vehicle.updatedAt)}
+                      </span>
                     </div>
-                    <span className="font-sans text-[10.5px] text-muted-foreground">
-                      {formatRelative(vehicle.updatedAt)}
-                    </span>
-                  </div>
-                  <StatusBadge status={vehicle.status} />
-                  <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
-                    <Truck className="size-3.5" />
-                    <span className="truncate">{driverName(vehicle.driverId)}</span>
-                  </div>
-                </button>
-              );
-            })}
+                    <StatusBadge status={vehicle.status} />
+                    <div className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
+                      <Truck className="size-3.5" />
+                      <span className="truncate">{driverName(vehicle.driverId)}</span>
+                    </div>
+                  </button>
+                );
+              })}
 
-            {filtered.length === 0 && (
-              <div className="px-4 py-10 text-center text-[12.5px] text-muted-foreground">
-                Nenhum veículo encontrado para os filtros atuais.
-              </div>
-            )}
+              {filtered.length === 0 && (
+                <div className="px-4 py-10 text-center text-[12.5px] text-muted-foreground">
+                  Nenhum veículo encontrado para os filtros atuais.
+                </div>
+              )}
+            </div>
           </div>
         </aside>
 

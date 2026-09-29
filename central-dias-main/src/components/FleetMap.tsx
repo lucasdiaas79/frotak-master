@@ -27,8 +27,20 @@ export function FleetMap({
   const mapRef = useRef<HTMLDivElement | null>(null);
   const mapInstance = useRef<LeafletMap | null>(null);
   const markersRef = useRef<Record<string, Marker>>({});
+  const markerSignaturesRef = useRef<Record<string, string>>({});
+  const onSelectRef = useRef(onSelect);
+  const getTooltipHtmlRef = useRef(getTooltipHtml);
+  const fittedVehicleIdsRef = useRef("");
   const [zoomLevel, setZoomLevel] = useState(initialZoom);
   const [mapReady, setMapReady] = useState(false);
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  useEffect(() => {
+    getTooltipHtmlRef.current = getTooltipHtml;
+  }, [getTooltipHtml]);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +70,8 @@ export function FleetMap({
       mapInstance.current?.remove();
       mapInstance.current = null;
       markersRef.current = {};
+      markerSignaturesRef.current = {};
+      fittedVehicleIdsRef.current = "";
       setMapReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -69,28 +83,41 @@ export function FleetMap({
       const L = await import("leaflet");
       if (cancelled || !mapReady || !mapInstance.current) return;
       const map = mapInstance.current;
-      Object.values(markersRef.current).forEach((m) => map.removeLayer(m));
-      markersRef.current = {};
+      const currentIds = new Set(vehicles.map((vehicle) => vehicle.id));
+      Object.entries(markersRef.current).forEach(([id, marker]) => {
+        if (currentIds.has(id)) return;
+        map.removeLayer(marker);
+        delete markersRef.current[id];
+        delete markerSignaturesRef.current[id];
+      });
       vehicles.forEach((v) => {
+        if (!Number.isFinite(v.lat) || !Number.isFinite(v.lng)) return;
         const isSel = v.id === selectedId;
         const { width, height } = getTruckMarkerSize(zoomLevel, isSel);
         const iconId = v.id.replace(/[^a-zA-Z0-9_-]/g, "") || "truck";
+        const color = vehicleMapColor(v);
+        const pending = pendingActionKindOfVehicle(v) !== null;
+        const tooltipHtml = getTooltipHtmlRef.current?.(v) ?? "";
+        const signature = [v.lat, v.lng, color, pending, isSel, width, height, tooltipHtml].join(
+          "|",
+        );
+        if (markerSignaturesRef.current[v.id] === signature) return;
         const icon = L.divIcon({
           className: "",
-          html: buildTruckMarkerSvg(
-            vehicleMapColor(v),
-            iconId,
-            isSel,
-            pendingActionKindOfVehicle(v) !== null,
-            width,
-            height,
-          ),
+          html: buildTruckMarkerSvg(color, iconId, isSel, pending, width, height),
           iconSize: [width, height],
           iconAnchor: [width / 2, height - 4],
         });
-        const marker = L.marker([v.lat, v.lng], { icon }).addTo(map);
-        if (onSelect) marker.on("click", () => onSelect(v.id));
-        const tooltipHtml = getTooltipHtml?.(v);
+        let marker = markersRef.current[v.id];
+        if (marker) {
+          marker.setLatLng([v.lat, v.lng]);
+          marker.setIcon(icon);
+          marker.unbindTooltip();
+        } else {
+          marker = L.marker([v.lat, v.lng], { icon }).addTo(map);
+          marker.on("click", () => onSelectRef.current?.(v.id));
+          markersRef.current[v.id] = marker;
+        }
         if (tooltipHtml) {
           marker.bindTooltip(tooltipHtml, {
             direction: "top",
@@ -100,13 +127,13 @@ export function FleetMap({
             sticky: true,
           });
         }
-        markersRef.current[v.id] = marker;
+        markerSignaturesRef.current[v.id] = signature;
       });
     })();
     return () => {
       cancelled = true;
     };
-  }, [vehicles, selectedId, onSelect, getTooltipHtml, zoomLevel, mapReady]);
+  }, [vehicles, selectedId, zoomLevel, mapReady]);
 
   useEffect(() => {
     if (!fitToVehicles || selectedId || !mapReady || !mapInstance.current || vehicles.length === 0)
@@ -115,6 +142,12 @@ export function FleetMap({
       (vehicle) => Number.isFinite(vehicle.lat) && Number.isFinite(vehicle.lng),
     );
     if (validVehicles.length === 0) return;
+    const vehicleIds = validVehicles
+      .map((vehicle) => vehicle.id)
+      .sort()
+      .join("|");
+    if (fittedVehicleIdsRef.current === vehicleIds) return;
+    fittedVehicleIdsRef.current = vehicleIds;
 
     const map = mapInstance.current;
     if (validVehicles.length === 1) {

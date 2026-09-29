@@ -9,6 +9,9 @@ import type {
   FinancialDashboard,
   FinancialReportPeriod,
 } from "./types";
+import { perfCount, perfStart } from "@/lib/performance";
+
+const financialDashboardInFlight = new Map<string, Promise<FinancialDashboard>>();
 
 function fail(operation: string, error: { message: string } | null) {
   if (error) throw new Error(`${operation}: ${error.message}`);
@@ -93,7 +96,24 @@ export async function getCashFlowEntries(
 export async function getFinancialDashboard(
   input: FinancialReportPeriod,
 ): Promise<FinancialDashboard> {
-  const { data, error } = await supabase.rpc("get_financial_dashboard", { p_payload: input });
-  fail("Nao foi possivel carregar o dashboard financeiro", error);
-  return numberify(data as FinancialDashboard);
+  const key = JSON.stringify(input);
+  const current = financialDashboardInFlight.get(key);
+  if (current) {
+    perfCount("financial:dashboard:deduplicated");
+    return current;
+  }
+
+  const request = (async () => {
+    const finish = perfStart("financial:rpc:get_financial_dashboard");
+    try {
+      const { data, error } = await supabase.rpc("get_financial_dashboard", { p_payload: input });
+      fail("Nao foi possivel carregar o dashboard financeiro", error);
+      return numberify(data as FinancialDashboard);
+    } finally {
+      finish();
+      financialDashboardInFlight.delete(key);
+    }
+  })();
+  financialDashboardInFlight.set(key, request);
+  return request;
 }

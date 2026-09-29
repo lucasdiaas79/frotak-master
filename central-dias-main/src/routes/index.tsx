@@ -30,6 +30,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { perfRender } from "@/lib/performance";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -579,9 +580,7 @@ function RecentTripCostsPanel({
       <div className="flex items-start justify-between gap-3 border-b border-border/80 bg-surface/35 px-4 py-4">
         <div className="min-w-0">
           <div className="label-tiny">Custos de viagens recentes</div>
-          <h2 className="mt-1 text-[17px] font-extrabold text-foreground">
-            Caixa por caminhão
-          </h2>
+          <h2 className="mt-1 text-[17px] font-extrabold text-foreground">Caixa por caminhão</h2>
           <p className="mt-1 text-[12px] text-muted-foreground">
             Entradas, despesas e saldo espelhados do app motorista.
           </p>
@@ -711,6 +710,7 @@ function RecentTripCostsPanel({
 }
 
 function Dashboard() {
+  perfRender("dashboard");
   const navigate = useNavigate();
   const { vehicles, drivers, trailers, senders, recipients, events, setVehicleStatus } = useFleet();
   const [selectedMapId, setSelectedMapId] = useState<string | null>(null);
@@ -796,8 +796,16 @@ function Dashboard() {
 
     const channel = supabase
       .channel("dashboard-trip-costs")
-      .on("postgres_changes", { event: "*", schema: "public", table: "freight_cash_entries" }, scheduleReload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "freight_expenses" }, scheduleReload)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "freight_cash_entries" },
+        scheduleReload,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "freight_expenses" },
+        scheduleReload,
+      )
       .subscribe();
 
     return () => {

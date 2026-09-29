@@ -41,6 +41,7 @@ import {
   YAxis,
 } from "recharts";
 import { PageHeader } from "@/components/PageHeader";
+import { perfRender } from "@/lib/performance";
 import { FinancialNav } from "@/components/financial/FinancialNav";
 import frotakLogo from "@/assets/logo-central.png";
 import { Badge } from "@/components/ui/badge";
@@ -919,6 +920,7 @@ function FinancialStatusBadge({
 }
 
 function OverviewContent({ access }: { access: FinancialAccess }) {
+  perfRender("financial-overview");
   const [mode, setMode] = useState<PeriodMode>("month");
   const [start, setStart] = useState(() => periodBounds("month")[0]);
   const [end, setEnd] = useState(() => periodBounds("month")[1]);

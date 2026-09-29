@@ -16,15 +16,36 @@ import * as trailerService from "./services/trailers";
 import * as partiesService from "./services/parties";
 import * as productsService from "./services/products";
 import * as eventsService from "./services/fleet-events";
+import {
+  driverFromRow,
+  fleetEventFromRow,
+  productFromRow,
+  recipientFromRow,
+  senderFromRow,
+  trailerFromRow,
+  vehicleFromRow,
+} from "./services/mappers";
 import { supabase } from "./supabase";
 import { getActiveTenantId, shouldUseLocalTenantData } from "./auth";
 import { loadLocalFleetData, nextLocalId, saveLocalFleetData } from "./localFleetData";
+import { perfCount, perfStart } from "./performance";
 
 const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function dbId(id?: string) {
   return id && uuidLike.test(id) ? id : "";
 }
+
+export type FleetDomain =
+  | "vehicles"
+  | "drivers"
+  | "trailers"
+  | "senders"
+  | "recipients"
+  | "products"
+  | "events";
+
+type LoadOptions = { force?: boolean; silent?: boolean };
 
 interface FleetState {
   vehicles: Vehicle[];
@@ -37,7 +58,8 @@ interface FleetState {
   loading: boolean;
   error?: string;
   realtimeReady: boolean;
-  loadAll: () => Promise<void>;
+  loadAll: (options?: LoadOptions) => Promise<void>;
+  refreshDomain: (domain: FleetDomain, options?: LoadOptions) => Promise<void>;
   subscribeRealtime: () => () => void;
   upsertVehicle: (v: Vehicle) => Promise<Vehicle>;
   deleteVehicle: (id: string) => Promise<void>;
@@ -79,16 +101,80 @@ interface FleetState {
 }
 
 async function loadFleetData() {
+  const timed = async <T>(domain: FleetDomain, request: Promise<T>) => {
+    const finish = perfStart(`fleet:query:${domain}`);
+    try {
+      return await request;
+    } finally {
+      finish();
+    }
+  };
   const [vehicles, drivers, trailers, senders, recipients, products, events] = await Promise.all([
-    vehicleService.listVehicles(),
-    driverService.listDrivers(),
-    trailerService.listTrailers(),
-    partiesService.listSenders(),
-    partiesService.listRecipients(),
-    productsService.listProducts(),
-    eventsService.listFleetEvents(),
+    timed("vehicles", vehicleService.listVehicles()),
+    timed("drivers", driverService.listDrivers()),
+    timed("trailers", trailerService.listTrailers()),
+    timed("senders", partiesService.listSenders()),
+    timed("recipients", partiesService.listRecipients()),
+    timed("products", productsService.listProducts()),
+    timed("events", eventsService.listFleetEvents()),
   ]);
   return { vehicles, drivers, trailers, senders, recipients, products, events };
+}
+
+const LOAD_ALL_TTL_MS = 120_000;
+const STALE_CHECK_INTERVAL_MS = 60_000;
+let loadAllInFlight: { tenantId: string; promise: Promise<void> } | null = null;
+let loadedTenantId = "";
+let lastLoadedAt = 0;
+const domainInFlight = new Map<string, Promise<void>>();
+let realtimeCleanup: (() => void) | null = null;
+let realtimeSubscribers = 0;
+
+function hasFleetData(state: FleetState) {
+  return (
+    state.vehicles.length > 0 ||
+    state.drivers.length > 0 ||
+    state.trailers.length > 0 ||
+    state.senders.length > 0 ||
+    state.recipients.length > 0 ||
+    state.products.length > 0 ||
+    state.events.length > 0
+  );
+}
+
+function upsertById<T extends { id: string }>(
+  items: T[],
+  item: T,
+  compare?: (a: T, b: T) => number,
+) {
+  const next = items.some((current) => current.id === item.id)
+    ? items.map((current) => (current.id === item.id ? item : current))
+    : [...items, item];
+  return compare ? next.sort(compare) : next;
+}
+
+async function loadFleetDomain(domain: FleetDomain) {
+  const finish = perfStart(`fleet:query:${domain}`);
+  try {
+    switch (domain) {
+      case "vehicles":
+        return await vehicleService.listVehicles();
+      case "drivers":
+        return await driverService.listDrivers();
+      case "trailers":
+        return await trailerService.listTrailers();
+      case "senders":
+        return await partiesService.listSenders();
+      case "recipients":
+        return await partiesService.listRecipients();
+      case "products":
+        return await productsService.listProducts();
+      case "events":
+        return await eventsService.listFleetEvents();
+    }
+  } finally {
+    finish();
+  }
 }
 
 function persistLocalState(state: FleetState) {
@@ -126,67 +212,341 @@ export const useFleet = create<FleetState>((set, get) => ({
   loading: false,
   realtimeReady: false,
 
-  loadAll: async () => {
+  loadAll: async (options = {}) => {
     if (shouldUseLocalTenantData()) {
       set({ ...loadLocalFleetData(getActiveTenantId()), loading: false, error: undefined });
       return;
     }
-    set({ loading: true, error: undefined });
-    try {
-      set({ ...(await loadFleetData()), loading: false });
-    } catch (error) {
-      set({
-        loading: false,
-        error: error instanceof Error ? error.message : "Erro ao carregar dados da frota.",
-      });
-      throw error;
+
+    const tenantId = getActiveTenantId();
+    const tenantChanged = loadedTenantId !== tenantId;
+    const cacheFresh = !tenantChanged && Date.now() - lastLoadedAt < LOAD_ALL_TTL_MS;
+    if (!options.force && cacheFresh && hasFleetData(get())) return;
+    if (loadAllInFlight?.tenantId === tenantId) {
+      perfCount("fleet:loadAll:deduplicated");
+      return loadAllInFlight.promise;
     }
+    if (loadAllInFlight) {
+      await loadAllInFlight.promise.catch(() => undefined);
+      return get().loadAll(options);
+    }
+
+    perfCount("fleet:loadAll");
+    const finish = perfStart("fleet:loadAll", { tenantChanged });
+    if (tenantChanged) {
+      set({
+        vehicles: [],
+        drivers: [],
+        trailers: [],
+        senders: [],
+        recipients: [],
+        products: [],
+        events: [],
+      });
+    }
+    const shouldBlock = !options.silent && !hasFleetData(get());
+    if (shouldBlock) set({ loading: true, error: undefined });
+
+    const request = (async () => {
+      try {
+        const data = await loadFleetData();
+        if (getActiveTenantId() !== tenantId) return;
+        loadedTenantId = tenantId;
+        lastLoadedAt = Date.now();
+        set({ ...data, loading: false, error: undefined });
+      } catch (error) {
+        if (getActiveTenantId() === tenantId) {
+          set({
+            loading: false,
+            error: error instanceof Error ? error.message : "Erro ao carregar dados da frota.",
+          });
+        }
+        throw error;
+      } finally {
+        finish();
+        if (loadAllInFlight?.promise === request) loadAllInFlight = null;
+      }
+    })();
+    loadAllInFlight = { tenantId, promise: request };
+    return request;
+  },
+
+  refreshDomain: async (domain, options = {}) => {
+    if (shouldUseLocalTenantData()) {
+      await get().loadAll(options);
+      return;
+    }
+    const tenantId = getActiveTenantId();
+    const requestKey = `${tenantId}:${domain}`;
+    const existing = domainInFlight.get(requestKey);
+    if (existing) {
+      perfCount(`fleet:refresh:${domain}:deduplicated`);
+      return existing;
+    }
+
+    const request = (async () => {
+      try {
+        const data = await loadFleetDomain(domain);
+        if (getActiveTenantId() !== tenantId) return;
+        set({ [domain]: data, error: undefined } as Pick<FleetState, FleetDomain | "error">);
+        lastLoadedAt = Date.now();
+      } catch (error) {
+        if (getActiveTenantId() === tenantId) {
+          set({ error: error instanceof Error ? error.message : `Erro ao atualizar ${domain}.` });
+        }
+        throw error;
+      } finally {
+        domainInFlight.delete(requestKey);
+      }
+    })();
+    domainInFlight.set(requestKey, request);
+    return request;
   },
 
   subscribeRealtime: () => {
     if (shouldUseLocalTenantData()) return () => {};
-    let reloadTimer: number | undefined;
-    const reload = () => {
-      if (reloadTimer) window.clearTimeout(reloadTimer);
-      reloadTimer = window.setTimeout(() => {
-        void get().loadAll();
-      }, 250);
+    realtimeSubscribers += 1;
+    if (realtimeCleanup) {
+      return () => {
+        realtimeSubscribers = Math.max(0, realtimeSubscribers - 1);
+        if (realtimeSubscribers === 0) realtimeCleanup?.();
+      };
+    }
+
+    const tenantId = getActiveTenantId();
+    const refreshTimers = new Map<FleetDomain, number>();
+    const scheduleRefresh = (domain: FleetDomain) => {
+      const current = refreshTimers.get(domain);
+      if (current) window.clearTimeout(current);
+      refreshTimers.set(
+        domain,
+        window.setTimeout(() => {
+          refreshTimers.delete(domain);
+          perfCount("realtime:refetch", { domain });
+          void get().refreshDomain(domain, { force: true, silent: true });
+        }, 250),
+      );
     };
-    const reloadWhenVisible = () => {
-      if (document.visibilityState !== "hidden") reload();
+    const isCurrentTenant = (row: Record<string, unknown>) =>
+      !row.tenant_id || row.tenant_id === tenantId;
+    const onRow =
+      (
+        domain: FleetDomain,
+        mapper: (row: Record<string, unknown>) => Vehicle | Driver | Trailer | Sender | Product,
+        compare?: (a: never, b: never) => number,
+      ) =>
+      (payload: { eventType: string; new: unknown; old: unknown }) => {
+        perfCount("realtime:event", { domain, event: payload.eventType });
+        const row = (payload.eventType === "DELETE" ? payload.old : payload.new) as Record<
+          string,
+          unknown
+        >;
+        if (!row?.id || !isCurrentTenant(row)) return;
+        if (payload.eventType === "DELETE") {
+          set((state) => ({
+            [domain]: (state[domain] as Array<{ id: string }>).filter((item) => item.id !== row.id),
+          }));
+          return;
+        }
+        try {
+          const item = mapper(row) as { id: string };
+          set((state) => ({
+            [domain]: upsertById(
+              state[domain] as Array<{ id: string }>,
+              item,
+              compare as ((a: { id: string }, b: { id: string }) => number) | undefined,
+            ),
+          }));
+          lastLoadedAt = Date.now();
+        } catch {
+          scheduleRefresh(domain);
+        }
+      };
+    const onVehicle = (payload: { eventType: string; new: unknown; old: unknown }) => {
+      perfCount("realtime:event", { domain: "vehicles", event: payload.eventType });
+      const row = (payload.eventType === "DELETE" ? payload.old : payload.new) as Record<
+        string,
+        unknown
+      >;
+      if (!row?.id || !isCurrentTenant(row)) return;
+      if (payload.eventType === "DELETE") {
+        set((state) => ({ vehicles: state.vehicles.filter((item) => item.id !== row.id) }));
+        return;
+      }
+      const existing = get().vehicles.find((item) => item.id === row.id);
+      try {
+        const mapped = vehicleFromRow({
+          ...(row as Parameters<typeof vehicleFromRow>[0]),
+          vehicle_trailers: existing?.trailerIds?.map((trailerId, position) => ({
+            trailer_id: trailerId,
+            position,
+            active: true,
+          })),
+        });
+        set((state) => ({
+          vehicles: upsertById(state.vehicles, mapped, (a, b) => a.plate.localeCompare(b.plate)),
+        }));
+        lastLoadedAt = Date.now();
+      } catch {
+        scheduleRefresh("vehicles");
+      }
     };
+    const onPosition = (payload: { eventType: string; new: unknown; old: unknown }) => {
+      if (payload.eventType === "DELETE") return;
+      const row = payload.new as Record<string, unknown>;
+      perfCount("realtime:event", { domain: "positions", event: payload.eventType });
+      if (
+        !row?.vehicle_id ||
+        !isCurrentTenant(row) ||
+        !get().vehicles.some((vehicle) => vehicle.id === row.vehicle_id)
+      ) {
+        return;
+      }
+      set((state) => ({
+        vehicles: state.vehicles.map((vehicle) =>
+          vehicle.id === row.vehicle_id
+            ? {
+                ...vehicle,
+                lat: Number(row.lat ?? vehicle.lat),
+                lng: Number(row.lng ?? vehicle.lng),
+                city: typeof row.city === "string" ? row.city : vehicle.city,
+                state: typeof row.state === "string" ? row.state : vehicle.state,
+                lastPositionAt:
+                  typeof row.recorded_at === "string" ? row.recorded_at : vehicle.lastPositionAt,
+                updatedAt:
+                  typeof row.recorded_at === "string" ? row.recorded_at : vehicle.updatedAt,
+              }
+            : vehicle,
+        ),
+      }));
+      lastLoadedAt = Date.now();
+    };
+    const onEvent = (payload: { eventType: string; new: unknown; old: unknown }) => {
+      perfCount("realtime:event", { domain: "events", event: payload.eventType });
+      const row = (payload.eventType === "DELETE" ? payload.old : payload.new) as Record<
+        string,
+        unknown
+      >;
+      if (!row?.id || !isCurrentTenant(row)) return;
+      if (payload.eventType === "DELETE") {
+        set((state) => ({ events: state.events.filter((item) => item.id !== row.id) }));
+        return;
+      }
+      try {
+        const item = fleetEventFromRow(row as Parameters<typeof fleetEventFromRow>[0]);
+        set((state) => ({
+          events: upsertById(state.events, item, (a, b) =>
+            b.timestamp.localeCompare(a.timestamp),
+          ).slice(0, 250),
+        }));
+      } catch {
+        scheduleRefresh("events");
+      }
+    };
+    const refreshWhenStale = () => {
+      if (document.visibilityState !== "hidden" && Date.now() - lastLoadedAt >= LOAD_ALL_TTL_MS) {
+        void get().loadAll({ silent: true });
+      }
+    };
+    const filter = `tenant_id=eq.${tenantId}`;
     const channel = supabase
       .channel("fleet-operational-data")
-      .on("postgres_changes", { event: "*", schema: "public", table: "vehicles" }, reload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "vehicle_trailers" }, reload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "drivers" }, reload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "trailers" }, reload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "senders" }, reload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "recipients" }, reload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "products" }, reload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "fleet_events" }, reload)
-      .on("postgres_changes", { event: "*", schema: "public", table: "freight_documents" }, reload)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "manual_workflow_overrides" },
-        reload,
+        { event: "*", schema: "public", table: "vehicles", filter },
+        onVehicle,
       )
-      .on("postgres_changes", { event: "*", schema: "public", table: "vehicle_positions" }, reload)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vehicle_trailers", filter },
+        () => scheduleRefresh("vehicles"),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "drivers", filter },
+        onRow(
+          "drivers",
+          (row) => driverFromRow(row as Parameters<typeof driverFromRow>[0]),
+          (a, b) => (a as Driver).name.localeCompare((b as Driver).name),
+        ),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "trailers", filter },
+        onRow(
+          "trailers",
+          (row) => trailerFromRow(row as Parameters<typeof trailerFromRow>[0]),
+          compareTrailers as never,
+        ),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "senders", filter },
+        onRow(
+          "senders",
+          (row) => senderFromRow(row as Parameters<typeof senderFromRow>[0]),
+          (a, b) => (a as Sender).name.localeCompare((b as Sender).name),
+        ),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "recipients", filter },
+        onRow(
+          "recipients",
+          (row) => recipientFromRow(row as Parameters<typeof recipientFromRow>[0]),
+          (a, b) => (a as Recipient).name.localeCompare((b as Recipient).name),
+        ),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "products", filter },
+        onRow(
+          "products",
+          (row) => productFromRow(row as Parameters<typeof productFromRow>[0]),
+          (a, b) => (a as Product).name.localeCompare((b as Product).name),
+        ),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "fleet_events", filter },
+        onEvent,
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "freight_documents", filter },
+        () => scheduleRefresh("vehicles"),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "manual_workflow_overrides", filter },
+        () => scheduleRefresh("vehicles"),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "vehicle_positions", filter },
+        onPosition,
+      )
       .subscribe((status) => set({ realtimeReady: status === "SUBSCRIBED" }));
 
-    window.addEventListener("focus", reload);
-    window.addEventListener("pageshow", reload);
-    document.addEventListener("visibilitychange", reloadWhenVisible);
-    const syncTimer = window.setInterval(reloadWhenVisible, 30_000);
+    window.addEventListener("focus", refreshWhenStale);
+    window.addEventListener("pageshow", refreshWhenStale);
+    document.addEventListener("visibilitychange", refreshWhenStale);
+    const staleTimer = window.setInterval(refreshWhenStale, STALE_CHECK_INTERVAL_MS);
 
-    return () => {
-      if (reloadTimer) window.clearTimeout(reloadTimer);
-      window.clearInterval(syncTimer);
-      window.removeEventListener("focus", reload);
-      window.removeEventListener("pageshow", reload);
-      document.removeEventListener("visibilitychange", reloadWhenVisible);
+    realtimeCleanup = () => {
+      refreshTimers.forEach((timer) => window.clearTimeout(timer));
+      refreshTimers.clear();
+      window.clearInterval(staleTimer);
+      window.removeEventListener("focus", refreshWhenStale);
+      window.removeEventListener("pageshow", refreshWhenStale);
+      document.removeEventListener("visibilitychange", refreshWhenStale);
       void supabase.removeChannel(channel);
       set({ realtimeReady: false });
+      realtimeCleanup = null;
+    };
+    return () => {
+      realtimeSubscribers = Math.max(0, realtimeSubscribers - 1);
+      if (realtimeSubscribers === 0) realtimeCleanup?.();
     };
   },
 
@@ -214,7 +574,15 @@ export const useFleet = create<FleetState>((set, get) => ({
     const saved = await vehicleService.upsertVehicle({ ...v, id: dbId(v.id) });
     set((s) => ({
       vehicles: s.vehicles.some((x) => x.id === saved.id)
-        ? s.vehicles.map((x) => (x.id === saved.id ? saved : x))
+        ? s.vehicles.map((x) =>
+            x.id === saved.id
+              ? {
+                  ...saved,
+                  trailerId: saved.trailerId ?? x.trailerId,
+                  trailerIds: saved.trailerIds?.length ? saved.trailerIds : x.trailerIds,
+                }
+              : x,
+          )
         : [...s.vehicles, saved].sort((a, b) => a.plate.localeCompare(b.plate)),
     }));
     return saved;
@@ -369,9 +737,17 @@ export const useFleet = create<FleetState>((set, get) => ({
       freightStage,
     );
     set((s) => ({
-      vehicles: s.vehicles.map((v) => (v.id === saved.id ? saved : v)),
+      vehicles: s.vehicles.map((v) =>
+        v.id === saved.id
+          ? {
+              ...saved,
+              trailerId: saved.trailerId ?? v.trailerId,
+              trailerIds: saved.trailerIds?.length ? saved.trailerIds : v.trailerIds,
+            }
+          : v,
+      ),
     }));
-    void get().loadAll();
+    void get().refreshDomain("events", { force: true, silent: true });
   },
 
   archiveFreight: async (vehicleId, reason) => {
@@ -380,7 +756,7 @@ export const useFleet = create<FleetState>((set, get) => ({
       return;
     }
     await vehicleService.archiveVehicleFreight(vehicleId, reason);
-    await get().loadAll();
+    await get().loadAll({ force: true, silent: true });
   },
 
   link: async (vehicleId, driverId, trailerId, extras) => {
@@ -441,7 +817,7 @@ export const useFleet = create<FleetState>((set, get) => ({
       freightPaymentType: extras?.freightPaymentType,
       paymentTermDays: extras?.paymentTermDays ?? null,
     });
-    await get().loadAll();
+    await get().loadAll({ force: true, silent: true });
   },
 
   addSender: async (s) => {

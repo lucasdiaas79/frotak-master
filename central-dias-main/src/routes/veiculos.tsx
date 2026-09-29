@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFleet } from "@/lib/store";
 import { useManualFreightAssetMode } from "@/lib/tenantDriverApp";
 import { PageHeader } from "@/components/PageHeader";
@@ -26,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { stageFromLegacyStatus } from "@/lib/freight-workflow";
-import { vehicleTrailerLabel } from "@/lib/vehicle-trailers";
+import { vehicleTrailerIds } from "@/lib/vehicle-trailers";
 import {
   ALL_SITUATIONS,
   ALL_STATUSES,
@@ -38,8 +38,21 @@ import {
 } from "@/lib/types";
 import type { Vehicle } from "@/lib/types";
 import { formatRelative } from "@/lib/format";
-import { Download, Eye, MapPin, Pencil, Plus, Search, Trash2, Truck, X } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Eye,
+  MapPin,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Truck,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
+import { perfRender } from "@/lib/performance";
 
 export const Route = createFileRoute("/veiculos")({
   head: () => ({
@@ -71,6 +84,7 @@ const blank: Vehicle = {
 };
 
 function VeiculosPage() {
+  perfRender("vehicles");
   const { vehicles, drivers, trailers, upsertVehicle, deleteVehicle, link } = useFleet();
   const manualFreightAssetMode = useManualFreightAssetMode();
   const [search, setSearch] = useState("");
@@ -79,6 +93,7 @@ function VeiculosPage() {
   const [editing, setEditing] = useState<Vehicle | null>(null);
   const [viewing, setViewing] = useState<Vehicle | null>(null);
   const [deleting, setDeleting] = useState<Vehicle | null>(null);
+  const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
     return vehicles.filter((v) => {
@@ -105,18 +120,48 @@ function VeiculosPage() {
     });
   }, [vehicles, search, statusF, ufF]);
 
-  const driverName = (id?: string) => drivers.find((d) => d.id === id)?.name ?? "-";
-  const trailerName = (vehicle: Vehicle) => vehicleTrailerLabel(vehicle, trailers);
+  const driverNames = useMemo(
+    () => new Map(drivers.map((driver) => [driver.id, driver.name])),
+    [drivers],
+  );
+  const trailerNames = useMemo(
+    () => new Map(trailers.map((trailer) => [trailer.id, trailer.identifier])),
+    [trailers],
+  );
+  const vehicleByDriver = useMemo(
+    () =>
+      new Map(
+        vehicles
+          .filter((vehicle) => vehicle.driverId)
+          .map((vehicle) => [vehicle.driverId!, vehicle]),
+      ),
+    [vehicles],
+  );
+  const driverName = (id?: string) => (id ? driverNames.get(id) : undefined) ?? "-";
+  const trailerName = (vehicle: Vehicle) => {
+    const labels = vehicleTrailerIds(vehicle)
+      .map((id) => trailerNames.get(id))
+      .filter((label): label is string => Boolean(label));
+    return labels.length ? labels.join(" + ") : "-";
+  };
+  const pageSize = 30;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const visibleVehicles = useMemo(
+    () => filtered.slice((page - 1) * pageSize, page * pageSize),
+    [filtered, page],
+  );
+
+  useEffect(() => setPage(1), [search, statusF, ufF]);
+  useEffect(() => setPage((current) => Math.min(current, totalPages)), [totalPages]);
   const exportCsv = () => {
     const header = manualFreightAssetMode
       ? "Tipo;Marca;Modelo;Ano;Placa;Renavam;Situação;Status;Caçamba;Cidade;UF\n"
       : "Tipo;Marca;Modelo;Ano;Placa;Renavam;Situação;Status;Motorista;Caçamba;Cidade;UF\n";
     const rows = filtered
-      .map(
-        (v) =>
-          manualFreightAssetMode
-            ? `${v.fleetKind || v.type};${v.brand ?? ""};${v.model ?? ""};${v.manufactureYear ?? ""};${v.plate};${v.renavam ?? ""};${VEHICLE_SITUATION_LABEL[v.situation]};${VEHICLE_STATUS_LABEL[v.status]};${trailerName(v)};${v.city};${v.state}`
-            : `${v.fleetKind || v.type};${v.brand ?? ""};${v.model ?? ""};${v.manufactureYear ?? ""};${v.plate};${v.renavam ?? ""};${VEHICLE_SITUATION_LABEL[v.situation]};${VEHICLE_STATUS_LABEL[v.status]};${driverName(v.driverId)};${trailerName(v)};${v.city};${v.state}`,
+      .map((v) =>
+        manualFreightAssetMode
+          ? `${v.fleetKind || v.type};${v.brand ?? ""};${v.model ?? ""};${v.manufactureYear ?? ""};${v.plate};${v.renavam ?? ""};${VEHICLE_SITUATION_LABEL[v.situation]};${VEHICLE_STATUS_LABEL[v.status]};${trailerName(v)};${v.city};${v.state}`
+          : `${v.fleetKind || v.type};${v.brand ?? ""};${v.model ?? ""};${v.manufactureYear ?? ""};${v.plate};${v.renavam ?? ""};${VEHICLE_SITUATION_LABEL[v.situation]};${VEHICLE_STATUS_LABEL[v.status]};${driverName(v.driverId)};${trailerName(v)};${v.city};${v.state}`,
       )
       .join("\n");
     const blob = new Blob([header + rows], { type: "text/csv" });
@@ -280,7 +325,9 @@ function VeiculosPage() {
           </div>
         </div>
         <div className="overflow-x-auto">
-          <table className={`data-table ${manualFreightAssetMode ? "min-w-[1120px]" : "min-w-[1220px]"}`}>
+          <table
+            className={`data-table ${manualFreightAssetMode ? "min-w-[1120px]" : "min-w-[1220px]"}`}
+          >
             <thead>
               <tr>
                 <th>Tipo</th>
@@ -297,7 +344,7 @@ function VeiculosPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((v) => (
+              {visibleVehicles.map((v) => (
                 <tr key={v.id}>
                   <td>
                     <span className="font-sans text-[12.5px] font-bold text-foreground">
@@ -331,9 +378,7 @@ function VeiculosPage() {
                   {!manualFreightAssetMode && (
                     <td className="font-medium">{driverName(v.driverId)}</td>
                   )}
-                  <td className="font-sans text-[12px] text-muted-foreground">
-                    {trailerName(v)}
-                  </td>
+                  <td className="font-sans text-[12px] text-muted-foreground">{trailerName(v)}</td>
                   <td>
                     <div className="flex justify-end gap-1">
                       <button
@@ -381,6 +426,41 @@ function VeiculosPage() {
             </tbody>
           </table>
         </div>
+        {filtered.length > pageSize && (
+          <div className="flex items-center justify-between border-t border-border/70 px-5 py-3">
+            <span className="text-[11.5px] text-muted-foreground">
+              Exibindo {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, filtered.length)} de{" "}
+              {filtered.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-8"
+                disabled={page === 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                aria-label="Página anterior"
+              >
+                <ChevronLeft className="size-3.5" />
+              </Button>
+              <span className="min-w-16 text-center text-[11.5px] font-semibold">
+                {page} de {totalPages}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-8"
+                disabled={page === totalPages}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                aria-label="Próxima página"
+              >
+                <ChevronRight className="size-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
       </section>
 
       <Modal
@@ -480,9 +560,7 @@ function VeiculosPage() {
                     {drivers
                       .filter((driver) => driver.active)
                       .map((driver) => {
-                        const linkedVehicle = vehicles.find(
-                          (vehicle) => vehicle.driverId === driver.id,
-                        );
+                        const linkedVehicle = vehicleByDriver.get(driver.id);
                         const linkedLabel =
                           linkedVehicle && linkedVehicle.id !== editing.id
                             ? ` · vinculado em ${linkedVehicle.plate}`

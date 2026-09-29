@@ -91,6 +91,7 @@ import type {
   FreightTone,
 } from "@/lib/freight-workflow";
 import { useFleet } from "@/lib/store";
+import { perfRender } from "@/lib/performance";
 import {
   getFinancialAccess,
   getFinancialIntegrationSettings,
@@ -431,12 +432,17 @@ function freightIcmsRate(originState?: string | null, destinationState?: string 
   return 12;
 }
 
-function freightIcmsPreview(originState?: string | null, destinationState?: string | null, gross?: number) {
+function freightIcmsPreview(
+  originState?: string | null,
+  destinationState?: string | null,
+  gross?: number,
+) {
   const origin = normalizeUf(originState);
   const destination = normalizeUf(destinationState);
   const rate = freightIcmsRate(originState, destinationState);
   const taxValue = gross ? Number(((gross * rate) / 100).toFixed(2)) : undefined;
-  const netValue = gross && taxValue !== undefined ? Number((gross - taxValue).toFixed(2)) : undefined;
+  const netValue =
+    gross && taxValue !== undefined ? Number((gross - taxValue).toFixed(2)) : undefined;
   const rule =
     !origin || !destination
       ? "UF pendente"
@@ -464,17 +470,14 @@ function FreightTaxPreviewCard({
 }) {
   const hasRoute = Boolean(preview.origin && preview.destination);
   return (
-    <div
-      className={cn(
-        "rounded-2xl border border-border/80 bg-surface-2/45 px-4 py-3",
-        className,
-      )}
-    >
+    <div className={cn("rounded-2xl border border-border/80 bg-surface-2/45 px-4 py-3", className)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="label-tiny">ICMS do frete</p>
           <strong className="text-[13px] text-foreground">
-            {hasRoute ? `${preview.rule} - ${preview.rate.toLocaleString("pt-BR")}%` : "Informe origem e destino"}
+            {hasRoute
+              ? `${preview.rule} - ${preview.rate.toLocaleString("pt-BR")}%`
+              : "Informe origem e destino"}
           </strong>
         </div>
         <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.12em] text-primary">
@@ -483,10 +486,16 @@ function FreightTaxPreviewCard({
       </div>
       <div className="mt-3 grid gap-2 text-[12px] text-muted-foreground sm:grid-cols-3">
         <span>
-          Origem/Destino <strong className="block text-foreground">{preview.origin ?? "-"}{" -> "}{preview.destination ?? "-"}</strong>
+          Origem/Destino{" "}
+          <strong className="block text-foreground">
+            {preview.origin ?? "-"}
+            {" -> "}
+            {preview.destination ?? "-"}
+          </strong>
         </span>
         <span>
-          ICMS estimado <strong className="block text-foreground">{formatMoney(preview.taxValue)}</strong>
+          ICMS estimado{" "}
+          <strong className="block text-foreground">{formatMoney(preview.taxValue)}</strong>
         </span>
         <span>
           {pricingMode === "per_ton" ? "Liquido apos descarga" : "Liquido estimado"}
@@ -509,7 +518,8 @@ function isAssetAssignmentMode(value: unknown): value is AssetAssignmentMode {
 }
 
 function readAssetAssignmentMode(settings: unknown): AssetAssignmentMode {
-  const record = settings && typeof settings === "object" ? (settings as Record<string, unknown>) : {};
+  const record =
+    settings && typeof settings === "object" ? (settings as Record<string, unknown>) : {};
   const driverApp =
     record.driverApp && typeof record.driverApp === "object"
       ? (record.driverApp as Record<string, unknown>)
@@ -530,6 +540,7 @@ function trailerImplementModels(
 }
 
 function GestaoFrotaPage() {
+  perfRender("fleet-management");
   const navigate = useNavigate();
   const {
     vehicles,
@@ -974,14 +985,6 @@ function GestaoFrotaPage() {
   const editing = vehicles.find((vehicle) => vehicle.id === editStatusId) || null;
   const situacaoOptions = viewMode === "pipeline" ? PIPELINE_SITUACOES : TABLE_SITUACOES;
 
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      void loadAll();
-    }, 5000);
-
-    return () => window.clearInterval(timer);
-  }, [loadAll]);
-
   const clearFilters = () => {
     setSearch("");
     setStageF("all");
@@ -1298,12 +1301,7 @@ function GestaoFrotaPage() {
       return;
     }
     if (
-      !isDriverAvailableForFreightMode(
-        driver,
-        form.vehicleId,
-        activeDriverIds,
-        assetAssignmentMode,
-      )
+      !isDriverAvailableForFreightMode(driver, form.vehicleId, activeDriverIds, assetAssignmentMode)
     ) {
       toast.error("Motorista indisponível para novo frete.");
       return;
@@ -1359,7 +1357,7 @@ function GestaoFrotaPage() {
     setIntendedStageAfterCreation(null);
 
     if (intendedStage && intendedStage !== "INDO_CARREGAR") {
-      await loadAll();
+      await loadAll({ force: true, silent: true });
       const updatedVehicle = useFleet
         .getState()
         .vehicles.find((candidate) => candidate.id === vehicle.id);
@@ -1378,7 +1376,10 @@ function GestaoFrotaPage() {
       toast.error("Selecione se o frete em grupo é CIF ou FOB.");
       return;
     }
-    if (groupForm.freightPricingMode === "per_ton" && !parseFreightValue(groupForm.freightTonPrice)) {
+    if (
+      groupForm.freightPricingMode === "per_ton" &&
+      !parseFreightValue(groupForm.freightTonPrice)
+    ) {
       toast.error("Informe o valor da tonelada do frete em grupo.");
       return;
     }
@@ -1505,7 +1506,7 @@ function GestaoFrotaPage() {
         description: `${result.segmentCount ?? segments.length} frete(s) na rota de ${driver.name}.`,
       });
       closeDemandPanel();
-      await loadAll();
+      await loadAll({ force: true, silent: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível criar o tiro longo.");
     }
@@ -1874,9 +1875,9 @@ function GestaoFrotaPage() {
           if (!open) setManualMove(null);
         }}
         onApplied={async () => {
-          await loadAll();
+          await loadAll({ force: true, silent: true });
         }}
-        onConflict={loadAll}
+        onConflict={() => loadAll({ force: true, silent: true })}
       />
 
       <Modal
@@ -2701,8 +2702,7 @@ function GroupFreightWorkspace({
     recipient?.state,
     form.freightPricingMode === "fixed" ? freightValue : undefined,
   );
-  const hasPricingValue =
-    form.freightPricingMode === "per_ton" ? Boolean(freightTonPrice) : true;
+  const hasPricingValue = form.freightPricingMode === "per_ton" ? Boolean(freightTonPrice) : true;
   const validCreate =
     !!form.senderId &&
     !!form.recipientId &&
@@ -2773,9 +2773,13 @@ function GroupFreightWorkspace({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label={form.freightPricingMode === "per_ton" ? "Valor da tonelada" : "Valor do frete"}>
+            <Field
+              label={form.freightPricingMode === "per_ton" ? "Valor da tonelada" : "Valor do frete"}
+            >
               <Input
-                value={form.freightPricingMode === "per_ton" ? form.freightTonPrice : form.freightValue}
+                value={
+                  form.freightPricingMode === "per_ton" ? form.freightTonPrice : form.freightValue
+                }
                 onChange={(event) =>
                   setForm({
                     ...form,
@@ -2783,7 +2787,9 @@ function GroupFreightWorkspace({
                       event.target.value,
                   })
                 }
-                placeholder={form.freightPricingMode === "per_ton" ? "Ex.: 185,00" : "Ex.: 12500,00"}
+                placeholder={
+                  form.freightPricingMode === "per_ton" ? "Ex.: 185,00" : "Ex.: 12500,00"
+                }
                 inputMode="decimal"
                 className="h-11"
               />
@@ -3001,7 +3007,10 @@ function LongTripWorkspace({
 
   const removeSegment = (index: number) => {
     if (form.segments.length === 1) return;
-    setForm({ ...form, segments: form.segments.filter((_, currentIndex) => currentIndex !== index) });
+    setForm({
+      ...form,
+      segments: form.segments.filter((_, currentIndex) => currentIndex !== index),
+    });
   };
 
   const selectVehicle = (vehicleId: string) => {
@@ -3046,8 +3055,8 @@ function LongTripWorkspace({
                 label: `${driver.name} · ${driver.cnh || "CNH não informada"}`,
                 disabled: Boolean(
                   selectedVehicle?.currentFreightId &&
-                    selectedVehicle.driverId &&
-                    selectedVehicle.driverId !== driver.id,
+                  selectedVehicle.driverId &&
+                  selectedVehicle.driverId !== driver.id,
                 ),
               }))}
           />
@@ -3145,7 +3154,9 @@ function LongTripWorkspace({
                       ...trailers.map((trailer) => ({
                         value: trailer.id,
                         label: `${trailer.identifier} · ${trailer.implementModel || trailer.type}`,
-                        disabled: Boolean(trailer.vehicleId && trailer.vehicleId !== form.vehicleId),
+                        disabled: Boolean(
+                          trailer.vehicleId && trailer.vehicleId !== form.vehicleId,
+                        ),
                       })),
                     ]}
                   />
@@ -3175,7 +3186,9 @@ function LongTripWorkspace({
                     <Input
                       value={segment[priceField]}
                       onChange={(event) => setSegment(index, { [priceField]: event.target.value })}
-                      placeholder={segment.freightPricingMode === "per_ton" ? "Ex.: 185,00" : "Ex.: 12500,00"}
+                      placeholder={
+                        segment.freightPricingMode === "per_ton" ? "Ex.: 185,00" : "Ex.: 12500,00"
+                      }
                       inputMode="decimal"
                       className="h-11"
                     />
@@ -4696,7 +4709,9 @@ function Availability({
   driver?: Driver;
   assetAssignmentMode: AssetAssignmentMode;
 }) {
-  const vehicleOk = vehicle ? isVehicleAvailableForFreightMode(vehicle, assetAssignmentMode) : false;
+  const vehicleOk = vehicle
+    ? isVehicleAvailableForFreightMode(vehicle, assetAssignmentMode)
+    : false;
   const driverOk = driver ? driver.active : false;
   return (
     <div className="space-y-2">

@@ -327,6 +327,13 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     } else {
       window.localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
     }
+    if (tenantId) {
+      window.localStorage.setItem("frotak-active-tenant-id", tenantId);
+      window.localStorage.setItem("frotak-active-tenant-name", tenantName || workspace?.name || "");
+    } else {
+      window.localStorage.removeItem("frotak-active-tenant-id");
+      window.localStorage.removeItem("frotak-active-tenant-name");
+    }
   }
 
   return {

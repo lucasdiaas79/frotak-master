@@ -74,7 +74,8 @@ export type CreateClientAccessInput = {
 };
 
 export const masterEmail = "Definido no Supabase Auth";
-export const loginAccounts: Array<{ email: string; name: string; role: string; password: string }> = [];
+export const loginAccounts: Array<{ email: string; name: string; role: string; password: string }> =
+  [];
 
 type PlatformUserRow = {
   platform_role: PlatformRole;
@@ -148,8 +149,7 @@ function getSupabaseBrowser() {
 
   const url = getPublicEnv("VITE_SUPABASE_URL");
   const key =
-    getPublicEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ||
-    getPublicEnv("VITE_SUPABASE_ANON_KEY");
+    getPublicEnv("VITE_SUPABASE_PUBLISHABLE_KEY") || getPublicEnv("VITE_SUPABASE_ANON_KEY");
 
   if (!url || !key) {
     throw new Error("Supabase Auth publico nao configurado.");
@@ -164,30 +164,6 @@ function getSupabaseBrowser() {
   });
 
   return browserSupabase;
-}
-
-function getSupabaseBrowserWithAccessToken(accessToken: string) {
-  const url = getPublicEnv("VITE_SUPABASE_URL");
-  const key =
-    getPublicEnv("VITE_SUPABASE_PUBLISHABLE_KEY") ||
-    getPublicEnv("VITE_SUPABASE_ANON_KEY");
-
-  if (!url || !key) {
-    throw new Error("Supabase Auth publico nao configurado.");
-  }
-
-  return createClient(url, key, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-    global: {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    },
-  });
 }
 
 function normalizeEmail(email: string) {
@@ -289,7 +265,7 @@ function sessionFromPlatformUser(session: Session, row: PlatformUserRow): AuthSe
   const fullName =
     typeof user.user_metadata?.full_name === "string" && user.user_metadata.full_name.trim()
       ? user.user_metadata.full_name.trim()
-      : user.email ?? "Usuario Master";
+      : (user.email ?? "Usuario Master");
 
   return {
     id: user.id,
@@ -411,7 +387,7 @@ export async function authenticate(email: string, password: string, fallbackRedi
     throw new Error("Erro temporario de autenticacao.");
   }
 
-  const authenticatedSupabase = getSupabaseBrowserWithAccessToken(session.access_token);
+  const authenticatedSupabase = supabase;
 
   const { data: platformUser, error: platformError } = await authenticatedSupabase
     .from("platform_users")

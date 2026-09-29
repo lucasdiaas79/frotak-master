@@ -18,6 +18,7 @@ import type {
   FinancialSettlement,
   SettlementInput,
 } from "./types";
+import { perfCount, perfStart } from "@/lib/performance";
 
 function fail(operation: string, error: { message: string } | null) {
   if (error) throw new Error(`${operation}: ${error.message}`);
@@ -32,10 +33,46 @@ export function hasFinancialPermission(access: FinancialAccess | null, permissio
   return Boolean(access?.isOwner || access?.permissions.includes(permission));
 }
 
-export async function getFinancialAccess(): Promise<FinancialAccess> {
-  const { data, error } = await supabase.rpc("get_financial_access");
-  fail("Não foi possível validar o acesso financeiro", error);
-  return data as FinancialAccess;
+const FINANCIAL_ACCESS_TTL_MS = 60_000;
+let financialAccessCache: { value: FinancialAccess; loadedAt: number } | null = null;
+const financialAccessInFlight = new Map<string, Promise<FinancialAccess>>();
+
+export async function getFinancialAccess(force = false): Promise<FinancialAccess> {
+  const activeWorkspaceId =
+    typeof window === "undefined"
+      ? null
+      : window.localStorage.getItem("frotak-active-workspace-id");
+  const cacheKey = activeWorkspaceId ?? "current-workspace";
+  if (
+    !force &&
+    financialAccessCache &&
+    (!activeWorkspaceId || financialAccessCache.value.workspaceId === activeWorkspaceId) &&
+    Date.now() - financialAccessCache.loadedAt < FINANCIAL_ACCESS_TTL_MS
+  ) {
+    perfCount("financial:access:cache-hit");
+    return financialAccessCache.value;
+  }
+  const inFlight = financialAccessInFlight.get(cacheKey);
+  if (inFlight) {
+    perfCount("financial:access:deduplicated");
+    return inFlight;
+  }
+
+  const request = (async () => {
+    const finish = perfStart("financial:rpc:get_financial_access");
+    try {
+      const { data, error } = await supabase.rpc("get_financial_access");
+      fail("Não foi possível validar o acesso financeiro", error);
+      const value = data as FinancialAccess;
+      financialAccessCache = { value, loadedAt: Date.now() };
+      return value;
+    } finally {
+      finish();
+      financialAccessInFlight.delete(cacheKey);
+    }
+  })();
+  financialAccessInFlight.set(cacheKey, request);
+  return request;
 }
 
 export async function listFinancialDocuments(
@@ -149,11 +186,17 @@ function mapFinancialDocumentDetails(row: Record<string, any>): FinancialDocumen
       ? row.financial_allocations.length
       : numberValue(row.allocation_count ?? row.allocationCount),
     costCenterId:
-      row.financial_allocations?.[0]?.cost_center_id ?? row.cost_center_id ?? row.costCenterId ?? null,
-    vehicleId: row.financial_allocations?.[0]?.vehicle_id ?? row.vehicle_id ?? row.vehicleId ?? null,
+      row.financial_allocations?.[0]?.cost_center_id ??
+      row.cost_center_id ??
+      row.costCenterId ??
+      null,
+    vehicleId:
+      row.financial_allocations?.[0]?.vehicle_id ?? row.vehicle_id ?? row.vehicleId ?? null,
     driverId: row.financial_allocations?.[0]?.driver_id ?? row.driver_id ?? row.driverId ?? null,
-    freightId: row.financial_allocations?.[0]?.freight_id ?? row.freight_id ?? row.freightId ?? null,
-    productId: row.financial_allocations?.[0]?.product_id ?? row.product_id ?? row.productId ?? null,
+    freightId:
+      row.financial_allocations?.[0]?.freight_id ?? row.freight_id ?? row.freightId ?? null,
+    productId:
+      row.financial_allocations?.[0]?.product_id ?? row.product_id ?? row.productId ?? null,
     installments: (row.financial_installments ?? row.installments ?? [])
       .map((item: Record<string, unknown>) => ({
         id: String(item.id),
@@ -173,9 +216,10 @@ function mapFinancialDocumentDetails(row: Record<string, any>): FinancialDocumen
         installmentId: String(item.installment_id ?? item.installmentId),
         financialAccountId: String(item.financial_account_id ?? item.financialAccountId),
         settlementType: item.settlement_type as "settlement" | "reversal",
-        originalSettlementId: item.original_settlement_id ?? item.originalSettlementId
-          ? String(item.original_settlement_id ?? item.originalSettlementId)
-          : null,
+        originalSettlementId:
+          (item.original_settlement_id ?? item.originalSettlementId)
+            ? String(item.original_settlement_id ?? item.originalSettlementId)
+            : null,
         principalAmount: numberValue(item.principal_amount ?? item.principalAmount),
         interestAmount: numberValue(item.interest_amount ?? item.interestAmount),
         penaltyAmount: numberValue(item.penalty_amount ?? item.penaltyAmount),
@@ -184,9 +228,10 @@ function mapFinancialDocumentDetails(row: Record<string, any>): FinancialDocumen
         settledOn: String(item.settled_on ?? item.settledOn),
         paymentMethod: String(item.payment_method ?? item.paymentMethod),
         notes: item.notes ? String(item.notes) : null,
-        reversalReason: item.reversal_reason ?? item.reversalReason
-          ? String(item.reversal_reason ?? item.reversalReason)
-          : null,
+        reversalReason:
+          (item.reversal_reason ?? item.reversalReason)
+            ? String(item.reversal_reason ?? item.reversalReason)
+            : null,
         createdAt: String(item.created_at ?? item.createdAt),
       }),
     ),
@@ -202,7 +247,10 @@ export async function listFinancialDocumentsPage(
   fail("Nao foi possivel carregar os titulos", error);
   const page = (data ?? {}) as Record<string, any>;
   const summary = (page.summary ?? {}) as Record<string, unknown>;
-  const payablePressure = (summary.payablePressure ?? {}) as Record<string, Record<string, unknown>>;
+  const payablePressure = (summary.payablePressure ?? {}) as Record<
+    string,
+    Record<string, unknown>
+  >;
   return {
     rows: ((page.rows ?? []) as Array<Record<string, any>>).map(mapFinancialDocumentDetails),
     page: numberValue(page.page) || input.page,
@@ -285,10 +333,7 @@ export async function reverseSettlement(id: string, reason: string) {
 }
 
 export async function listFinancialAccounts(workspaceId?: string): Promise<FinancialAccount[]> {
-  let query = supabase
-    .from("financial_account_balances")
-    .select("*")
-    .order("name");
+  let query = supabase.from("financial_account_balances").select("*").order("name");
   if (workspaceId) query = query.eq("workspace_id", workspaceId);
   const { data, error } = await query;
   fail("Não foi possível carregar bancos e caixas", error);

@@ -44,6 +44,8 @@ import type { Profile } from "@/lib/types";
 import { getFinancialAccess } from "@/lib/financial/phase2";
 import type { FinancialAccess } from "@/lib/financial/types";
 import { vehicleTrailerLabel } from "@/lib/vehicle-trailers";
+import { perfCount, perfStart } from "@/lib/performance";
+import { hasSupabaseConfig, supabase } from "@/lib/supabase";
 import logoCentral from "@/assets/logo-central.png";
 import faviconCentral from "@/assets/favicon.png";
 
@@ -782,11 +784,63 @@ function Topbar({
   );
 }
 
+let appInitializationPromise: Promise<{
+  profile: Profile | null;
+  financialAccess: FinancialAccess | null;
+}> | null = null;
+
+function initializeApplication(loadAll: () => Promise<void>) {
+  if (appInitializationPromise) {
+    perfCount("app:init:deduplicated");
+    return appInitializationPromise;
+  }
+
+  appInitializationPromise = (async () => {
+    const finishAuth = perfStart("app:authentication");
+    await acceptMasterSsoFromUrl(window.location.search);
+    const user = await getCurrentUser();
+    finishAuth();
+    if (!user) throw new Error("unauthenticated");
+
+    const finishProfile = perfStart("app:profile");
+    const loadedProfile = await getProfile(user.id);
+    finishProfile();
+
+    const financialPromise = (async () => {
+      const finish = perfStart("app:financial-access");
+      try {
+        return await getFinancialAccess();
+      } finally {
+        finish();
+      }
+    })();
+    const fleetPromise = (async () => {
+      const finish = perfStart("app:fleet-initial-load");
+      try {
+        await loadAll();
+      } finally {
+        finish();
+      }
+    })();
+    const [financialResult] = await Promise.allSettled([financialPromise, fleetPromise]);
+
+    return {
+      profile: loadedProfile,
+      financialAccess: financialResult.status === "fulfilled" ? financialResult.value : null,
+    };
+  })().catch((error) => {
+    appInitializationPromise = null;
+    throw error;
+  });
+
+  return appInitializationPromise;
+}
+
 export function AppLayout() {
   const loc = useLocation();
-  const navigate = useNavigate();
   const loadAll = useFleet((s) => s.loadAll);
   const subscribeRealtime = useFleet((s) => s.subscribeRealtime);
+  const isLoginRoute = loc.pathname === "/login";
   const [checkingAuth, setCheckingAuth] = React.useState(true);
   const [profile, setProfile] = React.useState<Profile | null>(null);
   const [financialAccess, setFinancialAccess] = React.useState<FinancialAccess | null>(null);
@@ -799,37 +853,26 @@ export function AppLayout() {
   React.useEffect(() => {
     let cancelled = false;
     let unsubscribeRealtime: (() => void) | undefined;
+    const authSubscription = hasSupabaseConfig()
+      ? supabase.auth.onAuthStateChange((event) => {
+          if (event === "SIGNED_OUT" && !cancelled) {
+            appInitializationPromise = null;
+            window.location.href = getMasterLoginUrl();
+          }
+        }).data.subscription
+      : null;
 
     async function checkAuth() {
-      if (loc.pathname === "/login") {
+      if (isLoginRoute) {
         setCheckingAuth(false);
         return;
       }
 
-      setCheckingAuth(true);
       try {
-        await acceptMasterSsoFromUrl(window.location.search);
-        const user = await getCurrentUser();
-        if (!user) {
-          if (!cancelled) {
-            window.location.href = getMasterLoginUrl();
-          }
-          return;
-        }
-
-        const loadedProfile = await getProfile(user.id);
+        const initialized = await initializeApplication(loadAll);
         if (!cancelled) {
-          setProfile(loadedProfile);
-          try {
-            setFinancialAccess(await getFinancialAccess());
-          } catch {
-            setFinancialAccess(null);
-          }
-          try {
-            await loadAll();
-          } catch (error) {
-            console.error("Failed to load fleet data after authentication.", error);
-          }
+          setProfile(initialized.profile);
+          setFinancialAccess(initialized.financialAccess);
           unsubscribeRealtime = subscribeRealtime();
           setCheckingAuth(false);
         }
@@ -845,8 +888,15 @@ export function AppLayout() {
     return () => {
       cancelled = true;
       unsubscribeRealtime?.();
+      authSubscription?.unsubscribe();
     };
-  }, [loc.pathname, navigate, loadAll, subscribeRealtime]);
+  }, [isLoginRoute, loadAll, subscribeRealtime]);
+
+  React.useEffect(() => {
+    const finish = perfStart("navigation:usable", { path: loc.pathname });
+    const frame = window.requestAnimationFrame(() => finish());
+    return () => window.cancelAnimationFrame(frame);
+  }, [loc.pathname]);
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
@@ -854,7 +904,7 @@ export function AppLayout() {
     }
   }, [collapsed]);
 
-  if (loc.pathname === "/login") {
+  if (isLoginRoute) {
     return <Outlet />;
   }
 
@@ -867,6 +917,7 @@ export function AppLayout() {
   }
 
   async function handleLogout() {
+    appInitializationPromise = null;
     await signOut();
     window.location.href = getMasterLoginUrl();
   }

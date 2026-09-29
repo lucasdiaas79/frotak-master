@@ -81,7 +81,7 @@ function MotoristasPage() {
             },
           });
           toast.success("Motorista salvo. Login do app ativo com senha temporaria 1234.");
-          void useFleet.getState().loadAll();
+          void useFleet.getState().loadAll({ force: true, silent: true });
         }
       } else {
         toast.success("Motorista salvo");
