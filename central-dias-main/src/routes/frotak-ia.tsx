@@ -83,22 +83,12 @@ async function requireAccessToken() {
 }
 
 async function requireWorkspaceId() {
-  const storedWorkspaceId =
-    typeof window !== "undefined"
-      ? window.localStorage.getItem("frotak-active-workspace-id")?.trim()
-      : undefined;
-  if (storedWorkspaceId) return storedWorkspaceId;
-
   const user = await getCurrentUser();
   if (!user) throw new Error("Sessao expirada. Entre novamente para usar a Frotak IA.");
 
   const profile = await getProfile(user.id);
   const workspaceId = profile?.workspaceId?.trim();
   if (!workspaceId) throw new Error("Workspace atual indisponivel para a Frotak IA.");
-
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem("frotak-active-workspace-id", workspaceId);
-  }
   return workspaceId;
 }
 

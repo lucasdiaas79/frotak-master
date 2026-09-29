@@ -3,6 +3,7 @@ import { hasSupabaseConfig, supabase } from "@/lib/supabase";
 import type { Profile } from "@/lib/types";
 
 const LOCAL_AUTH_KEY = "central-client-local-session";
+const ACTIVE_WORKSPACE_KEY = "frotak-active-workspace-id";
 const DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001";
 const CENTRAL_DEMO_EMAIL = "admin@central.com.br";
 const CENTRAL_DEMO_PASSWORD = "123456";
@@ -24,6 +25,7 @@ interface MembershipProfileRow {
   workspace_id?: string;
   is_owner?: boolean;
   status: string;
+  created_at?: string;
   workspaces:
     | {
         tenant_id: string;
@@ -250,6 +252,7 @@ export async function signIn(email: string, password: string) {
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
+  if (canUseStorage()) window.localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
   return data;
 }
 
@@ -257,6 +260,7 @@ export async function signOut() {
   if (canUseStorage()) {
     window.localStorage.removeItem(LOCAL_AUTH_KEY);
     window.localStorage.removeItem("frotak-sso-source");
+    window.localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
   }
 
   if (!hasSupabaseConfig() || shouldUseLocalTenantData()) {
@@ -282,16 +286,29 @@ export async function getProfile(userId: string): Promise<Profile | null> {
   if (error) throw error;
   if (!profile) return null;
 
-  const { data: membership, error: membershipError } = await supabase
+  const { data: memberships, error: membershipError } = await supabase
     .from("workspace_memberships")
     .select(
-      "workspace_id, status, is_owner, workspaces(tenant_id, name, tenants(legal_name, trade_name))",
+      "workspace_id, status, is_owner, created_at, workspaces(tenant_id, name, tenants(legal_name, trade_name))",
     )
     .eq("user_id", userId)
     .eq("status", "active")
-    .limit(1)
-    .maybeSingle<MembershipProfileRow>();
+    .order("is_owner", { ascending: false })
+    .order("created_at", { ascending: true })
+    .returns<MembershipProfileRow[]>();
   if (membershipError) throw membershipError;
+
+  const storedWorkspaceId = canUseStorage()
+    ? window.localStorage.getItem(ACTIVE_WORKSPACE_KEY)?.trim()
+    : undefined;
+  const activeMemberships = memberships ?? [];
+  const membership =
+    activeMemberships.find((item) => item.workspace_id === storedWorkspaceId) ??
+    activeMemberships.find(
+      (item) => firstRelation(item.workspaces)?.tenant_id === profile.tenant_id,
+    ) ??
+    activeMemberships[0] ??
+    null;
 
   const workspace = firstRelation(membership?.workspaces);
   const tenant = firstRelation(workspace?.tenants);
@@ -303,6 +320,14 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     tenant_id: tenantId,
     name: tenantName,
   });
+
+  if (canUseStorage()) {
+    if (membership?.workspace_id) {
+      window.localStorage.setItem(ACTIVE_WORKSPACE_KEY, membership.workspace_id);
+    } else {
+      window.localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
+    }
+  }
 
   return {
     ...baseProfile,
