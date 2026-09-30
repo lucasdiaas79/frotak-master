@@ -7,6 +7,7 @@ import {
   Building2,
   CalendarClock,
   ChevronRight,
+  CheckSquare,
   CircleDollarSign,
   Download,
   Eye,
@@ -22,6 +23,7 @@ import {
   Search,
   Settings2,
   ShieldAlert,
+  Square,
   Tags,
   TrendingDown,
   TrendingUp,
@@ -2291,6 +2293,9 @@ function TitlesContent({
     document: FinancialDocumentDetails;
     installment: FinancialInstallment;
   } | null>(null);
+  const [bulkSettleTargets, setBulkSettleTargets] = useState<
+    Array<{ document: FinancialDocumentDetails; installment: FinancialInstallment }>
+  >([]);
   const [saving, setSaving] = useState(false);
   const { vehicles, drivers, products } = useFleet();
   const canManageRecurring = hasFinancialPermission(access, "financial.manage_recurring");
@@ -2691,6 +2696,7 @@ function TitlesContent({
             }}
             onEdit={editDocument}
             onSettle={settleDocument}
+            onBulkSettle={setBulkSettleTargets}
             onOpenDetails={openDocumentDetails}
             onCancelRecurring={async (rule) => {
               try {
@@ -2785,6 +2791,41 @@ function TitlesContent({
             await loadDocuments();
           } catch (e) {
             toast.error(e instanceof Error ? e.message : "Falha na baixa.");
+          } finally {
+            setSaving(false);
+          }
+        }}
+      />
+      <BulkSettlementDialog
+        targets={bulkSettleTargets}
+        accounts={accounts.filter((a) => a.active)}
+        saving={saving}
+        onOpenChange={(open) => !open && setBulkSettleTargets([])}
+        onSave={async (input) => {
+          setSaving(true);
+          try {
+            for (const target of bulkSettleTargets) {
+              await settleInstallment({
+                installmentId: target.installment.id,
+                financialAccountId: input.financialAccountId,
+                amount: target.installment.balance,
+                interestAmount: 0,
+                penaltyAmount: 0,
+                discountAmount: 0,
+                settledOn: input.settledOn,
+                paymentMethod: input.paymentMethod,
+                notes: input.notes,
+              });
+            }
+            toast.success(
+              `${bulkSettleTargets.length} ${
+                bulkSettleTargets.length === 1 ? "pagamento registrado" : "pagamentos registrados"
+              }.`,
+            );
+            setBulkSettleTargets([]);
+            await loadDocuments();
+          } catch (e) {
+            toast.error(e instanceof Error ? e.message : "Falha ao pagar selecionados.");
           } finally {
             setSaving(false);
           }
@@ -3604,6 +3645,7 @@ function PayablesTitleList({
   canCreate,
   onNew,
   onSettle,
+  onBulkSettle,
   onReverse,
   onVoid,
   onEdit,
@@ -3620,29 +3662,80 @@ function PayablesTitleList({
   canCreate: boolean;
   onNew: () => void;
   onSettle: (d: FinancialDocumentDetails, i: FinancialInstallment) => void;
+  onBulkSettle: (
+    targets: Array<{ document: FinancialDocumentDetails; installment: FinancialInstallment }>,
+  ) => void;
   onReverse: (s: FinancialSettlement) => void;
   onVoid: (d: FinancialDocumentDetails) => void;
   onEdit: (d: FinancialDocumentDetails) => void;
   onOpenDetails: (d: FinancialDocumentDetails) => void;
   onCancelRecurring: (rule: FinancialRecurringRule) => void;
 }) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const supplierCounts = documents.reduce<Record<string, number>>((acc, document) => {
     const key = document.partnerName || "Fornecedor não informado";
     acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
-  const orderedDocuments = [...documents].sort((a, b) => {
-    const aInstallment = firstOpenInstallment(a);
-    const bInstallment = firstOpenInstallment(b);
-    if (!aInstallment && !bInstallment) return 0;
-    if (!aInstallment) return 1;
-    if (!bInstallment) return -1;
-    return aInstallment.dueDate.localeCompare(bInstallment.dueDate);
-  });
+  const orderedDocuments = useMemo(
+    () =>
+      [...documents].sort((a, b) => {
+        const aInstallment = firstOpenInstallment(a);
+        const bInstallment = firstOpenInstallment(b);
+        if (!aInstallment && !bInstallment) return 0;
+        if (!aInstallment) return 1;
+        if (!bInstallment) return -1;
+        return aInstallment.dueDate.localeCompare(bInstallment.dueDate);
+      }),
+    [documents],
+  );
   const grouped = payableAgendaGroups.map((group) => ({
     ...group,
     documents: orderedDocuments.filter((document) => payableAgendaGroup(document) === group.key),
   }));
+  const payableTargets = useMemo(
+    () =>
+      orderedDocuments.flatMap((document) => {
+        const installment = firstOpenInstallment(document);
+        if (!installment || !canSettle || ["draft", "voided"].includes(document.status)) return [];
+        return [{ document, installment }];
+      }),
+    [orderedDocuments, canSettle],
+  );
+  const payableIds = useMemo(
+    () => new Set(payableTargets.map(({ document }) => document.id)),
+    [payableTargets],
+  );
+  const selectedTargets = payableTargets.filter(({ document }) => selectedIds.includes(document.id));
+  const selectedTotal = selectedTargets.reduce(
+    (total, target) => total + target.installment.balance,
+    0,
+  );
+  const allPayableSelected =
+    payableTargets.length > 0 &&
+    payableTargets.every(({ document }) => selectedIds.includes(document.id));
+
+  useEffect(() => {
+    setSelectedIds((current) => current.filter((id) => payableIds.has(id)));
+  }, [payableIds]);
+
+  const toggleSelected = (documentId: string, selected: boolean) => {
+    setSelectedIds((current) =>
+      selected
+        ? Array.from(new Set([...current, documentId]))
+        : current.filter((id) => id !== documentId),
+    );
+  };
+
+  const toggleAllPayable = () => {
+    if (allPayableSelected) {
+      setSelectedIds((current) => current.filter((id) => !payableIds.has(id)));
+      return;
+    }
+    setSelectedIds((current) =>
+      Array.from(new Set([...current, ...payableTargets.map(({ document }) => document.id)])),
+    );
+  };
 
   return (
     <section className="financial-payables-list">
@@ -3653,7 +3746,29 @@ function PayablesTitleList({
         </div>
         <span>{total} encontrados</span>
       </div>
+      {canSettle && payableTargets.length > 0 && (
+        <div className="financial-payables-bulkbar">
+          <Button size="sm" variant="outline" onClick={toggleAllPayable}>
+            {allPayableSelected ? <CheckSquare className="size-4" /> : <Square className="size-4" />}
+            {allPayableSelected ? "Desmarcar visíveis" : "Selecionar pagáveis"}
+          </Button>
+          <span>
+            {selectedTargets.length
+              ? `${selectedTargets.length} selecionados - ${money.format(selectedTotal)}`
+              : "Selecione os títulos para pagar em lote"}
+          </span>
+          <Button
+            size="sm"
+            disabled={selectedTargets.length === 0}
+            onClick={() => onBulkSettle(selectedTargets)}
+          >
+            <CircleDollarSign className="size-4" />
+            Pagar selecionados
+          </Button>
+        </div>
+      )}
       <div className="hidden financial-payables-table-head md:grid">
+        <span>Sel.</span>
         <span>Fornecedor e título</span>
         <span>Vencimento</span>
         <span>Valor</span>
@@ -3684,6 +3799,8 @@ function PayablesTitleList({
                       : null
                   }
                   onSettle={onSettle}
+                  selected={selectedIds.includes(document.id)}
+                  onSelectedChange={(selected) => toggleSelected(document.id, selected)}
                   onReverse={onReverse}
                   onVoid={onVoid}
                   onEdit={onEdit}
@@ -3725,6 +3842,8 @@ function PayablesTitleRow({
   canEdit,
   recurringRule,
   onSettle,
+  selected,
+  onSelectedChange,
   onReverse,
   onVoid,
   onEdit,
@@ -3738,6 +3857,8 @@ function PayablesTitleRow({
   canEdit: boolean;
   recurringRule: FinancialRecurringRule | null;
   onSettle: (d: FinancialDocumentDetails, i: FinancialInstallment) => void;
+  selected: boolean;
+  onSelectedChange: (selected: boolean) => void;
   onReverse: (s: FinancialSettlement) => void;
   onVoid: (d: FinancialDocumentDetails) => void;
   onEdit: (d: FinancialDocumentDetails) => void;
@@ -3749,8 +3870,9 @@ function PayablesTitleRow({
   const balance = documentBalance(document);
   const activeSettlements = effectiveSettlements(document);
   const dueState = payableDueState(document);
+  const canSelect = Boolean(installment && canSettle && !["draft", "voided"].includes(document.status));
   const canAct =
-    Boolean(installment && canSettle && !["draft", "voided"].includes(document.status)) ||
+    canSelect ||
     (document.status === "draft" && canEdit) ||
     (canReverse && activeSettlements.length > 0);
 
@@ -3764,6 +3886,22 @@ function PayablesTitleRow({
         if (event.key === "Enter" || event.key === " ") onOpenDetails(document);
       }}
     >
+      <div className="financial-payables-select-cell">
+        {canSelect ? (
+          <button
+            type="button"
+            className={cn("financial-payables-select", selected && "financial-payables-select-active")}
+            aria-label={selected ? "Desmarcar título" : "Selecionar título"}
+            aria-pressed={selected}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelectedChange(!selected);
+            }}
+          >
+            {selected ? <CheckSquare className="size-4" /> : <Square className="size-4" />}
+          </button>
+        ) : null}
+      </div>
       <div className="financial-payables-partner-cell">
         <strong>{document.partnerName || "Fornecedor não informado"}</strong>
         <span>{document.description}</span>
@@ -5230,6 +5368,117 @@ function SettlementDialog({
           >
             {saving && <LoaderCircle className="size-4 animate-spin" />}
             {actionLabel}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BulkSettlementDialog({
+  targets,
+  accounts,
+  saving,
+  onOpenChange,
+  onSave,
+}: {
+  targets: Array<{ document: FinancialDocumentDetails; installment: FinancialInstallment }>;
+  accounts: FinancialAccount[];
+  saving: boolean;
+  onOpenChange: (v: boolean) => void;
+  onSave: (input: {
+    financialAccountId: string;
+    settledOn: string;
+    paymentMethod: string;
+    notes: string;
+  }) => void;
+}) {
+  const [form, setForm] = useState({
+    account: "",
+    date: today(),
+    method: "pix",
+    notes: "",
+  });
+  const total = targets.reduce((sum, target) => sum + target.installment.balance, 0);
+
+  useEffect(() => {
+    if (targets.length > 0) {
+      setForm((current) => ({
+        ...current,
+        date: today(),
+        notes: "",
+      }));
+    }
+  }, [targets.length]);
+
+  return (
+    <Dialog open={targets.length > 0} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Pagar selecionados</DialogTitle>
+          <DialogDescription>
+            {targets.length} {targets.length === 1 ? "título selecionado" : "títulos selecionados"} ·{" "}
+            total de {money.format(total)}. Cada parcela será baixada pelo saldo em aberto.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Data">
+            <Input
+              type="date"
+              value={form.date}
+              onChange={(event) => setForm({ ...form, date: event.target.value })}
+            />
+          </Field>
+          <Field label="Forma">
+            <Select value={form.method} onValueChange={(value) => setForm({ ...form, method: value })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pix">PIX</SelectItem>
+                <SelectItem value="bank_transfer">Transferência</SelectItem>
+                <SelectItem value="cash">Dinheiro</SelectItem>
+                <SelectItem value="card">Cartão</SelectItem>
+                <SelectItem value="boleto">Boleto</SelectItem>
+                <SelectItem value="other">Outro</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Banco / caixa" className="sm:col-span-2">
+            <SimpleSelect
+              value={form.account || "all"}
+              onChange={(value) => setForm({ ...form, account: value === "all" ? "" : value })}
+              all="Selecionar conta"
+              items={accounts.map((account) => [
+                account.id,
+                `${account.name} · ${money.format(account.currentBalance)}`,
+              ])}
+            />
+          </Field>
+          <Field label="Observação" className="sm:col-span-2">
+            <Textarea
+              value={form.notes}
+              onChange={(event) => setForm({ ...form, notes: event.target.value })}
+            />
+          </Field>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button
+            disabled={saving || targets.length === 0 || !form.account}
+            onClick={() =>
+              onSave({
+                financialAccountId: form.account,
+                settledOn: form.date,
+                paymentMethod: form.method,
+                notes: form.notes,
+              })
+            }
+          >
+            {saving && <LoaderCircle className="size-4 animate-spin" />}
+            Pagar {targets.length || ""}
           </Button>
         </DialogFooter>
       </DialogContent>

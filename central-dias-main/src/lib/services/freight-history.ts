@@ -177,7 +177,7 @@ export async function listLongTripHistory(): Promise<LongTripHistory[]> {
       trailer:trailers(identifier),
       allowance:driver_trip_daily_allowances(quantity, unit_amount, total_amount, status),
       entries:freight_cash_entries(id, origin, amount, notes, recorded_at),
-      expenses:freight_expenses(id, category, description, amount, notes, recorded_at)
+      expenses:freight_expenses(id, category, description, amount, notes, payment_source, recorded_at)
     `)
     .eq("status", "closed")
     .order("closed_at", { ascending: false });
@@ -197,7 +197,9 @@ export async function listLongTripHistory(): Promise<LongTripHistory[]> {
         | null,
     );
     const entries = (row.entries ?? []) as Array<Record<string, unknown>>;
-    const expenses = (row.expenses ?? []) as Array<Record<string, unknown>>;
+    const expenses = ((row.expenses ?? []) as Array<Record<string, unknown>>).filter(
+      (expense) => expense.payment_source === "trip_cash",
+    );
     const movements: LongTripHistoryMovement[] = [
       ...entries.map((entry) => ({
         id: String(entry.id),

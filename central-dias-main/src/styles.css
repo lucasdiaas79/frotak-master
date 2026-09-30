@@ -2065,8 +2065,8 @@
   }
   .financial-payables-table-head {
     grid-template-columns:
-      minmax(0, 1.5fr) minmax(144px, 0.78fr) minmax(132px, 0.62fr) minmax(116px, 0.55fr)
-      minmax(112px, auto);
+      44px minmax(0, 1.5fr) minmax(144px, 0.78fr) minmax(132px, 0.62fr)
+      minmax(116px, 0.55fr) minmax(112px, auto);
     gap: 14px;
     border-top: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
     border-bottom: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
@@ -2080,6 +2080,23 @@
   }
   .financial-payables-agenda-group {
     min-width: 0;
+  }
+  .financial-payables-bulkbar {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    border-top: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
+    background: color-mix(in oklch, var(--color-primary) 5%, transparent);
+    padding: 10px 16px;
+  }
+  .financial-payables-bulkbar span {
+    min-width: 0;
+    flex: 1;
+    color: var(--color-muted-foreground);
+    font-size: 12px;
+    font-weight: 850;
   }
   .financial-payables-agenda-label {
     display: flex;
@@ -2120,6 +2137,27 @@
   }
   .financial-payables-row:hover {
     background: color-mix(in oklch, var(--color-muted-foreground) 6%, transparent);
+  }
+  .financial-payables-select-cell {
+    position: absolute;
+    left: 16px;
+    top: 16px;
+  }
+  .financial-payables-select {
+    display: grid;
+    height: 32px;
+    width: 32px;
+    place-items: center;
+    border-radius: 10px;
+    color: var(--color-muted-foreground);
+    transition:
+      background 160ms ease,
+      color 160ms ease;
+  }
+  .financial-payables-select:hover,
+  .financial-payables-select-active {
+    background: color-mix(in oklch, var(--color-primary) 12%, transparent);
+    color: var(--color-primary);
   }
   .financial-payables-partner-cell,
   .financial-payables-due-cell,
@@ -2841,11 +2879,14 @@
     }
     .financial-payables-row {
       grid-template-columns:
-        minmax(0, 1.5fr) minmax(144px, 0.78fr) minmax(132px, 0.62fr) minmax(116px, 0.55fr)
-        minmax(112px, auto);
+        44px minmax(0, 1.5fr) minmax(144px, 0.78fr) minmax(132px, 0.62fr)
+        minmax(116px, 0.55fr) minmax(112px, auto);
       align-items: center;
       gap: 14px;
       padding: 14px 16px;
+    }
+    .financial-payables-select-cell {
+      position: static;
     }
     .financial-payables-value-cell {
       text-align: right;

@@ -758,6 +758,7 @@ function Dashboard() {
           .from("freight_expenses")
           .select("id, vehicle_id, driver_id, freight_id, trip_cycle_id, amount, recorded_at")
           .eq("tenant_id", tenantId)
+          .eq("payment_source", "trip_cash")
           .gte("recorded_at", since.toISOString())
           .order("recorded_at", { ascending: false })
           .limit(240),
