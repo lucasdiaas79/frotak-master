@@ -37,9 +37,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { deleteFuelRecords, listFuelRecords } from "@/lib/services/fuel-records";
+import {
+  deleteFuelRecords,
+  listFuelRecords,
+  listTripFuelEfficiencyCycles,
+  type TripFuelEfficiencyCycle,
+} from "@/lib/services/fuel-records";
 import { useFleet } from "@/lib/store";
-import { FUEL_TYPE_LABEL, type FuelRecord, type FuelType } from "@/lib/types";
+import { FUEL_TYPE_LABEL, type FuelRecord, type FuelType, type Vehicle } from "@/lib/types";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/abastecimentos")({
@@ -92,6 +98,8 @@ type VehicleFuelSummary = {
   records: FuelRecord[];
 };
 
+type FuelView = "geral" | "por_frete";
+
 function formatKmPerLiter(value: number | null) {
   if (value === null) return "Sem Km/L";
   return `${new Intl.NumberFormat("pt-BR", {
@@ -125,6 +133,23 @@ function calculateKmPerLiter(records: FuelRecord[]) {
   return distance / liters;
 }
 
+function dieselRecords(records: FuelRecord[]) {
+  return records.filter((record) => record.fuelType === "diesel_s10" && record.liters > 0);
+}
+
+function tripDistance(cycle: TripFuelEfficiencyCycle) {
+  if (cycle.startOdometer == null || cycle.endOdometer == null) return null;
+  const distance = cycle.endOdometer - cycle.startOdometer;
+  return distance > 0 ? distance : null;
+}
+
+function tripKmPerLiter(cycle: TripFuelEfficiencyCycle) {
+  const distance = tripDistance(cycle);
+  const liters = dieselRecords(cycle.fuelRecords).reduce((total, record) => total + record.liters, 0);
+  if (!distance || liters <= 0) return null;
+  return distance / liters;
+}
+
 async function fetchFileBuffer(url: string) {
   const response = await fetch(url);
   if (!response.ok) throw new Error("Falha ao baixar documento");
@@ -143,9 +168,13 @@ function downloadBlob(blob: Blob, fileName: string) {
 }
 
 function AbastecimentosPage() {
+  const [view, setView] = useState<FuelView>("geral");
   const [records, setRecords] = useState<FuelRecord[]>([]);
+  const [tripCycles, setTripCycles] = useState<TripFuelEfficiencyCycle[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tripLoading, setTripLoading] = useState(true);
   const [error, setError] = useState<string>();
+  const [tripError, setTripError] = useState<string>();
   const [plateFilter, setPlateFilter] = useState("");
   const [fuelTypeFilter, setFuelTypeFilter] = useState<"all" | FuelType>("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -157,6 +186,8 @@ function AbastecimentosPage() {
   const [deleting, setDeleting] = useState(false);
   const [rankMode, setRankMode] = useState<FuelRankMode>("diesel_arla");
   const [stationFilter, setStationFilter] = useState("all");
+  const [tripVehicleId, setTripVehicleId] = useState("");
+  const [selectedTripCycleId, setSelectedTripCycleId] = useState("");
 
   const vehicles = useFleet((state) => state.vehicles);
   const trailers = useFleet((state) => state.trailers);
@@ -175,6 +206,18 @@ function AbastecimentosPage() {
       })
       .finally(() => {
         if (active) setLoading(false);
+      });
+
+    setTripLoading(true);
+    listTripFuelEfficiencyCycles()
+      .then((items) => {
+        if (active) setTripCycles(items);
+      })
+      .catch((err) => {
+        if (active) setTripError(err instanceof Error ? err.message : "Erro ao carregar tiros longos.");
+      })
+      .finally(() => {
+        if (active) setTripLoading(false);
       });
 
     return () => {
@@ -230,6 +273,34 @@ function AbastecimentosPage() {
       }),
     );
   }, [trailers, vehicles]);
+
+  const tripVehicles = useMemo(() => {
+    const ids = new Set(tripCycles.map((cycle) => cycle.vehicleId).filter(Boolean));
+    return vehicles
+      .filter((vehicle) => ids.has(vehicle.id))
+      .sort((a, b) => a.plate.localeCompare(b.plate));
+  }, [tripCycles, vehicles]);
+
+  const selectedTripVehicleId = tripVehicleId || tripVehicles[0]?.id || "";
+  const vehicleTripCycles = useMemo(
+    () =>
+      tripCycles
+        .filter((cycle) => cycle.vehicleId === selectedTripVehicleId)
+        .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()),
+    [tripCycles, selectedTripVehicleId],
+  );
+  const selectedTripCycle =
+    vehicleTripCycles.find((cycle) => cycle.id === selectedTripCycleId) ?? vehicleTripCycles[0] ?? null;
+
+  useEffect(() => {
+    if (!selectedTripVehicleId) {
+      setSelectedTripCycleId("");
+      return;
+    }
+    if (!vehicleTripCycles.some((cycle) => cycle.id === selectedTripCycleId)) {
+      setSelectedTripCycleId(vehicleTripCycles[0]?.id ?? "");
+    }
+  }, [selectedTripCycleId, selectedTripVehicleId, vehicleTripCycles]);
 
   const rankingScope = useMemo(
     () =>
@@ -476,6 +547,15 @@ function AbastecimentosPage() {
         </CardContent>
       </Card>
 
+      <Tabs value={view} onValueChange={(value) => setView(value as FuelView)}>
+        <TabsList>
+          <TabsTrigger value="geral">Abastecimentos</TabsTrigger>
+          <TabsTrigger value="por_frete">Por frete</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {view === "geral" ? (
+        <>
       <section className="fuel-ranking-panel">
         <div className="fuel-ranking-head">
           <div>
@@ -594,6 +674,23 @@ function AbastecimentosPage() {
         </div>
       )}
 
+        </>
+      ) : (
+        <TripFuelEfficiencyPanel
+          loading={tripLoading}
+          error={tripError}
+          vehicles={tripVehicles}
+          selectedVehicleId={selectedTripVehicleId}
+          cycles={vehicleTripCycles}
+          selectedCycle={selectedTripCycle}
+          onVehicleChange={(value) => {
+            setTripVehicleId(value);
+            setSelectedTripCycleId("");
+          }}
+          onCycleChange={setSelectedTripCycleId}
+        />
+      )}
+
       <Dialog open={!!selectedRecord} onOpenChange={(open) => !open && setSelectedRecord(null)}>
         <DialogContent className="max-w-3xl overflow-y-auto">
           {selectedRecord ? (
@@ -708,6 +805,190 @@ function AbastecimentosPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function TripFuelEfficiencyPanel({
+  loading,
+  error,
+  vehicles,
+  selectedVehicleId,
+  cycles,
+  selectedCycle,
+  onVehicleChange,
+  onCycleChange,
+}: {
+  loading: boolean;
+  error?: string;
+  vehicles: Vehicle[];
+  selectedVehicleId: string;
+  cycles: TripFuelEfficiencyCycle[];
+  selectedCycle: TripFuelEfficiencyCycle | null;
+  onVehicleChange: (vehicleId: string) => void;
+  onCycleChange: (cycleId: string) => void;
+}) {
+  const selectedVehicle = vehicles.find((vehicle) => vehicle.id === selectedVehicleId);
+  const diesel = selectedCycle ? dieselRecords(selectedCycle.fuelRecords) : [];
+  const dieselLiters = diesel.reduce((total, record) => total + record.liters, 0);
+  const dieselAmount = diesel.reduce((total, record) => total + record.amount, 0);
+  const distance = selectedCycle ? tripDistance(selectedCycle) : null;
+  const kmPerLiter = selectedCycle ? tripKmPerLiter(selectedCycle) : null;
+
+  return (
+    <section className="space-y-4">
+      <Card>
+        <CardContent className="grid gap-3 p-4 md:grid-cols-2">
+          <div className="space-y-1 text-sm">
+            <span className="text-muted-foreground">Caminhao</span>
+            <Select value={selectedVehicleId || "none"} onValueChange={onVehicleChange}>
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Selecione o caminhao" />
+              </SelectTrigger>
+              <SelectContent>
+                {vehicles.length ? (
+                  vehicles.map((vehicle) => (
+                    <SelectItem key={vehicle.id} value={vehicle.id}>
+                      {vehicle.plate}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="none" disabled>
+                    Nenhum tiro longo com KM
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1 text-sm">
+            <span className="text-muted-foreground">Tiro longo</span>
+            <Select
+              value={selectedCycle?.id ?? "none"}
+              onValueChange={onCycleChange}
+              disabled={!cycles.length}
+            >
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Selecione o tiro longo" />
+              </SelectTrigger>
+              <SelectContent>
+                {cycles.length ? (
+                  cycles.map((cycle) => (
+                    <SelectItem key={cycle.id} value={cycle.id}>
+                      {formatDate(cycle.startedAt)} - {cycle.status === "closed" ? "Fechado" : "Aberto"}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="none" disabled>
+                    Sem tiros longos
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {loading ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">Carregando tiros longos...</CardContent>
+        </Card>
+      ) : error ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      ) : !selectedCycle ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            Nenhum tiro longo encontrado para o caminhao selecionado.
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <section className="fuel-ranking-panel">
+            <div className="fuel-ranking-head">
+              <div>
+                <p>Media por frete</p>
+                <h2>{selectedVehicle?.plate ?? "Caminhao"}</h2>
+                <span>
+                  {formatDate(selectedCycle.startedAt)}
+                  {selectedCycle.closedAt ? ` ate ${formatDate(selectedCycle.closedAt)}` : " - em aberto"}
+                </span>
+              </div>
+              <Badge variant={selectedCycle.status === "closed" ? "default" : "secondary"}>
+                {selectedCycle.status === "closed" ? "Fechado" : "Aberto"}
+              </Badge>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-5">
+              <FuelDetail label="Km/L" value={formatKmPerLiter(kmPerLiter)} />
+              <FuelDetail label="Distancia" value={distance == null ? "Sem KM" : `${formatNumber(distance)} km`} />
+              <FuelDetail label="Diesel" value={`${formatNumber(dieselLiters)} L`} />
+              <FuelDetail label="Custo Diesel" value={moneyFormatter.format(dieselAmount)} />
+              <FuelDetail label="Fretes" value={`${selectedCycle.completedFreightCount || selectedCycle.freights.length}`} />
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <FuelDetail
+                label="Odometro inicial"
+                value={selectedCycle.startOdometer == null ? "Nao informado" : formatNumber(selectedCycle.startOdometer)}
+              />
+              <FuelDetail
+                label="Odometro final"
+                value={selectedCycle.endOdometer == null ? "Nao informado" : formatNumber(selectedCycle.endOdometer)}
+              />
+            </div>
+          </section>
+
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="mb-3 text-sm font-semibold">Fretes do tiro longo</h3>
+                <div className="space-y-2">
+                  {selectedCycle.freights.map((freight, index) => (
+                    <div key={freight.id} className="rounded-2xl border border-border p-3 text-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <strong>Frete {freight.sequence ?? index + 1}</strong>
+                        <Badge variant={freight.lifecycleStatus === "completed" ? "default" : "outline"}>
+                          {freight.lifecycleStatus ?? "-"}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-muted-foreground">
+                        {freight.senderName ?? "Origem"} {"->"} {freight.recipientName ?? "Destino"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="mb-3 text-sm font-semibold">Abastecimentos usados no calculo</h3>
+                {diesel.length ? (
+                  <div className="space-y-2">
+                    {diesel.map((record) => (
+                      <div key={record.id} className="rounded-2xl border border-border p-3 text-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <strong>{record.station}</strong>
+                          <span>{formatNumber(record.liters)} L</span>
+                        </div>
+                        <p className="mt-1 text-muted-foreground">
+                          {formatDate(record.recordedAt)} - {formatNumber(record.odometer)} km -{" "}
+                          {moneyFormatter.format(record.amount)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Nenhum abastecimento Diesel vinculado a este tiro longo.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 

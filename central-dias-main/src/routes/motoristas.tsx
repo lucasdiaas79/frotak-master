@@ -80,7 +80,7 @@ function MotoristasPage() {
               phone: saved.phone,
             },
           });
-          toast.success("Motorista salvo. Login do app ativo com senha temporaria 1234.");
+          toast.success("Motorista salvo. Login do app ativo com senha temporaria 123456.");
           void useFleet.getState().loadAll({ force: true, silent: true });
         }
       } else {

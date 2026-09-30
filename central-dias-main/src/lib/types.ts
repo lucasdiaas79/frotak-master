@@ -427,6 +427,8 @@ export const FUEL_TYPE_LABEL: Record<FuelType, string> = {
 export interface FuelRecord {
   id: string;
   fuelDocumentId?: string;
+  freightId?: string;
+  tripCycleId?: string;
   vehicleId?: string;
   driverId?: string;
   vehiclePlate: string;
