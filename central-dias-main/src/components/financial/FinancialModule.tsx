@@ -44,6 +44,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { perfRender } from "@/lib/performance";
 import { FinancialNav } from "@/components/financial/FinancialNav";
 import frotakLogo from "@/assets/logo-central.png";
+import joTransportesLogo from "@/assets/logo-jo-transportes.png";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -423,6 +424,7 @@ function Upcoming({ title, documents }: { title: string; documents: FinancialDoc
 }
 
 type PeriodMode = "month" | "quarter" | "year" | "custom";
+const JO_TRANSPORTES_TENANT_ID = "ebfa57a2-f639-4e53-a006-3b1493c685a7";
 
 function periodBounds(mode: PeriodMode) {
   const now = new Date(`${today()}T12:00:00`);
@@ -481,16 +483,28 @@ async function imageUrlToDataUrl(src: string) {
   });
 }
 
+function tenantLogoFor(tenantId: string) {
+  return tenantId === JO_TRANSPORTES_TENANT_ID ? joTransportesLogo : frotakLogo;
+}
+
+function imageFormatFromDataUrl(dataUrl: string) {
+  return dataUrl.startsWith("data:image/jpeg") || dataUrl.startsWith("data:image/jpg")
+    ? "JPEG"
+    : "PNG";
+}
+
 async function exportDrePdf({
   filename,
   statement,
   periodLabel,
   scopeLabel,
+  tenantId,
 }: {
   filename: string;
   statement: DrePeriodStatementData | null;
   periodLabel: string;
   scopeLabel: string;
+  tenantId: string;
 }) {
   if (!statement) {
     toast.info("Nao ha dados para exportar.");
@@ -499,9 +513,10 @@ async function exportDrePdf({
 
   const [{ jsPDF }, logoDataUrl] = await Promise.all([
     import("jspdf"),
-    imageUrlToDataUrl(frotakLogo),
+    imageUrlToDataUrl(tenantLogoFor(tenantId)),
   ]);
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+  const logoFormat = imageFormatFromDataUrl(logoDataUrl);
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 12;
@@ -509,18 +524,21 @@ async function exportDrePdf({
   let y = margin;
 
   const addHeader = (subtitle?: string) => {
-    doc.setFillColor(13, 18, 16);
-    doc.rect(0, 0, pageWidth, 30, "F");
-    doc.addImage(logoDataUrl, "PNG", margin, 8, 32, 12);
-    doc.setTextColor(255, 255, 255);
+    doc.setFillColor(255, 255, 255);
+    doc.rect(0, 0, pageWidth, 34, "F");
+    doc.addImage(logoDataUrl, logoFormat, margin, 7, 38, 17);
+    doc.setTextColor(20, 24, 22);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text("DRE Gerencial", margin + 40, 13);
+    doc.text("DRE Gerencial", margin + 46, 13);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
-    doc.text(subtitle ?? periodLabel, margin + 40, 20);
+    doc.setTextColor(88, 96, 92);
+    doc.text(subtitle ?? periodLabel, margin + 46, 20);
     doc.text(`Escopo: ${scopeLabel}`, pageWidth - margin, 13, { align: "right" });
     doc.text(`Gerado em ${date.format(new Date())}`, pageWidth - margin, 20, { align: "right" });
+    doc.setDrawColor(225, 230, 226);
+    doc.line(margin, 31, pageWidth - margin, 31);
     y = 40;
   };
 
@@ -1693,13 +1711,14 @@ function DreContent({ access }: { access: FinancialAccess }) {
                       statement,
                       periodLabel: drePeriodLabel,
                       scopeLabel,
+                      tenantId: access.tenantId,
                     })
                       .catch(() => toast.error("Nao foi possivel gerar o PDF."))
                       .finally(() => setExportingPdf(false))
                   }
                   onSelect={() => setExportingPdf(true)}
                 >
-                  PDF com logo Frotak
+                  PDF com logo do tenant
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => exportCsv(`dre-${view}-${start}-${end}.csv`, csvRows)}
