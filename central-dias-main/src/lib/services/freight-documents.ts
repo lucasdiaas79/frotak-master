@@ -67,15 +67,13 @@ export async function listFreightDocuments(refs: Array<{ vehicleId: string; frei
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  const documents = await Promise.all(
-    (data ?? []).map((row) => fromRow(row as FreightDocumentRow)),
-  );
-
-  return documents.filter((document) => {
-    const currentFreightId = freightByVehicle.get(document.vehicleId);
+  const currentRows = (data ?? []).filter((row) => {
+    const currentFreightId = freightByVehicle.get(row.vehicle_id);
     if (!currentFreightId) return false;
-    return document.freightId === currentFreightId;
+    return row.freight_id === currentFreightId;
   });
+
+  return Promise.all(currentRows.map((row) => fromRow(row as FreightDocumentRow)));
 }
 
 export async function uploadFreightDocument(input: {
