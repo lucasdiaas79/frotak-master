@@ -122,13 +122,48 @@ async function loadFleetData() {
 }
 
 const LOAD_ALL_TTL_MS = 120_000;
-const STALE_CHECK_INTERVAL_MS = 60_000;
-let loadAllInFlight: { tenantId: string; promise: Promise<void> } | null = null;
+const DOMAIN_RECONCILIATION_TTL_MS = 60_000;
+const STALE_CHECK_INTERVAL_MS = 30_000;
+const FLEET_DOMAINS: FleetDomain[] = [
+  "vehicles",
+  "drivers",
+  "trailers",
+  "senders",
+  "recipients",
+  "products",
+  "events",
+];
+type InFlightRequest = { promise: Promise<void>; pending: boolean };
+let loadAllInFlight: (InFlightRequest & { tenantId: string }) | null = null;
 let loadedTenantId = "";
-let lastLoadedAt = 0;
-const domainInFlight = new Map<string, Promise<void>>();
+const domainAuthoritativeAt = new Map<FleetDomain, number>();
+const domainVersions = new Map<FleetDomain, number>();
+const domainInFlight = new Map<string, InFlightRequest>();
 let realtimeCleanup: (() => void) | null = null;
 let realtimeSubscribers = 0;
+
+function domainVersion(domain: FleetDomain) {
+  return domainVersions.get(domain) ?? 0;
+}
+
+function markDomainChanged(domain: FleetDomain) {
+  domainVersions.set(domain, domainVersion(domain) + 1);
+}
+
+function markDomainAuthoritative(domain: FleetDomain, loadedAt = Date.now()) {
+  domainAuthoritativeAt.set(domain, loadedAt);
+}
+
+function resetSynchronizationClocks() {
+  domainAuthoritativeAt.clear();
+  domainVersions.clear();
+}
+
+function allDomainsFresh(now = Date.now()) {
+  return FLEET_DOMAINS.every(
+    (domain) => now - (domainAuthoritativeAt.get(domain) ?? 0) < LOAD_ALL_TTL_MS,
+  );
+}
 
 function hasFleetData(state: FleetState) {
   return (
@@ -220,10 +255,11 @@ export const useFleet = create<FleetState>((set, get) => ({
 
     const tenantId = getActiveTenantId();
     const tenantChanged = loadedTenantId !== tenantId;
-    const cacheFresh = !tenantChanged && Date.now() - lastLoadedAt < LOAD_ALL_TTL_MS;
+    const cacheFresh = !tenantChanged && allDomainsFresh();
     if (!options.force && cacheFresh && hasFleetData(get())) return;
     if (loadAllInFlight?.tenantId === tenantId) {
       perfCount("fleet:loadAll:deduplicated");
+      if (options.force) loadAllInFlight.pending = true;
       return loadAllInFlight.promise;
     }
     if (loadAllInFlight) {
@@ -234,6 +270,7 @@ export const useFleet = create<FleetState>((set, get) => ({
     perfCount("fleet:loadAll");
     const finish = perfStart("fleet:loadAll", { tenantChanged });
     if (tenantChanged) {
+      resetSynchronizationClocks();
       set({
         vehicles: [],
         drivers: [],
@@ -247,13 +284,29 @@ export const useFleet = create<FleetState>((set, get) => ({
     const shouldBlock = !options.silent && !hasFleetData(get());
     if (shouldBlock) set({ loading: true, error: undefined });
 
+    const startedVersions = new Map(FLEET_DOMAINS.map((domain) => [domain, domainVersion(domain)]));
+    const changedDuringLoad = new Set<FleetDomain>();
+    const requestState: InFlightRequest & { tenantId: string } = {
+      tenantId,
+      pending: false,
+      promise: Promise.resolve(),
+    };
     const request = (async () => {
       try {
         const data = await loadFleetData();
         if (getActiveTenantId() !== tenantId) return;
         loadedTenantId = tenantId;
-        lastLoadedAt = Date.now();
-        set({ ...data, loading: false, error: undefined });
+        const loadedAt = Date.now();
+        const accepted: Partial<Pick<FleetState, FleetDomain>> = {};
+        for (const domain of FLEET_DOMAINS) {
+          if (domainVersion(domain) !== startedVersions.get(domain)) {
+            changedDuringLoad.add(domain);
+            continue;
+          }
+          accepted[domain] = data[domain] as never;
+          markDomainAuthoritative(domain, loadedAt);
+        }
+        set({ ...accepted, loading: false, error: undefined });
       } catch (error) {
         if (getActiveTenantId() === tenantId) {
           set({
@@ -264,10 +317,20 @@ export const useFleet = create<FleetState>((set, get) => ({
         throw error;
       } finally {
         finish();
-        if (loadAllInFlight?.promise === request) loadAllInFlight = null;
+        if (loadAllInFlight?.promise === request) {
+          const shouldRepeat = loadAllInFlight.pending;
+          loadAllInFlight = null;
+          if (shouldRepeat && getActiveTenantId() === tenantId) {
+            void get().loadAll({ force: true, silent: true });
+          }
+          changedDuringLoad.forEach((domain) => {
+            void get().refreshDomain(domain, { force: true, silent: true });
+          });
+        }
       }
     })();
-    loadAllInFlight = { tenantId, promise: request };
+    requestState.promise = request;
+    loadAllInFlight = requestState;
     return request;
   },
 
@@ -281,15 +344,22 @@ export const useFleet = create<FleetState>((set, get) => ({
     const existing = domainInFlight.get(requestKey);
     if (existing) {
       perfCount(`fleet:refresh:${domain}:deduplicated`);
-      return existing;
+      existing.pending = true;
+      return existing.promise;
     }
 
+    const startedVersion = domainVersion(domain);
+    const requestState: InFlightRequest = { pending: false, promise: Promise.resolve() };
     const request = (async () => {
       try {
         const data = await loadFleetDomain(domain);
         if (getActiveTenantId() !== tenantId) return;
+        if (domainVersion(domain) !== startedVersion) {
+          requestState.pending = true;
+          return;
+        }
         set({ [domain]: data, error: undefined } as Pick<FleetState, FleetDomain | "error">);
-        lastLoadedAt = Date.now();
+        markDomainAuthoritative(domain);
       } catch (error) {
         if (getActiveTenantId() === tenantId) {
           set({ error: error instanceof Error ? error.message : `Erro ao atualizar ${domain}.` });
@@ -297,9 +367,13 @@ export const useFleet = create<FleetState>((set, get) => ({
         throw error;
       } finally {
         domainInFlight.delete(requestKey);
+        if (requestState.pending && getActiveTenantId() === tenantId) {
+          void get().refreshDomain(domain, { force: true, silent: true });
+        }
       }
     })();
-    domainInFlight.set(requestKey, request);
+    requestState.promise = request;
+    domainInFlight.set(requestKey, requestState);
     return request;
   },
 
@@ -342,6 +416,7 @@ export const useFleet = create<FleetState>((set, get) => ({
           unknown
         >;
         if (!row?.id || !isCurrentTenant(row)) return;
+        markDomainChanged(domain);
         if (payload.eventType === "DELETE") {
           set((state) => ({
             [domain]: (state[domain] as Array<{ id: string }>).filter((item) => item.id !== row.id),
@@ -357,7 +432,6 @@ export const useFleet = create<FleetState>((set, get) => ({
               compare as ((a: { id: string }, b: { id: string }) => number) | undefined,
             ),
           }));
-          lastLoadedAt = Date.now();
         } catch {
           scheduleRefresh(domain);
         }
@@ -369,6 +443,7 @@ export const useFleet = create<FleetState>((set, get) => ({
         unknown
       >;
       if (!row?.id || !isCurrentTenant(row)) return;
+      markDomainChanged("vehicles");
       if (payload.eventType === "DELETE") {
         set((state) => ({ vehicles: state.vehicles.filter((item) => item.id !== row.id) }));
         return;
@@ -386,7 +461,6 @@ export const useFleet = create<FleetState>((set, get) => ({
         set((state) => ({
           vehicles: upsertById(state.vehicles, mapped, (a, b) => a.plate.localeCompare(b.plate)),
         }));
-        lastLoadedAt = Date.now();
       } catch {
         scheduleRefresh("vehicles");
       }
@@ -402,6 +476,7 @@ export const useFleet = create<FleetState>((set, get) => ({
       ) {
         return;
       }
+      markDomainChanged("vehicles");
       set((state) => ({
         vehicles: state.vehicles.map((vehicle) =>
           vehicle.id === row.vehicle_id
@@ -419,7 +494,6 @@ export const useFleet = create<FleetState>((set, get) => ({
             : vehicle,
         ),
       }));
-      lastLoadedAt = Date.now();
     };
     const onEvent = (payload: { eventType: string; new: unknown; old: unknown }) => {
       perfCount("realtime:event", { domain: "events", event: payload.eventType });
@@ -428,6 +502,7 @@ export const useFleet = create<FleetState>((set, get) => ({
         unknown
       >;
       if (!row?.id || !isCurrentTenant(row)) return;
+      markDomainChanged("events");
       if (payload.eventType === "DELETE") {
         set((state) => ({ events: state.events.filter((item) => item.id !== row.id) }));
         return;
@@ -443,14 +518,23 @@ export const useFleet = create<FleetState>((set, get) => ({
         scheduleRefresh("events");
       }
     };
-    const refreshWhenStale = () => {
-      if (document.visibilityState !== "hidden" && Date.now() - lastLoadedAt >= LOAD_ALL_TTL_MS) {
-        void get().loadAll({ silent: true });
+    const reconcileDomains = (force = false) => {
+      if (document.visibilityState === "hidden") return;
+      const now = Date.now();
+      for (const domain of FLEET_DOMAINS) {
+        if (
+          force ||
+          now - (domainAuthoritativeAt.get(domain) ?? 0) >= DOMAIN_RECONCILIATION_TTL_MS
+        ) {
+          scheduleRefresh(domain);
+        }
       }
     };
+    const reconcileStaleDomains = () => reconcileDomains(false);
     const filter = `tenant_id=eq.${tenantId}`;
+    let subscribedOnce = false;
     const channel = supabase
-      .channel("fleet-operational-data")
+      .channel(`fleet-operational-data:${tenantId}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "vehicles", filter },
@@ -516,6 +600,9 @@ export const useFleet = create<FleetState>((set, get) => ({
         { event: "*", schema: "public", table: "freight_documents", filter },
         () => scheduleRefresh("vehicles"),
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "freights", filter }, () =>
+        scheduleRefresh("vehicles"),
+      )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "manual_workflow_overrides", filter },
@@ -526,20 +613,31 @@ export const useFleet = create<FleetState>((set, get) => ({
         { event: "*", schema: "public", table: "vehicle_positions", filter },
         onPosition,
       )
-      .subscribe((status) => set({ realtimeReady: status === "SUBSCRIBED" }));
+      .subscribe((status) => {
+        const ready = status === "SUBSCRIBED";
+        set({ realtimeReady: ready });
+        if (ready) {
+          if (subscribedOnce) reconcileDomains(true);
+          subscribedOnce = true;
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          reconcileDomains();
+        }
+      });
 
-    window.addEventListener("focus", refreshWhenStale);
-    window.addEventListener("pageshow", refreshWhenStale);
-    document.addEventListener("visibilitychange", refreshWhenStale);
-    const staleTimer = window.setInterval(refreshWhenStale, STALE_CHECK_INTERVAL_MS);
+    window.addEventListener("focus", reconcileStaleDomains);
+    window.addEventListener("pageshow", reconcileStaleDomains);
+    document.addEventListener("visibilitychange", reconcileStaleDomains);
+    const staleTimer = window.setInterval(reconcileStaleDomains, STALE_CHECK_INTERVAL_MS);
 
     realtimeCleanup = () => {
       refreshTimers.forEach((timer) => window.clearTimeout(timer));
       refreshTimers.clear();
       window.clearInterval(staleTimer);
-      window.removeEventListener("focus", refreshWhenStale);
-      window.removeEventListener("pageshow", refreshWhenStale);
-      document.removeEventListener("visibilitychange", refreshWhenStale);
+      window.removeEventListener("focus", reconcileStaleDomains);
+      window.removeEventListener("pageshow", reconcileStaleDomains);
+      document.removeEventListener("visibilitychange", reconcileStaleDomains);
       void supabase.removeChannel(channel);
       set({ realtimeReady: false });
       realtimeCleanup = null;

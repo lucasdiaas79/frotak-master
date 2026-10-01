@@ -34,19 +34,34 @@ export function hasFinancialPermission(access: FinancialAccess | null, permissio
 }
 
 const FINANCIAL_ACCESS_TTL_MS = 60_000;
-let financialAccessCache: { value: FinancialAccess; loadedAt: number } | null = null;
+let financialAccessCache: {
+  scopeKey: string;
+  value: FinancialAccess;
+  loadedAt: number;
+} | null = null;
 const financialAccessInFlight = new Map<string, Promise<FinancialAccess>>();
 
+function activeWorkspaceId() {
+  return typeof window === "undefined"
+    ? null
+    : window.localStorage.getItem("frotak-active-workspace-id")?.trim() || null;
+}
+
+export function clearFinancialAccessCache() {
+  financialAccessCache = null;
+  financialAccessInFlight.clear();
+}
+
 export async function getFinancialAccess(force = false): Promise<FinancialAccess> {
-  const activeWorkspaceId =
-    typeof window === "undefined"
-      ? null
-      : window.localStorage.getItem("frotak-active-workspace-id");
-  const cacheKey = activeWorkspaceId ?? "current-workspace";
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user.id ?? "anonymous";
+  const requestedWorkspaceId = activeWorkspaceId();
+  const cacheKey = `${userId}:${requestedWorkspaceId ?? "current-workspace"}`;
   if (
     !force &&
     financialAccessCache &&
-    (!activeWorkspaceId || financialAccessCache.value.workspaceId === activeWorkspaceId) &&
+    financialAccessCache.scopeKey === cacheKey &&
+    (!requestedWorkspaceId || financialAccessCache.value.workspaceId === requestedWorkspaceId) &&
     Date.now() - financialAccessCache.loadedAt < FINANCIAL_ACCESS_TTL_MS
   ) {
     perfCount("financial:access:cache-hit");
@@ -64,7 +79,14 @@ export async function getFinancialAccess(force = false): Promise<FinancialAccess
       const { data, error } = await supabase.rpc("get_financial_access");
       fail("Não foi possível validar o acesso financeiro", error);
       const value = data as FinancialAccess;
-      financialAccessCache = { value, loadedAt: Date.now() };
+      const { data: currentSessionData } = await supabase.auth.getSession();
+      const currentUserId = currentSessionData.session?.user.id ?? "anonymous";
+      const currentWorkspaceId = activeWorkspaceId();
+      const currentScopeKey = `${currentUserId}:${currentWorkspaceId ?? "current-workspace"}`;
+      if (currentScopeKey !== cacheKey) {
+        throw new Error("O contexto de acesso financeiro mudou durante o carregamento.");
+      }
+      financialAccessCache = { scopeKey: cacheKey, value, loadedAt: Date.now() };
       return value;
     } finally {
       finish();

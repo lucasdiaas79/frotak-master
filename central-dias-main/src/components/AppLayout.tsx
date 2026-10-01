@@ -41,7 +41,7 @@ import {
 } from "@/lib/auth";
 import { useFleet } from "@/lib/store";
 import type { Profile } from "@/lib/types";
-import { getFinancialAccess } from "@/lib/financial/phase2";
+import { clearFinancialAccessCache, getFinancialAccess } from "@/lib/financial/phase2";
 import type { FinancialAccess } from "@/lib/financial/types";
 import { vehicleTrailerLabel } from "@/lib/vehicle-trailers";
 import { perfCount, perfStart } from "@/lib/performance";
@@ -784,24 +784,31 @@ function Topbar({
   );
 }
 
-let appInitializationPromise: Promise<{
+type ApplicationInitialization = {
   profile: Profile | null;
   financialAccess: FinancialAccess | null;
-}> | null = null;
+};
 
-function initializeApplication(loadAll: () => Promise<void>) {
-  if (appInitializationPromise) {
+let appInitialization: {
+  scopeKey: string;
+  promise: Promise<ApplicationInitialization>;
+} | null = null;
+
+async function initializeApplication(loadAll: () => Promise<void>) {
+  const finishAuth = perfStart("app:authentication");
+  await acceptMasterSsoFromUrl(window.location.search);
+  const user = await getCurrentUser();
+  finishAuth();
+  if (!user) throw new Error("unauthenticated");
+  const workspaceId = window.localStorage.getItem("frotak-active-workspace-id")?.trim() ?? "";
+  const scopeKey = `${user.id}:${workspaceId}`;
+
+  if (appInitialization?.scopeKey === scopeKey) {
     perfCount("app:init:deduplicated");
-    return appInitializationPromise;
+    return appInitialization.promise;
   }
 
-  appInitializationPromise = (async () => {
-    const finishAuth = perfStart("app:authentication");
-    await acceptMasterSsoFromUrl(window.location.search);
-    const user = await getCurrentUser();
-    finishAuth();
-    if (!user) throw new Error("unauthenticated");
-
+  const promise = (async () => {
     const finishProfile = perfStart("app:profile");
     const loadedProfile = await getProfile(user.id);
     finishProfile();
@@ -829,11 +836,12 @@ function initializeApplication(loadAll: () => Promise<void>) {
       financialAccess: financialResult.status === "fulfilled" ? financialResult.value : null,
     };
   })().catch((error) => {
-    appInitializationPromise = null;
+    if (appInitialization?.promise === promise) appInitialization = null;
     throw error;
   });
 
-  return appInitializationPromise;
+  appInitialization = { scopeKey, promise };
+  return promise;
 }
 
 export function AppLayout() {
@@ -856,7 +864,8 @@ export function AppLayout() {
     const authSubscription = hasSupabaseConfig()
       ? supabase.auth.onAuthStateChange((event) => {
           if (event === "SIGNED_OUT" && !cancelled) {
-            appInitializationPromise = null;
+            appInitialization = null;
+            clearFinancialAccessCache();
             window.location.href = getMasterLoginUrl();
           }
         }).data.subscription
@@ -917,7 +926,8 @@ export function AppLayout() {
   }
 
   async function handleLogout() {
-    appInitializationPromise = null;
+    appInitialization = null;
+    clearFinancialAccessCache();
     await signOut();
     window.location.href = getMasterLoginUrl();
   }

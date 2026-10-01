@@ -31,7 +31,15 @@ import {
   WalletCards,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 import {
   CartesianGrid,
@@ -163,6 +171,7 @@ import type {
   PayrollItemType,
 } from "@/lib/financial/types";
 import { useFleet } from "@/lib/store";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -181,6 +190,96 @@ function useFinancialAccess() {
       .finally(() => setLoading(false));
   }, []);
   return { access, loading, error };
+}
+
+function useFinancialRealtimeVersion(access: FinancialAccess) {
+  const [version, setVersion] = useState(0);
+  const lastReconciledAt = useRef(Date.now());
+
+  useEffect(() => {
+    let refreshTimer: number | null = null;
+    let subscribedOnce = false;
+    const reconcile = (force = false) => {
+      if (document.visibilityState === "hidden") return;
+      if (!force && Date.now() - lastReconciledAt.current < 60_000) return;
+      lastReconciledAt.current = Date.now();
+      setVersion((current) => current + 1);
+    };
+    const scheduleReconcile = () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(() => {
+        refreshTimer = null;
+        reconcile(true);
+      }, 250);
+    };
+    const reconcileWhenVisible = () => reconcile(false);
+    const workspaceFilter = `workspace_id=eq.${access.workspaceId}`;
+    const channel = supabase
+      .channel(`financial-workspace:${access.workspaceId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "financial_documents", filter: workspaceFilter },
+        scheduleReconcile,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "financial_integration_jobs",
+          filter: workspaceFilter,
+        },
+        scheduleReconcile,
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          if (subscribedOnce) reconcile(true);
+          subscribedOnce = true;
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          reconcile(false);
+        }
+      });
+
+    window.addEventListener("focus", reconcileWhenVisible);
+    window.addEventListener("pageshow", reconcileWhenVisible);
+    document.addEventListener("visibilitychange", reconcileWhenVisible);
+    const staleTimer = window.setInterval(reconcileWhenVisible, 30_000);
+
+    return () => {
+      if (refreshTimer) window.clearTimeout(refreshTimer);
+      window.clearInterval(staleTimer);
+      window.removeEventListener("focus", reconcileWhenVisible);
+      window.removeEventListener("pageshow", reconcileWhenVisible);
+      document.removeEventListener("visibilitychange", reconcileWhenVisible);
+      void supabase.removeChannel(channel);
+    };
+  }, [access.workspaceId]);
+
+  return version;
+}
+
+const FinancialSyncVersionContext = createContext(0);
+
+function useFinancialSyncVersion() {
+  return useContext(FinancialSyncVersionContext);
+}
+
+function FinancialAuthorizedBoundary({
+  access,
+  children,
+}: {
+  access: FinancialAccess;
+  children: (access: FinancialAccess) => ReactNode;
+}) {
+  const realtimeVersion = useFinancialRealtimeVersion(access);
+  return (
+    <FinancialSyncVersionContext.Provider value={realtimeVersion}>
+      <FinancialIntegrationHealthBanner access={access} />
+      {children(access)}
+    </FinancialSyncVersionContext.Provider>
+  );
 }
 
 function FinancialBoundary({ children }: { children: (access: FinancialAccess) => ReactNode }) {
@@ -203,16 +302,12 @@ function FinancialBoundary({ children }: { children: (access: FinancialAccess) =
         </div>
       </div>
     );
-  return (
-    <>
-      <FinancialIntegrationHealthBanner access={access} />
-      {children(access)}
-    </>
-  );
+  return <FinancialAuthorizedBoundary access={access}>{children}</FinancialAuthorizedBoundary>;
 }
 
 function FinancialIntegrationHealthBanner({ access }: { access: FinancialAccess }) {
   const [health, setHealth] = useState<FinancialIntegrationHealth | null>(null);
+  const syncVersion = useFinancialSyncVersion();
 
   useEffect(() => {
     let active = true;
@@ -226,7 +321,7 @@ function FinancialIntegrationHealthBanner({ access }: { access: FinancialAccess 
     return () => {
       active = false;
     };
-  }, [access.workspaceId]);
+  }, [access.workspaceId, syncVersion]);
 
   if (!health?.requiresAttention) return null;
 
@@ -941,6 +1036,7 @@ function FinancialStatusBadge({
 
 function OverviewContent({ access }: { access: FinancialAccess }) {
   perfRender("financial-overview");
+  const syncVersion = useFinancialSyncVersion();
   const [mode, setMode] = useState<PeriodMode>("month");
   const [start, setStart] = useState(() => periodBounds("month")[0]);
   const [end, setEnd] = useState(() => periodBounds("month")[1]);
@@ -954,7 +1050,7 @@ function OverviewContent({ access }: { access: FinancialAccess }) {
       .then(setDashboard)
       .catch(() => toast.error("Nao foi possivel carregar o dashboard financeiro."))
       .finally(() => setLoading(false));
-  }, [access.workspaceId, canDashboard, start, end]);
+  }, [access.workspaceId, canDashboard, start, end, syncVersion]);
 
   if (!canDashboard) {
     return (
@@ -1600,6 +1696,7 @@ function DrePeriodSummary({ statement }: { statement: DrePeriodStatementData }) 
 }
 
 function DreContent({ access }: { access: FinancialAccess }) {
+  const syncVersion = useFinancialSyncVersion();
   const [mode, setMode] = useState<PeriodMode>("month");
   const [start, setStart] = useState(() => periodBounds("month")[0]);
   const [end, setEnd] = useState(() => periodBounds("month")[1]);
@@ -1675,7 +1772,7 @@ function DreContent({ access }: { access: FinancialAccess }) {
       setStatement(null);
       toast.error("Nao foi possivel carregar a DRE gerencial.");
     });
-  }, [loadStatement]);
+  }, [loadStatement, syncVersion]);
 
   if (!canDre) {
     return (
@@ -2009,6 +2106,7 @@ function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
 }
 
 function CashFlowContent({ access }: { access: FinancialAccess }) {
+  const syncVersion = useFinancialSyncVersion();
   const [mode, setMode] = useState<PeriodMode>("month");
   const [start, setStart] = useState(() => periodBounds("month")[0]);
   const [end, setEnd] = useState(() => periodBounds("month")[1]);
@@ -2051,7 +2149,7 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
       setLoading(false);
       toast.error("Nao foi possivel carregar o fluxo de caixa.");
     });
-  }, [load]);
+  }, [load, syncVersion]);
   const chronologicalEntries = useMemo(
     () => [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date)),
     [entries],
@@ -2271,6 +2369,7 @@ function TitlesContent({
   access: FinancialAccess;
   direction: FinancialDocumentDirection;
 }) {
+  const syncVersion = useFinancialSyncVersion();
   const receiving = direction === "receivable";
   const [documents, setDocuments] = useState<FinancialDocumentDetails[]>([]);
   const [partners, setPartners] = useState<BusinessPartner[]>([]);
@@ -2411,7 +2510,7 @@ function TitlesContent({
 
   useEffect(() => {
     loadDocuments();
-  }, [loadDocuments]);
+  }, [loadDocuments, syncVersion]);
 
   useEffect(() => {
     setDocumentsPage(1);
@@ -3706,7 +3805,9 @@ function PayablesTitleList({
     () => new Set(payableTargets.map(({ document }) => document.id)),
     [payableTargets],
   );
-  const selectedTargets = payableTargets.filter(({ document }) => selectedIds.includes(document.id));
+  const selectedTargets = payableTargets.filter(({ document }) =>
+    selectedIds.includes(document.id),
+  );
   const selectedTotal = selectedTargets.reduce(
     (total, target) => total + target.installment.balance,
     0,
@@ -3749,7 +3850,11 @@ function PayablesTitleList({
       {canSettle && payableTargets.length > 0 && (
         <div className="financial-payables-bulkbar">
           <Button size="sm" variant="outline" onClick={toggleAllPayable}>
-            {allPayableSelected ? <CheckSquare className="size-4" /> : <Square className="size-4" />}
+            {allPayableSelected ? (
+              <CheckSquare className="size-4" />
+            ) : (
+              <Square className="size-4" />
+            )}
             {allPayableSelected ? "Desmarcar visíveis" : "Selecionar pagáveis"}
           </Button>
           <span>
@@ -3870,7 +3975,9 @@ function PayablesTitleRow({
   const balance = documentBalance(document);
   const activeSettlements = effectiveSettlements(document);
   const dueState = payableDueState(document);
-  const canSelect = Boolean(installment && canSettle && !["draft", "voided"].includes(document.status));
+  const canSelect = Boolean(
+    installment && canSettle && !["draft", "voided"].includes(document.status),
+  );
   const canAct =
     canSelect ||
     (document.status === "draft" && canEdit) ||
@@ -3890,7 +3997,10 @@ function PayablesTitleRow({
         {canSelect ? (
           <button
             type="button"
-            className={cn("financial-payables-select", selected && "financial-payables-select-active")}
+            className={cn(
+              "financial-payables-select",
+              selected && "financial-payables-select-active",
+            )}
             aria-label={selected ? "Desmarcar título" : "Selecionar título"}
             aria-pressed={selected}
             onClick={(event) => {
@@ -5417,8 +5527,8 @@ function BulkSettlementDialog({
         <DialogHeader>
           <DialogTitle>Pagar selecionados</DialogTitle>
           <DialogDescription>
-            {targets.length} {targets.length === 1 ? "título selecionado" : "títulos selecionados"} ·{" "}
-            total de {money.format(total)}. Cada parcela será baixada pelo saldo em aberto.
+            {targets.length} {targets.length === 1 ? "título selecionado" : "títulos selecionados"}{" "}
+            · total de {money.format(total)}. Cada parcela será baixada pelo saldo em aberto.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -5430,7 +5540,10 @@ function BulkSettlementDialog({
             />
           </Field>
           <Field label="Forma">
-            <Select value={form.method} onValueChange={(value) => setForm({ ...form, method: value })}>
+            <Select
+              value={form.method}
+              onValueChange={(value) => setForm({ ...form, method: value })}
+            >
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -5555,6 +5668,7 @@ export function FinancialRecurringPage() {
 }
 
 function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
+  const syncVersion = useFinancialSyncVersion();
   const [rules, setRules] = useState<FinancialRecurringRule[]>([]);
   const [partners, setPartners] = useState<BusinessPartner[]>([]);
   const [chart, setChart] = useState<ChartAccount[]>([]);
@@ -5582,7 +5696,7 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
 
   useEffect(() => {
     load().catch(() => toast.error("Nao foi possivel carregar salarios e recorrencias."));
-  }, [load]);
+  }, [load, syncVersion]);
 
   const active = rules.filter((rule) => rule.status === "active");
   const monthlyTotal = active.reduce((sum, rule) => sum + rule.amount, 0);
@@ -6089,6 +6203,7 @@ export function FinancialPayrollPage() {
 }
 
 function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
+  const syncVersion = useFinancialSyncVersion();
   const [employees, setEmployees] = useState<EmployeeFinancialProfile[]>([]);
   const [entries, setEntries] = useState<PayrollEntry[]>([]);
   const [chart, setChart] = useState<ChartAccount[]>([]);
@@ -6130,7 +6245,7 @@ function FinancialPayrollContent({ access }: { access: FinancialAccess }) {
 
   useEffect(() => {
     if (canView) load().catch(() => toast.error("Nao foi possivel carregar os salarios."));
-  }, [canView, load]);
+  }, [canView, load, syncVersion]);
 
   if (!canView) {
     return (
@@ -6723,6 +6838,7 @@ export function FinancialAccountsPage() {
   return <FinancialBoundary>{(access) => <AccountsContent access={access} />}</FinancialBoundary>;
 }
 function AccountsContent({ access }: { access: FinancialAccess }) {
+  const syncVersion = useFinancialSyncVersion();
   const [items, setItems] = useState<FinancialAccount[]>([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -6767,7 +6883,7 @@ function AccountsContent({ access }: { access: FinancialAccess }) {
   const load = () => listFinancialAccounts().then(setItems);
   useEffect(() => {
     load().catch(() => toast.error("Falha ao carregar contas."));
-  }, []);
+  }, [syncVersion]);
   const can = hasFinancialPermission(access, "financial.manage_accounts");
   return (
     <div className="financial-shell space-y-4">
@@ -6943,6 +7059,7 @@ export function FinancialCostCentersPage() {
   );
 }
 function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart" | "centers" }) {
+  const syncVersion = useFinancialSyncVersion();
   const [chart, setChart] = useState<ChartAccount[]>([]);
   const [centers, setCenters] = useState<CostCenter[]>([]);
   const [open, setOpen] = useState(false);
@@ -6988,7 +7105,7 @@ function StructurePage({ access, kind }: { access: FinancialAccess; kind: "chart
   }, [access.tenantId, access.workspaceId, kind]);
   useEffect(() => {
     load().catch(() => toast.error("Falha ao carregar estrutura."));
-  }, [load]);
+  }, [load, syncVersion]);
   const can = hasFinancialPermission(
     access,
     kind === "chart" ? "financial.manage_chart" : "financial.manage_cost_centers",
