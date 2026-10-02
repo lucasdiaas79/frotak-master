@@ -9,117 +9,43 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as VinculacaoRouteImport } from './routes/vinculacao'
-import { Route as VeiculosRouteImport } from './routes/veiculos'
-import { Route as UsuariosRouteImport } from './routes/usuarios'
-import { Route as RemetentesRouteImport } from './routes/remetentes'
-import { Route as ProdutosRouteImport } from './routes/produtos'
-import { Route as MotoristasRouteImport } from './routes/motoristas'
-import { Route as MapaRouteImport } from './routes/mapa'
-import { Route as LucrosDespesasRouteImport } from './routes/lucros-despesas'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as HistoricosRouteImport } from './routes/historicos'
-import { Route as GestaoFrotaRouteImport } from './routes/gestao-frota'
-import { Route as FrotakIaRouteImport } from './routes/frotak-ia'
-import { Route as FinanceiroRouteImport } from './routes/financeiro'
-import { Route as DestinatariosRouteImport } from './routes/destinatarios'
-import { Route as ClientesRouteImport } from './routes/clientes'
-import { Route as CarretasRouteImport } from './routes/carretas'
-import { Route as AbastecimentosRouteImport } from './routes/abastecimentos'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AbastecimentosRouteImport } from './routes/abastecimentos'
+import { Route as CarretasRouteImport } from './routes/carretas'
+import { Route as ClientesRouteImport } from './routes/clientes'
+import { Route as DestinatariosRouteImport } from './routes/destinatarios'
+import { Route as FinanceiroRouteImport } from './routes/financeiro'
+import { Route as FrotakIaRouteImport } from './routes/frotak-ia'
+import { Route as GestaoFrotaRouteImport } from './routes/gestao-frota'
+import { Route as HistoricosRouteImport } from './routes/historicos'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as LucrosDespesasRouteImport } from './routes/lucros-despesas'
+import { Route as ManualRouteImport } from './routes/manual'
+import { Route as MapaRouteImport } from './routes/mapa'
+import { Route as MotoristasRouteImport } from './routes/motoristas'
+import { Route as ProdutosRouteImport } from './routes/produtos'
+import { Route as RemetentesRouteImport } from './routes/remetentes'
+import { Route as UsuariosRouteImport } from './routes/usuarios'
+import { Route as VeiculosRouteImport } from './routes/veiculos'
+import { Route as VinculacaoRouteImport } from './routes/vinculacao'
 import { Route as FinanceiroIndexRouteImport } from './routes/financeiro.index'
-import { Route as FinanceiroSalariosRouteImport } from './routes/financeiro.salarios'
-import { Route as FinanceiroRentabilidadeRouteImport } from './routes/financeiro.rentabilidade'
-import { Route as FinanceiroRecorrenciasRouteImport } from './routes/financeiro.recorrencias'
-import { Route as FinanceiroReceberRouteImport } from './routes/financeiro.receber'
-import { Route as FinanceiroPlanoContasRouteImport } from './routes/financeiro.plano-contas'
-import { Route as FinanceiroPagarRouteImport } from './routes/financeiro.pagar'
-import { Route as FinanceiroFluxoCaixaRouteImport } from './routes/financeiro.fluxo-caixa'
-import { Route as FinanceiroDreRouteImport } from './routes/financeiro.dre'
-import { Route as FinanceiroContasReceberRouteImport } from './routes/financeiro.contas-receber'
-import { Route as FinanceiroContasPagarRouteImport } from './routes/financeiro.contas-pagar'
-import { Route as FinanceiroContasRouteImport } from './routes/financeiro.contas'
 import { Route as FinanceiroCentrosCustoRouteImport } from './routes/financeiro.centros-custo'
+import { Route as FinanceiroContasRouteImport } from './routes/financeiro.contas'
+import { Route as FinanceiroContasPagarRouteImport } from './routes/financeiro.contas-pagar'
+import { Route as FinanceiroContasReceberRouteImport } from './routes/financeiro.contas-receber'
+import { Route as FinanceiroDreRouteImport } from './routes/financeiro.dre'
+import { Route as FinanceiroFluxoCaixaRouteImport } from './routes/financeiro.fluxo-caixa'
+import { Route as FinanceiroPagarRouteImport } from './routes/financeiro.pagar'
+import { Route as FinanceiroPlanoContasRouteImport } from './routes/financeiro.plano-contas'
+import { Route as FinanceiroReceberRouteImport } from './routes/financeiro.receber'
+import { Route as FinanceiroRecorrenciasRouteImport } from './routes/financeiro.recorrencias'
+import { Route as FinanceiroRentabilidadeRouteImport } from './routes/financeiro.rentabilidade'
+import { Route as FinanceiroSalariosRouteImport } from './routes/financeiro.salarios'
 import { Route as ApiSascarSyncRouteImport } from './routes/api/sascar/sync'
 
-const VinculacaoRoute = VinculacaoRouteImport.update({
-  id: '/vinculacao',
-  path: '/vinculacao',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const VeiculosRoute = VeiculosRouteImport.update({
-  id: '/veiculos',
-  path: '/veiculos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const UsuariosRoute = UsuariosRouteImport.update({
-  id: '/usuarios',
-  path: '/usuarios',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RemetentesRoute = RemetentesRouteImport.update({
-  id: '/remetentes',
-  path: '/remetentes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProdutosRoute = ProdutosRouteImport.update({
-  id: '/produtos',
-  path: '/produtos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MotoristasRoute = MotoristasRouteImport.update({
-  id: '/motoristas',
-  path: '/motoristas',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MapaRoute = MapaRouteImport.update({
-  id: '/mapa',
-  path: '/mapa',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LucrosDespesasRoute = LucrosDespesasRouteImport.update({
-  id: '/lucros-despesas',
-  path: '/lucros-despesas',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HistoricosRoute = HistoricosRouteImport.update({
-  id: '/historicos',
-  path: '/historicos',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GestaoFrotaRoute = GestaoFrotaRouteImport.update({
-  id: '/gestao-frota',
-  path: '/gestao-frota',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FrotakIaRoute = FrotakIaRouteImport.update({
-  id: '/frotak-ia',
-  path: '/frotak-ia',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FinanceiroRoute = FinanceiroRouteImport.update({
-  id: '/financeiro',
-  path: '/financeiro',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DestinatariosRoute = DestinatariosRouteImport.update({
-  id: '/destinatarios',
-  path: '/destinatarios',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ClientesRoute = ClientesRouteImport.update({
-  id: '/clientes',
-  path: '/clientes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CarretasRoute = CarretasRouteImport.update({
-  id: '/carretas',
-  path: '/carretas',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AbastecimentosRoute = AbastecimentosRouteImport.update({
@@ -127,9 +53,89 @@ const AbastecimentosRoute = AbastecimentosRouteImport.update({
   path: '/abastecimentos',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const CarretasRoute = CarretasRouteImport.update({
+  id: '/carretas',
+  path: '/carretas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClientesRoute = ClientesRouteImport.update({
+  id: '/clientes',
+  path: '/clientes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DestinatariosRoute = DestinatariosRouteImport.update({
+  id: '/destinatarios',
+  path: '/destinatarios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceiroRoute = FinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FrotakIaRoute = FrotakIaRouteImport.update({
+  id: '/frotak-ia',
+  path: '/frotak-ia',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GestaoFrotaRoute = GestaoFrotaRouteImport.update({
+  id: '/gestao-frota',
+  path: '/gestao-frota',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistoricosRoute = HistoricosRouteImport.update({
+  id: '/historicos',
+  path: '/historicos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LucrosDespesasRoute = LucrosDespesasRouteImport.update({
+  id: '/lucros-despesas',
+  path: '/lucros-despesas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ManualRoute = ManualRouteImport.update({
+  id: '/manual',
+  path: '/manual',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MapaRoute = MapaRouteImport.update({
+  id: '/mapa',
+  path: '/mapa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MotoristasRoute = MotoristasRouteImport.update({
+  id: '/motoristas',
+  path: '/motoristas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProdutosRoute = ProdutosRouteImport.update({
+  id: '/produtos',
+  path: '/produtos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RemetentesRoute = RemetentesRouteImport.update({
+  id: '/remetentes',
+  path: '/remetentes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UsuariosRoute = UsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VeiculosRoute = VeiculosRouteImport.update({
+  id: '/veiculos',
+  path: '/veiculos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VinculacaoRoute = VinculacaoRouteImport.update({
+  id: '/vinculacao',
+  path: '/vinculacao',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FinanceiroIndexRoute = FinanceiroIndexRouteImport.update({
@@ -137,54 +143,9 @@ const FinanceiroIndexRoute = FinanceiroIndexRouteImport.update({
   path: '/',
   getParentRoute: () => FinanceiroRoute,
 } as any)
-const FinanceiroSalariosRoute = FinanceiroSalariosRouteImport.update({
-  id: '/salarios',
-  path: '/salarios',
-  getParentRoute: () => FinanceiroRoute,
-} as any)
-const FinanceiroRentabilidadeRoute = FinanceiroRentabilidadeRouteImport.update({
-  id: '/rentabilidade',
-  path: '/rentabilidade',
-  getParentRoute: () => FinanceiroRoute,
-} as any)
-const FinanceiroRecorrenciasRoute = FinanceiroRecorrenciasRouteImport.update({
-  id: '/recorrencias',
-  path: '/recorrencias',
-  getParentRoute: () => FinanceiroRoute,
-} as any)
-const FinanceiroReceberRoute = FinanceiroReceberRouteImport.update({
-  id: '/receber',
-  path: '/receber',
-  getParentRoute: () => FinanceiroRoute,
-} as any)
-const FinanceiroPlanoContasRoute = FinanceiroPlanoContasRouteImport.update({
-  id: '/plano-contas',
-  path: '/plano-contas',
-  getParentRoute: () => FinanceiroRoute,
-} as any)
-const FinanceiroPagarRoute = FinanceiroPagarRouteImport.update({
-  id: '/pagar',
-  path: '/pagar',
-  getParentRoute: () => FinanceiroRoute,
-} as any)
-const FinanceiroFluxoCaixaRoute = FinanceiroFluxoCaixaRouteImport.update({
-  id: '/fluxo-caixa',
-  path: '/fluxo-caixa',
-  getParentRoute: () => FinanceiroRoute,
-} as any)
-const FinanceiroDreRoute = FinanceiroDreRouteImport.update({
-  id: '/dre',
-  path: '/dre',
-  getParentRoute: () => FinanceiroRoute,
-} as any)
-const FinanceiroContasReceberRoute = FinanceiroContasReceberRouteImport.update({
-  id: '/contas-receber',
-  path: '/contas-receber',
-  getParentRoute: () => FinanceiroRoute,
-} as any)
-const FinanceiroContasPagarRoute = FinanceiroContasPagarRouteImport.update({
-  id: '/contas-pagar',
-  path: '/contas-pagar',
+const FinanceiroCentrosCustoRoute = FinanceiroCentrosCustoRouteImport.update({
+  id: '/centros-custo',
+  path: '/centros-custo',
   getParentRoute: () => FinanceiroRoute,
 } as any)
 const FinanceiroContasRoute = FinanceiroContasRouteImport.update({
@@ -192,9 +153,54 @@ const FinanceiroContasRoute = FinanceiroContasRouteImport.update({
   path: '/contas',
   getParentRoute: () => FinanceiroRoute,
 } as any)
-const FinanceiroCentrosCustoRoute = FinanceiroCentrosCustoRouteImport.update({
-  id: '/centros-custo',
-  path: '/centros-custo',
+const FinanceiroContasPagarRoute = FinanceiroContasPagarRouteImport.update({
+  id: '/contas-pagar',
+  path: '/contas-pagar',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
+const FinanceiroContasReceberRoute = FinanceiroContasReceberRouteImport.update({
+  id: '/contas-receber',
+  path: '/contas-receber',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
+const FinanceiroDreRoute = FinanceiroDreRouteImport.update({
+  id: '/dre',
+  path: '/dre',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
+const FinanceiroFluxoCaixaRoute = FinanceiroFluxoCaixaRouteImport.update({
+  id: '/fluxo-caixa',
+  path: '/fluxo-caixa',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
+const FinanceiroPagarRoute = FinanceiroPagarRouteImport.update({
+  id: '/pagar',
+  path: '/pagar',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
+const FinanceiroPlanoContasRoute = FinanceiroPlanoContasRouteImport.update({
+  id: '/plano-contas',
+  path: '/plano-contas',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
+const FinanceiroReceberRoute = FinanceiroReceberRouteImport.update({
+  id: '/receber',
+  path: '/receber',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
+const FinanceiroRecorrenciasRoute = FinanceiroRecorrenciasRouteImport.update({
+  id: '/recorrencias',
+  path: '/recorrencias',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
+const FinanceiroRentabilidadeRoute = FinanceiroRentabilidadeRouteImport.update({
+  id: '/rentabilidade',
+  path: '/rentabilidade',
+  getParentRoute: () => FinanceiroRoute,
+} as any)
+const FinanceiroSalariosRoute = FinanceiroSalariosRouteImport.update({
+  id: '/salarios',
+  path: '/salarios',
   getParentRoute: () => FinanceiroRoute,
 } as any)
 const ApiSascarSyncRoute = ApiSascarSyncRouteImport.update({
@@ -215,6 +221,7 @@ export interface FileRoutesByFullPath {
   '/historicos': typeof HistoricosRoute
   '/login': typeof LoginRoute
   '/lucros-despesas': typeof LucrosDespesasRoute
+  '/manual': typeof ManualRoute
   '/mapa': typeof MapaRoute
   '/motoristas': typeof MotoristasRoute
   '/produtos': typeof ProdutosRoute
@@ -248,6 +255,7 @@ export interface FileRoutesByTo {
   '/historicos': typeof HistoricosRoute
   '/login': typeof LoginRoute
   '/lucros-despesas': typeof LucrosDespesasRoute
+  '/manual': typeof ManualRoute
   '/mapa': typeof MapaRoute
   '/motoristas': typeof MotoristasRoute
   '/produtos': typeof ProdutosRoute
@@ -283,6 +291,7 @@ export interface FileRoutesById {
   '/historicos': typeof HistoricosRoute
   '/login': typeof LoginRoute
   '/lucros-despesas': typeof LucrosDespesasRoute
+  '/manual': typeof ManualRoute
   '/mapa': typeof MapaRoute
   '/motoristas': typeof MotoristasRoute
   '/produtos': typeof ProdutosRoute
@@ -319,6 +328,7 @@ export interface FileRouteTypes {
     | '/historicos'
     | '/login'
     | '/lucros-despesas'
+    | '/manual'
     | '/mapa'
     | '/motoristas'
     | '/produtos'
@@ -352,6 +362,7 @@ export interface FileRouteTypes {
     | '/historicos'
     | '/login'
     | '/lucros-despesas'
+    | '/manual'
     | '/mapa'
     | '/motoristas'
     | '/produtos'
@@ -386,6 +397,7 @@ export interface FileRouteTypes {
     | '/historicos'
     | '/login'
     | '/lucros-despesas'
+    | '/manual'
     | '/mapa'
     | '/motoristas'
     | '/produtos'
@@ -421,6 +433,7 @@ export interface RootRouteChildren {
   HistoricosRoute: typeof HistoricosRoute
   LoginRoute: typeof LoginRoute
   LucrosDespesasRoute: typeof LucrosDespesasRoute
+  ManualRoute: typeof ManualRoute
   MapaRoute: typeof MapaRoute
   MotoristasRoute: typeof MotoristasRoute
   ProdutosRoute: typeof ProdutosRoute
@@ -433,116 +446,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/vinculacao': {
-      id: '/vinculacao'
-      path: '/vinculacao'
-      fullPath: '/vinculacao'
-      preLoaderRoute: typeof VinculacaoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/veiculos': {
-      id: '/veiculos'
-      path: '/veiculos'
-      fullPath: '/veiculos'
-      preLoaderRoute: typeof VeiculosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/usuarios': {
-      id: '/usuarios'
-      path: '/usuarios'
-      fullPath: '/usuarios'
-      preLoaderRoute: typeof UsuariosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/remetentes': {
-      id: '/remetentes'
-      path: '/remetentes'
-      fullPath: '/remetentes'
-      preLoaderRoute: typeof RemetentesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/produtos': {
-      id: '/produtos'
-      path: '/produtos'
-      fullPath: '/produtos'
-      preLoaderRoute: typeof ProdutosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/motoristas': {
-      id: '/motoristas'
-      path: '/motoristas'
-      fullPath: '/motoristas'
-      preLoaderRoute: typeof MotoristasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/mapa': {
-      id: '/mapa'
-      path: '/mapa'
-      fullPath: '/mapa'
-      preLoaderRoute: typeof MapaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/lucros-despesas': {
-      id: '/lucros-despesas'
-      path: '/lucros-despesas'
-      fullPath: '/lucros-despesas'
-      preLoaderRoute: typeof LucrosDespesasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/historicos': {
-      id: '/historicos'
-      path: '/historicos'
-      fullPath: '/historicos'
-      preLoaderRoute: typeof HistoricosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/gestao-frota': {
-      id: '/gestao-frota'
-      path: '/gestao-frota'
-      fullPath: '/gestao-frota'
-      preLoaderRoute: typeof GestaoFrotaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/frotak-ia': {
-      id: '/frotak-ia'
-      path: '/frotak-ia'
-      fullPath: '/frotak-ia'
-      preLoaderRoute: typeof FrotakIaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/financeiro': {
-      id: '/financeiro'
-      path: '/financeiro'
-      fullPath: '/financeiro'
-      preLoaderRoute: typeof FinanceiroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/destinatarios': {
-      id: '/destinatarios'
-      path: '/destinatarios'
-      fullPath: '/destinatarios'
-      preLoaderRoute: typeof DestinatariosRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/clientes': {
-      id: '/clientes'
-      path: '/clientes'
-      fullPath: '/clientes'
-      preLoaderRoute: typeof ClientesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/carretas': {
-      id: '/carretas'
-      path: '/carretas'
-      fullPath: '/carretas'
-      preLoaderRoute: typeof CarretasRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/abastecimentos': {
@@ -552,11 +460,123 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AbastecimentosRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/carretas': {
+      id: '/carretas'
+      path: '/carretas'
+      fullPath: '/carretas'
+      preLoaderRoute: typeof CarretasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clientes': {
+      id: '/clientes'
+      path: '/clientes'
+      fullPath: '/clientes'
+      preLoaderRoute: typeof ClientesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/destinatarios': {
+      id: '/destinatarios'
+      path: '/destinatarios'
+      fullPath: '/destinatarios'
+      preLoaderRoute: typeof DestinatariosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/financeiro': {
+      id: '/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof FinanceiroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/frotak-ia': {
+      id: '/frotak-ia'
+      path: '/frotak-ia'
+      fullPath: '/frotak-ia'
+      preLoaderRoute: typeof FrotakIaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/gestao-frota': {
+      id: '/gestao-frota'
+      path: '/gestao-frota'
+      fullPath: '/gestao-frota'
+      preLoaderRoute: typeof GestaoFrotaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/historicos': {
+      id: '/historicos'
+      path: '/historicos'
+      fullPath: '/historicos'
+      preLoaderRoute: typeof HistoricosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lucros-despesas': {
+      id: '/lucros-despesas'
+      path: '/lucros-despesas'
+      fullPath: '/lucros-despesas'
+      preLoaderRoute: typeof LucrosDespesasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/manual': {
+      id: '/manual'
+      path: '/manual'
+      fullPath: '/manual'
+      preLoaderRoute: typeof ManualRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mapa': {
+      id: '/mapa'
+      path: '/mapa'
+      fullPath: '/mapa'
+      preLoaderRoute: typeof MapaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/motoristas': {
+      id: '/motoristas'
+      path: '/motoristas'
+      fullPath: '/motoristas'
+      preLoaderRoute: typeof MotoristasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/produtos': {
+      id: '/produtos'
+      path: '/produtos'
+      fullPath: '/produtos'
+      preLoaderRoute: typeof ProdutosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/remetentes': {
+      id: '/remetentes'
+      path: '/remetentes'
+      fullPath: '/remetentes'
+      preLoaderRoute: typeof RemetentesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/usuarios': {
+      id: '/usuarios'
+      path: '/usuarios'
+      fullPath: '/usuarios'
+      preLoaderRoute: typeof UsuariosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/veiculos': {
+      id: '/veiculos'
+      path: '/veiculos'
+      fullPath: '/veiculos'
+      preLoaderRoute: typeof VeiculosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/vinculacao': {
+      id: '/vinculacao'
+      path: '/vinculacao'
+      fullPath: '/vinculacao'
+      preLoaderRoute: typeof VinculacaoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/financeiro/': {
@@ -566,74 +586,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceiroIndexRouteImport
       parentRoute: typeof FinanceiroRoute
     }
-    '/financeiro/salarios': {
-      id: '/financeiro/salarios'
-      path: '/salarios'
-      fullPath: '/financeiro/salarios'
-      preLoaderRoute: typeof FinanceiroSalariosRouteImport
-      parentRoute: typeof FinanceiroRoute
-    }
-    '/financeiro/rentabilidade': {
-      id: '/financeiro/rentabilidade'
-      path: '/rentabilidade'
-      fullPath: '/financeiro/rentabilidade'
-      preLoaderRoute: typeof FinanceiroRentabilidadeRouteImport
-      parentRoute: typeof FinanceiroRoute
-    }
-    '/financeiro/recorrencias': {
-      id: '/financeiro/recorrencias'
-      path: '/recorrencias'
-      fullPath: '/financeiro/recorrencias'
-      preLoaderRoute: typeof FinanceiroRecorrenciasRouteImport
-      parentRoute: typeof FinanceiroRoute
-    }
-    '/financeiro/receber': {
-      id: '/financeiro/receber'
-      path: '/receber'
-      fullPath: '/financeiro/receber'
-      preLoaderRoute: typeof FinanceiroReceberRouteImport
-      parentRoute: typeof FinanceiroRoute
-    }
-    '/financeiro/plano-contas': {
-      id: '/financeiro/plano-contas'
-      path: '/plano-contas'
-      fullPath: '/financeiro/plano-contas'
-      preLoaderRoute: typeof FinanceiroPlanoContasRouteImport
-      parentRoute: typeof FinanceiroRoute
-    }
-    '/financeiro/pagar': {
-      id: '/financeiro/pagar'
-      path: '/pagar'
-      fullPath: '/financeiro/pagar'
-      preLoaderRoute: typeof FinanceiroPagarRouteImport
-      parentRoute: typeof FinanceiroRoute
-    }
-    '/financeiro/fluxo-caixa': {
-      id: '/financeiro/fluxo-caixa'
-      path: '/fluxo-caixa'
-      fullPath: '/financeiro/fluxo-caixa'
-      preLoaderRoute: typeof FinanceiroFluxoCaixaRouteImport
-      parentRoute: typeof FinanceiroRoute
-    }
-    '/financeiro/dre': {
-      id: '/financeiro/dre'
-      path: '/dre'
-      fullPath: '/financeiro/dre'
-      preLoaderRoute: typeof FinanceiroDreRouteImport
-      parentRoute: typeof FinanceiroRoute
-    }
-    '/financeiro/contas-receber': {
-      id: '/financeiro/contas-receber'
-      path: '/contas-receber'
-      fullPath: '/financeiro/contas-receber'
-      preLoaderRoute: typeof FinanceiroContasReceberRouteImport
-      parentRoute: typeof FinanceiroRoute
-    }
-    '/financeiro/contas-pagar': {
-      id: '/financeiro/contas-pagar'
-      path: '/contas-pagar'
-      fullPath: '/financeiro/contas-pagar'
-      preLoaderRoute: typeof FinanceiroContasPagarRouteImport
+    '/financeiro/centros-custo': {
+      id: '/financeiro/centros-custo'
+      path: '/centros-custo'
+      fullPath: '/financeiro/centros-custo'
+      preLoaderRoute: typeof FinanceiroCentrosCustoRouteImport
       parentRoute: typeof FinanceiroRoute
     }
     '/financeiro/contas': {
@@ -643,11 +600,74 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceiroContasRouteImport
       parentRoute: typeof FinanceiroRoute
     }
-    '/financeiro/centros-custo': {
-      id: '/financeiro/centros-custo'
-      path: '/centros-custo'
-      fullPath: '/financeiro/centros-custo'
-      preLoaderRoute: typeof FinanceiroCentrosCustoRouteImport
+    '/financeiro/contas-pagar': {
+      id: '/financeiro/contas-pagar'
+      path: '/contas-pagar'
+      fullPath: '/financeiro/contas-pagar'
+      preLoaderRoute: typeof FinanceiroContasPagarRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
+    '/financeiro/contas-receber': {
+      id: '/financeiro/contas-receber'
+      path: '/contas-receber'
+      fullPath: '/financeiro/contas-receber'
+      preLoaderRoute: typeof FinanceiroContasReceberRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
+    '/financeiro/dre': {
+      id: '/financeiro/dre'
+      path: '/dre'
+      fullPath: '/financeiro/dre'
+      preLoaderRoute: typeof FinanceiroDreRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
+    '/financeiro/fluxo-caixa': {
+      id: '/financeiro/fluxo-caixa'
+      path: '/fluxo-caixa'
+      fullPath: '/financeiro/fluxo-caixa'
+      preLoaderRoute: typeof FinanceiroFluxoCaixaRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
+    '/financeiro/pagar': {
+      id: '/financeiro/pagar'
+      path: '/pagar'
+      fullPath: '/financeiro/pagar'
+      preLoaderRoute: typeof FinanceiroPagarRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
+    '/financeiro/plano-contas': {
+      id: '/financeiro/plano-contas'
+      path: '/plano-contas'
+      fullPath: '/financeiro/plano-contas'
+      preLoaderRoute: typeof FinanceiroPlanoContasRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
+    '/financeiro/receber': {
+      id: '/financeiro/receber'
+      path: '/receber'
+      fullPath: '/financeiro/receber'
+      preLoaderRoute: typeof FinanceiroReceberRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
+    '/financeiro/recorrencias': {
+      id: '/financeiro/recorrencias'
+      path: '/recorrencias'
+      fullPath: '/financeiro/recorrencias'
+      preLoaderRoute: typeof FinanceiroRecorrenciasRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
+    '/financeiro/rentabilidade': {
+      id: '/financeiro/rentabilidade'
+      path: '/rentabilidade'
+      fullPath: '/financeiro/rentabilidade'
+      preLoaderRoute: typeof FinanceiroRentabilidadeRouteImport
+      parentRoute: typeof FinanceiroRoute
+    }
+    '/financeiro/salarios': {
+      id: '/financeiro/salarios'
+      path: '/salarios'
+      fullPath: '/financeiro/salarios'
+      preLoaderRoute: typeof FinanceiroSalariosRouteImport
       parentRoute: typeof FinanceiroRoute
     }
     '/api/sascar/sync': {
@@ -708,6 +728,7 @@ const rootRouteChildren: RootRouteChildren = {
   HistoricosRoute: HistoricosRoute,
   LoginRoute: LoginRoute,
   LucrosDespesasRoute: LucrosDespesasRoute,
+  ManualRoute: ManualRoute,
   MapaRoute: MapaRoute,
   MotoristasRoute: MotoristasRoute,
   ProdutosRoute: ProdutosRoute,

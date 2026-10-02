@@ -8,6 +8,7 @@ import {
   Container,
   FolderKanban,
   Fuel,
+  Headphones,
   History,
   Landmark,
   LayoutDashboard,
@@ -115,6 +116,7 @@ const MOBILE_NAV: NavItem[] = [
 ];
 
 const ADMIN_NAV: NavItem[] = [{ to: "/usuarios", label: "Usuários", icon: Users }];
+const SUPPORT_NAV: NavItem[] = [{ to: "/manual", label: "Suporte", icon: Headphones }];
 
 const FINANCIAL_NAV: NavItem[] = [
   {
@@ -146,6 +148,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/": "Dashboard Operacional",
   "/gestao-frota": "Gestão de Frota",
   "/frotak-ia": "Frotak IA",
+  "/manual": "Suporte",
   "/historicos": "Históricos",
   "/abastecimentos": "Abastecimentos",
   "/lucros-despesas": "Rentabilidade da Frota",
@@ -176,6 +179,7 @@ const ROUTE_GROUPS: Record<string, string> = {
   "/": "Operacional",
   "/gestao-frota": "Operacional",
   "/frotak-ia": "Operacional",
+  "/manual": "Suporte",
   "/historicos": "Operacional",
   "/abastecimentos": "Operacional",
   "/lucros-despesas": "Financeiro",
@@ -590,6 +594,8 @@ function SidebarBody({
       </div>
 
       <div className="relative z-10 border-t border-sidebar-border/80 p-3">
+        <NavSection title="Ajuda" items={SUPPORT_NAV} collapsed={collapsed} compact />
+        <div className="mx-2 my-3 h-px bg-sidebar-border/80" />
         <div
           className={cn(
             "flex items-center gap-3 rounded-2xl border border-sidebar-border bg-sidebar-accent/55 p-2.5 shadow-inner",
@@ -1053,6 +1059,12 @@ export function AppLayout() {
                 onNavigate={() => setMobileMenuOpen(false)}
               />
             )}
+            <MobileMenuSection
+              title="Ajuda"
+              items={SUPPORT_NAV}
+              currentPath={loc.pathname}
+              onNavigate={() => setMobileMenuOpen(false)}
+            />
             <button
               type="button"
               onClick={() => {
