@@ -27,12 +27,7 @@ type FrotakAiMessage = {
 };
 
 type SerializableValue =
-  | null
-  | boolean
-  | number
-  | string
-  | SerializableValue[]
-  | { [key: string]: SerializableValue };
+  null | boolean | number | string | SerializableValue[] | { [key: string]: SerializableValue };
 
 const MAX_HISTORY_MESSAGES = 40;
 const MAX_HISTORY_CHARS = 16_000;
@@ -153,6 +148,10 @@ function frotakAiSystemInstruction(contextSummary?: string) {
   return [
     "Voce e a Frotak IA, assistente operacional inteligente da Frotak.",
     "Responda sempre em portugues do Brasil, com linguagem clara para operadores, gestores e expedicao.",
+    "Conheca o sistema Frotak como uma central operacional com Dashboard, Gestao de Frota, App Motorista, Documentos/CT-e, Abastecimentos, Financeiro, Cadastros, Historicos, Mapa, Suporte e Frotak IA.",
+    "Use estes termos do negocio corretamente: caminhao, cavalo e veiculo podem representar a unidade principal; cacamba, carreta e implemento sao vinculados ao veiculo quando aplicavel; tiro longo e um ciclo com multiplas etapas/fretes; embarcador costuma ser remetente/origem; destinatario costuma ser destino/recebedor; CT-e e comprovantes sao documentos do frete; abastecimento gera controle de combustivel e pode gerar titulo a pagar, nao deve ser tratado como despesa do caixa do motorista.",
+    "Quando a pergunta for sobre como usar o sistema, explique o fluxo operacional sem inventar dados: conferir cadastros, criar frete/tiro longo na Gestao de Frota, enviar ou acompanhar comandos no App Motorista, anexar CT-e/comprovantes, registrar abastecimentos/despesas e auditar no financeiro/historico.",
+    "No bate-papo por voz, para perguntas sobre ultimo frete, fretes recentes, embarcador, remetente, destinatario, origem, destino, CT-e ou comprovantes, chame consultar_frotak com topico fretes e source history antes de responder.",
     "Se a pergunta pedir numero, status, lista, valor ou localizacao, comece pelo resultado objetivo.",
     "Quando o usuario pedir explicacao, analise, causa ou plano, entregue uma resposta completa e estruturada.",
     "Considere toda pergunta sobre operacao, clientes, parceiros, frota ou financeiro como referente ao tenant/workspace atual, salvo quando o usuario pedir explicitamente uma explicacao geral.",
@@ -291,6 +290,60 @@ function moneyBRL(value: unknown) {
   }).format(Number.isFinite(amount) ? amount : 0);
 }
 
+function textValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function dateTimeBR(value: unknown) {
+  const text = textValue(value);
+  if (!text) return "";
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return text;
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function placeText(city: unknown, state: unknown) {
+  const cityText = textValue(city);
+  const stateText = textValue(state);
+  if (cityText && stateText) return `${cityText}/${stateText}`;
+  return cityText || stateText;
+}
+
+function uniqueNonEmpty(values: string[]) {
+  return Array.from(new Set(values.map((item) => item.trim()).filter(Boolean)));
+}
+
+function freightHistoryItems(result: unknown) {
+  const record = nestedRecord(nestedRecord(result, "consultas"), "fretes");
+  const history = asRecord(record).history;
+  return Array.isArray(history) ? (history as Array<Record<string, unknown>>) : [];
+}
+
+function freightDetailText(item: Record<string, unknown>, tenantName: string) {
+  const senderPlace = placeText(item.sender_city, item.sender_state);
+  const recipientPlace = placeText(item.recipient_city, item.recipient_state);
+  const details = [
+    `Frete: ${textValue(item.freight_id) || "sem codigo"}`,
+    textValue(item.vehicle_plate) ? `placa ${textValue(item.vehicle_plate)}` : "",
+    textValue(item.driver_name) ? `motorista ${textValue(item.driver_name)}` : "",
+    `valor ${moneyBRL(item.freight_value)}`,
+    textValue(item.final_status) ? `status ${textValue(item.final_status)}` : "",
+    textValue(item.final_freight_stage) ? `etapa ${textValue(item.final_freight_stage)}` : "",
+    textValue(item.sender_name) ? `remetente/embarcador ${textValue(item.sender_name)}` : "",
+    senderPlace ? `origem ${senderPlace}` : "",
+    textValue(item.recipient_name) ? `destinatario ${textValue(item.recipient_name)}` : "",
+    recipientPlace ? `destino ${recipientPlace}` : "",
+    textValue(item.product_name) ? `produto ${textValue(item.product_name)}` : "",
+    dateTimeBR(item.started_at) ? `inicio ${dateTimeBR(item.started_at)}` : "",
+    dateTimeBR(item.finished_at) ? `finalizado em ${dateTimeBR(item.finished_at)}` : "",
+  ].filter(Boolean);
+
+  return `Ultimo frete encontrado no tenant ${tenantName}: ${details.join("; ")}.`;
+}
+
 async function answerDeterministicTenantQuestion(
   context: Awaited<ReturnType<typeof resolveFrotakAiContext>>,
   message: string,
@@ -302,15 +355,26 @@ async function answerDeterministicTenantQuestion(
     normalized,
   );
   const asksDriver = /\b(motorista|motoristas|condutor|condutores)\b/.test(normalized);
-  const asksFreight = /\b(frete|fretes|viagem|viagens|rota|rotas|carga|descarga)\b/.test(
-    normalized,
-  );
+  const asksFreight =
+    /\b(frete|fretes|viagem|viagens|rota|rotas|carga|descarga|tiro|tiros|cte|ct-e|documento|documentos|comprovante|comprovantes|embarcador|embarcadores|remetente|remetentes|destinatario|destinatarios|origem|origens|destino|destinos|produto|produtos)\b/.test(
+      normalized,
+    );
   const asksFinancial =
     /\b(financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|receitas|despesa|despesas|saldo|valor|valores|lucro|rentabilidade|margem|resultado|faturamento|cliente|clientes|parceiro|parceiros|pagador|pagadores)\b/.test(
       normalized,
     );
   const asksCount = /\b(quantos|quantas|qtd|quantidade|total|numero)\b/.test(normalized);
   const asksList = /\b(cite|listar|liste|mostre|quais|nomes|nome)\b/.test(normalized);
+  const asksLastFreight =
+    asksFreight &&
+    /\b(ultimo|ultima|ultimos|ultimas|recente|recentes|historico|historicos)\b/.test(normalized);
+  const asksFreightParties =
+    asksFreight &&
+    /\b(embarcador|embarcadores|remetente|remetentes|destinatario|destinatarios|origem|origens|destino|destinos|cliente|clientes|produto|produtos)\b/.test(
+      normalized,
+    );
+  const asksFreightDocuments =
+    asksFreight && /\b(cte|ct-e|documento|documentos|comprovante|comprovantes)\b/.test(normalized);
 
   if (asksPartnerProfitability) {
     const result = await executeFrotakAiTool(context, "consultar_frotak", {
@@ -467,6 +531,60 @@ async function answerDeterministicTenantQuestion(
 
   if (
     asksFreight &&
+    (asksLastFreight || asksFreightParties || asksFreightDocuments) &&
+    !(asksList && /\b(em rota|andamento|ativos|abertos|status)\b/.test(normalized))
+  ) {
+    const result = await executeFrotakAiTool(context, "consultar_frotak", {
+      pergunta: message,
+      topico: "fretes",
+      source: "history",
+      limit: Math.max(limit, 20),
+    });
+    const record = nestedRecord(nestedRecord(result, "consultas"), "fretes");
+    if (hasError(result) || hasError(record))
+      return {
+        text: `Nao consegui consultar os fretes finalizados: ${errorMessage(hasError(result) ? result : record)}.`,
+        tools: ["consultar_frotak"],
+      };
+
+    const history = freightHistoryItems(result);
+    if (history.length === 0) {
+      return {
+        text: `Nao encontrei fretes finalizados no tenant ${context.tenantName} com os filtros consultados.`,
+        tools: ["consultar_frotak"],
+      };
+    }
+
+    if (asksFreightParties && asksList && !asksLastFreight) {
+      const lines = history
+        .slice(0, limit)
+        .map((item) => {
+          const sender = textValue(item.sender_name) || "remetente nao informado";
+          const senderPlace = placeText(item.sender_city, item.sender_state);
+          const recipient = textValue(item.recipient_name) || "destinatario nao informado";
+          const recipientPlace = placeText(item.recipient_city, item.recipient_state);
+          const plate = textValue(item.vehicle_plate);
+          return uniqueNonEmpty([
+            plate ? `${plate}` : "",
+            `embarcador/remetente: ${sender}${senderPlace ? ` (${senderPlace})` : ""}`,
+            `destinatario: ${recipient}${recipientPlace ? ` (${recipientPlace})` : ""}`,
+          ]).join(" - ");
+        })
+        .filter(Boolean);
+      return {
+        text: `Nos fretes recentes do tenant ${context.tenantName}: ${lines.join("; ")}.`,
+        tools: ["consultar_frotak"],
+      };
+    }
+
+    return {
+      text: freightDetailText(history[0], context.tenantName),
+      tools: ["consultar_frotak"],
+    };
+  }
+
+  if (
+    asksFreight &&
     (asksList || /\b(em rota|andamento|ativos|abertos|status)\b/.test(normalized))
   ) {
     const result = await executeFrotakAiTool(context, "consultar_frotak", {
@@ -537,7 +655,7 @@ async function buildMandatoryTenantData(
   const normalized = normalizeIntentText(message);
   const limit = requestedLimit(normalized);
   const isFrotakDataQuestion =
-    /\b(empresa|companhia|tenant|workspace|cliente|clientes|parceiro|parceiros|pagador|pagadores|caminhao|caminhoes|veiculo|veiculos|frota|placa|placas|motorista|motoristas|condutor|condutores|frete|fretes|viagem|viagens|rota|rotas|carga|descarga|financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|receitas|despesa|despesas|saldo|valor|valores|lucro|rentabilidade|margem|resultado|faturamento|abastecimento|abastecimentos|diesel|arla|posto|combustivel|posicao|posicoes|localizacao|sascar|telemetria|mapa|onde)\b/.test(
+    /\b(empresa|companhia|tenant|workspace|cliente|clientes|parceiro|parceiros|pagador|pagadores|caminhao|caminhoes|veiculo|veiculos|frota|placa|placas|motorista|motoristas|condutor|condutores|frete|fretes|viagem|viagens|rota|rotas|carga|descarga|tiro|tiros|cte|ct-e|documento|documentos|comprovante|comprovantes|embarcador|embarcadores|remetente|remetentes|destinatario|destinatarios|origem|origens|destino|destinos|produto|produtos|financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|receitas|despesa|despesas|saldo|valor|valores|lucro|rentabilidade|margem|resultado|faturamento|abastecimento|abastecimentos|diesel|arla|posto|combustivel|posicao|posicoes|localizacao|sascar|telemetria|mapa|onde)\b/.test(
       normalized,
     );
 

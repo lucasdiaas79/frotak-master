@@ -77,6 +77,11 @@ export const FROTAK_AI_TOOL_DECLARATIONS = [
           type: Type.STRING,
           description: "Status operacional ou financeiro quando aplicavel.",
         },
+        source: {
+          type: Type.STRING,
+          description:
+            "Origem da consulta de fretes: active para fretes em andamento, history para encerrados ou all.",
+        },
         direction: {
           type: Type.STRING,
           description: "receivable para A Receber, payable para A Pagar ou all.",
@@ -153,13 +158,7 @@ export async function executeFrotakAiTool(
 }
 
 type FrotakConsultaTopico =
-  | "empresa"
-  | "veiculos"
-  | "motoristas"
-  | "fretes"
-  | "financeiro"
-  | "abastecimentos"
-  | "posicoes";
+  "empresa" | "veiculos" | "motoristas" | "fretes" | "financeiro" | "abastecimentos" | "posicoes";
 
 function normalizeIntentText(text: string) {
   return text
@@ -210,7 +209,11 @@ function detectTopics(args: Record<string, unknown>) {
   if (/\b(caminhao|caminhoes|veiculo|veiculos|frota|placa|placas)\b/.test(text))
     addTopic(topics, "veiculos");
   if (/\b(motorista|motoristas|condutor|condutores)\b/.test(text)) addTopic(topics, "motoristas");
-  if (/\b(frete|fretes|viagem|viagens|rota|rotas|carga|descarga)\b/.test(text))
+  if (
+    /\b(frete|fretes|viagem|viagens|rota|rotas|carga|descarga|tiro|tiros|cte|ct-e|documento|documentos|comprovante|comprovantes|embarcador|embarcadores|remetente|remetentes|destinatario|destinatarios|origem|origens|destino|destinos|cliente|clientes|produto|produtos)\b/.test(
+      text,
+    )
+  )
     addTopic(topics, "fretes");
   if (
     /\b(financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|receitas|despesa|despesas|saldo|valor|valores|lucro|rentabilidade|margem|resultado|faturamento|cliente|clientes|parceiro|parceiros|pagador|pagadores)\b/.test(
@@ -508,7 +511,7 @@ async function queryFreights(
     if (status) historyQuery = historyQuery.eq("final_status", status);
     if (search) {
       historyQuery = historyQuery.or(
-        `vehicle_plate.ilike.%${search}%,driver_name.ilike.%${search}%,sender_name.ilike.%${search}%,recipient_name.ilike.%${search}%,product_name.ilike.%${search}%`,
+        `freight_id.ilike.%${search}%,vehicle_plate.ilike.%${search}%,driver_name.ilike.%${search}%,sender_name.ilike.%${search}%,sender_city.ilike.%${search}%,sender_state.ilike.%${search}%,recipient_name.ilike.%${search}%,recipient_city.ilike.%${search}%,recipient_state.ilike.%${search}%,product_name.ilike.%${search}%`,
       );
     }
 
