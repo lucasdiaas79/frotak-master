@@ -1,8 +1,10 @@
 import {
+  EndSensitivity,
   FunctionCallingConfigMode,
   FunctionResponseScheduling,
   GoogleGenAI,
   Modality,
+  StartSensitivity,
   type Content,
   type FunctionResponse,
 } from "@google/genai";
@@ -715,6 +717,30 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" })
         createFrotakAiContextSummary(context),
       );
       const liveSetupConfig = {
+        generationConfig: {
+          responseModalities: [Modality.AUDIO],
+          temperature: 0.2,
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: process.env.GEMINI_LIVE_VOICE || "Aoede",
+              },
+            },
+          },
+        },
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
+        realtimeInputConfig: {
+          automaticActivityDetection: {
+            disabled: false,
+            startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
+            endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_HIGH,
+            prefixPaddingMs: 100,
+            silenceDurationMs: 700,
+          },
+        },
+        contextWindowCompression: { slidingWindow: {} },
+        sessionResumption: {},
         tools: [{ functionDeclarations: [...FROTAK_AI_TOOL_DECLARATIONS] }],
         systemInstruction: {
           parts: [{ text: liveSystemInstruction }],
@@ -732,22 +758,7 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" })
           expireTime: new Date(Date.now() + 30 * 60_000).toISOString(),
           liveConnectConstraints: {
             model,
-            config: {
-              responseModalities: [Modality.AUDIO],
-              temperature: 0.2,
-              speechConfig: {
-                voiceConfig: {
-                  prebuiltVoiceConfig: {
-                    voiceName: process.env.GEMINI_LIVE_VOICE || "Aoede",
-                  },
-                },
-              },
-              inputAudioTranscription: {},
-              outputAudioTranscription: {},
-              sessionResumption: {},
-              tools: liveSetupConfig.tools,
-              systemInstruction: liveSetupConfig.systemInstruction,
-            },
+            config: liveSetupConfig,
           },
         },
       });

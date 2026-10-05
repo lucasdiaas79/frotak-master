@@ -6,6 +6,7 @@ import {
   Bot,
   LoaderCircle,
   Mic,
+  MicOff,
   Plus,
   SlidersHorizontal,
   User,
@@ -68,6 +69,7 @@ function liveStatusLabel(status: FrotakLiveStatus) {
   if (status === "connecting") return "Conectando ao Frotak Live";
   if (status === "reconnecting") return "Reconectando";
   if (status === "ready") return "Pode falar";
+  if (status === "muted") return "Microfone pausado";
   if (status === "listening") return "Ouvindo";
   if (status === "thinking") return "Pensando";
   if (status === "speaking") return "Respondendo";
@@ -100,6 +102,7 @@ function FrotakIaPage() {
   const [liveStatus, setLiveStatus] = useState<FrotakLiveStatus>("idle");
   const [lastLiveText, setLastLiveText] = useState("");
   const [lastUserTranscript, setLastUserTranscript] = useState("");
+  const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const liveSessionRef = useRef<FrotakLiveSession | null>(null);
 
   useEffect(
@@ -171,6 +174,7 @@ function FrotakIaPage() {
     try {
       setMode("live");
       setLiveStatus("connecting");
+      setMicrophoneEnabled(true);
       setLastLiveText("");
       setLastUserTranscript("");
 
@@ -208,15 +212,19 @@ function FrotakIaPage() {
           }),
         onError: (message) => {
           toast.error(message);
-          setLiveStatus("error");
+          const failedSession = liveSessionRef.current;
+          liveSessionRef.current = null;
+          void failedSession?.stop().finally(() => setLiveStatus("error"));
         },
       });
 
       liveSessionRef.current = session;
       await session.start();
     } catch (error) {
-      stream?.getTracks().forEach((track) => track.stop());
+      const failedSession = liveSessionRef.current;
       liveSessionRef.current = null;
+      await failedSession?.stop();
+      stream?.getTracks().forEach((track) => track.stop());
       setLiveStatus("error");
       setMode("text");
       toast.error(
@@ -229,7 +237,14 @@ function FrotakIaPage() {
     const session = liveSessionRef.current;
     liveSessionRef.current = null;
     if (session) await session.stop();
+    setMicrophoneEnabled(true);
     setLiveStatus("idle");
+  };
+
+  const toggleMicrophone = () => {
+    const next = !microphoneEnabled;
+    setMicrophoneEnabled(next);
+    liveSessionRef.current?.setMicrophoneEnabled(next);
   };
 
   const exitLiveMode = async () => {
@@ -244,10 +259,12 @@ function FrotakIaPage() {
         liveStatus={liveStatus}
         lastLiveText={lastLiveText}
         lastUserTranscript={lastUserTranscript}
+        microphoneEnabled={microphoneEnabled}
         setDraft={setDraft}
         startLive={startLive}
         exitLiveMode={exitLiveMode}
         sendMessage={sendMessage}
+        toggleMicrophone={toggleMicrophone}
       />
     );
   }
@@ -317,19 +334,23 @@ function FrotakLiveView({
   liveStatus,
   lastLiveText,
   lastUserTranscript,
+  microphoneEnabled,
   setDraft,
   startLive,
   exitLiveMode,
   sendMessage,
+  toggleMicrophone,
 }: {
   draft: string;
   liveStatus: FrotakLiveStatus;
   lastLiveText: string;
   lastUserTranscript: string;
+  microphoneEnabled: boolean;
   setDraft: (value: string) => void;
   startLive: () => Promise<void>;
   exitLiveMode: () => Promise<void>;
   sendMessage: () => Promise<void>;
+  toggleMicrophone: () => void;
 }) {
   const active = liveStatus !== "idle" && liveStatus !== "error";
   const speaking = liveStatus === "speaking";
@@ -351,13 +372,7 @@ function FrotakLiveView({
           <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-primary">Frotak</p>
           <h1 className="text-[20px] font-extrabold">Frotak Live</h1>
         </div>
-        <button
-          type="button"
-          className="inline-flex size-14 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white shadow-lg backdrop-blur"
-          aria-label="Ajustes de voz"
-        >
-          <SlidersHorizontal className="size-7" />
-        </button>
+        <div className="size-14" aria-hidden="true" />
       </div>
 
       <div className="flex flex-1 flex-col items-center justify-center px-7 text-center">
@@ -410,7 +425,6 @@ function FrotakLiveView({
 
       <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
         <div className="flex h-16 min-w-0 items-center gap-3 rounded-full border border-white/10 bg-white/[0.08] px-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
-          <Plus className="size-7 shrink-0 text-white" />
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -428,14 +442,21 @@ function FrotakLiveView({
           type="button"
           onClick={() => {
             if (!active) void startLive();
+            else toggleMicrophone();
           }}
           className={cn(
             "inline-flex size-16 items-center justify-center rounded-full border border-white/10 text-white shadow-lg transition",
-            active ? "bg-primary" : "bg-white/10",
+            active && microphoneEnabled ? "bg-primary" : "bg-white/10",
           )}
-          aria-label={active ? "Microfone ativo" : "Iniciar voz"}
+          aria-label={
+            !active ? "Iniciar voz" : microphoneEnabled ? "Pausar microfone" : "Ativar microfone"
+          }
         >
-          <Mic className="size-7" />
+          {active && !microphoneEnabled ? (
+            <MicOff className="size-7" />
+          ) : (
+            <Mic className="size-7" />
+          )}
         </button>
         <button
           type="button"
