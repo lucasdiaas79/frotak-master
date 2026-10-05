@@ -274,6 +274,8 @@ export interface SettlementInput {
   settledOn: string;
   paymentMethod: string;
   notes?: string;
+  batchId?: string;
+  batchName?: string;
   adjustmentAllocation?: {
     scope: "company" | "cost_center" | "vehicle" | "driver";
     costCenterId?: string | null;
@@ -718,6 +720,47 @@ export interface CashFlowEntry {
   chart_account_code: string | null;
   chart_account_name: string | null;
   financial_account_name: string | null;
+  batch_id?: string | null;
+  batch_name?: string | null;
+}
+
+export interface CashFlowSettlementBatchDetails {
+  batch_id: string;
+  batch_name: string;
+  signed_amount: number;
+  entries: Array<{
+    settlement_id: string;
+    document_id: string;
+    installment_id: string;
+    installment_number: number;
+    entry_date: string;
+    direction: FinancialDocumentDirection;
+    amount: number;
+    signed_amount: number;
+    original_amount: number;
+    description: string;
+    document_number: string | null;
+    partner_name: string | null;
+    chart_account_code: string | null;
+    chart_account_name: string | null;
+    financial_account_name: string;
+    payment_method: string;
+    notes: string | null;
+    allocations: Array<{
+      id: string;
+      amount: number;
+      percentage: number | null;
+      description: string | null;
+      chart_account_code: string | null;
+      chart_account_name: string | null;
+      cost_center_name: string | null;
+      vehicle_plate: string | null;
+      driver_name: string | null;
+      product_name: string | null;
+      business_partner_name: string | null;
+      freight_reference: string | null;
+    }>;
+  }>;
 }
 
 export interface FinancialDashboard {

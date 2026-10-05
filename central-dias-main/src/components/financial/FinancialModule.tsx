@@ -132,6 +132,7 @@ import {
   voidPayrollEntry,
 } from "@/lib/financial/payroll";
 import {
+  getCashFlowSettlementBatchDetails,
   getCashFlowEntries,
   getCashFlowSummary,
   getDreDetail,
@@ -142,6 +143,7 @@ import {
 import type {
   BusinessPartner,
   CashFlowEntry,
+  CashFlowSettlementBatchDetails,
   CashFlowSummary,
   CanonicalFreight,
   ChartAccount,
@@ -2062,6 +2064,26 @@ function CashFlowTimeline({
 }
 
 function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
+  const rows = useMemo(() => {
+    const batches = new Map<string, CashFlowEntry[]>();
+    for (const entry of entries) {
+      if (entry.status === "settlement" && entry.batch_id && entry.batch_name) {
+        const items = batches.get(entry.batch_id) ?? [];
+        items.push(entry);
+        batches.set(entry.batch_id, items);
+      }
+    }
+    const seen = new Set<string>();
+    return entries.flatMap((entry) => {
+      if (!entry.batch_id || !entry.batch_name || entry.status !== "settlement") {
+        return [{ kind: "entry" as const, entry }];
+      }
+      if (seen.has(entry.batch_id)) return [];
+      seen.add(entry.batch_id);
+      return [{ kind: "batch" as const, entries: batches.get(entry.batch_id) ?? [entry] }];
+    });
+  }, [entries]);
+
   return (
     <section className="financial-cashflow-movements">
       <div className="flex min-w-0 items-start justify-between gap-4">
@@ -2072,8 +2094,13 @@ function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
         <ReceiptText className="size-5 shrink-0 text-primary" />
       </div>
       <div className="mt-3 divide-y divide-border/70">
-        {entries.length ? (
-          entries.map((entry) => (
+        {rows.length ? (
+          rows.map((row) => {
+            if (row.kind === "batch") {
+              return <CashFlowSettlementBatchRow key={row.entries[0].batch_id} entries={row.entries} />;
+            }
+            const { entry } = row;
+            return (
             <div key={entry.entry_id} className="financial-cashflow-movement-row">
               <div className="financial-cashflow-date-chip">
                 {date.format(new Date(`${entry.entry_date}T12:00:00`))}
@@ -2101,12 +2128,129 @@ function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
                 </strong>
               </div>
             </div>
-          ))
+            );
+          })
         ) : (
           <div className="financial-cashflow-empty">Nenhum lançamento no período.</div>
         )}
       </div>
     </section>
+  );
+}
+
+function CashFlowSettlementBatchRow({ entries }: { entries: CashFlowEntry[] }) {
+  const [details, setDetails] = useState<CashFlowSettlementBatchDetails | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [requested, setRequested] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const batchId = entries[0].batch_id!;
+  const batchName = entries[0].batch_name!;
+  const total = entries.reduce((sum, entry) => sum + entry.signed_amount, 0);
+
+  useEffect(() => {
+    if (!expanded || details || loading || requested) return;
+    setRequested(true);
+    setLoading(true);
+    getCashFlowSettlementBatchDetails(batchId)
+      .then(setDetails)
+      .catch((error: unknown) => {
+        setLoadError(true);
+        toast.error(error instanceof Error ? error.message : "Nao foi possivel abrir o lote.");
+      })
+      .finally(() => setLoading(false));
+  }, [batchId, details, expanded, loading, requested]);
+
+  return (
+    <div className="financial-cashflow-batch-row">
+      <div className="financial-cashflow-movement-row">
+        <div className="financial-cashflow-date-chip">
+          {date.format(new Date(`${entries[0].entry_date}T12:00:00`))}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-black">{batchName}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+            <span>{entries.length} títulos pagos</span>
+            <span>{entries[0].financial_account_name || "Sem conta financeira"}</span>
+            <Badge variant="secondary">Pagamento em lote</Badge>
+          </div>
+        </div>
+        <div className="financial-cashflow-row-value">
+          <span>Saída</span>
+          <strong className="text-destructive">{signedMoney(total)}</strong>
+        </div>
+      </div>
+      <button
+        type="button"
+        className="financial-cashflow-batch-toggle"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <ChevronRight className={cn("size-4 transition-transform", expanded && "rotate-90")} />
+        {expanded ? "Ocultar títulos e apropriações" : "Ver títulos, apropriações e gerenciais"}
+      </button>
+      {expanded && (
+        <div className="financial-cashflow-batch-details">
+          {loading && <div className="text-sm text-muted-foreground">Carregando detalhes...</div>}
+          {loadError && (
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <span>Não foi possível carregar os detalhes.</span>
+              <button
+                type="button"
+                className="font-semibold text-primary"
+                onClick={() => {
+                  setLoadError(false);
+                  setRequested(false);
+                }}
+              >
+                Tentar novamente
+              </button>
+            </div>
+          )}
+          {details?.entries.map((item) => (
+            <article className="financial-cashflow-batch-title" key={item.settlement_id}>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="font-bold">{item.partner_name || item.description}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.description}
+                    {item.document_number && ` · Doc. ${item.document_number}`}
+                    {` · Parcela ${item.installment_number}`}
+                  </p>
+                </div>
+                <strong className="whitespace-nowrap text-sm">{money.format(item.amount)}</strong>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <span>Conta: {item.financial_account_name}</span>
+                <span>Categoria: {item.chart_account_code ? `${item.chart_account_code} · ` : ""}{item.chart_account_name || "Sem categoria"}</span>
+                <span>Pagamento: {item.payment_method}</span>
+                <span>Valor original: {money.format(item.original_amount)}</span>
+                {item.notes && <span>Observação: {item.notes}</span>}
+              </div>
+              <div className="mt-3 space-y-2">
+                {item.allocations.length ? item.allocations.map((allocation) => (
+                  <div className="financial-cashflow-allocation" key={allocation.id}>
+                    <div className="flex flex-wrap justify-between gap-2">
+                      <strong>{allocation.chart_account_code ? `${allocation.chart_account_code} · ` : ""}{allocation.chart_account_name || "Apropriação"}</strong>
+                      <span>{money.format(allocation.amount)}{allocation.percentage != null && ` · ${allocation.percentage}%`}</span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                      {allocation.description && <span>{allocation.description}</span>}
+                      {allocation.cost_center_name && <span>Centro: {allocation.cost_center_name}</span>}
+                      {allocation.vehicle_plate && <span>Veículo: {allocation.vehicle_plate}</span>}
+                      {allocation.driver_name && <span>Motorista: {allocation.driver_name}</span>}
+                      {allocation.product_name && <span>Produto: {allocation.product_name}</span>}
+                      {allocation.business_partner_name && <span>Parceiro: {allocation.business_partner_name}</span>}
+                      {allocation.freight_reference && <span>Frete: {allocation.freight_reference}</span>}
+                    </div>
+                  </div>
+                )) : <p className="text-xs text-muted-foreground">Sem apropriações cadastradas.</p>}
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2914,6 +3058,7 @@ function TitlesContent({
         onSave={async (input) => {
           setSaving(true);
           try {
+            const batchId = receiving ? undefined : crypto.randomUUID();
             for (const target of bulkSettleTargets) {
               await settleInstallment({
                 installmentId: target.installment.id,
@@ -2925,6 +3070,7 @@ function TitlesContent({
                 settledOn: input.settledOn,
                 paymentMethod: input.paymentMethod,
                 notes: input.notes,
+                ...(batchId ? { batchId, batchName: input.batchName } : {}),
               });
             }
             toast.success(
@@ -5631,6 +5777,7 @@ function BulkSettlementDialog({
     settledOn: string;
     paymentMethod: string;
     notes: string;
+    batchName: string;
   }) => void;
 }) {
   const [form, setForm] = useState({
@@ -5638,6 +5785,7 @@ function BulkSettlementDialog({
     date: today(),
     method: "pix",
     notes: "",
+    batchName: "",
   });
   const total = targets.reduce((sum, target) => sum + target.installment.balance, 0);
 
@@ -5647,6 +5795,7 @@ function BulkSettlementDialog({
         ...current,
         date: today(),
         notes: "",
+        batchName: "",
       }));
     }
   }, [targets.length]);
@@ -5662,6 +5811,20 @@ function BulkSettlementDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
+          {!receiving && (
+            <Field label="Nome da fatura / pagamento" className="sm:col-span-2">
+              <Input
+                autoFocus
+                maxLength={120}
+                placeholder="Ex.: Faturas Posto Taiçoca - outubro"
+                value={form.batchName}
+                onChange={(event) => setForm({ ...form, batchName: event.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Esse nome será exibido como um único movimento no Fluxo de Caixa.
+              </p>
+            </Field>
+          )}
           <Field label="Data">
             <Input
               type="date"
@@ -5710,13 +5873,14 @@ function BulkSettlementDialog({
             Cancelar
           </Button>
           <Button
-            disabled={saving || targets.length === 0 || !form.account}
+            disabled={saving || targets.length === 0 || !form.account || (!receiving && !form.batchName.trim())}
             onClick={() =>
               onSave({
                 financialAccountId: form.account,
                 settledOn: form.date,
                 paymentMethod: form.method,
                 notes: form.notes,
+                batchName: form.batchName.trim(),
               })
             }
           >

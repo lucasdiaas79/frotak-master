@@ -338,6 +338,16 @@ export async function voidFinancialDocument(id: string, reason: string) {
 }
 
 export async function settleInstallment(input: SettlementInput) {
+  if (input.batchId && input.batchName) {
+    const { batchId, batchName, ...payload } = input;
+    const { data, error } = await supabase.rpc("settle_financial_installment_with_batch", {
+      p_payload: payload,
+      p_batch_id: batchId,
+      p_batch_name: batchName,
+    });
+    fail("Não foi possível registrar a baixa", error);
+    return data as string;
+  }
   const { data, error } = await supabase.rpc("settle_financial_installment", {
     p_payload: input,
   });

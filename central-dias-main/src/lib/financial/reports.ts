@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type {
   CashFlowEntry,
+  CashFlowSettlementBatchDetails,
   CashFlowSummary,
   Dre12MonthStatement,
   DreDetail,
@@ -90,7 +91,44 @@ export async function getCashFlowEntries(
   const { data, error } = await supabase.rpc("get_cash_flow_entries", { p_payload: input });
   fail("Nao foi possivel carregar os lancamentos do fluxo", error);
   const payload = numberify(data as { entries: CashFlowEntry[] });
-  return payload.entries ?? [];
+  const entries = payload.entries ?? [];
+  if (input.mode !== "forecast") {
+    const settlementIds = entries
+      .map((entry) => entry.settlement_id)
+      .filter((id): id is string => Boolean(id));
+    if (settlementIds.length) {
+      const { data: batchRows, error: batchError } = await supabase
+        .from("financial_settlements")
+        .select("id,batch_id,batch_name")
+        .in("id", settlementIds);
+      if (!batchError) {
+        const batchBySettlement = new Map(
+          (batchRows ?? []).map((row) => [row.id, row]),
+        );
+        return entries.map((entry) => {
+          const batch = entry.settlement_id
+            ? batchBySettlement.get(entry.settlement_id)
+            : undefined;
+          return {
+            ...entry,
+            batch_id: batch?.batch_id ?? null,
+            batch_name: batch?.batch_name ?? null,
+          };
+        });
+      }
+    }
+  }
+  return entries;
+}
+
+export async function getCashFlowSettlementBatchDetails(
+  batchId: string,
+): Promise<CashFlowSettlementBatchDetails> {
+  const { data, error } = await supabase.rpc("get_cash_flow_settlement_batch_details", {
+    p_batch_id: batchId,
+  });
+  fail("Nao foi possivel carregar os detalhes do pagamento", error);
+  return numberify(data as CashFlowSettlementBatchDetails);
 }
 
 export async function getFinancialDashboard(
