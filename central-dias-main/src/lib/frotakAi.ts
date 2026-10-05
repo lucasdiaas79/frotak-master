@@ -151,6 +151,8 @@ function frotakAiSystemInstruction(contextSummary?: string) {
     "Conheca o sistema Frotak como uma central operacional com Dashboard, Gestao de Frota, App Motorista, Documentos/CT-e, Abastecimentos, Financeiro, Cadastros, Historicos, Mapa, Suporte e Frotak IA.",
     "Use estes termos do negocio corretamente: caminhao, cavalo e veiculo podem representar a unidade principal; cacamba, carreta e implemento sao vinculados ao veiculo quando aplicavel; tiro longo e um ciclo com multiplas etapas/fretes; embarcador costuma ser remetente/origem; destinatario costuma ser destino/recebedor; CT-e e comprovantes sao documentos do frete; abastecimento gera controle de combustivel e pode gerar titulo a pagar, nao deve ser tratado como despesa do caixa do motorista.",
     "Quando a pergunta for sobre como usar o sistema, explique o fluxo operacional sem inventar dados: conferir cadastros, criar frete/tiro longo na Gestao de Frota, enviar ou acompanhar comandos no App Motorista, anexar CT-e/comprovantes, registrar abastecimentos/despesas e auditar no financeiro/historico.",
+    "Para perguntas de como fazer, onde encontrar uma funcao, passo a passo, acesso, uso de tela ou resolucao de problema, chame consultar_suporte antes de responder e siga o manual oficial retornado.",
+    "Se o manual nao trouxer a orientacao pedida, diga claramente que o procedimento nao foi encontrado no material oficial e oriente o usuario a reunir os dados necessarios para o suporte. Nao invente botoes, campos ou etapas.",
     "No bate-papo por voz, para perguntas sobre ultimo frete, fretes recentes, embarcador, remetente, destinatario, origem, destino, CT-e ou comprovantes, chame consultar_frotak com topico fretes e source history antes de responder.",
     "Se a pergunta pedir numero, status, lista, valor ou localizacao, comece pelo resultado objetivo.",
     "Quando o usuario pedir explicacao, analise, causa ou plano, entregue uma resposta completa e estruturada.",
@@ -199,7 +201,7 @@ async function generateWithFallback(
           temperature: 0.2,
           maxOutputTokens: 1400,
           systemInstruction: params.systemInstruction,
-          tools: [{ functionDeclarations: FROTAK_AI_TOOL_DECLARATIONS }],
+          tools: [{ functionDeclarations: [...FROTAK_AI_TOOL_DECLARATIONS] }],
           toolConfig: {
             functionCallingConfig: {
               mode: FunctionCallingConfigMode.AUTO,
@@ -673,6 +675,32 @@ async function buildMandatoryTenantData(
   ].join("\n");
 }
 
+function isSupportQuestion(normalizedMessage: string) {
+  return /\b(como (faco|fazer|criar|cadastrar|enviar|anexar|usar|acessar|entrar|registrar|pagar|receber|baixar|visualizar|emitir|alterar|editar|cancelar|estornar|consultar|puxar)|onde (fica|encontro)|passo a passo|manual|suporte|ajuda|o que fazer quando|o que significa|qual a diferenca|por que|porque|entendendo|nao consigo|nao esta funcionando|erro|falha|bloquead[oa]s?)\b/.test(
+    normalizedMessage,
+  );
+}
+
+async function buildMandatorySupportData(
+  context: Awaited<ReturnType<typeof resolveFrotakAiContext>>,
+  message: string,
+) {
+  const normalized = normalizeIntentText(message);
+  if (!isSupportQuestion(normalized)) return null;
+
+  const data = await executeFrotakAiTool(context, "consultar_suporte", {
+    pergunta: message,
+    query: message,
+    limit: 6,
+  });
+
+  return [
+    "CONHECIMENTO OFICIAL OBRIGATORIO DO SUPORTE FROTAK:",
+    JSON.stringify(data),
+    "Responda com base nestas orientacoes do manual. Seja pratico, organize o passo a passo e nao invente telas, botoes ou regras ausentes.",
+  ].join("\n");
+}
+
 export const createFrotakLiveToken = createServerFn({ method: "POST" })
   .inputValidator((input: { accessToken?: string; workspaceId?: string } | undefined) => ({
     accessToken: input?.accessToken ?? "",
@@ -687,7 +715,7 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" })
         createFrotakAiContextSummary(context),
       );
       const liveSetupConfig = {
-        tools: [{ functionDeclarations: FROTAK_AI_TOOL_DECLARATIONS }],
+        tools: [{ functionDeclarations: [...FROTAK_AI_TOOL_DECLARATIONS] }],
         systemInstruction: {
           parts: [{ text: liveSystemInstruction }],
         },
@@ -804,7 +832,13 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
         };
       }
 
-      const mandatoryTenantData = await buildMandatoryTenantData(resolvedContext, message);
+      const [mandatoryTenantData, mandatorySupportData] = await Promise.all([
+        buildMandatoryTenantData(resolvedContext, message),
+        buildMandatorySupportData(resolvedContext, message),
+      ]);
+      const mandatoryContext = [mandatoryTenantData, mandatorySupportData]
+        .filter(Boolean)
+        .join("\n\n");
       const systemInstruction = frotakAiSystemInstruction(
         createFrotakAiContextSummary(resolvedContext),
       );
@@ -813,7 +847,7 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
         ...historyToContents(data.history),
         {
           role: "user",
-          parts: [{ text: mandatoryTenantData ? `${message}\n\n${mandatoryTenantData}` : message }],
+          parts: [{ text: mandatoryContext ? `${message}\n\n${mandatoryContext}` : message }],
         },
       ] as Content[];
 
@@ -842,7 +876,7 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
             temperature: 0.2,
             maxOutputTokens: 1600,
             systemInstruction,
-            tools: [{ functionDeclarations: FROTAK_AI_TOOL_DECLARATIONS }],
+            tools: [{ functionDeclarations: [...FROTAK_AI_TOOL_DECLARATIONS] }],
           },
         });
 

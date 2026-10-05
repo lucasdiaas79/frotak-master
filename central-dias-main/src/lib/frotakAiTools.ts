@@ -4,8 +4,9 @@ import {
   type FrotakAiContext,
   getSupabaseServerClient,
 } from "@/lib/frotakAiContext";
+import { searchManualSupport } from "@/routes/manual";
 
-export type FrotakAiToolName = "consultar_frotak";
+export type FrotakAiToolName = "consultar_frotak" | "consultar_suporte";
 
 export type FrotakAiToolCall = {
   id?: string;
@@ -109,7 +110,29 @@ export const FROTAK_AI_TOOL_DECLARATIONS = [
       },
     },
   },
-] satisfies FunctionDeclaration[];
+  {
+    name: "consultar_suporte",
+    description:
+      "Pesquisa o manual oficial da Frotak. Use para explicar como usar telas e funcionalidades, orientar passo a passo, solucionar dificuldades e responder perguntas sobre procedimentos da Central ou do app motorista.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        pergunta: {
+          type: Type.STRING,
+          description: "Pergunta original do usuario sobre uso ou suporte do sistema.",
+        },
+        query: {
+          type: Type.STRING,
+          description: "Termos principais do procedimento ou problema a localizar no manual.",
+        },
+        limit: {
+          type: Type.INTEGER,
+          description: "Quantidade de orientacoes relacionadas. Use de 3 a 8.",
+        },
+      },
+    },
+  },
+] as const satisfies readonly FunctionDeclaration[];
 
 export function normalizeFrotakAiToolCall(call: FunctionCall): FrotakAiToolCall | null {
   if (!call.name || !isFrotakAiToolName(call.name)) return null;
@@ -129,11 +152,13 @@ export async function executeFrotakAiTool(
   name: FrotakAiToolName,
   args: Record<string, unknown> = {},
 ) {
-  const supabase = getSupabaseServerClient(context.accessToken);
   const result =
-    name === "consultar_frotak"
-      ? await executeConsultarFrotak(supabase, context, args)
-      : { error: "Ferramenta indisponivel." };
+    name === "consultar_suporte"
+      ? searchManualSupport(
+          textArg(args, "query") ?? textArg(args, "pergunta") ?? "",
+          limitFromArgs(args),
+        )
+      : await executeConsultarFrotak(getSupabaseServerClient(context.accessToken), context, args);
 
   if (
     result &&

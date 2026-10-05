@@ -554,3 +554,85 @@ function GuideAccordion({ guide, group }: { guide: Guide; group: GuideGroup }) {
 function normalize(value: string) {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
+
+const supportSearchStopWords = new Set([
+  "a",
+  "as",
+  "com",
+  "como",
+  "da",
+  "das",
+  "de",
+  "do",
+  "dos",
+  "e",
+  "em",
+  "eu",
+  "faco",
+  "fazer",
+  "me",
+  "na",
+  "nas",
+  "no",
+  "nos",
+  "o",
+  "os",
+  "para",
+  "por",
+  "que",
+  "um",
+  "uma",
+]);
+
+// Shared with the server-side support tool used by text and voice conversations.
+// eslint-disable-next-line react-refresh/only-export-components
+export function searchManualSupport(query: string, requestedLimit = 6) {
+  const normalizedQuery = normalize(query);
+  const tokens = Array.from(
+    new Set(
+      normalizedQuery
+        .split(/[^a-z0-9]+/)
+        .filter((token) => token.length > 1 && !supportSearchStopWords.has(token)),
+    ),
+  );
+  const limit = Math.max(1, Math.min(10, Math.trunc(requestedLimit) || 6));
+
+  const results = guideGroups.flatMap((group) =>
+    group.guides.map((guide) => {
+      const title = normalize(guide.title);
+      const detail = normalize(guide.detail);
+      const groupText = normalize(`${group.title} ${group.summary} ${group.topic}`);
+      const operationalText = normalize(`${group.steps.join(" ")} ${group.checks.join(" ")}`);
+      let score = normalizedQuery && title.includes(normalizedQuery) ? 30 : 0;
+      if (normalizedQuery && detail.includes(normalizedQuery)) score += 14;
+      if (normalizedQuery && groupText.includes(normalizedQuery)) score += 8;
+      for (const token of tokens) {
+        if (title.includes(token)) score += 7;
+        if (detail.includes(token)) score += 3;
+        if (groupText.includes(token)) score += 2;
+        if (operationalText.includes(token)) score += 1;
+      }
+      return {
+        score,
+        area_id: group.id,
+        area: group.title,
+        topico: group.topic,
+        resumo: group.summary,
+        titulo: guide.title,
+        orientacao: guide.detail,
+        fluxo_recomendado: group.steps,
+        pontos_de_conferencia: group.checks,
+      };
+    }),
+  )
+    .filter((result) => !normalizedQuery || result.score > 0)
+    .sort((a, b) => b.score - a.score || a.titulo.localeCompare(b.titulo, "pt-BR"))
+    .slice(0, limit);
+
+  return {
+    fonte: "Manual oficial de Suporte da Frotak",
+    consulta: query,
+    resultados: results,
+    encontrado: results.length > 0,
+  };
+}
