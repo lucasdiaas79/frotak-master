@@ -2079,8 +2079,13 @@ function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
                 {date.format(new Date(`${entry.entry_date}T12:00:00`))}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-black">{entry.description}</div>
+                <div className="truncate text-sm font-black">
+                  {entry.partner_name?.trim() || entry.description}
+                </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  {entry.partner_name?.trim() && entry.description !== entry.partner_name && (
+                    <span>{entry.description}</span>
+                  )}
                   {entry.document_number && <span>Doc. {entry.document_number}</span>}
                   <span>{entry.financial_account_name || "Sem conta financeira"}</span>
                   <span>{entry.chart_account_name || "Sem categoria"}</span>
@@ -2152,6 +2157,10 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
   }, [load, syncVersion]);
   const chronologicalEntries = useMemo(
     () => [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date)),
+    [entries],
+  );
+  const recentEntries = useMemo(
+    () => [...entries].sort((a, b) => b.entry_date.localeCompare(a.entry_date)),
     [entries],
   );
   const temporalGroups = useMemo(() => {
@@ -2302,8 +2311,8 @@ function CashFlowContent({ access }: { access: FinancialAccess }) {
           </section>
           <CashFlowForecastPanel summary={summary} />
           <div className="financial-cashflow-main-grid">
+            <CashFlowMovementList entries={recentEntries} />
             <CashFlowTimeline groups={temporalGroups} maxMovement={maxTemporalMovement} />
-            <CashFlowMovementList entries={chronologicalEntries} />
           </div>
         </>
       )}
@@ -2693,6 +2702,7 @@ function TitlesContent({
             }}
             onEdit={editDocument}
             onSettle={settleDocument}
+            onBulkSettle={setBulkSettleTargets}
             onOpenDetails={openDocumentDetails}
             onCancelRecurring={async (rule) => {
               try {
@@ -2897,6 +2907,7 @@ function TitlesContent({
       />
       <BulkSettlementDialog
         targets={bulkSettleTargets}
+        receiving={receiving}
         accounts={accounts.filter((a) => a.active)}
         saving={saving}
         onOpenChange={(open) => !open && setBulkSettleTargets([])}
@@ -2918,13 +2929,25 @@ function TitlesContent({
             }
             toast.success(
               `${bulkSettleTargets.length} ${
-                bulkSettleTargets.length === 1 ? "pagamento registrado" : "pagamentos registrados"
+                bulkSettleTargets.length === 1
+                  ? receiving
+                    ? "recebimento registrado"
+                    : "pagamento registrado"
+                  : receiving
+                    ? "recebimentos registrados"
+                    : "pagamentos registrados"
               }.`,
             );
             setBulkSettleTargets([]);
             await loadDocuments();
           } catch (e) {
-            toast.error(e instanceof Error ? e.message : "Falha ao pagar selecionados.");
+            toast.error(
+              e instanceof Error
+                ? e.message
+                : receiving
+                  ? "Falha ao receber selecionados."
+                  : "Falha ao pagar selecionados.",
+            );
           } finally {
             setSaving(false);
           }
@@ -3214,6 +3237,7 @@ function ReceivablesTitleList({
   canCreate,
   onNew,
   onSettle,
+  onBulkSettle,
   onReverse,
   onVoid,
   onEdit,
@@ -3230,12 +3254,62 @@ function ReceivablesTitleList({
   canCreate: boolean;
   onNew: () => void;
   onSettle: (d: FinancialDocumentDetails, i: FinancialInstallment) => void;
+  onBulkSettle: (
+    targets: Array<{ document: FinancialDocumentDetails; installment: FinancialInstallment }>,
+  ) => void;
   onReverse: (s: FinancialSettlement) => void;
   onVoid: (d: FinancialDocumentDetails) => void;
   onEdit: (d: FinancialDocumentDetails) => void;
   onOpenDetails: (d: FinancialDocumentDetails) => void;
   onCancelRecurring: (rule: FinancialRecurringRule) => void;
 }) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const receivableTargets = useMemo(
+    () =>
+      documents.flatMap((document) => {
+        const installment = firstOpenInstallment(document);
+        if (!installment || !canSettle || ["draft", "voided"].includes(document.status)) return [];
+        return [{ document, installment }];
+      }),
+    [documents, canSettle],
+  );
+  const receivableIds = useMemo(
+    () => new Set(receivableTargets.map(({ document }) => document.id)),
+    [receivableTargets],
+  );
+  const selectedTargets = receivableTargets.filter(({ document }) =>
+    selectedIds.includes(document.id),
+  );
+  const selectedTotal = selectedTargets.reduce(
+    (sum, target) => sum + target.installment.balance,
+    0,
+  );
+  const allReceivablesSelected =
+    receivableTargets.length > 0 &&
+    receivableTargets.every(({ document }) => selectedIds.includes(document.id));
+
+  useEffect(() => {
+    setSelectedIds((current) => current.filter((id) => receivableIds.has(id)));
+  }, [receivableIds]);
+
+  const toggleSelected = (documentId: string, selected: boolean) => {
+    setSelectedIds((current) =>
+      selected
+        ? Array.from(new Set([...current, documentId]))
+        : current.filter((id) => id !== documentId),
+    );
+  };
+
+  const toggleAllReceivables = () => {
+    if (allReceivablesSelected) {
+      setSelectedIds((current) => current.filter((id) => !receivableIds.has(id)));
+      return;
+    }
+    setSelectedIds((current) =>
+      Array.from(new Set([...current, ...receivableTargets.map(({ document }) => document.id)])),
+    );
+  };
+
   return (
     <section className="financial-receivables-list">
       <div className="financial-receivables-list-head">
@@ -3245,7 +3319,33 @@ function ReceivablesTitleList({
         </div>
         <span>{total} encontrados</span>
       </div>
+      {canSettle && receivableTargets.length > 0 && (
+        <div className="financial-payables-bulkbar">
+          <Button size="sm" variant="outline" onClick={toggleAllReceivables}>
+            {allReceivablesSelected ? (
+              <CheckSquare className="size-4" />
+            ) : (
+              <Square className="size-4" />
+            )}
+            {allReceivablesSelected ? "Desmarcar visíveis" : "Selecionar recebíveis"}
+          </Button>
+          <span>
+            {selectedTargets.length
+              ? `${selectedTargets.length} selecionados - ${money.format(selectedTotal)}`
+              : "Selecione os títulos para receber em lote"}
+          </span>
+          <Button
+            size="sm"
+            disabled={selectedTargets.length === 0}
+            onClick={() => onBulkSettle(selectedTargets)}
+          >
+            <CircleDollarSign className="size-4" />
+            Receber selecionados
+          </Button>
+        </div>
+      )}
       <div className="hidden financial-receivables-table-head md:grid">
+        <span>Sel.</span>
         <span>Cliente e título</span>
         <span>Vencimento</span>
         <span>Valor</span>
@@ -3266,6 +3366,8 @@ function ReceivablesTitleList({
                 : null
             }
             onSettle={onSettle}
+            selected={selectedIds.includes(document.id)}
+            onSelectedChange={(selected) => toggleSelected(document.id, selected)}
             onReverse={onReverse}
             onVoid={onVoid}
             onEdit={onEdit}
@@ -3300,6 +3402,8 @@ function ReceivablesTitleRow({
   canEdit,
   recurringRule,
   onSettle,
+  selected,
+  onSelectedChange,
   onReverse,
   onVoid,
   onEdit,
@@ -3312,6 +3416,8 @@ function ReceivablesTitleRow({
   canEdit: boolean;
   recurringRule: FinancialRecurringRule | null;
   onSettle: (d: FinancialDocumentDetails, i: FinancialInstallment) => void;
+  selected: boolean;
+  onSelectedChange: (selected: boolean) => void;
   onReverse: (s: FinancialSettlement) => void;
   onVoid: (d: FinancialDocumentDetails) => void;
   onEdit: (d: FinancialDocumentDetails) => void;
@@ -3323,8 +3429,11 @@ function ReceivablesTitleRow({
   const balance = documentBalance(document);
   const activeSettlements = effectiveSettlements(document);
   const dueState = receivableDueState(document);
+  const canSelect = Boolean(
+    installment && canSettle && !["draft", "voided"].includes(document.status),
+  );
   const canAct =
-    Boolean(installment && canSettle && !["draft", "voided"].includes(document.status)) ||
+    canSelect ||
     (document.status === "draft" && canEdit) ||
     (canReverse && activeSettlements.length > 0);
 
@@ -3338,6 +3447,25 @@ function ReceivablesTitleRow({
         if (event.key === "Enter" || event.key === " ") onOpenDetails(document);
       }}
     >
+      <div className="financial-payables-select-cell">
+        {canSelect ? (
+          <button
+            type="button"
+            className={cn(
+              "financial-payables-select",
+              selected && "financial-payables-select-active",
+            )}
+            aria-label={selected ? "Desmarcar título" : "Selecionar título"}
+            aria-pressed={selected}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelectedChange(!selected);
+            }}
+          >
+            {selected ? <CheckSquare className="size-4" /> : <Square className="size-4" />}
+          </button>
+        ) : null}
+      </div>
       <div className="financial-receivables-title-cell">
         <strong>{document.partnerName || "Cliente não informado"}</strong>
         <span>{document.description}</span>
@@ -5353,7 +5481,7 @@ function SettlementDialog({
               </span>
             </div>
           )}
-          <Field label="Forma">
+          <Field label={receiving ? "Forma de recebimento" : "Forma de pagamento"}>
             <Select value={form.method} onValueChange={(v) => setForm({ ...form, method: v })}>
               <SelectTrigger>
                 <SelectValue />
@@ -5487,12 +5615,14 @@ function SettlementDialog({
 
 function BulkSettlementDialog({
   targets,
+  receiving,
   accounts,
   saving,
   onOpenChange,
   onSave,
 }: {
   targets: Array<{ document: FinancialDocumentDetails; installment: FinancialInstallment }>;
+  receiving: boolean;
   accounts: FinancialAccount[];
   saving: boolean;
   onOpenChange: (v: boolean) => void;
@@ -5525,7 +5655,7 @@ function BulkSettlementDialog({
     <Dialog open={targets.length > 0} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Pagar selecionados</DialogTitle>
+          <DialogTitle>{receiving ? "Receber selecionados" : "Pagar selecionados"}</DialogTitle>
           <DialogDescription>
             {targets.length} {targets.length === 1 ? "título selecionado" : "títulos selecionados"}{" "}
             · total de {money.format(total)}. Cada parcela será baixada pelo saldo em aberto.
@@ -5557,7 +5687,7 @@ function BulkSettlementDialog({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Banco / caixa" className="sm:col-span-2">
+          <Field label={receiving ? "Conta de entrada" : "Banco / caixa"} className="sm:col-span-2">
             <SimpleSelect
               value={form.account || "all"}
               onChange={(value) => setForm({ ...form, account: value === "all" ? "" : value })}
@@ -5591,7 +5721,7 @@ function BulkSettlementDialog({
             }
           >
             {saving && <LoaderCircle className="size-4 animate-spin" />}
-            Pagar {targets.length || ""}
+            {receiving ? "Receber" : "Pagar"} {targets.length || ""}
           </Button>
         </DialogFooter>
       </DialogContent>

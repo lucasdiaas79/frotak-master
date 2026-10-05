@@ -795,8 +795,8 @@
   }
   .financial-receivables-table-head {
     grid-template-columns:
-      minmax(0, 1.55fr) minmax(138px, 0.75fr) minmax(126px, 0.62fr) minmax(116px, 0.55fr)
-      minmax(112px, auto);
+      44px minmax(0, 1.55fr) minmax(138px, 0.75fr) minmax(126px, 0.62fr)
+      minmax(116px, 0.55fr) minmax(112px, auto);
     gap: 14px;
     border-top: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
     border-bottom: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
@@ -814,13 +814,18 @@
     min-width: 0;
     gap: 12px;
     border-top: 1px solid color-mix(in oklch, var(--color-border) 68%, transparent);
-    padding: 15px 66px 15px 16px;
+    padding: 15px 66px 15px 58px;
     transition:
       background 160ms ease,
       border-color 160ms ease;
   }
   .financial-receivables-row:hover {
     background: color-mix(in oklch, var(--color-primary) 5%, transparent);
+  }
+  .financial-receivables-select-cell {
+    position: absolute;
+    left: 12px;
+    top: 16px;
   }
   .financial-receivables-title-cell,
   .financial-receivables-due-cell,
@@ -2788,11 +2793,14 @@
     }
     .financial-receivables-row {
       grid-template-columns:
-        minmax(0, 1.55fr) minmax(138px, 0.75fr) minmax(126px, 0.62fr) minmax(116px, 0.55fr)
-        minmax(112px, auto);
+        44px minmax(0, 1.55fr) minmax(138px, 0.75fr) minmax(126px, 0.62fr)
+        minmax(116px, 0.55fr) minmax(112px, auto);
       align-items: center;
       gap: 14px;
       padding: 14px 16px;
+    }
+    .financial-receivables-select-cell {
+      position: static;
     }
     .financial-receivables-value-cell {
       text-align: right;
@@ -2916,7 +2924,7 @@
       transform: none;
     }
     .financial-cashflow-main-grid {
-      grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
+      grid-template-columns: minmax(0, 2.3fr) minmax(300px, 0.9fr);
     }
     .financial-cashflow-movement-row {
       grid-template-columns: 86px minmax(0, 1fr) minmax(140px, auto);
