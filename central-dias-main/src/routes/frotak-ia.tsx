@@ -57,6 +57,26 @@ const initialMessages: ChatMessage[] = [
   },
 ];
 
+const LIVE_MICROPHONE_TIMEOUT_MS = 20_000;
+const LIVE_TOKEN_TIMEOUT_MS = 20_000;
+const LIVE_CONNECTION_TIMEOUT_MS = 30_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 function cleanAssistantText(text: string) {
   return text
     .replace(/\*/g, "")
@@ -104,6 +124,7 @@ function FrotakIaPage() {
   const [lastUserTranscript, setLastUserTranscript] = useState("");
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const liveSessionRef = useRef<FrotakLiveSession | null>(null);
+  const liveStartAttemptRef = useRef(0);
 
   useEffect(
     () => () => {
@@ -125,7 +146,8 @@ function FrotakIaPage() {
     if (mode === "live" && liveSessionRef.current) {
       liveSessionRef.current.sendText(text);
       setDraft("");
-      setLastLiveText(text);
+      setLastUserTranscript(text);
+      setLastLiveText("");
       return;
     }
 
@@ -170,6 +192,8 @@ function FrotakIaPage() {
   const startLive = async () => {
     if (liveSessionRef.current) return;
 
+    const attempt = liveStartAttemptRef.current + 1;
+    liveStartAttemptRef.current = attempt;
     let stream: MediaStream | null = null;
     try {
       setMode("live");
@@ -178,12 +202,30 @@ function FrotakIaPage() {
       setLastLiveText("");
       setLastUserTranscript("");
 
-      stream = await requestFrotakLiveMicrophone();
+      const streamRequest = requestFrotakLiveMicrophone();
+      void streamRequest.then((requestedStream) => {
+        if (liveStartAttemptRef.current !== attempt) {
+          requestedStream.getTracks().forEach((track) => track.stop());
+        }
+      });
+      stream = await withTimeout(
+        streamRequest,
+        LIVE_MICROPHONE_TIMEOUT_MS,
+        "O navegador nao respondeu ao pedido de microfone. Verifique a permissao e tente novamente.",
+      );
+      if (liveStartAttemptRef.current !== attempt) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       const workspaceId = await requireWorkspaceId();
       const fetchLiveToken = async () =>
-        createFrotakLiveToken({
-          data: { accessToken: await requireAccessToken(), workspaceId },
-        });
+        withTimeout(
+          createFrotakLiveToken({
+            data: { accessToken: await requireAccessToken(), workspaceId },
+          }),
+          LIVE_TOKEN_TIMEOUT_MS,
+          "Nao foi possivel autorizar o Frotak Live a tempo. Tente novamente em instantes.",
+        );
       const liveToken = await fetchLiveToken();
       const session = new FrotakLiveSession({
         token: liveToken.token,
@@ -219,12 +261,19 @@ function FrotakIaPage() {
       });
 
       liveSessionRef.current = session;
-      await session.start();
+      await withTimeout(
+        session.start(),
+        LIVE_CONNECTION_TIMEOUT_MS,
+        "O Frotak Live demorou para conectar. Tente novamente em instantes.",
+      );
     } catch (error) {
+      const cancelled = liveStartAttemptRef.current !== attempt;
       const failedSession = liveSessionRef.current;
       liveSessionRef.current = null;
       await failedSession?.stop();
       stream?.getTracks().forEach((track) => track.stop());
+      if (cancelled) return;
+      liveStartAttemptRef.current += 1;
       setLiveStatus("error");
       setMode("text");
       toast.error(
@@ -234,6 +283,7 @@ function FrotakIaPage() {
   };
 
   const stopLive = async () => {
+    liveStartAttemptRef.current += 1;
     const session = liveSessionRef.current;
     liveSessionRef.current = null;
     if (session) await session.stop();

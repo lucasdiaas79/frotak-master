@@ -1,7 +1,6 @@
 import {
   EndSensitivity,
   FunctionCallingConfigMode,
-  FunctionResponseScheduling,
   GoogleGenAI,
   Modality,
   StartSensitivity,
@@ -10,6 +9,7 @@ import {
 } from "@google/genai";
 import { createServerFn } from "@tanstack/react-start";
 import { createFrotakAiContextSummary, resolveFrotakAiContext } from "@/lib/frotakAiContext";
+import { isFrotakSupportQuestion } from "@/lib/frotakAiIntent";
 import {
   classifyFrotakQuestion,
   executeFrotakAiTool,
@@ -33,6 +33,7 @@ type SerializableValue =
 
 const MAX_HISTORY_MESSAGES = 40;
 const MAX_HISTORY_CHARS = 16_000;
+const MAX_TOOL_ROUNDS = 4;
 
 function geminiApiKey() {
   const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
@@ -81,6 +82,9 @@ function publicError(error: unknown) {
   }
   if (/overloaded|unavailable|503|high demand/i.test(message)) {
     return "A Frotak IA esta instavel no momento. Tente novamente em instantes.";
+  }
+  if (/429|quota|rate.?limit|resource.?exhausted/i.test(message)) {
+    return "A Frotak IA atingiu o limite temporario de uso. Tente novamente em instantes.";
   }
   return "Nao foi possivel concluir a conversa com a Frotak IA.";
 }
@@ -353,6 +357,8 @@ async function answerDeterministicTenantQuestion(
   message: string,
 ) {
   const normalized = normalizeIntentText(message);
+  if (isFrotakSupportQuestion(normalized)) return null;
+
   const { asksTenantIdentity, asksPartnerProfitability } = classifyFrotakQuestion(message);
   const limit = requestedLimit(normalized, 5);
   const asksVehicle = /\b(caminhao|caminhoes|veiculo|veiculos|frota|placa|placas)\b/.test(
@@ -657,6 +663,8 @@ async function buildMandatoryTenantData(
   message: string,
 ) {
   const normalized = normalizeIntentText(message);
+  if (isFrotakSupportQuestion(normalized)) return null;
+
   const limit = requestedLimit(normalized);
   const isFrotakDataQuestion =
     /\b(empresa|companhia|tenant|workspace|cliente|clientes|parceiro|parceiros|pagador|pagadores|caminhao|caminhoes|veiculo|veiculos|frota|placa|placas|motorista|motoristas|condutor|condutores|frete|fretes|viagem|viagens|rota|rotas|carga|descarga|tiro|tiros|cte|ct-e|documento|documentos|comprovante|comprovantes|embarcador|embarcadores|remetente|remetentes|destinatario|destinatarios|origem|origens|destino|destinos|produto|produtos|financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|receitas|despesa|despesas|saldo|valor|valores|lucro|rentabilidade|margem|resultado|faturamento|abastecimento|abastecimentos|diesel|arla|posto|combustivel|posicao|posicoes|localizacao|sascar|telemetria|mapa|onde)\b/.test(
@@ -677,18 +685,12 @@ async function buildMandatoryTenantData(
   ].join("\n");
 }
 
-function isSupportQuestion(normalizedMessage: string) {
-  return /\b(como (faco|fazer|criar|cadastrar|enviar|anexar|usar|acessar|entrar|registrar|pagar|receber|baixar|visualizar|emitir|alterar|editar|cancelar|estornar|consultar|puxar)|onde (fica|encontro)|passo a passo|manual|suporte|ajuda|o que fazer quando|o que significa|qual a diferenca|por que|porque|entendendo|nao consigo|nao esta funcionando|erro|falha|bloquead[oa]s?)\b/.test(
-    normalizedMessage,
-  );
-}
-
 async function buildMandatorySupportData(
   context: Awaited<ReturnType<typeof resolveFrotakAiContext>>,
   message: string,
 ) {
   const normalized = normalizeIntentText(message);
-  if (!isSupportQuestion(normalized)) return null;
+  if (!isFrotakSupportQuestion(normalized)) return null;
 
   const data = await executeFrotakAiTool(context, "consultar_suporte", {
     pergunta: message,
@@ -862,43 +864,51 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
         },
       ] as Content[];
 
-      const first = await generateWithFallback(ai, { contents, systemInstruction });
-      const modelContent = first.response.candidates?.[0]?.content;
-      const toolCalls = (first.response.functionCalls ?? [])
-        .map(normalizeFrotakAiToolCall)
-        .filter((call): call is FrotakAiToolCall => Boolean(call));
+      let current = await generateWithFallback(ai, { contents, systemInstruction });
+      let conversation = contents;
+      const usedTools = new Set<string>();
 
-      if (toolCalls.length > 0) {
+      for (let round = 0; round < MAX_TOOL_ROUNDS; round += 1) {
+        const modelContent = current.response.candidates?.[0]?.content;
+        const toolCalls = (current.response.functionCalls ?? [])
+          .map(normalizeFrotakAiToolCall)
+          .filter((call): call is FrotakAiToolCall => Boolean(call));
+
+        if (toolCalls.length === 0) {
+          const text = cleanModelText(current.response.text ?? "");
+          if (!text) throw new Error("Resposta vazia da IA");
+          return { text, model: current.model, tools: [...usedTools] };
+        }
+
         if (!modelContent) throw new Error("Resposta de ferramenta sem conteudo do modelo");
+        toolCalls.forEach((call) => usedTools.add(call.name));
         const toolResponses = await Promise.all(
           toolCalls.map(async (call) => {
             const result = await executeFrotakAiTool(resolvedContext, call.name, call.args ?? {});
-            return {
-              ...toolResponsePart(call, result),
-              scheduling: FunctionResponseScheduling.WHEN_IDLE,
-            };
+            return toolResponsePart(call, result);
           }),
         );
+        conversation = [...conversation, modelContent, functionResponseContent(toolResponses)];
 
-        const second = await ai.models.generateContent({
-          model: first.model,
-          contents: [...contents, modelContent, functionResponseContent(toolResponses)],
+        const finalRound = round === MAX_TOOL_ROUNDS - 1;
+        const response = await ai.models.generateContent({
+          model: current.model,
+          contents: conversation,
           config: {
             temperature: 0.2,
             maxOutputTokens: 1600,
             systemInstruction,
-            tools: [{ functionDeclarations: [...FROTAK_AI_TOOL_DECLARATIONS] }],
+            ...(finalRound
+              ? {}
+              : { tools: [{ functionDeclarations: [...FROTAK_AI_TOOL_DECLARATIONS] }] }),
           },
         });
-
-        const text = cleanModelText(second.text ?? "");
-        if (!text) throw new Error("Resposta vazia da IA");
-        return { text, model: first.model, tools: toolCalls.map((call) => call.name) };
+        current = { response, model: current.model };
       }
 
-      const text = cleanModelText(first.response.text ?? "");
-      if (!text) throw new Error("Resposta vazia da IA");
-      return { text, model: first.model, tools: [] };
+      const text = cleanModelText(current.response.text ?? "");
+      if (!text) throw new Error("A Frotak IA excedeu o limite de consultas para esta pergunta");
+      return { text, model: current.model, tools: [...usedTools] };
     } catch (error) {
       logFrotakAiStage(context ? "gemini" : "context", error, {
         workspaceId: data.workspaceId,

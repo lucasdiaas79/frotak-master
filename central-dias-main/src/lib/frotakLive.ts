@@ -1,3 +1,5 @@
+import { requiresFrotakTool } from "@/lib/frotakAiIntent";
+
 export type FrotakLiveStatus =
   | "idle"
   | "connecting"
@@ -221,6 +223,8 @@ export class FrotakLiveSession {
   private toolCallsPending = 0;
   private toolFailures = 0;
   private cancelledToolCallIds = new Set<string>();
+  private resolveReady: (() => void) | null = null;
+  private rejectReady: ((error: Error) => void) | null = null;
 
   constructor(options: FrotakLiveSessionOptions) {
     this.options = options;
@@ -242,7 +246,17 @@ export class FrotakLiveSession {
   async start() {
     this.closed = false;
     this.reconnectAttempts = 0;
-    await this.connect(false);
+    const ready = new Promise<void>((resolve, reject) => {
+      this.resolveReady = resolve;
+      this.rejectReady = reject;
+    });
+    try {
+      await this.connect(false);
+      await ready;
+    } finally {
+      this.resolveReady = null;
+      this.rejectReady = null;
+    }
   }
 
   sendText(text: string) {
@@ -281,6 +295,7 @@ export class FrotakLiveSession {
       this.websocket.send(JSON.stringify({ realtimeInput: { audioStreamEnd: true } }));
     }
     this.closed = true;
+    this.rejectReady?.(new Error("Conexao de voz cancelada."));
     if (this.setupTimeout) window.clearTimeout(this.setupTimeout);
     if (this.silenceTimer) window.clearTimeout(this.silenceTimer);
     if (this.reconnectTimer) window.clearTimeout(this.reconnectTimer);
@@ -321,7 +336,7 @@ export class FrotakLiveSession {
     if (isReconnect) {
       this.reconnecting = true;
       this.options.onStatus?.("reconnecting");
-      if (this.options.refreshToken) {
+      if (this.options.refreshToken && !this.sessionResumptionHandle) {
         const next = await this.options.refreshToken();
         this.options.token = next.token;
         this.options.model = next.model;
@@ -440,6 +455,11 @@ export class FrotakLiveSession {
     return true;
   }
 
+  private closeWebSocket() {
+    this.websocket?.close();
+    this.websocket = null;
+  }
+
   private requireGrounding(source: string) {
     if (this.groundingRequired) return;
     this.groundingRequired = true;
@@ -461,6 +481,7 @@ export class FrotakLiveSession {
 
   private failSession(message: string) {
     if (this.closed) return;
+    this.rejectReady?.(new Error(message));
     this.options.onStatus?.("error");
     this.options.onError?.(message);
   }
@@ -492,6 +513,7 @@ export class FrotakLiveSession {
       this.setupTimeout = null;
       this.setupComplete = true;
       this.reconnecting = false;
+      this.resolveReady?.();
       if (this.reconnectStableTimer) window.clearTimeout(this.reconnectStableTimer);
       this.reconnectStableTimer = window.setTimeout(() => {
         this.reconnectAttempts = 0;
@@ -665,8 +687,7 @@ export class FrotakLiveSession {
     this.options.onStatus?.("reconnecting");
     console.warn("[frotakLive] reconnecting", { reason, attempt: this.reconnectAttempts });
 
-    this.websocket?.close();
-    this.websocket = null;
+    this.closeWebSocket();
     this.setupComplete = false;
     if (this.reconnectStableTimer) window.clearTimeout(this.reconnectStableTimer);
     this.reconnectStableTimer = null;
@@ -686,6 +707,8 @@ export class FrotakLiveSession {
       console.error("[frotakLive] reconnect failed", {
         message: error instanceof Error ? error.message : String(error),
       });
+      this.closeWebSocket();
+      this.sessionResumptionHandle = null;
       this.reconnecting = false;
       void this.scheduleReconnect("tentativa de reconexao falhou");
     }
@@ -722,32 +745,6 @@ async function readWebSocketMessage(data: string | ArrayBuffer | Blob) {
   if (typeof data === "string") return data;
   if (data instanceof Blob) return data.text();
   return new TextDecoder().decode(data);
-}
-
-function normalizeIntentText(text: string) {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-function requiresFrotakTool(text: string) {
-  const normalized = normalizeIntentText(text);
-  const domain =
-    /\b(frotak|empresa|companhia|tenant|workspace|cliente|frota|caminhao|caminhoes|veiculo|veiculos|placa|placas|motorista|motoristas|frete|fretes|viagem|viagens|rota|rotas|financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|despesa|saldo|abastecimento|abastecimentos|diesel|arla|posto|combustivel|posicao|posicoes|localizacao|sascar|telemetria|mapa|status|valor|valores|quantidade|quantos|quantas|total|cte|ct e|mdfe|mdf e|documento|comprovante|nota|login|senha|app|tela|menu|cadastro|usuario|suporte)\b/.test(
-      normalized,
-    );
-  const factual =
-    /\b(qual|quais|quanto|quantos|quantas|cite|listar|liste|mostre|status|valor|valores|total|numero|nome|nomes|placa|placas|onde)\b/.test(
-      normalized,
-    );
-  const support =
-    /\b(como|onde fica|onde encontro|passo a passo|o que fazer|nao consigo|nao aparece|nao funciona|erro|falha|ajuda|acessar|abrir|enviar|anexar|cadastrar|criar|editar|baixar|visualizar|consultar|usar|entrar)\b/.test(
-      normalized,
-    );
-  return domain && (factual || support);
 }
 
 function appendTranscript(current: string, fragment: string) {
