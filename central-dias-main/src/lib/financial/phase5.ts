@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import type {
+  FinancialDocumentInput,
   FinancialRecurringGenerationResult,
   FinancialRecurringRule,
   FinancialRecurringRuleInput,
@@ -68,7 +69,7 @@ export async function saveFinancialRecurringRule(input: FinancialRecurringRuleIn
 }
 
 export async function saveFinancialDocumentWithRecurring(input: {
-  document: Record<string, unknown>;
+  document: FinancialDocumentInput;
   recurring: FinancialRecurringRuleInput;
 }) {
   const { data, error } = await supabase.rpc("save_financial_document_with_recurring", {

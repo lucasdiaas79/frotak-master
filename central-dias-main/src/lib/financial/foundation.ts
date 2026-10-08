@@ -146,5 +146,6 @@ export async function findFinancialDocumentBySource(
     currency: data.currency,
     status: data.status,
     chartAccountId: data.chart_account_id,
+    entryDate: data.entry_date ?? data.created_at?.slice(0, 10) ?? null,
   };
 }

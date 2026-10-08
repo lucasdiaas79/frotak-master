@@ -414,114 +414,6 @@ export function FinancialOverviewPage() {
   return <FinancialBoundary>{(access) => <OverviewContent access={access} />}</FinancialBoundary>;
 }
 
-function LegacyOverviewContent() {
-  const [documents, setDocuments] = useState<FinancialDocumentDetails[]>([]);
-  const [accounts, setAccounts] = useState<FinancialAccount[]>([]);
-  useEffect(() => {
-    Promise.all([listFinancialDocuments(), listFinancialAccounts()])
-      .then(([d, a]) => {
-        setDocuments(d);
-        setAccounts(a);
-      })
-      .catch(() => toast.error("Não foi possível carregar a visão financeira."));
-  }, []);
-  const open = documents.filter((d) => !["draft", "voided", "settled"].includes(d.status));
-  const received = documents
-    .filter((d) => d.direction === "receivable")
-    .flatMap(effectiveSettlements)
-    .filter((s) => s.settledOn >= monthStart())
-    .reduce((sum, s) => sum + s.netAmount, 0);
-  const paid = documents
-    .filter((d) => d.direction === "payable")
-    .flatMap(effectiveSettlements)
-    .filter((s) => s.settledOn >= monthStart())
-    .reduce((sum, s) => sum + s.netAmount, 0);
-  const overdue = open
-    .flatMap((d) => d.installments)
-    .filter((i) => i.balance > 0 && i.dueDate < today());
-  return (
-    <div
-      className={cn(
-        "financial-shell space-y-4",
-        receiving ? "financial-receivables-shell" : "financial-payables-shell",
-      )}
-    >
-      <PageHeader title="Financeiro" subtitle="Controle real de contas, vencimentos e caixa" />
-      <FinancialNav />
-      <div className="grid grid-cols-2 gap-3 px-3 md:grid-cols-3 lg:grid-cols-6 md:px-0">
-        <Stat
-          label="A receber"
-          value={open
-            .filter((d) => d.direction === "receivable")
-            .reduce((s, d) => s + d.installments.reduce((a, i) => a + i.balance, 0), 0)}
-          icon={ArrowDownLeft}
-        />
-        <Stat
-          label="A pagar"
-          value={open
-            .filter((d) => d.direction === "payable")
-            .reduce((s, d) => s + d.installments.reduce((a, i) => a + i.balance, 0), 0)}
-          icon={ArrowUpRight}
-        />
-        <Stat label="Recebido no mês" value={received} icon={CircleDollarSign} tone="success" />
-        <Stat label="Pago no mês" value={paid} icon={ReceiptText} />
-        <Stat
-          label="Saldo financeiro"
-          value={accounts.reduce((s, a) => s + a.currentBalance, 0)}
-          icon={Landmark}
-          tone="success"
-        />
-        <Stat label="Títulos vencidos" value={overdue.length} icon={CalendarClock} tone="danger" />
-      </div>
-      <div className="grid gap-3 px-3 lg:grid-cols-2 md:px-0">
-        <Upcoming
-          title="Próximos recebimentos"
-          documents={documents.filter((d) => d.direction === "receivable")}
-        />
-        <Upcoming
-          title="Próximos pagamentos"
-          documents={documents.filter((d) => d.direction === "payable")}
-        />
-      </div>
-    </div>
-  );
-}
-
-function Upcoming({ title, documents }: { title: string; documents: FinancialDocumentDetails[] }) {
-  const items = documents
-    .flatMap((d) =>
-      d.installments.map((i) => ({ ...i, description: d.description, partner: d.partnerName })),
-    )
-    .filter((i) => i.balance > 0 && i.dueDate >= today())
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
-    .slice(0, 5);
-  return (
-    <section className="premium-card p-4">
-      <h2 className="text-sm font-extrabold">{title}</h2>
-      <div className="mt-3 divide-y divide-border">
-        {items.length ? (
-          items.map((i) => (
-            <div key={i.id} className="flex items-center gap-3 py-3">
-              <CalendarClock className="size-4 text-primary" />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-bold">{i.description}</div>
-                <div className="text-xs text-muted-foreground">
-                  {i.partner || "Sem parceiro"} · {date.format(new Date(`${i.dueDate}T12:00:00`))}
-                </div>
-              </div>
-              <strong className="text-sm">{money.format(i.balance)}</strong>
-            </div>
-          ))
-        ) : (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            Nenhum vencimento próximo.
-          </p>
-        )}
-      </div>
-    </section>
-  );
-}
-
 type PeriodMode = "month" | "quarter" | "year" | "custom";
 const JO_TRANSPORTES_TENANT_ID = "ebfa57a2-f639-4e53-a006-3b1493c685a7";
 
@@ -2063,8 +1955,11 @@ function CashFlowTimeline({
   );
 }
 
+type CashFlowMovementRow =
+  { kind: "entry"; entry: CashFlowEntry } | { kind: "batch"; entries: CashFlowEntry[] };
+
 function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
-  const rows = useMemo(() => {
+  const rows = useMemo<CashFlowMovementRow[]>(() => {
     const batches = new Map<string, CashFlowEntry[]>();
     for (const entry of entries) {
       if (entry.status === "settlement" && entry.batch_id && entry.batch_name) {
@@ -2074,14 +1969,17 @@ function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
       }
     }
     const seen = new Set<string>();
-    return entries.flatMap((entry) => {
+    const result: CashFlowMovementRow[] = [];
+    for (const entry of entries) {
       if (!entry.batch_id || !entry.batch_name || entry.status !== "settlement") {
-        return [{ kind: "entry" as const, entry }];
+        result.push({ kind: "entry", entry });
+        continue;
       }
-      if (seen.has(entry.batch_id)) return [];
+      if (seen.has(entry.batch_id)) continue;
       seen.add(entry.batch_id);
-      return [{ kind: "batch" as const, entries: batches.get(entry.batch_id) ?? [entry] }];
-    });
+      result.push({ kind: "batch", entries: batches.get(entry.batch_id) ?? [entry] });
+    }
+    return result;
   }, [entries]);
 
   return (
@@ -2097,37 +1995,39 @@ function CashFlowMovementList({ entries }: { entries: CashFlowEntry[] }) {
         {rows.length ? (
           rows.map((row) => {
             if (row.kind === "batch") {
-              return <CashFlowSettlementBatchRow key={row.entries[0].batch_id} entries={row.entries} />;
+              return (
+                <CashFlowSettlementBatchRow key={row.entries[0].batch_id} entries={row.entries} />
+              );
             }
             const { entry } = row;
             return (
-            <div key={entry.entry_id} className="financial-cashflow-movement-row">
-              <div className="financial-cashflow-date-chip">
-                {date.format(new Date(`${entry.entry_date}T12:00:00`))}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-black">
-                  {entry.partner_name?.trim() || entry.description}
+              <div key={entry.entry_id} className="financial-cashflow-movement-row">
+                <div className="financial-cashflow-date-chip">
+                  {date.format(new Date(`${entry.entry_date}T12:00:00`))}
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                  {entry.partner_name?.trim() && entry.description !== entry.partner_name && (
-                    <span>{entry.description}</span>
-                  )}
-                  {entry.document_number && <span>Doc. {entry.document_number}</span>}
-                  <span>{entry.financial_account_name || "Sem conta financeira"}</span>
-                  <span>{entry.chart_account_name || "Sem categoria"}</span>
-                  <Badge variant={entry.status === "overdue" ? "destructive" : "secondary"}>
-                    {cashFlowStatusLabel[entry.status]}
-                  </Badge>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-black">
+                    {entry.partner_name?.trim() || entry.description}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                    {entry.partner_name?.trim() && entry.description !== entry.partner_name && (
+                      <span>{entry.description}</span>
+                    )}
+                    {entry.document_number && <span>Doc. {entry.document_number}</span>}
+                    <span>{entry.financial_account_name || "Sem conta financeira"}</span>
+                    <span>{entry.chart_account_name || "Sem categoria"}</span>
+                    <Badge variant={entry.status === "overdue" ? "destructive" : "secondary"}>
+                      {cashFlowStatusLabel[entry.status]}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="financial-cashflow-row-value">
+                  <span>{entry.direction === "receivable" ? "Entrada" : "Saída"}</span>
+                  <strong className={cn(entry.signed_amount < 0 && "text-destructive")}>
+                    {signedMoney(entry.signed_amount)}
+                  </strong>
                 </div>
               </div>
-              <div className="financial-cashflow-row-value">
-                <span>{entry.direction === "receivable" ? "Entrada" : "Saída"}</span>
-                <strong className={cn(entry.signed_amount < 0 && "text-destructive")}>
-                  {signedMoney(entry.signed_amount)}
-                </strong>
-              </div>
-            </div>
             );
           })
         ) : (
@@ -2222,29 +2122,52 @@ function CashFlowSettlementBatchRow({ entries }: { entries: CashFlowEntry[] }) {
               </div>
               <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                 <span>Conta: {item.financial_account_name}</span>
-                <span>Categoria: {item.chart_account_code ? `${item.chart_account_code} · ` : ""}{item.chart_account_name || "Sem categoria"}</span>
+                <span>
+                  Categoria: {item.chart_account_code ? `${item.chart_account_code} · ` : ""}
+                  {item.chart_account_name || "Sem categoria"}
+                </span>
                 <span>Pagamento: {item.payment_method}</span>
                 <span>Valor original: {money.format(item.original_amount)}</span>
                 {item.notes && <span>Observação: {item.notes}</span>}
               </div>
               <div className="mt-3 space-y-2">
-                {item.allocations.length ? item.allocations.map((allocation) => (
-                  <div className="financial-cashflow-allocation" key={allocation.id}>
-                    <div className="flex flex-wrap justify-between gap-2">
-                      <strong>{allocation.chart_account_code ? `${allocation.chart_account_code} · ` : ""}{allocation.chart_account_name || "Apropriação"}</strong>
-                      <span>{money.format(allocation.amount)}{allocation.percentage != null && ` · ${allocation.percentage}%`}</span>
+                {item.allocations.length ? (
+                  item.allocations.map((allocation) => (
+                    <div className="financial-cashflow-allocation" key={allocation.id}>
+                      <div className="flex flex-wrap justify-between gap-2">
+                        <strong>
+                          {allocation.chart_account_code
+                            ? `${allocation.chart_account_code} · `
+                            : ""}
+                          {allocation.chart_account_name || "Apropriação"}
+                        </strong>
+                        <span>
+                          {money.format(allocation.amount)}
+                          {allocation.percentage != null && ` · ${allocation.percentage}%`}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                        {allocation.description && <span>{allocation.description}</span>}
+                        {allocation.cost_center_name && (
+                          <span>Centro: {allocation.cost_center_name}</span>
+                        )}
+                        {allocation.vehicle_plate && (
+                          <span>Veículo: {allocation.vehicle_plate}</span>
+                        )}
+                        {allocation.driver_name && <span>Motorista: {allocation.driver_name}</span>}
+                        {allocation.product_name && <span>Produto: {allocation.product_name}</span>}
+                        {allocation.business_partner_name && (
+                          <span>Parceiro: {allocation.business_partner_name}</span>
+                        )}
+                        {allocation.freight_reference && (
+                          <span>Frete: {allocation.freight_reference}</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                      {allocation.description && <span>{allocation.description}</span>}
-                      {allocation.cost_center_name && <span>Centro: {allocation.cost_center_name}</span>}
-                      {allocation.vehicle_plate && <span>Veículo: {allocation.vehicle_plate}</span>}
-                      {allocation.driver_name && <span>Motorista: {allocation.driver_name}</span>}
-                      {allocation.product_name && <span>Produto: {allocation.product_name}</span>}
-                      {allocation.business_partner_name && <span>Parceiro: {allocation.business_partner_name}</span>}
-                      {allocation.freight_reference && <span>Frete: {allocation.freight_reference}</span>}
-                    </div>
-                  </div>
-                )) : <p className="text-xs text-muted-foreground">Sem apropriações cadastradas.</p>}
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground">Sem apropriações cadastradas.</p>
+                )}
               </div>
             </article>
           ))}
@@ -3028,6 +2951,7 @@ function TitlesContent({
       />
       <SettlementDialog
         target={settleTarget}
+        receiving={receiving}
         accounts={accounts.filter((a) => a.active)}
         centers={centers}
         vehicles={vehicles}
@@ -4430,7 +4354,7 @@ function TitleDetailsDialog({
   chart: ChartAccount[];
   centers: CostCenter[];
   vehicles: Array<{ id: string; plate: string }>;
-  drivers: Array<{ id: string; name: string }>;
+  drivers: Array<{ id: string; name: string; active?: boolean }>;
   onOpenChange: (open: boolean) => void;
 }) {
   const chartAccount = chart.find((item) => item.id === document?.chartAccountId);
@@ -4917,7 +4841,7 @@ function DocumentDialog({
   centers: CostCenter[];
   freights: CanonicalFreight[];
   vehicles: Array<{ id: string; plate: string }>;
-  drivers: Array<{ id: string; name: string }>;
+  drivers: Array<{ id: string; name: string; active?: boolean }>;
   products: Array<{ id: string; name: string }>;
   saving: boolean;
   document: FinancialDocumentDetails | null;
@@ -5279,7 +5203,7 @@ function DocumentDialog({
                   setForm({ ...form, driverId: v === "all" ? "" : v, vehicleId: "", freightId: "" })
                 }
                 all="Nao apropriar por funcionario"
-                items={drivers.filter((d) => d.active).map((d) => [d.id, d.name])}
+                items={drivers.filter((d) => d.active !== false).map((d) => [d.id, d.name])}
               />
             </Field>
             <Field label="Produto (opcional)">
@@ -5472,6 +5396,7 @@ function PartnerDialog({
 
 function SettlementDialog({
   target,
+  receiving,
   accounts,
   centers,
   vehicles,
@@ -5482,6 +5407,7 @@ function SettlementDialog({
   onSave,
 }: {
   target: { document: FinancialDocumentDetails; installment: FinancialInstallment } | null;
+  receiving: boolean;
   accounts: FinancialAccount[];
   centers: CostCenter[];
   vehicles: Array<{ id: string; plate: string }>;
@@ -5873,7 +5799,12 @@ function BulkSettlementDialog({
             Cancelar
           </Button>
           <Button
-            disabled={saving || targets.length === 0 || !form.account || (!receiving && !form.batchName.trim())}
+            disabled={
+              saving ||
+              targets.length === 0 ||
+              !form.account ||
+              (!receiving && !form.batchName.trim())
+            }
             onClick={() =>
               onSave({
                 financialAccountId: form.account,
@@ -6025,7 +5956,7 @@ function FinancialRecurringContent({ access }: { access: FinancialAccess }) {
       employeeName: rule.employeeName || "",
       driverId: rule.driverId || "",
       vehicleId: rule.vehicleId || "",
-      costCenterId: rule.costCenterId,
+      costCenterId: rule.costCenterId ?? "",
       chartAccountId: rule.chartAccountId,
       amount: String(rule.amount),
       frequency: rule.frequency,

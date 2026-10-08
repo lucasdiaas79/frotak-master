@@ -1,15 +1,12 @@
 import { createRouter, useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
-import {
-  clearInvalidAuthSession,
-  getMasterLoginUrl,
-  isAuthSessionError,
-} from "@/lib/auth";
+import { clearInvalidAuthSession, getMasterLoginUrl, isAuthSessionError } from "@/lib/auth";
 import { routeTree } from "./routeTree.gen";
 
-function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function DefaultErrorComponent({ error, reset }: { error: unknown; reset: () => void }) {
   const router = useRouter();
   const sessionExpired = isAuthSessionError(error);
+  const errorMessage = error instanceof Error ? error.message : String(error ?? "");
 
   useEffect(() => {
     if (!sessionExpired) return;
@@ -46,9 +43,9 @@ function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => vo
             ? "Estamos direcionando você para entrar novamente com segurança."
             : "Ocorreu uma falha inesperada. Tente carregar os dados novamente."}
         </p>
-        {import.meta.env.DEV && error.message && (
+        {import.meta.env.DEV && errorMessage && (
           <pre className="mt-4 max-h-40 overflow-auto rounded-md bg-muted p-3 text-left font-mono text-xs text-destructive">
-            {error.message}
+            {errorMessage}
           </pre>
         )}
         <div className="mt-6 flex items-center justify-center gap-3">
