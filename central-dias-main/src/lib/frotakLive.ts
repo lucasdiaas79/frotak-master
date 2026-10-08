@@ -259,7 +259,7 @@ export class FrotakLiveSession {
 
   sendText(text: string) {
     if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) return;
-    this.beginGroundedTurn();
+    if (requiresFrotakTool(text)) this.beginGroundedTurn();
     this.options.onStatus?.("thinking");
     this.sendRealtimeInput({ text });
   }
@@ -542,14 +542,14 @@ export class FrotakLiveSession {
     if (interimInputText) {
       const preview = appendTranscript(this.inputTranscriptBuffer, interimInputText);
       this.options.onInputText?.(sanitizeLiveText(preview));
-      this.requireGrounding("voice");
+      if (requiresFrotakTool(preview)) this.requireGrounding("voice");
     }
 
     const inputText = message.serverContent?.inputTranscription?.text;
     if (inputText) {
       this.inputTranscriptBuffer = appendTranscript(this.inputTranscriptBuffer, inputText);
       this.options.onInputText?.(sanitizeLiveText(this.inputTranscriptBuffer));
-      this.requireGrounding("voice");
+      if (requiresFrotakTool(this.inputTranscriptBuffer)) this.requireGrounding("voice");
     }
 
     const toolCalls = message.toolCall?.functionCalls ?? [];
@@ -586,13 +586,15 @@ export class FrotakLiveSession {
     }
 
     if (message.serverContent?.turnComplete) {
-      const failClosed = this.groundingRequired && !this.canReleaseModelOutput();
-      const text = failClosed ? FACTUAL_FAIL_CLOSED_MESSAGE : this.transcriptBuffer.trim();
-      this.transcriptBuffer = "";
-      this.inputTranscriptBuffer = "";
-      this.groundingRequired = false;
-      this.resetToolState();
-      if (text) this.options.onText?.(sanitizeLiveText(text));
+      if (!(this.groundingRequired && this.toolCallsPending > 0)) {
+        const failClosed = this.groundingRequired && !this.canReleaseModelOutput();
+        const text = failClosed ? FACTUAL_FAIL_CLOSED_MESSAGE : this.transcriptBuffer.trim();
+        this.transcriptBuffer = "";
+        this.inputTranscriptBuffer = "";
+        this.groundingRequired = false;
+        this.resetToolState();
+        if (text) this.options.onText?.(sanitizeLiveText(text));
+      }
     }
 
     if (message.sessionResumptionUpdate?.resumable && message.sessionResumptionUpdate.newHandle) {
@@ -813,3 +815,4 @@ function sanitizeLiveText(text: string) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
+import { requiresFrotakTool } from "@/lib/frotakAiIntent";
