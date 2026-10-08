@@ -1,5 +1,5 @@
 import type { Session, User } from "@supabase/supabase-js";
-import { hasSupabaseConfig, supabase } from "@/lib/supabase";
+import { hasSupabaseConfig, supabase, supabaseAuthStorageKey } from "@/lib/supabase";
 import type { Profile } from "@/lib/types";
 
 const LOCAL_AUTH_KEY = "central-client-local-session";
@@ -8,6 +8,14 @@ const DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001";
 const CENTRAL_DEMO_EMAIL = "admin@central.com.br";
 const CENTRAL_DEMO_PASSWORD = "123456";
 const MASTER_SSO_SOURCE = "frotak-master";
+const AUTH_ERROR_MARKERS = [
+  "invalid refresh token",
+  "refresh token not found",
+  "auth session missing",
+  "jwt expired",
+  "invalid jwt",
+  "unauthenticated",
+];
 
 interface ProfileRow {
   id: string;
@@ -83,6 +91,40 @@ type LocalSession = {
 
 function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+export function isAuthSessionError(error: unknown) {
+  const candidate = error as { message?: unknown; name?: unknown; status?: unknown } | null;
+  const message = String(candidate?.message ?? error ?? "").toLowerCase();
+  const name = String(candidate?.name ?? "").toLowerCase();
+
+  return (
+    name.includes("authapierror") ||
+    candidate?.status === 401 ||
+    AUTH_ERROR_MARKERS.some((marker) => message.includes(marker))
+  );
+}
+
+function clearStoredAuthState() {
+  if (!canUseStorage()) return;
+  window.localStorage.removeItem(LOCAL_AUTH_KEY);
+  window.localStorage.removeItem("frotak-sso-source");
+  window.localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
+  window.localStorage.removeItem(supabaseAuthStorageKey);
+}
+
+export async function clearInvalidAuthSession() {
+  clearStoredAuthState();
+
+  if (hasSupabaseConfig()) {
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch {
+      // The refresh token may already be unusable; local cleanup above is authoritative.
+    }
+  }
+
+  clearStoredAuthState();
 }
 
 function readLocalSession(): LocalSession | null {
@@ -257,11 +299,7 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function signOut() {
-  if (canUseStorage()) {
-    window.localStorage.removeItem(LOCAL_AUTH_KEY);
-    window.localStorage.removeItem("frotak-sso-source");
-    window.localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
-  }
+  clearStoredAuthState();
 
   if (!hasSupabaseConfig() || shouldUseLocalTenantData()) {
     return;

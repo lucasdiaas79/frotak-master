@@ -35,9 +35,11 @@ import {
 } from "@/components/ui/sheet";
 import {
   acceptMasterSsoFromUrl,
+  clearInvalidAuthSession,
   getCurrentUser,
   getMasterLoginUrl,
   getProfile,
+  isAuthSessionError,
   signOut,
 } from "@/lib/auth";
 import { useFleet } from "@/lib/store";
@@ -856,6 +858,7 @@ export function AppLayout() {
   const subscribeRealtime = useFleet((s) => s.subscribeRealtime);
   const isLoginRoute = loc.pathname === "/login";
   const [checkingAuth, setCheckingAuth] = React.useState(true);
+  const [initializationError, setInitializationError] = React.useState<string | null>(null);
   const [profile, setProfile] = React.useState<Profile | null>(null);
   const [financialAccess, setFinancialAccess] = React.useState<FinancialAccess | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
@@ -891,10 +894,18 @@ export function AppLayout() {
           unsubscribeRealtime = subscribeRealtime();
           setCheckingAuth(false);
         }
-      } catch {
-        if (!cancelled) {
-          window.location.href = getMasterLoginUrl();
+      } catch (error) {
+        if (cancelled) return;
+
+        if (isAuthSessionError(error)) {
+          await clearInvalidAuthSession();
+          window.location.replace(getMasterLoginUrl());
+          return;
         }
+
+        console.error("[app] Falha ao inicializar o sistema", error);
+        setInitializationError("Não foi possível carregar os dados do sistema.");
+        setCheckingAuth(false);
       }
     }
 
@@ -927,6 +938,26 @@ export function AppLayout() {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background text-[13px] text-muted-foreground">
         Carregando sistema...
+      </div>
+    );
+  }
+
+  if (initializationError) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Não foi possível carregar o sistema
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">{initializationError}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-6 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            Tentar novamente
+          </button>
+        </div>
       </div>
     );
   }

@@ -5,6 +5,16 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undef
 const fallbackSupabaseUrl = "http://127.0.0.1:54321";
 const fallbackSupabaseAnonKey = "local-dev-anon-key";
 
+function authStorageKey(url: string) {
+  try {
+    return `sb-${new URL(url).hostname.split(".")[0]}-auth-token`;
+  } catch {
+    return "frotak-supabase-auth-token";
+  }
+}
+
+export const supabaseAuthStorageKey = authStorageKey(supabaseUrl ?? fallbackSupabaseUrl);
+
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn(
     "Supabase env vars are not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.",
@@ -19,6 +29,7 @@ export const supabase = createClient(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
+      storageKey: supabaseAuthStorageKey,
     },
   },
 );
