@@ -172,8 +172,10 @@ function FrotakIaPage() {
       const history = messages
         .filter((message) => !message.pending)
         .map((message) => ({ role: message.role, text: message.text }));
-      const accessToken = await requireAccessToken();
-      const workspaceId = await requireWorkspaceId();
+      const [accessToken, workspaceId] = await Promise.all([
+        requireAccessToken(),
+        requireWorkspaceId(),
+      ]);
       const response = await sendFrotakAiChatMessage({
         data: { accessToken, workspaceId, message: text, history },
       });

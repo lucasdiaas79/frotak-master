@@ -68,7 +68,7 @@ export const FROTAK_AI_TOOL_DECLARATIONS = [
         topico: {
           type: Type.STRING,
           description:
-            "Topico principal: empresa, veiculos, motoristas, fretes, financeiro, abastecimentos ou posicoes.",
+            "Topico principal: empresa, veiculos, implementos, motoristas, clientes, produtos, fretes, financeiro, abastecimentos ou posicoes.",
         },
         query: {
           type: Type.STRING,
@@ -183,7 +183,16 @@ export async function executeFrotakAiTool(
 }
 
 type FrotakConsultaTopico =
-  "empresa" | "veiculos" | "motoristas" | "fretes" | "financeiro" | "abastecimentos" | "posicoes";
+  | "empresa"
+  | "veiculos"
+  | "implementos"
+  | "motoristas"
+  | "clientes"
+  | "produtos"
+  | "fretes"
+  | "financeiro"
+  | "abastecimentos"
+  | "posicoes";
 
 function normalizeIntentText(text: string) {
   return text
@@ -233,15 +242,24 @@ function detectTopics(args: Record<string, unknown>) {
   if (asksTenantIdentity) addTopic(topics, "empresa");
   if (/\b(caminhao|caminhoes|veiculo|veiculos|frota|placa|placas)\b/.test(text))
     addTopic(topics, "veiculos");
+  if (/\b(cacamba|cacambas|carreta|carretas|implemento|implementos)\b/.test(text))
+    addTopic(topics, "implementos");
   if (/\b(motorista|motoristas|condutor|condutores)\b/.test(text)) addTopic(topics, "motoristas");
   if (
-    /\b(frete|fretes|viagem|viagens|rota|rotas|carga|descarga|tiro|tiros|cte|ct-e|documento|documentos|comprovante|comprovantes|embarcador|embarcadores|remetente|remetentes|destinatario|destinatarios|origem|origens|destino|destinos|cliente|clientes|produto|produtos)\b/.test(
+    /\b(cliente|clientes|parceiro|parceiros|embarcador|embarcadores|remetente|remetentes|destinatario|destinatarios|fornecedor|fornecedores)\b/.test(
+      text,
+    )
+  )
+    addTopic(topics, "clientes");
+  if (/\b(produto|produtos)\b/.test(text)) addTopic(topics, "produtos");
+  if (
+    /\b(frete|fretes|viagem|viagens|rota|rotas|carga|descarga|tiro|tiros|cte|ct-e|documento|documentos|comprovante|comprovantes|origem|origens|destino|destinos)\b/.test(
       text,
     )
   )
     addTopic(topics, "fretes");
   if (
-    /\b(financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|receitas|despesa|despesas|saldo|valor|valores|lucro|rentabilidade|margem|resultado|faturamento|cliente|clientes|parceiro|parceiros|pagador|pagadores)\b/.test(
+    /\b(financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|receitas|despesa|despesas|saldo|valor|valores|lucro|rentabilidade|margem|resultado|faturamento|pagador|pagadores)\b/.test(
       text,
     )
   )
@@ -289,12 +307,33 @@ async function executeConsultarFrotak(
     });
   }
 
+  if (topics.includes("implementos")) {
+    consultas.implementos = await queryTrailers(supabase, context, {
+      limit,
+      query: textArg(args, "query"),
+    });
+  }
+
   if (topics.includes("motoristas")) {
     const inactive = /\b(inativo|inativos|inactive)\b/.test(text);
     consultas.motoristas = await queryDrivers(supabase, context, {
       limit,
       query: textArg(args, "query"),
       status: textArg(args, "status") ?? (inactive ? "inactive" : "active"),
+    });
+  }
+
+  if (topics.includes("clientes")) {
+    consultas.clientes = await queryBusinessPartners(supabase, context, {
+      limit,
+      query: textArg(args, "query"),
+    });
+  }
+
+  if (topics.includes("produtos")) {
+    consultas.produtos = await queryProducts(supabase, context, {
+      limit,
+      query: textArg(args, "query"),
     });
   }
 
@@ -475,6 +514,105 @@ async function queryDrivers(
       "cnh",
       "active",
       "vehicle_id",
+      "updated_at",
+    ]),
+  };
+}
+
+async function queryTrailers(
+  supabase: SupabaseServer,
+  context: FrotakAiContext,
+  args: Record<string, unknown>,
+) {
+  let query = supabase
+    .from("trailers")
+    .select(
+      "identifier, type, brand, model, implement_type, implement_model, vehicle_id, updated_at",
+      {
+        count: "exact",
+      },
+    )
+    .eq("tenant_id", context.tenantId)
+    .order("identifier")
+    .limit(limitFromArgs(args));
+
+  const search = textArg(args, "query");
+  if (search) query = query.or(`identifier.ilike.%${search}%,type.ilike.%${search}%`);
+
+  const { data, error, count } = await query;
+  if (error) return { error: error.message, code: error.code };
+  return {
+    count: data?.length ?? 0,
+    totalCount: count ?? data?.length ?? 0,
+    items: compactRows((data ?? []) as Array<Record<string, unknown>>, [
+      "identifier",
+      "type",
+      "brand",
+      "model",
+      "implement_type",
+      "implement_model",
+      "vehicle_id",
+      "updated_at",
+    ]),
+  };
+}
+
+async function queryBusinessPartners(
+  supabase: SupabaseServer,
+  context: FrotakAiContext,
+  args: Record<string, unknown>,
+) {
+  let query = supabase
+    .from("business_partners")
+    .select("trade_name, legal_name, tax_id, active, requires_review, updated_at", {
+      count: "exact",
+    })
+    .eq("tenant_id", context.tenantId)
+    .order("trade_name")
+    .limit(limitFromArgs(args));
+
+  const search = textArg(args, "query");
+  if (search) query = query.or(`trade_name.ilike.%${search}%,legal_name.ilike.%${search}%`);
+
+  const { data, error, count } = await query;
+  if (error) return { error: error.message, code: error.code };
+  return {
+    count: data?.length ?? 0,
+    totalCount: count ?? data?.length ?? 0,
+    items: compactRows((data ?? []) as Array<Record<string, unknown>>, [
+      "trade_name",
+      "legal_name",
+      "tax_id",
+      "active",
+      "requires_review",
+      "updated_at",
+    ]),
+  };
+}
+
+async function queryProducts(
+  supabase: SupabaseServer,
+  context: FrotakAiContext,
+  args: Record<string, unknown>,
+) {
+  let query = supabase
+    .from("products")
+    .select("name, active, updated_at", { count: "exact" })
+    .eq("tenant_id", context.tenantId)
+    .order("name")
+    .limit(limitFromArgs(args));
+
+  const search = textArg(args, "query");
+  if (search) query = query.ilike("name", `%${search}%`);
+
+  const { data, error, count } = await query;
+  if (error) return { error: error.message, code: error.code };
+  return {
+    count: data?.length ?? 0,
+    totalCount: count ?? data?.length ?? 0,
+    items: compactRows((data ?? []) as Array<Record<string, unknown>>, [
+      "name",
+      "active",
       "updated_at",
     ]),
   };

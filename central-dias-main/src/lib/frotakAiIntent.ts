@@ -17,7 +17,7 @@ export function isFrotakSupportQuestion(text: string) {
 export function requiresFrotakTool(text: string) {
   const normalized = normalizeFrotakIntentText(text);
   const domain =
-    /\b(frotak|empresa|companhia|tenant|workspace|cliente|frota|caminhao|caminhoes|veiculo|veiculos|placa|placas|motorista|motoristas|frete|fretes|viagem|viagens|rota|rotas|financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|despesa|saldo|abastecimento|abastecimentos|diesel|arla|posto|combustivel|posicao|posicoes|localizacao|sascar|telemetria|mapa|status|valor|valores|quantidade|quantos|quantas|total|cte|ct e|mdfe|mdf e|documento|comprovante|nota|login|senha|app|tela|menu|cadastro|usuario|suporte)\b/.test(
+    /\b(frotak|empresa|companhia|tenant|workspace|cliente|clientes|parceiro|parceiros|produto|produtos|frota|caminhao|caminhoes|veiculo|veiculos|placa|placas|cacamba|cacambas|carreta|carretas|implemento|implementos|motorista|motoristas|frete|fretes|viagem|viagens|rota|rotas|financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|despesa|saldo|abastecimento|abastecimentos|diesel|arla|posto|combustivel|posicao|posicoes|localizacao|sascar|telemetria|mapa|status|valor|valores|quantidade|quantos|quantas|total|cte|ct e|mdfe|mdf e|documento|comprovante|nota|login|senha|app|tela|menu|cadastro|usuario|suporte)\b/.test(
       normalized,
     );
   const factual =

@@ -1,5 +1,3 @@
-import { requiresFrotakTool } from "@/lib/frotakAiIntent";
-
 export type FrotakLiveStatus =
   | "idle"
   | "connecting"
@@ -261,12 +259,7 @@ export class FrotakLiveSession {
 
   sendText(text: string) {
     if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) return;
-    if (requiresFrotakTool(text)) {
-      this.groundingRequired = true;
-      this.resetToolState();
-      this.player.stopNow();
-      console.info("[frotakLive] groundingRequired", { source: "text" });
-    }
+    this.beginGroundedTurn();
     this.options.onStatus?.("thinking");
     this.sendRealtimeInput({ text });
   }
@@ -467,6 +460,12 @@ export class FrotakLiveSession {
     console.info("[frotakLive] groundingRequired", { source });
   }
 
+  private beginGroundedTurn() {
+    this.groundingRequired = true;
+    this.resetToolState();
+    this.player.stopNow();
+  }
+
   private canReleaseModelOutput() {
     if (!this.groundingRequired) return true;
     return this.toolCallsSeen > 0 && this.toolCallsPending === 0 && this.toolFailures === 0;
@@ -543,15 +542,14 @@ export class FrotakLiveSession {
     if (interimInputText) {
       const preview = appendTranscript(this.inputTranscriptBuffer, interimInputText);
       this.options.onInputText?.(sanitizeLiveText(preview));
-      if (requiresFrotakTool(preview)) this.requireGrounding("interim-transcription");
+      this.requireGrounding("voice");
     }
 
     const inputText = message.serverContent?.inputTranscription?.text;
     if (inputText) {
-      console.info("[frotakLive] transcription received");
       this.inputTranscriptBuffer = appendTranscript(this.inputTranscriptBuffer, inputText);
       this.options.onInputText?.(sanitizeLiveText(this.inputTranscriptBuffer));
-      if (requiresFrotakTool(this.inputTranscriptBuffer)) this.requireGrounding("transcription");
+      this.requireGrounding("voice");
     }
 
     const toolCalls = message.toolCall?.functionCalls ?? [];
@@ -575,15 +573,9 @@ export class FrotakLiveSession {
       const audio = part.inlineData?.data;
       const canPlayModelOutput = this.canReleaseModelOutput();
       if (audio && canPlayModelOutput) void this.player.enqueue(audio);
-      if (audio && !canPlayModelOutput) {
-        console.info("[frotakLive] suppressed factual audio before tool");
-      }
       if (part.text && canPlayModelOutput) {
         this.transcriptBuffer = appendTranscript(this.transcriptBuffer, part.text);
         this.options.onPartialText?.(sanitizeLiveText(this.transcriptBuffer));
-      }
-      if (part.text && !canPlayModelOutput) {
-        console.info("[frotakLive] suppressed factual text before tool");
       }
     });
 

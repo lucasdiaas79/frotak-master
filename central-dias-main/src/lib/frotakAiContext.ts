@@ -74,73 +74,6 @@ function normalizeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-async function readMembershipPermissions(
-  supabase: ReturnType<typeof getSupabaseServerClient>,
-  membershipId: string,
-  workspaceId: string,
-) {
-  const { data: membershipRoles, error: membershipRolesError } = await supabase
-    .from("membership_roles")
-    .select("role_id")
-    .eq("membership_id", membershipId)
-    .eq("workspace_id", workspaceId);
-
-  if (membershipRolesError) {
-    throw new Error(
-      `membership_roles permissions query failed (${membershipRolesError.code ?? "unknown"}): ${membershipRolesError.message}`,
-    );
-  }
-
-  const roleIds = [
-    ...new Set(
-      (membershipRoles ?? [])
-        .map((row) => (typeof row.role_id === "string" ? row.role_id : ""))
-        .filter(Boolean),
-    ),
-  ];
-  if (roleIds.length === 0) return [];
-
-  const { data: rolePermissions, error: rolePermissionsError } = await supabase
-    .from("role_permissions")
-    .select("permission_id")
-    .in("role_id", roleIds);
-
-  if (rolePermissionsError) {
-    throw new Error(
-      `role_permissions query failed (${rolePermissionsError.code ?? "unknown"}): ${rolePermissionsError.message}`,
-    );
-  }
-
-  const permissionIds = [
-    ...new Set(
-      (rolePermissions ?? [])
-        .map((row) => (typeof row.permission_id === "string" ? row.permission_id : ""))
-        .filter(Boolean),
-    ),
-  ];
-  if (permissionIds.length === 0) return [];
-
-  const { data: permissionRows, error: permissionsError } = await supabase
-    .from("permissions")
-    .select("code")
-    .in("id", permissionIds)
-    .eq("active", true);
-
-  if (permissionsError) {
-    throw new Error(
-      `permissions query failed (${permissionsError.code ?? "unknown"}): ${permissionsError.message}`,
-    );
-  }
-
-  return [
-    ...new Set(
-      (permissionRows ?? [])
-        .map((row) => (typeof row.code === "string" ? row.code.trim() : ""))
-        .filter(Boolean),
-    ),
-  ];
-}
-
 export async function resolveFrotakAiContext(
   accessToken: string,
   workspaceId: string,
@@ -198,25 +131,12 @@ export async function resolveFrotakAiContext(
     workspaceName: workspaceRow.name,
     tenantName: tenantRow.trade_name || tenantRow.legal_name || workspaceRow.name,
     isOwner: membershipRow.is_owner === true,
-    permissions: await readMembershipPermissions(
-      supabase,
-      membershipRow.id,
-      membershipRow.workspace_id,
-    ),
+    permissions: [],
   };
 }
 
 export function canReadFinancial(context: FrotakAiContext) {
-  if (context.isOwner) return true;
-  return context.permissions.some((permission) =>
-    [
-      "financial.view",
-      "financial.dashboard.view",
-      "financial.dashboard.read",
-      "financial.transactions.read",
-      "financial.transactions.manage",
-    ].includes(permission),
-  );
+  return context.isOwner;
 }
 
 export function createFrotakAiContextSummary(context: FrotakAiContext) {
@@ -224,8 +144,8 @@ export function createFrotakAiContextSummary(context: FrotakAiContext) {
     `Tenant atual: ${context.tenantName} (${context.tenantId}).`,
     `Workspace atual: ${context.workspaceName} (${context.workspaceId}).`,
     context.isOwner
-      ? "Perfil autenticado: proprietario da empresa."
-      : "Perfil autenticado: membro da empresa com permissoes limitadas pelo servidor.",
+      ? "Perfil autenticado: owner; pode consultar dados financeiros."
+      : "Perfil autenticado: membro; nao pode receber nenhum dado financeiro.",
     "Toda pergunta operacional ou financeira do usuario se refere a este tenant/workspace, salvo pedido explicitamente geral.",
     "Nunca consulte, revele, compare ou misture dados de outro tenant/workspace.",
     "As ferramentas disponiveis sao somente leitura e aplicam filtros de tenant/workspace e permissoes no servidor.",
