@@ -741,12 +741,6 @@ export const createFrotakLiveToken = createServerFn({ method: "POST" })
         contextWindowCompression: { slidingWindow: {} },
         sessionResumption: {},
         tools: [{ functionDeclarations: [...FROTAK_AI_TOOL_DECLARATIONS] }],
-        toolConfig: {
-          functionCallingConfig: {
-            mode: FunctionCallingConfigMode.VALIDATED,
-            allowedFunctionNames: ["consultar_frotak", "consultar_suporte"],
-          },
-        },
         systemInstruction: {
           parts: [{ text: liveSystemInstruction }],
         },
