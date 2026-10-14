@@ -157,7 +157,7 @@ function openAiModel() {
 }
 
 function openAiServiceTier() {
-  return process.env.OPENAI_SERVICE_TIER?.trim() || "ultrafast";
+  return process.env.OPENAI_SERVICE_TIER?.trim() || "fast";
 }
 
 function openAiTimeoutMs() {
