@@ -157,8 +157,8 @@ function openAiServiceTier() {
 }
 
 function openAiTimeoutMs() {
-  const value = Number(process.env.OPENAI_TIMEOUT_MS ?? 9_000);
-  return Number.isFinite(value) ? Math.max(2_000, Math.min(30_000, Math.trunc(value))) : 9_000;
+  const value = Number(process.env.OPENAI_TIMEOUT_MS ?? 5_000);
+  return Number.isFinite(value) ? Math.max(2_000, Math.min(30_000, Math.trunc(value))) : 5_000;
 }
 
 function geminiModels() {
