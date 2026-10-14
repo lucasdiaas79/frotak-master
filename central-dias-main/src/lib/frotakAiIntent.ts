@@ -16,12 +16,13 @@ export function isFrotakSupportQuestion(text: string) {
 
 export function requiresFrotakTool(text: string) {
   const normalized = normalizeFrotakIntentText(text);
+  const mentionsPlate = /\b[a-z]{3}[0-9][a-z0-9][0-9]{2}\b/.test(normalized);
   const domain =
-    /\b(frotak|empresa|companhia|tenant|workspace|cliente|clientes|parceiro|parceiros|produto|produtos|frota|caminhao|caminhoes|veiculo|veiculos|placa|placas|cacamba|cacambas|carreta|carretas|implemento|implementos|motorista|motoristas|frete|fretes|viagem|viagens|rota|rotas|financeiro|receber|pagar|dre|caixa|titulo|titulos|receita|despesa|saldo|abastecimento|abastecimentos|diesel|arla|posto|combustivel|posicao|posicoes|localizacao|sascar|telemetria|mapa|status|valor|valores|quantidade|quantos|quantas|total|cte|ct e|mdfe|mdf e|documento|comprovante|nota|login|senha|app|tela|menu|cadastro|usuario|suporte)\b/.test(
+    /\b(frotak|empresa|companhia|tenant|workspace|cliente|clientes|parceiro|parceiros|produto|produtos|frota|caminhao|caminhoes|veiculo|veiculos|placa|placas|cacamba|cacambas|carreta|carretas|implemento|implementos|motorista|motoristas|condutor|condutores|cnh|frete|fretes|viagem|viagens|rota|rotas|financeiro|receber|pagar|dre|caixa|conta|contas|titulo|titulos|receita|receitas|despesa|despesas|custo|custos|saldo|rentabilidade|lucro|margem|resultado|abastecimento|abastecimentos|diesel|arla|posto|combustivel|litro|litros|preco|posicao|posicoes|localizacao|localize|localizar|sascar|telemetria|mapa|status|vencido|vencidos|vencida|vencidas|valor|valores|quantidade|quantos|quantas|total|cte|ct e|mdfe|mdf e|documento|comprovante|nota|login|senha|app|tela|menu|cadastro|usuario|suporte)\b/.test(
       normalized,
-    );
+    ) || mentionsPlate;
   const factual =
-    /\b(qual|quais|quanto|quantos|quantas|cite|listar|liste|mostre|status|valor|valores|total|numero|nome|nomes|placa|placas|onde)\b/.test(
+    /\b(qual|quais|quem|quando|quanto|quantos|quantas|cite|buscar|busque|consultar|consulte|listar|liste|mostre|localize|puxe|compare|comparar|ultimo|ultima|ultimos|ultimas|status|valor|valores|total|numero|nome|nomes|placa|placas|onde|tem|esta|estao|foi|foram)\b/.test(
       normalized,
     );
 
