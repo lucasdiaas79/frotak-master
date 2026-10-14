@@ -41,8 +41,12 @@ const ACTIVITY_RMS_THRESHOLD = 0.01;
 const FACTUAL_FAIL_CLOSED_MESSAGE =
   "Nao foi possivel consultar os dados da Frotak neste momento. Tente novamente em instantes.";
 // Enviado uma vez quando a IA tenta responder um dado do tenant sem consultar as ferramentas.
+// Antes de consultar, a IA pode falar uma frase curta de espera ("Entendi, deixa so eu dar
+// uma olhada aqui"). Ate este limite o audio toca mesmo sem ferramenta; o resto espera a consulta.
+const PRE_TOOL_AUDIO_MS = 3_500;
+
 const GROUNDING_RETRY_PROMPT =
-  "Instrucao do sistema: a resposta anterior nao foi entregue porque nao consultou as ferramentas da Frotak. Consulte agora a ferramenta adequada para a ultima pergunta do usuario e responda de novo, curto e direto, sem mencionar esta instrucao.";
+  "Instrucao do sistema: a resposta anterior nao foi entregue porque nao consultou as ferramentas da Frotak. Consulte agora a ferramenta adequada para a ultima pergunta do usuario e responda de novo, curto e direto, sem mencionar esta instrucao e sem repetir a frase de espera.";
 
 type GeminiLiveMessage = {
   setupComplete?: unknown;
@@ -224,6 +228,7 @@ export class FrotakLiveSession {
   private toolCallsPending = 0;
   private toolFailures = 0;
   private groundingRetried = false;
+  private preToolAudioMs = 0;
   private cancelledToolCallIds = new Set<string>();
   private resolveReady: (() => void) | null = null;
   private rejectReady: ((error: Error) => void) | null = null;
@@ -473,6 +478,15 @@ export class FrotakLiveSession {
     this.player.stopNow();
   }
 
+  private canPlayWaitingPhrase() {
+    return (
+      this.groundingRequired &&
+      this.toolCallsSeen === 0 &&
+      this.toolFailures === 0 &&
+      this.preToolAudioMs < PRE_TOOL_AUDIO_MS
+    );
+  }
+
   private canReleaseModelOutput() {
     if (!this.groundingRequired) return true;
     return this.toolCallsSeen > 0 && this.toolCallsPending === 0 && this.toolFailures === 0;
@@ -483,6 +497,7 @@ export class FrotakLiveSession {
     this.toolCallsPending = 0;
     this.toolFailures = 0;
     this.groundingRetried = false;
+    this.preToolAudioMs = 0;
     this.cancelledToolCallIds.clear();
   }
 
@@ -592,6 +607,10 @@ export class FrotakLiveSession {
       const audio = part.inlineData?.data;
       const canPlayModelOutput = this.canReleaseModelOutput();
       if (audio && canPlayModelOutput) void this.player.enqueue(audio);
+      else if (audio && this.canPlayWaitingPhrase()) {
+        this.preToolAudioMs += ((audio.length * 3) / 4 / 2 / OUTPUT_RATE) * 1000;
+        void this.player.enqueue(audio);
+      }
       if (part.text && canPlayModelOutput) {
         this.transcriptBuffer = appendTranscript(this.transcriptBuffer, part.text);
         this.options.onPartialText?.(sanitizeLiveText(this.transcriptBuffer));

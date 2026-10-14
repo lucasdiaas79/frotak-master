@@ -107,6 +107,21 @@ function cleanAssistantText(text: string) {
     .trim();
 }
 
+// Segura trocas rapidas de estado (ex.: entre um pedaco de audio e outro) para a esfera nao piscar.
+function useStableLiveStatus(status: FrotakLiveStatus) {
+  const [stable, setStable] = useState(status);
+  useEffect(() => {
+    if (["speaking", "error", "idle", "connecting"].includes(status)) {
+      setStable(status);
+      return;
+    }
+    const delay = status === "ready" || status === "interrupted" ? 900 : 350;
+    const timer = window.setTimeout(() => setStable(status), delay);
+    return () => window.clearTimeout(timer);
+  }, [status]);
+  return stable;
+}
+
 function liveStatusLabel(status: FrotakLiveStatus) {
   if (status === "connecting") return "Conectando ao Frotak Live";
   if (status === "reconnecting") return "Reconectando";
@@ -142,8 +157,8 @@ function FrotakIaPage() {
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<"text" | "live">("text");
   const [liveStatus, setLiveStatus] = useState<FrotakLiveStatus>("idle");
-  const [lastLiveText, setLastLiveText] = useState("");
-  const [lastUserTranscript, setLastUserTranscript] = useState("");
+  const [, setLastLiveText] = useState("");
+  const [, setLastUserTranscript] = useState("");
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
   const [pendingAction, setPendingAction] = useState<FrotakAiPendingAction | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -392,8 +407,6 @@ function FrotakIaPage() {
       <FrotakLiveView
         draft={draft}
         liveStatus={liveStatus}
-        lastLiveText={lastLiveText}
-        lastUserTranscript={lastUserTranscript}
         microphoneEnabled={microphoneEnabled}
         setDraft={setDraft}
         startLive={startLive}
@@ -468,9 +481,7 @@ function FrotakIaPage() {
 
 function FrotakLiveView({
   draft,
-  liveStatus,
-  lastLiveText,
-  lastUserTranscript,
+  liveStatus: rawLiveStatus,
   microphoneEnabled,
   setDraft,
   startLive,
@@ -482,8 +493,6 @@ function FrotakLiveView({
   actionCard: ReactNode;
   draft: string;
   liveStatus: FrotakLiveStatus;
-  lastLiveText: string;
-  lastUserTranscript: string;
   microphoneEnabled: boolean;
   setDraft: (value: string) => void;
   startLive: () => Promise<void>;
@@ -491,6 +500,7 @@ function FrotakLiveView({
   sendMessage: () => Promise<void>;
   toggleMicrophone: () => void;
 }) {
+  const liveStatus = useStableLiveStatus(rawLiveStatus);
   const active = liveStatus !== "idle" && liveStatus !== "error";
   const speaking = liveStatus === "speaking";
   const listening = liveStatus === "listening";
@@ -529,22 +539,6 @@ function FrotakLiveView({
         >
           <FrotakOrb state={orbState} />
         </div>
-
-        <p className="mt-8 text-[15px] font-bold text-white/72">{liveStatusLabel(liveStatus)}</p>
-        {lastUserTranscript ? (
-          <p className="mt-3 max-w-md whitespace-pre-wrap text-[13px] font-semibold leading-relaxed text-white/45">
-            Voce: {lastUserTranscript}
-          </p>
-        ) : null}
-        {lastLiveText ? (
-          <p className="mt-4 max-w-md whitespace-pre-wrap text-[17px] font-semibold leading-relaxed text-white">
-            {lastLiveText}
-          </p>
-        ) : (
-          <p className="mt-4 max-w-sm text-[15px] font-medium leading-relaxed text-white/54">
-            Converse por voz com a assistente operacional da Frotak.
-          </p>
-        )}
       </div>
 
       {actionCard ? <div className="mx-auto mb-4 w-full max-w-md px-5">{actionCard}</div> : null}
