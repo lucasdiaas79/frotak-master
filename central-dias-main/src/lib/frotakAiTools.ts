@@ -1060,3 +1060,57 @@ async function queryProfitability(
   rows = rows.slice(0, limitFromArgs(args));
   return { period, dimension, count: rows.length, items: rows };
 }
+
+const VEHICLE_ATTENTION_SITUATIONS = new Set(["parado", "quebrado", "manutencao"]);
+
+function countBy(rows: Array<Record<string, unknown>>, field: string) {
+  const counts: Record<string, number> = {};
+  rows.forEach((row) => {
+    const key =
+      typeof row[field] === "string" && row[field] ? String(row[field]) : "sem_informacao";
+    counts[key] = (counts[key] ?? 0) + 1;
+  });
+  return counts;
+}
+
+// Retrato compacto do tenant carregado no inicio da conversa, para a IA ja saber
+// o tamanho da operacao e o que precisa de atencao. Os numeros sao contados aqui no
+// servidor; a IA so repete. Qualquer falha devolve vazio para nao travar a conversa.
+export async function createFrotakAiTenantSnapshot(context: FrotakAiContext) {
+  try {
+    const supabase = getSupabaseServerClient(context.accessToken);
+    const [summary, fleet] = await Promise.all([
+      queryTenantSummary(supabase, context),
+      supabase
+        .from("vehicles")
+        .select("plate, vehicle_situation, freight_stage")
+        .eq("tenant_id", context.tenantId)
+        .order("plate")
+        .limit(1000),
+    ]);
+    if ("error" in summary || fleet.error) return "";
+    const vehicles = (fleet.data ?? []) as Array<Record<string, unknown>>;
+    const attention = vehicles
+      .filter((row) => VEHICLE_ATTENTION_SITUATIONS.has(String(row.vehicle_situation ?? "")))
+      .slice(0, 20)
+      .map((row) => `${row.plate} (${row.vehicle_situation})`);
+    const snapshot = {
+      geradoEm: new Date().toISOString(),
+      totais: summary.totals,
+      veiculosPorSituacao: countBy(vehicles, "vehicle_situation"),
+      veiculosPorEtapaDoFrete: countBy(vehicles, "freight_stage"),
+      veiculosQuePedemAtencao: attention,
+    };
+    return [
+      "Retrato do tenant no inicio desta conversa (pode estar desatualizado; para responder numeros e status, consulte a ferramenta):",
+      JSON.stringify(snapshot),
+    ].join(" ");
+  } catch (error) {
+    console.error("[frotakAi] snapshot failed", {
+      workspaceId: context.workspaceId,
+      tenantId: context.tenantId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return "";
+  }
+}

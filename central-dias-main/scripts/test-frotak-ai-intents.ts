@@ -6,6 +6,7 @@ import { isFrotakSupportQuestion, requiresFrotakTool } from "../src/lib/frotakAi
 import {
   FROTAK_AI_FINANCIAL_TOOL_NAMES,
   FROTAK_AI_TOOL_NAMES,
+  isFrotakAiTechnicalFailure,
 } from "../src/lib/frotakAiToolCatalog.ts";
 import { FROTAK_AI_V2_EVALUATION_CASES } from "./frotak-ai-v2-cases.ts";
 
@@ -79,4 +80,26 @@ test("v2 tool executor remains read-only and removes the generic query", () => {
   assert.ok(source.includes("FROTAK_AI_FINANCIAL_TOOLS.has(name) && !canReadFinancial(context)"));
   assert.ok(source.includes('.eq("tenant_id", context.tenantId)'));
   assert.ok(source.includes("workspaceId: context.workspaceId"));
+});
+
+test("business answers do not count as technical tool failures", () => {
+  assert.equal(
+    isFrotakAiTechnicalFailure({ ok: true, data: { rows: [{ error: "campo" }] } }),
+    false,
+  );
+  assert.equal(
+    isFrotakAiTechnicalFailure({
+      ok: false,
+      error: "Veiculo nao encontrado",
+      code: "VEHICLE_NOT_FOUND",
+    }),
+    false,
+  );
+  assert.equal(
+    isFrotakAiTechnicalFailure({ ok: false, error: "x", code: "OWNER_REQUIRED" }),
+    false,
+  );
+  assert.equal(isFrotakAiTechnicalFailure({ ok: false, error: "timeout", code: "57014" }), true);
+  assert.equal(isFrotakAiTechnicalFailure({ error: "Sessao indisponivel" }), true);
+  assert.equal(isFrotakAiTechnicalFailure(null), true);
 });

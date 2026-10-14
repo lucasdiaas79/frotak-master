@@ -40,6 +40,9 @@ const CAPTURE_CHUNK_SIZE = 4096;
 const ACTIVITY_RMS_THRESHOLD = 0.01;
 const FACTUAL_FAIL_CLOSED_MESSAGE =
   "Nao foi possivel consultar os dados da Frotak neste momento. Tente novamente em instantes.";
+// Enviado uma vez quando a IA tenta responder um dado do tenant sem consultar as ferramentas.
+const GROUNDING_RETRY_PROMPT =
+  "Instrucao do sistema: a resposta anterior nao foi entregue porque nao consultou as ferramentas da Frotak. Consulte agora a ferramenta adequada para a ultima pergunta do usuario e responda de novo, curto e direto, sem mencionar esta instrucao.";
 
 type GeminiLiveMessage = {
   setupComplete?: unknown;
@@ -220,6 +223,7 @@ export class FrotakLiveSession {
   private toolCallsSeen = 0;
   private toolCallsPending = 0;
   private toolFailures = 0;
+  private groundingRetried = false;
   private cancelledToolCallIds = new Set<string>();
   private resolveReady: (() => void) | null = null;
   private rejectReady: ((error: Error) => void) | null = null;
@@ -455,6 +459,9 @@ export class FrotakLiveSession {
 
   private requireGrounding(source: string) {
     if (this.groundingRequired) return;
+    // A transcricao da fala pode chegar depois que a resposta ja comecou a tocar.
+    // Nesse caso nao corta a voz no meio; a trava vale para a proxima pergunta.
+    if (this.speaking) return;
     this.groundingRequired = true;
     this.player.stopNow();
     console.info("[frotakLive] groundingRequired", { source });
@@ -475,7 +482,19 @@ export class FrotakLiveSession {
     this.toolCallsSeen = 0;
     this.toolCallsPending = 0;
     this.toolFailures = 0;
+    this.groundingRetried = false;
     this.cancelledToolCallIds.clear();
+  }
+
+  // A IA respondeu um dado do tenant sem consultar: em vez de calar, pede uma vez que consulte.
+  private requestGroundedRetry() {
+    if (this.groundingRetried) return false;
+    if (!this.sendRealtimeInput({ text: GROUNDING_RETRY_PROMPT })) return false;
+    this.groundingRetried = true;
+    this.transcriptBuffer = "";
+    this.options.onStatus?.("thinking");
+    console.info("[frotakLive] grounding retry requested");
+    return true;
   }
 
   private failSession(message: string) {
@@ -586,7 +605,14 @@ export class FrotakLiveSession {
     }
 
     if (message.serverContent?.turnComplete) {
-      if (!(this.groundingRequired && this.toolCallsPending > 0)) {
+      const skippedTools =
+        this.groundingRequired &&
+        this.toolCallsSeen === 0 &&
+        this.toolCallsPending === 0 &&
+        this.toolFailures === 0;
+      if (skippedTools && this.requestGroundedRetry()) {
+        // Aguarda a nova resposta, agora com consulta.
+      } else if (!(this.groundingRequired && this.toolCallsPending > 0)) {
         const failClosed = this.groundingRequired && !this.canReleaseModelOutput();
         const text = failClosed ? FACTUAL_FAIL_CLOSED_MESSAGE : this.transcriptBuffer.trim();
         this.transcriptBuffer = "";
@@ -635,7 +661,7 @@ export class FrotakLiveSession {
             args: call.args ?? {},
           });
           if (call.id && this.cancelledToolCallIds.has(call.id)) return null;
-          const succeeded = !hasToolError(output);
+          const succeeded = !isFrotakAiTechnicalFailure(output);
           console.info("[frotakLive] tool result", {
             name: call.name,
             ok: succeeded,
@@ -748,16 +774,6 @@ function appendTranscript(current: string, fragment: string) {
   return `${current} ${fragment}`;
 }
 
-function hasToolError(value: unknown, depth = 0): boolean {
-  if (depth > 6 || value === null || value === undefined) return false;
-  if (Array.isArray(value)) return value.some((item) => hasToolError(item, depth + 1));
-  if (typeof value !== "object") return false;
-
-  const record = value as Record<string, unknown>;
-  if (record.ok === false || typeof record.error === "string") return true;
-  return Object.values(record).some((item) => hasToolError(item, depth + 1));
-}
-
 function calculateRms(input: Float32Array) {
   let sum = 0;
   for (let index = 0; index < input.length; index += 1) sum += input[index] * input[index];
@@ -816,3 +832,4 @@ function sanitizeLiveText(text: string) {
     .trim();
 }
 import { requiresFrotakTool } from "@/lib/frotakAiIntent";
+import { isFrotakAiTechnicalFailure } from "@/lib/frotakAiToolCatalog";
