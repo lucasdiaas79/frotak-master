@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { FrotakOrb, type FrotakOrbState } from "@/components/frotak/FrotakOrb";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { getCurrentAccessToken, getCurrentUser, getProfile } from "@/lib/auth";
@@ -408,6 +409,13 @@ function FrotakLiveView({
   const speaking = liveStatus === "speaking";
   const listening = liveStatus === "listening";
   const thinking = liveStatus === "thinking" || liveStatus === "reconnecting";
+  const orbState: FrotakOrbState = speaking
+    ? "speaking"
+    : listening
+      ? "listening"
+      : thinking
+        ? "thinking"
+        : "idle";
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-black text-white md:absolute md:inset-0 md:rounded-[28px]">
@@ -429,33 +437,15 @@ function FrotakLiveView({
 
       <div className="flex flex-1 flex-col items-center justify-center px-7 text-center">
         <div
+          role="img"
+          aria-label={`Frotak Live: ${liveStatusLabel(liveStatus)}`}
           className={cn(
-            "relative flex aspect-square w-[52vw] max-w-[260px] min-w-[190px] items-center justify-center rounded-full transition duration-500",
-            "bg-[radial-gradient(circle_at_68%_34%,rgba(255,255,255,0.95),rgba(96,165,250,0.76)_34%,rgba(34,197,94,0.68)_68%,rgba(12,19,15,0.98)_100%)]",
-            "shadow-[0_0_90px_rgba(34,197,94,0.25)]",
-            speaking && "scale-105 animate-pulse shadow-[0_0_120px_rgba(34,197,94,0.42)]",
-            listening && "scale-95 shadow-[0_0_110px_rgba(59,130,246,0.36)]",
-            thinking && "shadow-[0_0_105px_rgba(250,204,21,0.28)]",
+            "relative aspect-square w-[78vw] min-w-[250px] max-w-[360px] overflow-hidden rounded-full transition-transform duration-500",
+            speaking && "scale-[1.04]",
+            listening && "scale-[0.98]",
           )}
         >
-          <div
-            className={cn(
-              "absolute -inset-7 rounded-full border border-primary/0 transition",
-              listening && "animate-ping border-primary/25",
-              speaking && "animate-pulse border-sky-300/25",
-              thinking && "animate-pulse border-yellow-300/25",
-            )}
-          />
-          <div
-            className={cn(
-              "absolute inset-4 rounded-full bg-white/8 blur-xl transition",
-              listening && "scale-110 bg-primary/20",
-              speaking && "scale-125 bg-sky-200/20",
-            )}
-          />
-          <span className="relative text-[56px] font-black tracking-[-0.08em] text-white/88">
-            F
-          </span>
+          <FrotakOrb state={orbState} />
         </div>
 
         <p className="mt-8 text-[15px] font-bold text-white/72">{liveStatusLabel(liveStatus)}</p>
