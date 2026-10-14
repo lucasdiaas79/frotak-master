@@ -152,7 +152,7 @@ function frotakAiSystemInstruction(
     "Voce e a Frotak IA, assistente operacional do sistema Frotak: o braco direito do gestor, que conhece o tenant inteiro.",
     mode === "voz"
       ? "Esta conversa e por voz: responda falado, natural e curto, em no maximo 3 frases, sem listas, simbolos ou tabelas."
-      : "Esta conversa e por texto: responda curto e objetivo, no maximo 3 frases ou 5 itens curtos; use lista quando ajudar.",
+      : "Esta conversa e por texto: responda curto e objetivo, no maximo 3 frases ou 5 itens curtos; use lista quando ajudar. Quando o usuario pedir detalhe, abertura ou cada item, liste todos os itens que a ferramenta devolveu (ate 15), um por linha, com o valor.",
     "Responda em portugues do Brasil.",
     "Para cada pergunta sobre o sistema ou sobre o tenant, escolha uma ou mais ferramentas especificas antes de responder.",
     "O backend e a unica fonte de fatos, filtros, totais, saldos, margens e demais numeros criticos.",
@@ -185,6 +185,37 @@ function modelList() {
   );
 }
 
+function isRetryableGeminiError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /not found|unavailable|overloaded|503|500|internal|high demand|deadline|timeout|fetch failed/i.test(
+    message,
+  );
+}
+
+// Cada rodada do chat tenta de novo e cai para o modelo reserva quando o Gemini oscila,
+// em vez de perder as consultas que ja foram feitas.
+async function generateWithFallback(
+  ai: GoogleGenAI,
+  preferredModel: string,
+  request: Omit<Parameters<GoogleGenAI["models"]["generateContent"]>[0], "model">,
+) {
+  const models = Array.from(new Set([preferredModel, ...modelList()]));
+  let lastError: unknown;
+  for (const model of models) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await ai.models.generateContent({ ...request, model });
+      } catch (error) {
+        lastError = error;
+        logFrotakAiStage("gemini", error, { tool: `${model}#${attempt + 1}` });
+        if (!isRetryableGeminiError(error)) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
+      }
+    }
+  }
+  throw lastError;
+}
+
 async function selectToolsWithFallback(
   ai: GoogleGenAI,
   contents: Content[],
@@ -198,7 +229,7 @@ async function selectToolsWithFallback(
         contents,
         config: {
           temperature: 0,
-          maxOutputTokens: 220,
+          maxOutputTokens: 1024,
           systemInstruction,
           tools: [{ functionDeclarations: [...FROTAK_AI_TOOL_DECLARATIONS] }],
           toolConfig: {
@@ -209,8 +240,8 @@ async function selectToolsWithFallback(
       return { response, model };
     } catch (error) {
       lastError = error;
-      const message = error instanceof Error ? error.message : String(error);
-      if (!/not found|unavailable|overloaded|503|high demand/i.test(message)) break;
+      logFrotakAiStage("gemini", error, { tool: `${model}#select` });
+      if (!isRetryableGeminiError(error)) break;
     }
   }
   throw lastError;
@@ -424,12 +455,11 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
         conversation.push(modelContent, functionResponseContent(toolResponses));
 
         const lastRound = round + 1 >= MAX_TOOL_ROUNDS;
-        response = await ai.models.generateContent({
-          model: selected.model,
+        response = await generateWithFallback(ai, selected.model, {
           contents: conversation,
           config: {
             temperature: 0.1,
-            maxOutputTokens: 600,
+            maxOutputTokens: 1200,
             systemInstruction,
             tools: [{ functionDeclarations: [...FROTAK_AI_TOOL_DECLARATIONS] }],
             toolConfig: {

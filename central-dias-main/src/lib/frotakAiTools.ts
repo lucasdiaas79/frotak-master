@@ -206,8 +206,33 @@ export const FROTAK_AI_TOOL_DECLARATIONS = [
   {
     name: "consultar_dre",
     description:
-      "Somente owner. Consulta a DRE gerencial. Receita, custos, despesas, resultado, margem e reconciliacao ja vem calculados pelo backend.",
-    parameters: { type: Type.OBJECT, properties: { ...periodProperties } },
+      "Somente owner. Consulta a DRE gerencial. Receita, custos, despesas, resultado, margem e reconciliacao ja vem calculados pelo backend. Use detalhar=true para abrir cada custo, despesa ou receita por conta gerencial e os maiores lancamentos.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        ...periodProperties,
+        detalhar: {
+          type: Type.BOOLEAN,
+          description: "true para listar contas gerenciais e lancamentos que compoem a DRE.",
+        },
+        grupo: {
+          type: Type.STRING,
+          enum: [
+            "gross_revenue",
+            "discounts_obtained",
+            "revenue_deduction",
+            "variable_cost",
+            "operating_expense",
+            "depreciation_amortization",
+            "financial_result",
+            "income_tax",
+            "other_result",
+          ],
+          description:
+            "Grupo da DRE a detalhar: variable_cost (custos operacionais), operating_expense (despesas), gross_revenue (receita) etc. Omita para todos.",
+        },
+      },
+    },
   },
   {
     name: "consultar_rentabilidade",
@@ -1145,6 +1170,50 @@ async function queryDre(
     data && typeof data === "object" && !Array.isArray(data)
       ? (data as Record<string, unknown>)
       : {};
+  if (args.detalhar === true || textArg(args, "grupo")) {
+    const { data: detail, error: detailError } = await supabase.rpc("get_dre_detail", {
+      p_payload: {
+        workspaceId: context.workspaceId,
+        startDate: period.startDate,
+        endDate: period.endDate,
+        costCenterId: null,
+        dreGroup: textArg(args, "grupo") ?? null,
+        chartAccountId: null,
+      },
+    });
+    if (detailError) return errorResult(detailError)!;
+    const record =
+      detail && typeof detail === "object" && !Array.isArray(detail)
+        ? (detail as Record<string, unknown>)
+        : {};
+    const accounts = Array.isArray(record.accounts) ? record.accounts : [];
+    const documents = Array.isArray(record.documents) ? record.documents : [];
+    return {
+      period,
+      totals: payload.totals ?? {},
+      grupo: textArg(args, "grupo") ?? "todos",
+      contasGerenciais: compactRows(accounts as Array<Record<string, unknown>>, [
+        "code",
+        "name",
+        "dre_group",
+        "signed_amount",
+        "document_count",
+      ]).slice(0, 40),
+      maioresLancamentos: compactRows(documents as Array<Record<string, unknown>>, [
+        "competence_date",
+        "description",
+        "partner_name",
+        "vehicle_plate",
+        "cost_center_name",
+        "signed_amount",
+      ])
+        .sort(
+          (a, b) => Math.abs(numberValue(b.signed_amount)) - Math.abs(numberValue(a.signed_amount)),
+        )
+        .slice(0, 15),
+      totalLancamentos: documents.length,
+    };
+  }
   return {
     period,
     groups: payload.groups ?? [],
