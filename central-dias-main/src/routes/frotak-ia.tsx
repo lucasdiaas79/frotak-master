@@ -439,11 +439,7 @@ function FrotakLiveView({
         <div
           role="img"
           aria-label={`Frotak Live: ${liveStatusLabel(liveStatus)}`}
-          className={cn(
-            "relative aspect-square w-[78vw] min-w-[250px] max-w-[360px] overflow-hidden rounded-full transition-transform duration-500",
-            speaking && "scale-[1.04]",
-            listening && "scale-[0.98]",
-          )}
+          className="relative aspect-square w-[78vw] min-w-[250px] max-w-[360px]"
         >
           <FrotakOrb state={orbState} />
         </div>
