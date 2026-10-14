@@ -80,3 +80,20 @@ test("v2 tool executor remains read-only and removes the generic query", () => {
   assert.ok(source.includes('.eq("tenant_id", context.tenantId)'));
   assert.ok(source.includes("workspaceId: context.workspaceId"));
 });
+
+
+test("text chat uses OpenAI primary with Gemini fallback while voice stays Gemini Live", () => {
+  const providers = readFileSync(
+    new URL("../src/lib/frotakAiProviders.ts", import.meta.url),
+    "utf8",
+  );
+  const chat = readFileSync(new URL("../src/lib/frotakAi.ts", import.meta.url), "utf8");
+
+  assert.ok(providers.includes('FROTAK_AI_OPENAI_TEXT_MODEL = "gpt-6.1-sol"'));
+  assert.ok(providers.includes('FROTAK_AI_GEMINI_TEXT_MODEL = "gemini-3.8-flash"'));
+  assert.ok(providers.includes('"openai,gemini"'));
+  assert.ok(providers.includes('tool_choice: "required"'));
+  assert.ok(providers.includes("runFrotakAiTextChat"));
+  assert.ok(chat.includes('FROTAK_AI_LIVE_MODEL = "gemini-3.8-live"'));
+  assert.ok(chat.includes("runFrotakAiTextChat"));
+});

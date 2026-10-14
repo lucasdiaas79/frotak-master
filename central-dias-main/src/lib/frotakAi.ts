@@ -1,24 +1,24 @@
 import {
   EndSensitivity,
-  FunctionCallingConfigMode,
   GoogleGenAI,
   Modality,
   StartSensitivity,
-  type Content,
-  type FunctionResponse,
 } from "@google/genai";
 import { createServerFn } from "@tanstack/react-start";
 import { createFrotakAiContextSummary, resolveFrotakAiContext } from "@/lib/frotakAiContext";
 import {
+  FROTAK_AI_GEMINI_TEXT_MODEL,
+  FROTAK_AI_OPENAI_TEXT_MODEL,
+  runFrotakAiTextChat,
+} from "@/lib/frotakAiProviders";
+import {
   executeFrotakAiTool,
   FROTAK_AI_TOOL_DECLARATIONS,
   isFrotakAiToolName,
-  normalizeFrotakAiToolCall,
-  type FrotakAiToolCall,
 } from "@/lib/frotakAiTools";
 
-export const FROTAK_AI_TEXT_MODEL = "gemini-3.8-flash";
-export const FROTAK_AI_TEXT_FALLBACK_MODEL = "gemini-3.6-flash";
+export const FROTAK_AI_TEXT_MODEL = FROTAK_AI_OPENAI_TEXT_MODEL;
+export const FROTAK_AI_TEXT_FALLBACK_MODEL = FROTAK_AI_GEMINI_TEXT_MODEL;
 export const FROTAK_AI_LIVE_MODEL = "gemini-3.8-live";
 
 type FrotakAiMessage = {
@@ -29,47 +29,21 @@ type FrotakAiMessage = {
 type SerializableValue =
   null | boolean | number | string | SerializableValue[] | { [key: string]: SerializableValue };
 
-const MAX_HISTORY_MESSAGES = 12;
-const MAX_HISTORY_CHARS = 6_000;
-const MAX_TOOL_CALLS = 6;
-
 function geminiApiKey() {
   const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY nao configurada");
   return key;
 }
 
-function trimText(value: unknown, max = 2400) {
-  if (typeof value !== "string") return "";
-  const text = value.trim();
-  return text.length > max ? `${text.slice(0, max)}...` : text;
-}
-
 function toSerializableValue(value: unknown): SerializableValue {
   return JSON.parse(JSON.stringify(value ?? null)) as SerializableValue;
 }
 
-function historyToContents(history: FrotakAiMessage[]) {
-  const contents: Content[] = [];
-  let totalChars = 0;
-  for (const message of history
-    .filter((item) => item.text.trim())
-    .slice(-MAX_HISTORY_MESSAGES)
-    .reverse()) {
-    const text = trimText(message.text);
-    if (!text || totalChars + text.length > MAX_HISTORY_CHARS) continue;
-    totalChars += text.length;
-    contents.unshift({
-      role: message.role === "assistant" ? "model" : "user",
-      parts: [{ text }],
-    });
-  }
-  return contents;
-}
-
 function publicError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  if (message.includes("GEMINI_API_KEY")) return "Chave da IA nao configurada.";
+  if (message.includes("GEMINI_API_KEY") || message.includes("OPENAI_API_KEY")) {
+    return "Chave da IA nao configurada.";
+  }
   if (message.includes("API key")) return "Chave da IA invalida ou nao autorizada.";
   if (message.includes("not found")) return "Modelo de IA nao encontrado ou indisponivel.";
   if (/unauthorized|membership|workspace|tenant/i.test(message)) {
@@ -105,7 +79,7 @@ function errorInfo(error: unknown) {
 }
 
 function logFrotakAiStage(
-  stage: "context" | "tool" | "gemini",
+  stage: "context" | "tool" | "gemini" | "provider",
   error: unknown,
   meta: { workspaceId?: string; tenantId?: string; tool?: string } = {},
 ) {
@@ -118,20 +92,6 @@ function logFrotakAiStage(
     code: info.code,
     message: info.message,
   });
-}
-
-function cleanModelText(text: string) {
-  return text
-    .replace(/\*/g, "")
-    .replace(/\r/g, "")
-    .split("\n")
-    .map((line) => line.trimEnd())
-    .filter(
-      (line) => !/^(analyzing|calculating|confirming|identifying|verifying)\b/i.test(line.trim()),
-    )
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
 }
 
 function frotakAiSystemInstruction(contextSummary?: string) {
@@ -151,62 +111,6 @@ function frotakAiSystemInstruction(contextSummary?: string) {
   ]
     .filter(Boolean)
     .join(" ");
-}
-
-function modelList() {
-  return Array.from(
-    new Set(
-      [process.env.GEMINI_TEXT_MODEL, FROTAK_AI_TEXT_MODEL, FROTAK_AI_TEXT_FALLBACK_MODEL].filter(
-        (item): item is string => Boolean(item && item.trim()),
-      ),
-    ),
-  );
-}
-
-async function selectToolsWithFallback(
-  ai: GoogleGenAI,
-  contents: Content[],
-  systemInstruction: string,
-) {
-  let lastError: unknown;
-  for (const model of modelList()) {
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents,
-        config: {
-          temperature: 0,
-          maxOutputTokens: 220,
-          systemInstruction,
-          tools: [{ functionDeclarations: [...FROTAK_AI_TOOL_DECLARATIONS] }],
-          toolConfig: {
-            functionCallingConfig: { mode: FunctionCallingConfigMode.ANY },
-          },
-        },
-      });
-      return { response, model };
-    } catch (error) {
-      lastError = error;
-      const message = error instanceof Error ? error.message : String(error);
-      if (!/not found|unavailable|overloaded|503|high demand/i.test(message)) break;
-    }
-  }
-  throw lastError;
-}
-
-function toolResponsePart(call: FrotakAiToolCall, result: unknown): FunctionResponse {
-  return {
-    id: call.id,
-    name: call.name,
-    response: { output: toSerializableValue(result) as Record<string, unknown> },
-  };
-}
-
-function functionResponseContent(responses: FunctionResponse[]): Content {
-  return {
-    role: "user",
-    parts: responses.map((functionResponse) => ({ functionResponse })),
-  } as Content;
 }
 
 function simpleConversationAnswer(message: string) {
@@ -356,42 +260,14 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
       const systemInstruction = frotakAiSystemInstruction(
         createFrotakAiContextSummary(resolvedContext),
       );
-      const contents = [
-        ...historyToContents(data.history),
-        { role: "user", parts: [{ text: message }] },
-      ] as Content[];
-      const ai = new GoogleGenAI({ apiKey: geminiApiKey() });
-      const selected = await selectToolsWithFallback(ai, contents, systemInstruction);
-      const modelContent = selected.response.candidates?.[0]?.content;
-      const toolCalls = (selected.response.functionCalls ?? [])
-        .map(normalizeFrotakAiToolCall)
-        .filter((call): call is FrotakAiToolCall => Boolean(call))
-        .slice(0, MAX_TOOL_CALLS);
-
-      if (!modelContent || toolCalls.length === 0) {
-        throw new Error("O modelo nao selecionou uma ferramenta Frotak valida.");
-      }
-
-      const toolResponses = await Promise.all(
-        toolCalls.map(async (call) => {
-          const result = await executeFrotakAiTool(resolvedContext, call.name, call.args ?? {});
-          return toolResponsePart(call, result);
-        }),
-      );
-      const finalResponse = await ai.models.generateContent({
-        model: selected.model,
-        contents: [...contents, modelContent, functionResponseContent(toolResponses)],
-        config: {
-          temperature: 0.1,
-          maxOutputTokens: 500,
-          systemInstruction,
-        },
+      return runFrotakAiTextChat({
+        history: data.history,
+        message,
+        systemInstruction,
+        executeTool: (name, args) => executeFrotakAiTool(resolvedContext, name, args),
       });
-      const text = cleanModelText(finalResponse.text ?? "");
-      if (!text) throw new Error("Resposta vazia da IA");
-      return { text, model: selected.model, tools: toolCalls.map((call) => call.name) };
     } catch (error) {
-      logFrotakAiStage(context ? "gemini" : "context", error, {
+      logFrotakAiStage(context ? "provider" : "context", error, {
         workspaceId: data.workspaceId,
         tenantId: context?.tenantId,
       });
