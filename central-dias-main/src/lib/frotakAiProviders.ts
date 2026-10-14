@@ -283,7 +283,7 @@ async function selectWithOpenAi(
     tools: openAiTools(),
     tool_choice: "required",
     parallel_tool_calls: true,
-    max_output_tokens: 260,
+    max_output_tokens: 800,
   });
   const calls = parseOpenAiCalls(response);
   if (!response.id || calls.length === 0) {
@@ -373,7 +373,9 @@ async function finalizeWithOpenAi(
       output: JSON.stringify(toSerializableValue(result)),
     })),
     reasoning: { effort: "low" },
-    max_output_tokens: 500,
+    tools: openAiTools(),
+    tool_choice: "none",
+    max_output_tokens: 700,
   });
   const text = cleanModelText(openAiText(response));
   if (!text) throw new Error("Resposta vazia da OpenAI");
