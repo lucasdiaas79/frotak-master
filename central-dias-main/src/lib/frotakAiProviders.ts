@@ -148,6 +148,10 @@ function geminiApiKey() {
   return typeof key === "string" && key.trim() ? key.trim() : undefined;
 }
 
+function providerAvailable(provider: ProviderName) {
+  return provider === "openai" ? Boolean(openAiApiKey()) : Boolean(geminiApiKey());
+}
+
 function openAiModel() {
   return process.env.OPENAI_TEXT_MODEL?.trim() || FROTAK_AI_OPENAI_TEXT_MODEL;
 }
@@ -252,7 +256,14 @@ function openAiText(response: OpenAiResponse) {
 function parseOpenAiCalls(response: OpenAiResponse) {
   const calls: FrotakAiToolCall[] = [];
   for (const item of response.output ?? []) {
-    if (item.type !== "function_call" || !item.name || !isFrotakAiToolName(item.name)) continue;
+    if (
+      item.type !== "function_call" ||
+      !item.call_id ||
+      !item.name ||
+      !isFrotakAiToolName(item.name)
+    ) {
+      continue;
+    }
     let args: Record<string, unknown> = {};
     if (item.arguments) {
       try {
@@ -493,6 +504,7 @@ export async function runFrotakAiTextChat(params: {
   let lastError: unknown;
 
   for (const provider of providerOrder()) {
+    if (!providerAvailable(provider)) continue;
     try {
       if (provider === "openai") {
         selection = await selectWithOpenAi(params.history, params.message, params.systemInstruction);
@@ -529,7 +541,9 @@ export async function runFrotakAiTextChat(params: {
     logProviderFailure(selection.provider, "finalize", error);
   }
 
-  const fallbackOrder = providerOrder().filter((provider) => provider !== selection?.provider);
+  const fallbackOrder = providerOrder().filter(
+    (provider) => provider !== selection?.provider && providerAvailable(provider),
+  );
   for (const provider of fallbackOrder) {
     try {
       const final =
