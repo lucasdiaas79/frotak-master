@@ -10,6 +10,21 @@ import {
   type FrotakAiToolName,
 } from "@/lib/frotakAiToolCatalog";
 import { createDeterministicFrotakAnswer } from "@/lib/frotakAiDeterministic";
+import {
+  FROTAK_AI_EXPENSE_CATEGORIES,
+  FROTAK_AI_VEHICLE_SITUATIONS,
+  isFrotakAiActionName,
+  prepareFrotakAiAction,
+} from "@/lib/frotakAiActions";
+import { listFrotakAiAlerts } from "@/lib/frotakAiAlerts";
+import {
+  FROTAK_AI_DOMAIN_NAMES,
+  frotakAiDomainCatalogText,
+  queryFrotakAiDomain,
+  searchFrotakAiTenant,
+  summarizeFrotakAiDomain,
+} from "@/lib/frotakAiDomains";
+import { searchFrotakAiWeb } from "@/lib/frotakAiWebSearch";
 import { searchManualSupport } from "@/routes/manual";
 
 export type { FrotakAiToolName } from "@/lib/frotakAiToolCatalog";
@@ -193,8 +208,33 @@ export const FROTAK_AI_TOOL_DECLARATIONS = [
   {
     name: "consultar_dre",
     description:
-      "Somente owner. Consulta a DRE gerencial. Receita, custos, despesas, resultado, margem e reconciliacao ja vem calculados pelo backend.",
-    parameters: { type: Type.OBJECT, properties: { ...periodProperties } },
+      "Somente owner. Consulta a DRE gerencial. Receita, custos, despesas, resultado, margem e reconciliacao ja vem calculados pelo backend. Use detalhar=true para abrir cada custo, despesa ou receita por conta gerencial e os maiores lancamentos.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        ...periodProperties,
+        detalhar: {
+          type: Type.BOOLEAN,
+          description: "true para listar contas gerenciais e lancamentos que compoem a DRE.",
+        },
+        grupo: {
+          type: Type.STRING,
+          enum: [
+            "gross_revenue",
+            "discounts_obtained",
+            "revenue_deduction",
+            "variable_cost",
+            "operating_expense",
+            "depreciation_amortization",
+            "financial_result",
+            "income_tax",
+            "other_result",
+          ],
+          description:
+            "Grupo da DRE a detalhar: variable_cost (custos operacionais), operating_expense (despesas), gross_revenue (receita) etc. Omita para todos.",
+        },
+      },
+    },
   },
   {
     name: "consultar_rentabilidade",
@@ -225,6 +265,144 @@ export const FROTAK_AI_TOOL_DECLARATIONS = [
         limit: { type: Type.INTEGER, description: "Quantidade de orientacoes, entre 3 e 8." },
       },
       required: ["query"],
+    },
+  },
+  {
+    name: "consultar",
+    description:
+      "Consulta generica de qualquer area do tenant. Use quando nenhuma ferramenta especifica cobre a pergunta, ou para totais, somas e agrupamentos (por mes, placa, motorista, categoria, status). Somas e contagens sao calculadas pelo servidor. Dominios: " +
+      frotakAiDomainCatalogText(),
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        dominio: {
+          type: Type.STRING,
+          enum: [...FROTAK_AI_DOMAIN_NAMES],
+          description: "Area a consultar.",
+        },
+        filtros: {
+          type: Type.ARRAY,
+          description:
+            "Filtros por campo do dominio. Tambem aceita os campos placa, motorista e parceiro em dominios ligados a veiculo, motorista ou parceiro.",
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              campo: { type: Type.STRING },
+              operador: {
+                type: Type.STRING,
+                enum: [
+                  "igual",
+                  "diferente",
+                  "contem",
+                  "maior",
+                  "maior_igual",
+                  "menor",
+                  "menor_igual",
+                  "vazio",
+                  "preenchido",
+                ],
+              },
+              valor: { type: Type.STRING },
+            },
+            required: ["campo"],
+          },
+        },
+        busca: {
+          type: Type.STRING,
+          description: "Texto livre procurado nos campos de texto do dominio.",
+        },
+        agrupar_por: {
+          type: Type.STRING,
+          description:
+            "Campo para agrupar com totais: mes, dia, placa, motorista, parceiro ou um campo do dominio.",
+        },
+        totais: { type: Type.BOOLEAN, description: "true para receber so a contagem e as somas." },
+        ordenar: { type: Type.STRING, description: "Campo para ordenar a lista." },
+        ordem: { type: Type.STRING, enum: ["asc", "desc"] },
+        ...periodProperties,
+        limite: limitProperty,
+      },
+      required: ["dominio"],
+    },
+  },
+  {
+    name: "resumir",
+    description:
+      "Resumo pronto de um dominio no periodo (padrao 30 dias): contagem, somas e os principais grupos. Use para perguntas abertas como 'como estao as despesas' ou 'resumo das viagens'.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        dominio: { type: Type.STRING, enum: [...FROTAK_AI_DOMAIN_NAMES] },
+        ...periodProperties,
+      },
+      required: ["dominio"],
+    },
+  },
+  {
+    name: "buscar",
+    description:
+      "Procura um nome, placa, documento ou telefone em todo o tenant (veiculos, motoristas, implementos, parceiros e produtos). Use quando nao souber a que se refere um termo.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: { texto: { type: Type.STRING, description: "Termo a procurar." } },
+      required: ["texto"],
+    },
+  },
+  {
+    name: "alertas",
+    description:
+      "Lista o que precisa de atencao agora: veiculos parados ou quebrados, rastreados sem sinal, fretes longos, diarias pendentes, abastecimentos fora do padrao e, para o owner, contas vencidas ou vencendo. Use para 'como esta a operacao', 'o que precisa da minha atencao' e para o briefing do dia.",
+    parameters: { type: Type.OBJECT, properties: {} },
+  },
+  {
+    name: "lancar_despesa_frete",
+    description:
+      "Prepara o lancamento de uma despesa no frete ativo de um veiculo. Nao grava: devolve um resumo que o usuario confirma no botao da tela.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        placa: { type: Type.STRING },
+        categoria: { type: Type.STRING, enum: [...FROTAK_AI_EXPENSE_CATEGORIES] },
+        valor: { type: Type.NUMBER, description: "Valor em reais dito pelo usuario." },
+        descricao: { type: Type.STRING },
+      },
+      required: ["placa", "categoria", "valor"],
+    },
+  },
+  {
+    name: "atualizar_situacao_veiculo",
+    description:
+      "Prepara a mudanca de situacao de um veiculo sem frete ativo. Nao grava: o usuario confirma no botao da tela.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        placa: { type: Type.STRING },
+        situacao: { type: Type.STRING, enum: Object.keys(FROTAK_AI_VEHICLE_SITUATIONS) },
+        observacao: { type: Type.STRING },
+      },
+      required: ["placa", "situacao"],
+    },
+  },
+  {
+    name: "registrar_ocorrencia",
+    description:
+      "Prepara o registro de uma ocorrencia na linha do tempo de um veiculo. Nao grava: o usuario confirma no botao da tela.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: { placa: { type: Type.STRING }, descricao: { type: Type.STRING } },
+      required: ["placa", "descricao"],
+    },
+  },
+  {
+    name: "pesquisar_web",
+    description:
+      "Pesquisa na internet pela busca do Google. Use para assuntos fora do tenant que pedem informacao atual: precos de caminhoes, pneus e diesel, tabela de frete ANTT, noticias do setor, legislacao, mercado de trabalho, clima e estradas. Nunca use para dados da empresa do usuario.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        pergunta: { type: Type.STRING, description: "O que pesquisar, em portugues." },
+      },
+      required: ["pergunta"],
     },
   },
 ] as const satisfies readonly FunctionDeclaration[];
@@ -262,6 +440,55 @@ export async function executeFrotakAiTool(
 
   const supabase = getSupabaseServerClient(context.accessToken);
   let data: QueryResult;
+  const startedAt = Date.now();
+  try {
+    data = await runFrotakAiTool(supabase, context, name, args);
+  } catch (error) {
+    data = { error: error instanceof Error ? error.message : String(error), code: "TOOL_FAILED" };
+  }
+  // Metrica por chamada (aparece nos logs da Vercel): ferramenta, tempo e resultado.
+  console.info("[frotakAi] tool", {
+    tenantId: context.tenantId,
+    tool: name,
+    ms: Date.now() - startedAt,
+    ok: typeof data.error !== "string",
+    code: typeof data.error === "string" ? data.code : undefined,
+  });
+
+  if (typeof data.error === "string") {
+    console.error("[frotakAi] tool failed", {
+      stage: "tool",
+      workspaceId: context.workspaceId,
+      tenantId: context.tenantId,
+      tool: name,
+      code: data.code,
+      message: data.error,
+    });
+    return {
+      ok: false,
+      tool: name,
+      error: data.error,
+      code: data.code,
+      deterministicAnswer: data.error,
+    };
+  }
+
+  return {
+    ok: true,
+    tool: name,
+    scope: { tenant: context.tenantName, workspace: context.workspaceName },
+    data,
+    deterministicAnswer: createDeterministicFrotakAnswer(name, data),
+  };
+}
+
+async function runFrotakAiTool(
+  supabase: SupabaseServer,
+  context: FrotakAiContext,
+  name: FrotakAiToolName,
+  args: Record<string, unknown>,
+): Promise<QueryResult> {
+  let data: QueryResult = {};
   switch (name) {
     case "consultar_tenant":
       data = await queryTenantSummary(supabase, context);
@@ -307,33 +534,28 @@ export async function executeFrotakAiTool(
         items: searchManualSupport(textArg(args, "query") ?? "", limitFromArgs(args, 6, 8)),
       };
       break;
+    case "consultar":
+      data = await queryFrotakAiDomain(supabase, context, args);
+      break;
+    case "resumir":
+      data = await summarizeFrotakAiDomain(supabase, context, args);
+      break;
+    case "buscar":
+      data = await searchFrotakAiTenant(supabase, context, args);
+      break;
+    case "alertas":
+      data = await listFrotakAiAlerts(supabase, context);
+      break;
+    case "pesquisar_web":
+      data = await searchFrotakAiWeb(args);
+      break;
+    case "lancar_despesa_frete":
+    case "atualizar_situacao_veiculo":
+    case "registrar_ocorrencia":
+      data = isFrotakAiActionName(name) ? await prepareFrotakAiAction(context, name, args) : {};
+      break;
   }
-
-  if (typeof data.error === "string") {
-    console.error("[frotakAi] tool failed", {
-      stage: "tool",
-      workspaceId: context.workspaceId,
-      tenantId: context.tenantId,
-      tool: name,
-      code: data.code,
-      message: data.error,
-    });
-    return {
-      ok: false,
-      tool: name,
-      error: data.error,
-      code: data.code,
-      deterministicAnswer: data.error,
-    };
-  }
-
-  return {
-    ok: true,
-    tool: name,
-    scope: { tenant: context.tenantName, workspace: context.workspaceName },
-    data,
-    deterministicAnswer: createDeterministicFrotakAnswer(name, data),
-  };
+  return data;
 }
 
 function limitFromArgs(
@@ -972,6 +1194,50 @@ async function queryDre(
     data && typeof data === "object" && !Array.isArray(data)
       ? (data as Record<string, unknown>)
       : {};
+  if (args.detalhar === true || textArg(args, "grupo")) {
+    const { data: detail, error: detailError } = await supabase.rpc("get_dre_detail", {
+      p_payload: {
+        workspaceId: context.workspaceId,
+        startDate: period.startDate,
+        endDate: period.endDate,
+        costCenterId: null,
+        dreGroup: textArg(args, "grupo") ?? null,
+        chartAccountId: null,
+      },
+    });
+    if (detailError) return errorResult(detailError)!;
+    const record =
+      detail && typeof detail === "object" && !Array.isArray(detail)
+        ? (detail as Record<string, unknown>)
+        : {};
+    const accounts = Array.isArray(record.accounts) ? record.accounts : [];
+    const documents = Array.isArray(record.documents) ? record.documents : [];
+    return {
+      period,
+      totals: payload.totals ?? {},
+      grupo: textArg(args, "grupo") ?? "todos",
+      contasGerenciais: compactRows(accounts as Array<Record<string, unknown>>, [
+        "code",
+        "name",
+        "dre_group",
+        "signed_amount",
+        "document_count",
+      ]).slice(0, 40),
+      maioresLancamentos: compactRows(documents as Array<Record<string, unknown>>, [
+        "competence_date",
+        "description",
+        "partner_name",
+        "vehicle_plate",
+        "cost_center_name",
+        "signed_amount",
+      ])
+        .sort(
+          (a, b) => Math.abs(numberValue(b.signed_amount)) - Math.abs(numberValue(a.signed_amount)),
+        )
+        .slice(0, 15),
+      totalLancamentos: documents.length,
+    };
+  }
   return {
     period,
     groups: payload.groups ?? [],
@@ -1067,4 +1333,67 @@ async function queryProfitability(
   }
   rows = rows.slice(0, limitFromArgs(args));
   return { period, dimension, count: rows.length, items: rows };
+}
+
+const VEHICLE_ATTENTION_SITUATIONS = new Set(["parado", "quebrado", "manutencao"]);
+
+function countBy(rows: Array<Record<string, unknown>>, field: string) {
+  const counts: Record<string, number> = {};
+  rows.forEach((row) => {
+    const key =
+      typeof row[field] === "string" && row[field] ? String(row[field]) : "sem_informacao";
+    counts[key] = (counts[key] ?? 0) + 1;
+  });
+  return counts;
+}
+
+// Retrato compacto do tenant carregado no inicio da conversa, para a IA ja saber
+// o tamanho da operacao e o que precisa de atencao. Os numeros sao contados aqui no
+// servidor; a IA so repete. Qualquer falha devolve vazio para nao travar a conversa.
+export async function createFrotakAiTenantSnapshot(context: FrotakAiContext) {
+  try {
+    const supabase = getSupabaseServerClient(context.accessToken);
+    const [summary, fleet, alerts] = await Promise.all([
+      queryTenantSummary(supabase, context),
+      supabase
+        .from("vehicles")
+        .select("plate, vehicle_situation, freight_stage")
+        .eq("tenant_id", context.tenantId)
+        .order("plate")
+        .limit(1000),
+      listFrotakAiAlerts(supabase, context).catch(() => null),
+    ]);
+    if ("error" in summary || fleet.error) return "";
+    const vehicles = (fleet.data ?? []) as Array<Record<string, unknown>>;
+    const attention = vehicles
+      .filter((row) => VEHICLE_ATTENTION_SITUATIONS.has(String(row.vehicle_situation ?? "")))
+      .slice(0, 20)
+      .map((row) => `${row.plate} (${row.vehicle_situation})`);
+    const snapshot = {
+      geradoEm: new Date().toISOString(),
+      totais: summary.totals,
+      veiculosPorSituacao: countBy(vehicles, "vehicle_situation"),
+      veiculosPorEtapaDoFrete: countBy(vehicles, "freight_stage"),
+      veiculosQuePedemAtencao: attention,
+      alertas:
+        alerts && "alertas" in alerts
+          ? alerts.alertas.map((alert) => ({
+              titulo: alert.titulo,
+              quantidade: alert.quantidade,
+              ...(alert.valor !== undefined ? { valor: alert.valor } : {}),
+            }))
+          : undefined,
+    };
+    return [
+      "Retrato do tenant no inicio desta conversa (pode estar desatualizado; para responder numeros e status, consulte a ferramenta):",
+      JSON.stringify(snapshot),
+    ].join(" ");
+  } catch (error) {
+    console.error("[frotakAi] snapshot failed", {
+      workspaceId: context.workspaceId,
+      tenantId: context.tenantId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return "";
+  }
 }

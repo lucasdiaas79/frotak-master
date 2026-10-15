@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeft,
+  Check,
   ArrowUp,
   AudioLines,
   Bot,
@@ -12,24 +13,30 @@ import {
   User,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { FrotakOrb, type FrotakOrbState } from "@/components/frotak/FrotakOrb";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { getCurrentAccessToken, getCurrentUser, getProfile } from "@/lib/auth";
 import {
+  confirmFrotakAiAction,
   createFrotakLiveToken,
   executeFrotakAiToolCall,
   sendFrotakAiChatMessage,
 } from "@/lib/frotakAi";
+import {
+  extractFrotakAiPendingAction,
+  FROTAK_AI_BRIEFING_TRIGGER,
+  stripFrotakAiActionToken,
+  type FrotakAiPendingAction,
+} from "@/lib/frotakAiToolCatalog";
 import {
   FrotakLiveSession,
   requestFrotakLiveMicrophone,
   type FrotakLiveStatus,
 } from "@/lib/frotakLive";
 import { cn } from "@/lib/utils";
-import { cancelSpeech, speakPortuguese } from "@/lib/frotakVoice";
 
 export const Route = createFileRoute("/frotak-ia")({
   head: () => ({
@@ -63,6 +70,19 @@ const LIVE_MICROPHONE_TIMEOUT_MS = 20_000;
 const LIVE_TOKEN_TIMEOUT_MS = 20_000;
 const LIVE_CONNECTION_TIMEOUT_MS = 30_000;
 
+// O briefing abre a voz so na primeira conversa do dia em cada workspace.
+function claimDailyBriefing(workspaceId: string) {
+  const key = `frotak-ia-briefing:${workspaceId}`;
+  const today = new Date().toLocaleDateString("sv-SE");
+  try {
+    if (window.localStorage.getItem(key) === today) return false;
+    window.localStorage.setItem(key, today);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
@@ -85,6 +105,21 @@ function cleanAssistantText(text: string) {
     .replace(/\r/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+// Segura trocas rapidas de estado (ex.: entre um pedaco de audio e outro) para a esfera nao piscar.
+function useStableLiveStatus(status: FrotakLiveStatus) {
+  const [stable, setStable] = useState(status);
+  useEffect(() => {
+    if (["speaking", "error", "idle", "connecting"].includes(status)) {
+      setStable(status);
+      return;
+    }
+    const delay = status === "ready" || status === "interrupted" ? 900 : 350;
+    const timer = window.setTimeout(() => setStable(status), delay);
+    return () => window.clearTimeout(timer);
+  }, [status]);
+  return stable;
 }
 
 function liveStatusLabel(status: FrotakLiveStatus) {
@@ -122,9 +157,11 @@ function FrotakIaPage() {
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<"text" | "live">("text");
   const [liveStatus, setLiveStatus] = useState<FrotakLiveStatus>("idle");
-  const [lastLiveText, setLastLiveText] = useState("");
-  const [lastUserTranscript, setLastUserTranscript] = useState("");
+  const [, setLastLiveText] = useState("");
+  const [, setLastUserTranscript] = useState("");
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
+  const [pendingAction, setPendingAction] = useState<FrotakAiPendingAction | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const liveSessionRef = useRef<FrotakLiveSession | null>(null);
   const liveStartAttemptRef = useRef(0);
 
@@ -183,6 +220,8 @@ function FrotakIaPage() {
       });
 
       updateMessage(pendingId, cleanAssistantText(response.text), false);
+      const action = response.pendingActions?.at(-1);
+      if (action) setPendingAction(action);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Nao foi possivel falar com a Frotak IA.";
@@ -247,15 +286,19 @@ function FrotakIaPage() {
           if (text) setLastUserTranscript(text);
         },
         refreshToken: fetchLiveToken,
-        onToolCall: async (call) =>
-          executeFrotakAiToolCall({
+        onToolCall: async (call) => {
+          const result = await executeFrotakAiToolCall({
             data: {
               accessToken: await requireAccessToken(),
               workspaceId,
               name: call.name,
               args: call.args ?? {},
             },
-          }),
+          });
+          const action = extractFrotakAiPendingAction(result);
+          if (action) setPendingAction(action);
+          return stripFrotakAiActionToken(result);
+        },
         onDeterministicAnswer: async (text) => {
           await speakPortuguese(text);
         },
@@ -273,6 +316,9 @@ function FrotakIaPage() {
         LIVE_CONNECTION_TIMEOUT_MS,
         "O Frotak Live demorou para conectar. Tente novamente em instantes.",
       );
+      if (liveSessionRef.current === session && claimDailyBriefing(workspaceId)) {
+        session.sendText(FROTAK_AI_BRIEFING_TRIGGER);
+      }
     } catch (error) {
       const cancelled = liveStartAttemptRef.current !== attempt;
       const failedSession = liveSessionRef.current;
@@ -290,7 +336,6 @@ function FrotakIaPage() {
   };
 
   const stopLive = async () => {
-    cancelSpeech();
     liveStartAttemptRef.current += 1;
     const session = liveSessionRef.current;
     liveSessionRef.current = null;
@@ -305,6 +350,56 @@ function FrotakIaPage() {
     liveSessionRef.current?.setMicrophoneEnabled(next);
   };
 
+  const resolvePendingAction = async (confirmed: boolean) => {
+    const action = pendingAction;
+    if (!action || confirming) return;
+    if (!confirmed) {
+      setPendingAction(null);
+      liveSessionRef.current?.sendText("O usuario cancelou a acao na tela. Nada foi gravado.");
+      return;
+    }
+    setConfirming(true);
+    try {
+      const [accessToken, workspaceId] = await Promise.all([
+        requireAccessToken(),
+        requireWorkspaceId(),
+      ]);
+      const result = await confirmFrotakAiAction({
+        data: { accessToken, workspaceId, token: action.token },
+      });
+      const text = result.ok
+        ? (result.message ?? "Acao confirmada.")
+        : (result.error ?? "Nao foi possivel concluir a acao.");
+      if (!result.ok) toast.error(text);
+      setPendingAction(null);
+      if (liveSessionRef.current) {
+        liveSessionRef.current.sendText(
+          result.ok
+            ? `O usuario confirmou na tela e a acao foi gravada: ${text} Avise em uma frase.`
+            : `A acao nao foi gravada: ${text} Avise em uma frase.`,
+        );
+      } else {
+        setMessages((current) => [
+          ...current,
+          { id: `assistant-${Date.now()}`, role: "assistant", text },
+        ]);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Nao foi possivel concluir a acao.");
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  const actionCard = pendingAction ? (
+    <PendingActionCard
+      action={pendingAction}
+      confirming={confirming}
+      dark={mode === "live"}
+      onResolve={resolvePendingAction}
+    />
+  ) : null;
+
   const exitLiveMode = async () => {
     await stopLive();
     setMode("text");
@@ -315,14 +410,13 @@ function FrotakIaPage() {
       <FrotakLiveView
         draft={draft}
         liveStatus={liveStatus}
-        lastLiveText={lastLiveText}
-        lastUserTranscript={lastUserTranscript}
         microphoneEnabled={microphoneEnabled}
         setDraft={setDraft}
         startLive={startLive}
         exitLiveMode={exitLiveMode}
         sendMessage={sendMessage}
         toggleMicrophone={toggleMicrophone}
+        actionCard={actionCard}
       />
     );
   }
@@ -372,6 +466,7 @@ function FrotakIaPage() {
             {messages.map((message) => (
               <ChatBubble key={message.id} message={message} />
             ))}
+            {actionCard}
           </div>
         </div>
 
@@ -389,20 +484,18 @@ function FrotakIaPage() {
 
 function FrotakLiveView({
   draft,
-  liveStatus,
-  lastLiveText,
-  lastUserTranscript,
+  liveStatus: rawLiveStatus,
   microphoneEnabled,
   setDraft,
   startLive,
   exitLiveMode,
   sendMessage,
   toggleMicrophone,
+  actionCard,
 }: {
+  actionCard: ReactNode;
   draft: string;
   liveStatus: FrotakLiveStatus;
-  lastLiveText: string;
-  lastUserTranscript: string;
   microphoneEnabled: boolean;
   setDraft: (value: string) => void;
   startLive: () => Promise<void>;
@@ -410,6 +503,7 @@ function FrotakLiveView({
   sendMessage: () => Promise<void>;
   toggleMicrophone: () => void;
 }) {
+  const liveStatus = useStableLiveStatus(rawLiveStatus);
   const active = liveStatus !== "idle" && liveStatus !== "error";
   const speaking = liveStatus === "speaking";
   const listening = liveStatus === "listening";
@@ -444,31 +538,17 @@ function FrotakLiveView({
         <div
           role="img"
           aria-label={`Frotak Live: ${liveStatusLabel(liveStatus)}`}
-          className={cn(
-            "relative aspect-square w-[78vw] min-w-[250px] max-w-[360px] overflow-hidden rounded-full transition-transform duration-500",
-            speaking && "scale-[1.04]",
-            listening && "scale-[0.98]",
-          )}
+          className="relative aspect-square w-[78vw] min-w-[250px] max-w-[360px]"
         >
           <FrotakOrb state={orbState} />
         </div>
 
-        <p className="mt-8 text-[15px] font-bold text-white/72">{liveStatusLabel(liveStatus)}</p>
-        {lastUserTranscript ? (
-          <p className="mt-3 max-w-md whitespace-pre-wrap text-[13px] font-semibold leading-relaxed text-white/45">
-            Voce: {lastUserTranscript}
-          </p>
-        ) : null}
-        {lastLiveText ? (
-          <p className="mt-4 max-w-md whitespace-pre-wrap text-[17px] font-semibold leading-relaxed text-white">
-            {lastLiveText}
-          </p>
-        ) : (
-          <p className="mt-4 max-w-sm text-[15px] font-medium leading-relaxed text-white/54">
-            Converse por voz com a assistente operacional da Frotak.
-          </p>
-        )}
+        <p className="mt-8 text-[15px] font-bold text-white/72" aria-live="polite">
+          {liveStatusLabel(liveStatus)}
+        </p>
       </div>
+
+      {actionCard ? <div className="mx-auto mb-4 w-full max-w-md px-5">{actionCard}</div> : null}
 
       <div className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
         <div className="flex h-16 min-w-0 items-center gap-3 rounded-full border border-white/10 bg-white/[0.08] px-4 shadow-[0_18px_60px_rgba(0,0,0,0.45)]">
@@ -513,6 +593,61 @@ function FrotakLiveView({
         >
           <X className="size-8" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+function PendingActionCard({
+  action,
+  confirming,
+  dark,
+  onResolve,
+}: {
+  action: FrotakAiPendingAction;
+  confirming: boolean;
+  dark: boolean;
+  onResolve: (confirmed: boolean) => Promise<void>;
+}) {
+  return (
+    <div
+      role="alertdialog"
+      aria-label="Confirmar acao da Frotak IA"
+      className={cn(
+        "rounded-2xl border p-4 text-left shadow-lg",
+        dark ? "border-white/15 bg-white/[0.08] text-white" : "border-primary/30 bg-primary/5",
+      )}
+    >
+      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-primary">
+        Confirmar acao
+      </p>
+      <p className="mt-1 text-[15px] font-semibold leading-snug">{action.resumo}</p>
+      <div className="mt-3 flex gap-2">
+        <Button
+          type="button"
+          className="h-10 flex-1 gap-2 rounded-full"
+          disabled={confirming}
+          onClick={() => void onResolve(true)}
+        >
+          {confirming ? (
+            <LoaderCircle className="size-4 animate-spin" />
+          ) : (
+            <Check className="size-4" />
+          )}
+          Confirmar
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "h-10 flex-1 rounded-full",
+            dark && "border-white/20 bg-transparent text-white",
+          )}
+          disabled={confirming}
+          onClick={() => void onResolve(false)}
+        >
+          Cancelar
+        </Button>
       </div>
     </div>
   );

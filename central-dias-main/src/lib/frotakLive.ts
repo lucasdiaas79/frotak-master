@@ -38,9 +38,23 @@ const GEMINI_LIVE_WS =
 const INPUT_RATE = 16_000;
 const OUTPUT_RATE = 24_000;
 const CAPTURE_CHUNK_SIZE = 4096;
-const ACTIVITY_RMS_THRESHOLD = 0.01;
+// Portao de ruido: so manda audio real para o Gemini quando ha voz sustentada. Ruido curto
+// (batida, porta, carro passando) vira silencio e nao interrompe nem faz a IA "ouvir".
+const GATE_MIN_RMS = 0.018;
+const GATE_NOISE_RATIO = 3.5;
+const GATE_SPEAKING_BOOST = 1.8;
+const GATE_ONSET_FRAMES = 6; // ~120 ms de voz seguida para abrir
+const GATE_HANGOVER_FRAMES = 35; // ~700 ms aberto depois da ultima fala
+const GATE_PREROLL_FRAMES = 12; // ~240 ms de atraso para nao cortar o inicio da palavra
 const FACTUAL_FAIL_CLOSED_MESSAGE =
   "Nao foi possivel consultar os dados da Frotak neste momento. Tente novamente em instantes.";
+// Enviado uma vez quando a IA tenta responder um dado do tenant sem consultar as ferramentas.
+// Antes de consultar, a IA pode falar uma frase curta de espera ("Entendi, deixa so eu dar
+// uma olhada aqui"). Ate este limite o audio toca mesmo sem ferramenta; o resto espera a consulta.
+const PRE_TOOL_AUDIO_MS = 3_500;
+
+const GROUNDING_RETRY_PROMPT =
+  "Instrucao do sistema: a resposta anterior nao foi entregue porque nao consultou as ferramentas da Frotak. Consulte agora a ferramenta adequada para a ultima pergunta do usuario e responda de novo, curto e direto, sem mencionar esta instrucao e sem repetir a frase de espera.";
 
 type GeminiLiveMessage = {
   setupComplete?: unknown;
@@ -222,6 +236,14 @@ export class FrotakLiveSession {
   private toolCallsPending = 0;
   private toolFailures = 0;
   private deterministicTurnText = "";
+  private groundingRetried = false;
+  private preToolAudioMs = 0;
+  private gateQueue: Float32Array[] = [];
+  private gateFrame = 0;
+  private gateOpenFrom = Number.POSITIVE_INFINITY;
+  private gateOpenUntil = -1;
+  private gateVoicedRun = 0;
+  private noiseFloor = 0.005;
   private cancelledToolCallIds = new Set<string>();
   private resolveReady: (() => void) | null = null;
   private rejectReady: ((error: Error) => void) | null = null;
@@ -261,7 +283,7 @@ export class FrotakLiveSession {
 
   sendText(text: string) {
     if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) return;
-    if (requiresFrotakTool(text)) this.beginGroundedTurn();
+    this.player.stopNow();
     this.options.onStatus?.("thinking");
     this.sendRealtimeInput({ text });
   }
@@ -270,6 +292,8 @@ export class FrotakLiveSession {
     if (this.closed || this.microphoneEnabled === enabled) return;
     this.microphoneEnabled = enabled;
     this.captureBuffer = [];
+    this.gateQueue = [];
+    this.gateVoicedRun = 0;
     this.stream?.getAudioTracks().forEach((track) => {
       track.enabled = enabled;
     });
@@ -412,19 +436,8 @@ export class FrotakLiveSession {
       ) {
         return;
       }
-      const input = event.data;
-      const rms = calculateRms(input);
-
-      if (rms > ACTIVITY_RMS_THRESHOLD) {
-        if (!this.speaking) this.options.onStatus?.("listening");
-        if (this.silenceTimer) window.clearTimeout(this.silenceTimer);
-        this.silenceTimer = window.setTimeout(() => {
-          if (!this.closed && !this.speaking && this.microphoneEnabled) {
-            this.options.onStatus?.("thinking");
-          }
-        }, 900);
-      }
-
+      const input = this.applyNoiseGate(event.data);
+      if (!input) return;
       this.captureBuffer.push(...input);
       if (this.captureBuffer.length < CAPTURE_CHUNK_SIZE) return;
 
@@ -455,17 +468,58 @@ export class FrotakLiveSession {
     this.websocket = null;
   }
 
-  private requireGrounding(source: string) {
-    if (this.groundingRequired) return;
-    this.groundingRequired = true;
-    this.player.stopNow();
-    console.info("[frotakLive] groundingRequired", { source });
+  // Recebe um quadro de ~20 ms e devolve o quadro atrasado: audio real se faz parte de uma fala,
+  // silencio se for ruido.
+  private applyNoiseGate(frame: Float32Array) {
+    const rms = calculateRms(frame);
+    const threshold =
+      Math.max(GATE_MIN_RMS, this.noiseFloor * GATE_NOISE_RATIO) *
+      (this.speaking ? GATE_SPEAKING_BOOST : 1);
+    const index = this.gateFrame;
+    this.gateFrame += 1;
+
+    if (rms > threshold) {
+      this.gateVoicedRun += 1;
+      if (this.gateVoicedRun >= GATE_ONSET_FRAMES) {
+        if (index > this.gateOpenUntil) {
+          this.gateOpenFrom = index - GATE_ONSET_FRAMES - GATE_PREROLL_FRAMES + 1;
+        }
+        this.gateOpenUntil = index + GATE_HANGOVER_FRAMES;
+      }
+    } else {
+      this.gateVoicedRun = 0;
+      this.noiseFloor = this.noiseFloor * 0.97 + rms * 0.03;
+    }
+
+    const open = index <= this.gateOpenUntil && index >= this.gateOpenFrom;
+    if (open && !this.speaking) {
+      this.options.onStatus?.("listening");
+      if (this.silenceTimer) window.clearTimeout(this.silenceTimer);
+      this.silenceTimer = window.setTimeout(
+        () => {
+          if (!this.closed && !this.speaking && this.microphoneEnabled) {
+            this.options.onStatus?.("thinking");
+          }
+        },
+        (GATE_HANGOVER_FRAMES + GATE_PREROLL_FRAMES) * 20 + 300,
+      );
+    }
+
+    this.gateQueue.push(frame);
+    if (this.gateQueue.length <= GATE_PREROLL_FRAMES) return null;
+    const delayed = this.gateQueue.shift()!;
+    const delayedIndex = index - GATE_PREROLL_FRAMES;
+    const delayedOpen = delayedIndex >= this.gateOpenFrom && delayedIndex <= this.gateOpenUntil;
+    return delayedOpen ? delayed : new Float32Array(delayed.length);
   }
 
-  private beginGroundedTurn() {
-    this.groundingRequired = true;
-    this.resetToolState();
-    this.player.stopNow();
+  private canPlayWaitingPhrase() {
+    return (
+      this.groundingRequired &&
+      this.toolCallsSeen === 0 &&
+      this.toolFailures === 0 &&
+      this.preToolAudioMs < PRE_TOOL_AUDIO_MS
+    );
   }
 
   private canReleaseModelOutput() {
@@ -477,8 +531,21 @@ export class FrotakLiveSession {
     this.toolCallsSeen = 0;
     this.toolCallsPending = 0;
     this.toolFailures = 0;
+    this.groundingRetried = false;
+    this.preToolAudioMs = 0;
     this.cancelledToolCallIds.clear();
     this.deterministicTurnText = "";
+  }
+
+  // A IA respondeu um dado do tenant sem consultar: em vez de calar, pede uma vez que consulte.
+  private requestGroundedRetry() {
+    if (this.groundingRetried) return false;
+    if (!this.sendRealtimeInput({ text: GROUNDING_RETRY_PROMPT })) return false;
+    this.groundingRetried = true;
+    this.transcriptBuffer = "";
+    this.options.onStatus?.("thinking");
+    console.info("[frotakLive] grounding retry requested");
+    return true;
   }
 
   private failSession(message: string) {
@@ -545,14 +612,12 @@ export class FrotakLiveSession {
     if (interimInputText) {
       const preview = appendTranscript(this.inputTranscriptBuffer, interimInputText);
       this.options.onInputText?.(sanitizeLiveText(preview));
-      if (requiresFrotakTool(preview)) this.requireGrounding("voice");
     }
 
     const inputText = message.serverContent?.inputTranscription?.text;
     if (inputText) {
       this.inputTranscriptBuffer = appendTranscript(this.inputTranscriptBuffer, inputText);
       this.options.onInputText?.(sanitizeLiveText(this.inputTranscriptBuffer));
-      if (requiresFrotakTool(this.inputTranscriptBuffer)) this.requireGrounding("voice");
     }
 
     const toolCalls = message.toolCall?.functionCalls ?? [];
@@ -576,6 +641,10 @@ export class FrotakLiveSession {
       const audio = part.inlineData?.data;
       const canPlayModelOutput = this.canReleaseModelOutput() && !this.deterministicTurnText;
       if (audio && canPlayModelOutput) void this.player.enqueue(audio);
+      else if (audio && this.canPlayWaitingPhrase()) {
+        this.preToolAudioMs += ((audio.length * 3) / 4 / 2 / OUTPUT_RATE) * 1000;
+        void this.player.enqueue(audio);
+      }
       if (part.text && canPlayModelOutput) {
         this.transcriptBuffer = appendTranscript(this.transcriptBuffer, part.text);
         this.options.onPartialText?.(sanitizeLiveText(this.transcriptBuffer));
@@ -589,7 +658,14 @@ export class FrotakLiveSession {
     }
 
     if (message.serverContent?.turnComplete) {
-      if (!(this.groundingRequired && this.toolCallsPending > 0)) {
+      const skippedTools =
+        this.groundingRequired &&
+        this.toolCallsSeen === 0 &&
+        this.toolCallsPending === 0 &&
+        this.toolFailures === 0;
+      if (skippedTools && this.requestGroundedRetry()) {
+        // Aguarda a nova resposta, agora com consulta.
+      } else if (!(this.groundingRequired && this.toolCallsPending > 0)) {
         const failClosed = this.groundingRequired && !this.canReleaseModelOutput();
         const text = failClosed
           ? FACTUAL_FAIL_CLOSED_MESSAGE
@@ -640,7 +716,7 @@ export class FrotakLiveSession {
             args: call.args ?? {},
           });
           if (call.id && this.cancelledToolCallIds.has(call.id)) return null;
-          const succeeded = !hasToolError(output);
+          const succeeded = !isFrotakAiTechnicalFailure(output);
           console.info("[frotakLive] tool result", {
             name: call.name,
             ok: succeeded,
@@ -775,16 +851,6 @@ function appendTranscript(current: string, fragment: string) {
   return `${current} ${fragment}`;
 }
 
-function hasToolError(value: unknown, depth = 0): boolean {
-  if (depth > 6 || value === null || value === undefined) return false;
-  if (Array.isArray(value)) return value.some((item) => hasToolError(item, depth + 1));
-  if (typeof value !== "object") return false;
-
-  const record = value as Record<string, unknown>;
-  if (record.ok === false || typeof record.error === "string") return true;
-  return Object.values(record).some((item) => hasToolError(item, depth + 1));
-}
-
 function calculateRms(input: Float32Array) {
   let sum = 0;
   for (let index = 0; index < input.length; index += 1) sum += input[index] * input[index];
@@ -842,4 +908,4 @@ function sanitizeLiveText(text: string) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
-import { requiresFrotakTool } from "@/lib/frotakAiIntent";
+import { isFrotakAiTechnicalFailure } from "@/lib/frotakAiToolCatalog";

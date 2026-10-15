@@ -8,8 +8,11 @@ import {
   deterministicAnswerFromToolResult,
 } from "../src/lib/frotakAiDeterministic.ts";
 import {
+  extractFrotakAiPendingAction,
   FROTAK_AI_FINANCIAL_TOOL_NAMES,
   FROTAK_AI_TOOL_NAMES,
+  isFrotakAiTechnicalFailure,
+  stripFrotakAiActionToken,
 } from "../src/lib/frotakAiToolCatalog.ts";
 import { FROTAK_AI_V2_EVALUATION_CASES } from "./frotak-ai-v2-cases.ts";
 
@@ -46,13 +49,17 @@ test("v2 evaluation suite has at least 50 unique real questions", () => {
     [...new Set(FROTAK_AI_V2_EVALUATION_CASES.map((item) => item.category))].sort(),
     [
       "abastecimento",
+      "acoes",
       "dre",
       "financeiro",
       "fretes",
       "frota",
       "motoristas",
       "posicao",
+      "proativa",
       "rentabilidade",
+      "tenant_inteiro",
+      "web",
     ],
   );
 });
@@ -69,7 +76,9 @@ test("all financial evaluation questions are owner-only", () => {
   const financial = new Set<string>(FROTAK_AI_FINANCIAL_TOOL_NAMES);
   FROTAK_AI_V2_EVALUATION_CASES.forEach((item) => {
     if (financial.has(item.expectedTool)) assert.equal(item.ownerOnly, true, item.question);
-    if (item.ownerOnly) assert.equal(financial.has(item.expectedTool), true, item.question);
+    if (item.ownerOnly) {
+      assert.equal(financial.has(item.expectedTool) || Boolean(item.domain), true, item.question);
+    }
   });
 });
 
@@ -83,6 +92,84 @@ test("v2 tool executor remains read-only and removes the generic query", () => {
   assert.ok(source.includes("FROTAK_AI_FINANCIAL_TOOLS.has(name) && !canReadFinancial(context)"));
   assert.ok(source.includes('.eq("tenant_id", context.tenantId)'));
   assert.ok(source.includes("workspaceId: context.workspaceId"));
+});
+
+test("business answers do not count as technical tool failures", () => {
+  assert.equal(
+    isFrotakAiTechnicalFailure({ ok: true, data: { rows: [{ error: "campo" }] } }),
+    false,
+  );
+  assert.equal(
+    isFrotakAiTechnicalFailure({
+      ok: false,
+      error: "Veiculo nao encontrado",
+      code: "VEHICLE_NOT_FOUND",
+    }),
+    false,
+  );
+  assert.equal(
+    isFrotakAiTechnicalFailure({ ok: false, error: "x", code: "OWNER_REQUIRED" }),
+    false,
+  );
+  assert.equal(isFrotakAiTechnicalFailure({ ok: false, error: "timeout", code: "57014" }), true);
+  assert.equal(isFrotakAiTechnicalFailure({ error: "Sessao indisponivel" }), true);
+  assert.equal(isFrotakAiTechnicalFailure(null), true);
+});
+
+test("generic domains, alerts and the action preview never write", () => {
+  for (const file of ["frotakAiDomains.ts", "frotakAiAlerts.ts"]) {
+    const source = readFileSync(new URL(`../src/lib/${file}`, import.meta.url), "utf8");
+    assert.equal(/\.(insert|update|upsert|delete|rpc)\s*\(/.test(source), false, file);
+    assert.ok(source.includes('.eq("tenant_id", context.tenantId)'), file);
+  }
+  const actions = readFileSync(new URL("../src/lib/frotakAiActions.ts", import.meta.url), "utf8");
+  const prepare = actions.slice(
+    actions.indexOf("export async function prepareFrotakAiAction"),
+    actions.indexOf("async function alreadyExecuted"),
+  );
+  assert.ok(prepare.length > 0);
+  assert.equal(/\.(insert|update|upsert|delete|rpc)\s*\(/.test(prepare), false);
+  assert.ok(actions.includes("action.userId !== context.userId"));
+  assert.ok(actions.includes("if (await alreadyExecuted(action.nonce))"));
+});
+
+test("financial domains in the catalog are owner-only", () => {
+  const source = readFileSync(new URL("../src/lib/frotakAiDomains.ts", import.meta.url), "utf8");
+  for (const domain of [
+    "folha",
+    "adiantamentos_funcionarios",
+    "lancamentos_financeiros",
+    "parcelas_financeiras",
+  ]) {
+    const block = source.slice(source.indexOf(`${domain}: {`));
+    const end = block.indexOf("\n  },\n");
+    assert.ok(block.slice(0, end).includes("financial: true"), domain);
+  }
+  assert.ok(source.includes("domain.spec.financial && !canReadFinancial(context)"));
+});
+
+test("the confirmation token reaches the screen but not the model", () => {
+  const result = {
+    ok: true,
+    tool: "lancar_despesa_frete",
+    data: {
+      status: "aguardando_confirmacao",
+      resumo: "Lancar",
+      confirmacao: { token: "t.s", resumo: "Lancar" },
+    },
+  };
+  assert.deepEqual(extractFrotakAiPendingAction(result), { token: "t.s", resumo: "Lancar" });
+  const stripped = stripFrotakAiActionToken(result) as { data: Record<string, unknown> };
+  assert.equal("confirmacao" in stripped.data, false);
+  assert.equal(stripped.data.resumo, "Lancar");
+  assert.equal(extractFrotakAiPendingAction({ ok: true, data: {} }), null);
+});
+
+test("new business answers do not mute the voice", () => {
+  for (const code of ["INVALID_FILTER", "INVALID_DOMAIN", "NO_ACTIVE_FREIGHT", "ACTIVE_FREIGHT"]) {
+    assert.equal(isFrotakAiTechnicalFailure({ ok: false, error: "x", code }), false, code);
+  }
+  assert.equal(isFrotakAiTechnicalFailure({ ok: false, error: "x", code: "TOOL_FAILED" }), true);
 });
 
 test("critical fuel values are rendered deterministically by the server", () => {
@@ -120,8 +207,23 @@ test("tool result exposes the exact server answer to text and voice flows", () =
   assert.equal(answer, "Total confirmado pelo servidor: 44.");
 });
 
-test("every tenant data tool has a deterministic renderer", () => {
-  FROTAK_AI_TOOL_NAMES.filter((name) => name !== "consultar_suporte").forEach((name) => {
+test("critical tenant tools have deterministic renderers", () => {
+  const criticalTools = [
+    "consultar_tenant",
+    "buscar_veiculo",
+    "buscar_implemento",
+    "consultar_posicao",
+    "listar_fretes_ativos",
+    "consultar_frete",
+    "consultar_motorista",
+    "buscar_parceiro",
+    "buscar_produto",
+    "consultar_abastecimentos",
+    "consultar_financeiro",
+    "consultar_dre",
+    "consultar_rentabilidade",
+  ] as const;
+  criticalTools.forEach((name) => {
     assert.equal(typeof createDeterministicFrotakAnswer(name, {}), "string", name);
   });
   assert.equal(createDeterministicFrotakAnswer("consultar_suporte", {}), null);

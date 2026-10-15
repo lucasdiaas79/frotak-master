@@ -9,9 +9,15 @@ export type FrotakAiEvaluationCase = {
     | "abastecimento"
     | "financeiro"
     | "dre"
-    | "rentabilidade";
+    | "rentabilidade"
+    | "tenant_inteiro"
+    | "proativa"
+    | "acoes"
+    | "web";
   question: string;
   expectedTool: FrotakAiToolName;
+  // Dominio esperado quando a ferramenta e a consulta generica.
+  domain?: string;
   ownerOnly?: boolean;
 };
 
@@ -364,5 +370,102 @@ export const FROTAK_AI_V2_EVALUATION_CASES: FrotakAiEvaluationCase[] = [
     question: "Qual a margem do cliente Pedra Branca?",
     expectedTool: "consultar_rentabilidade",
     ownerOnly: true,
+  },
+  {
+    category: "tenant_inteiro",
+    question: "Qual o total de despesas de pedagio este mes?",
+    expectedTool: "consultar",
+    domain: "despesas_frete",
+  },
+  {
+    category: "tenant_inteiro",
+    question: "Quais despesas de frete a TNX6J30 teve na semana?",
+    expectedTool: "consultar",
+    domain: "despesas_frete",
+  },
+  {
+    category: "tenant_inteiro",
+    question: "Qual o total de despesas por caminhao no mes?",
+    expectedTool: "consultar",
+    domain: "despesas_frete",
+  },
+  {
+    category: "tenant_inteiro",
+    question: "Quanto foi entregue de caixa para os motoristas este mes?",
+    expectedTool: "consultar",
+    domain: "caixa_viagem",
+  },
+  {
+    category: "tenant_inteiro",
+    question: "Quais documentos de frete estao pendentes?",
+    expectedTool: "consultar",
+    domain: "documentos_frete",
+  },
+  {
+    category: "tenant_inteiro",
+    question: "Quais viagens estao abertas agora?",
+    expectedTool: "consultar",
+    domain: "viagens",
+  },
+  {
+    category: "tenant_inteiro",
+    question: "Quantas diarias de motorista estao aguardando aprovacao?",
+    expectedTool: "consultar",
+    domain: "diarias",
+  },
+  {
+    category: "tenant_inteiro",
+    question: "Qual o valor liquido da folha deste mes?",
+    expectedTool: "consultar",
+    domain: "folha",
+    ownerOnly: true,
+  },
+  {
+    category: "tenant_inteiro",
+    question: "O que aconteceu com a QMF0384 na linha do tempo esta semana?",
+    expectedTool: "consultar",
+    domain: "eventos_frota",
+  },
+  {
+    category: "tenant_inteiro",
+    question: "Faca um resumo das despesas do mes",
+    expectedTool: "resumir",
+    domain: "despesas_frete",
+  },
+  {
+    category: "tenant_inteiro",
+    question: "Busque Pedra Branca no cadastro",
+    expectedTool: "buscar",
+  },
+  { category: "proativa", question: "Como esta a operacao hoje?", expectedTool: "alertas" },
+  {
+    category: "proativa",
+    question: "O que precisa da minha atencao?",
+    expectedTool: "alertas",
+  },
+  {
+    category: "acoes",
+    question: "Lance 850 reais de pedagio no frete da TNX6J30",
+    expectedTool: "lancar_despesa_frete",
+  },
+  {
+    category: "acoes",
+    question: "Mude a QMF0384 para manutencao",
+    expectedTool: "atualizar_situacao_veiculo",
+  },
+  {
+    category: "acoes",
+    question: "Registre uma ocorrencia na TNX6J30: pneu furado",
+    expectedTool: "registrar_ocorrencia",
+  },
+  {
+    category: "web",
+    question: "Quanto custa em media um caminhao novo hoje?",
+    expectedTool: "pesquisar_web",
+  },
+  {
+    category: "web",
+    question: "Qual o preco medio do diesel S10 esta semana?",
+    expectedTool: "pesquisar_web",
   },
 ];

@@ -148,6 +148,6 @@ export function createFrotakAiContextSummary(context: FrotakAiContext) {
       : "Perfil autenticado: membro; nao pode receber nenhum dado financeiro.",
     "Toda pergunta operacional ou financeira do usuario se refere a este tenant/workspace, salvo pedido explicitamente geral.",
     "Nunca consulte, revele, compare ou misture dados de outro tenant/workspace.",
-    "As ferramentas disponiveis sao somente leitura e aplicam filtros de tenant/workspace e permissoes no servidor.",
+    "As ferramentas aplicam filtros de tenant/workspace e permissoes no servidor. Consultas so leem; acoes so gravam depois que o usuario confirma na tela.",
   ].join(" ");
 }
