@@ -4,6 +4,10 @@ import test from "node:test";
 import { canReadFinancial, type FrotakAiContext } from "../src/lib/frotakAiContext.ts";
 import { isFrotakSupportQuestion, requiresFrotakTool } from "../src/lib/frotakAiIntent.ts";
 import {
+  createDeterministicFrotakAnswer,
+  deterministicAnswerFromToolResult,
+} from "../src/lib/frotakAiDeterministic.ts";
+import {
   FROTAK_AI_FINANCIAL_TOOL_NAMES,
   FROTAK_AI_TOOL_NAMES,
 } from "../src/lib/frotakAiToolCatalog.ts";
@@ -79,4 +83,46 @@ test("v2 tool executor remains read-only and removes the generic query", () => {
   assert.ok(source.includes("FROTAK_AI_FINANCIAL_TOOLS.has(name) && !canReadFinancial(context)"));
   assert.ok(source.includes('.eq("tenant_id", context.tenantId)'));
   assert.ok(source.includes("workspaceId: context.workspaceId"));
+});
+
+test("critical fuel values are rendered deterministically by the server", () => {
+  const answer = createDeterministicFrotakAnswer("consultar_abastecimentos", {
+    period: { startDate: "2026-09-15", endDate: "2026-10-15" },
+    totalCount: 3,
+    totals: { liters: 650, amount: 3900, averagePricePerLiter: 6 },
+  });
+  assert.equal(
+    answer,
+    "Periodo: 2026-09-15 a 2026-10-15. 3 abastecimentos.\nLitros: 650. Valor: R$ 3.900,00. Preco medio: R$ 6,00/L.",
+  );
+});
+
+test("DRE values are copied from backend fields without model calculation", () => {
+  const answer = createDeterministicFrotakAnswer("consultar_dre", {
+    period: { startDate: "2026-10-01", endDate: "2026-10-15" },
+    totals: {
+      netRevenue: 61175,
+      grossResult: 60000,
+      operatingResult: 59325,
+      managerial_result: 59325,
+      managerialMargin: 97,
+    },
+  });
+  assert.ok(answer?.includes("Resultado gerencial: R$ 59.325,00"));
+  assert.ok(answer?.includes("Margem gerencial: 97%"));
+});
+
+test("tool result exposes the exact server answer to text and voice flows", () => {
+  const answer = deterministicAnswerFromToolResult({
+    ok: true,
+    deterministicAnswer: "Total confirmado pelo servidor: 44.",
+  });
+  assert.equal(answer, "Total confirmado pelo servidor: 44.");
+});
+
+test("every tenant data tool has a deterministic renderer", () => {
+  FROTAK_AI_TOOL_NAMES.filter((name) => name !== "consultar_suporte").forEach((name) => {
+    assert.equal(typeof createDeterministicFrotakAnswer(name, {}), "string", name);
+  });
+  assert.equal(createDeterministicFrotakAnswer("consultar_suporte", {}), null);
 });

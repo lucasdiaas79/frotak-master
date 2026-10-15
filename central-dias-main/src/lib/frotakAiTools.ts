@@ -9,6 +9,7 @@ import {
   isKnownFrotakAiToolName,
   type FrotakAiToolName,
 } from "@/lib/frotakAiToolCatalog";
+import { createDeterministicFrotakAnswer } from "@/lib/frotakAiDeterministic";
 import { searchManualSupport } from "@/routes/manual";
 
 export type { FrotakAiToolName } from "@/lib/frotakAiToolCatalog";
@@ -257,7 +258,7 @@ export async function executeFrotakAiTool(
   args: Record<string, unknown> = {},
 ) {
   const access = canExecuteFrotakAiTool(context, name);
-  if (!access.allowed) return access;
+  if (!access.allowed) return { ...access, deterministicAnswer: access.error };
 
   const supabase = getSupabaseServerClient(context.accessToken);
   let data: QueryResult;
@@ -317,7 +318,13 @@ export async function executeFrotakAiTool(
       code: data.code,
       message: data.error,
     });
-    return { ok: false, tool: name, error: data.error, code: data.code };
+    return {
+      ok: false,
+      tool: name,
+      error: data.error,
+      code: data.code,
+      deterministicAnswer: data.error,
+    };
   }
 
   return {
@@ -325,6 +332,7 @@ export async function executeFrotakAiTool(
     tool: name,
     scope: { tenant: context.tenantName, workspace: context.workspaceName },
     data,
+    deterministicAnswer: createDeterministicFrotakAnswer(name, data),
   };
 }
 

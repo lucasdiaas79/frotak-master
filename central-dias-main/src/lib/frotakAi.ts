@@ -9,6 +9,7 @@ import {
 } from "@google/genai";
 import { createServerFn } from "@tanstack/react-start";
 import { createFrotakAiContextSummary, resolveFrotakAiContext } from "@/lib/frotakAiContext";
+import { deterministicAnswerFromToolResult } from "@/lib/frotakAiDeterministic";
 import {
   executeFrotakAiTool,
   FROTAK_AI_TOOL_DECLARATIONS,
@@ -372,11 +373,24 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
         throw new Error("O modelo nao selecionou uma ferramenta Frotak valida.");
       }
 
-      const toolResponses = await Promise.all(
+      const toolExecutions = await Promise.all(
         toolCalls.map(async (call) => {
           const result = await executeFrotakAiTool(resolvedContext, call.name, call.args ?? {});
-          return toolResponsePart(call, result);
+          return { call, result };
         }),
+      );
+      const deterministicAnswers = toolExecutions
+        .map(({ result }) => deterministicAnswerFromToolResult(result))
+        .filter((answer): answer is string => Boolean(answer));
+      if (deterministicAnswers.length === toolExecutions.length) {
+        return {
+          text: deterministicAnswers.join("\n\n"),
+          model: "frotak-server",
+          tools: toolCalls.map((call) => call.name),
+        };
+      }
+      const toolResponses = toolExecutions.map(({ call, result }) =>
+        toolResponsePart(call, result),
       );
       const finalResponse = await ai.models.generateContent({
         model: selected.model,

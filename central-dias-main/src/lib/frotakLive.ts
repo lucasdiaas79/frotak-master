@@ -20,6 +20,7 @@ export type FrotakLiveSessionOptions = {
   onInputText?: (text: string) => void;
   onPartialText?: (text: string) => void;
   onError?: (message: string) => void;
+  onDeterministicAnswer?: (text: string) => Promise<void> | void;
   refreshToken?: () => Promise<{
     token: string;
     model: string;
@@ -220,6 +221,7 @@ export class FrotakLiveSession {
   private toolCallsSeen = 0;
   private toolCallsPending = 0;
   private toolFailures = 0;
+  private deterministicTurnText = "";
   private cancelledToolCallIds = new Set<string>();
   private resolveReady: (() => void) | null = null;
   private rejectReady: ((error: Error) => void) | null = null;
@@ -476,6 +478,7 @@ export class FrotakLiveSession {
     this.toolCallsPending = 0;
     this.toolFailures = 0;
     this.cancelledToolCallIds.clear();
+    this.deterministicTurnText = "";
   }
 
   private failSession(message: string) {
@@ -563,7 +566,7 @@ export class FrotakLiveSession {
     }
 
     const outputText = message.serverContent?.outputTranscription?.text;
-    if (outputText && this.canReleaseModelOutput()) {
+    if (outputText && this.canReleaseModelOutput() && !this.deterministicTurnText) {
       this.transcriptBuffer = appendTranscript(this.transcriptBuffer, outputText);
       this.options.onPartialText?.(sanitizeLiveText(this.transcriptBuffer));
     }
@@ -571,7 +574,7 @@ export class FrotakLiveSession {
     const parts = message.serverContent?.modelTurn?.parts ?? [];
     parts.forEach((part) => {
       const audio = part.inlineData?.data;
-      const canPlayModelOutput = this.canReleaseModelOutput();
+      const canPlayModelOutput = this.canReleaseModelOutput() && !this.deterministicTurnText;
       if (audio && canPlayModelOutput) void this.player.enqueue(audio);
       if (part.text && canPlayModelOutput) {
         this.transcriptBuffer = appendTranscript(this.transcriptBuffer, part.text);
@@ -588,7 +591,9 @@ export class FrotakLiveSession {
     if (message.serverContent?.turnComplete) {
       if (!(this.groundingRequired && this.toolCallsPending > 0)) {
         const failClosed = this.groundingRequired && !this.canReleaseModelOutput();
-        const text = failClosed ? FACTUAL_FAIL_CLOSED_MESSAGE : this.transcriptBuffer.trim();
+        const text = failClosed
+          ? FACTUAL_FAIL_CLOSED_MESSAGE
+          : this.deterministicTurnText || this.transcriptBuffer.trim();
         this.transcriptBuffer = "";
         this.inputTranscriptBuffer = "";
         this.groundingRequired = false;
@@ -665,6 +670,22 @@ export class FrotakLiveSession {
       (response): response is NonNullable<typeof response> => response !== null,
     );
     if (activeResponses.length === 0) return;
+    const deterministicAnswers = activeResponses
+      .map((response) => deterministicAnswerFromUnknown(response.response.output))
+      .filter((answer): answer is string => Boolean(answer));
+    if (deterministicAnswers.length === activeResponses.length) {
+      this.deterministicTurnText = deterministicAnswers.join("\n\n");
+      this.transcriptBuffer = "";
+      this.player.stopNow();
+      this.options.onPartialText?.(this.deterministicTurnText);
+      void Promise.resolve(this.options.onDeterministicAnswer?.(this.deterministicTurnText)).catch(
+        (error) => {
+          console.error("[frotakLive] deterministic voice failed", {
+            message: error instanceof Error ? error.message : String(error),
+          });
+        },
+      );
+    }
     if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN || this.closed) return;
     this.websocket.send(JSON.stringify({ toolResponse: { functionResponses: activeResponses } }));
   }
@@ -707,6 +728,12 @@ export class FrotakLiveSession {
       void this.scheduleReconnect("tentativa de reconexao falhou");
     }
   }
+}
+
+function deterministicAnswerFromUnknown(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const answer = (value as Record<string, unknown>).deterministicAnswer;
+  return typeof answer === "string" && answer.trim() ? answer.trim() : null;
 }
 
 function waitForWebSocketOpen(websocket: WebSocket) {

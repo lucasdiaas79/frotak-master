@@ -29,6 +29,7 @@ import {
   type FrotakLiveStatus,
 } from "@/lib/frotakLive";
 import { cn } from "@/lib/utils";
+import { cancelSpeech, speakPortuguese } from "@/lib/frotakVoice";
 
 export const Route = createFileRoute("/frotak-ia")({
   head: () => ({
@@ -255,6 +256,9 @@ function FrotakIaPage() {
               args: call.args ?? {},
             },
           }),
+        onDeterministicAnswer: async (text) => {
+          await speakPortuguese(text);
+        },
         onError: (message) => {
           toast.error(message);
           const failedSession = liveSessionRef.current;
@@ -286,6 +290,7 @@ function FrotakIaPage() {
   };
 
   const stopLive = async () => {
+    cancelSpeech();
     liveStartAttemptRef.current += 1;
     const session = liveSessionRef.current;
     liveSessionRef.current = null;
