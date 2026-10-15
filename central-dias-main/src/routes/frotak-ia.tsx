@@ -16,6 +16,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { FrotakOrb, type FrotakOrbState } from "@/components/frotak/FrotakOrb";
+import { FrotakPushToggle } from "@/components/frotak/FrotakPushToggle";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { getCurrentAccessToken, getCurrentUser, getProfile } from "@/lib/auth";
@@ -440,6 +441,10 @@ function FrotakIaPage() {
               Frotak IA
             </h1>
           </div>
+          <FrotakPushToggle
+            getAccessToken={requireAccessToken}
+            getWorkspaceId={requireWorkspaceId}
+          />
           <Button
             type="button"
             variant="outline"

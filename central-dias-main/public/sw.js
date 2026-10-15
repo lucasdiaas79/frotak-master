@@ -58,3 +58,34 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+// Avisos da Frotak IA (push). O servidor manda { title, body, url, tag }.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { body: event.data ? event.data.text() : "" };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Frotak IA", {
+      body: data.body || "",
+      tag: data.tag || "frotak-ia",
+      icon: "/pwa-icon-192.png",
+      badge: "/pwa-icon-192.png",
+      data: { url: data.url || "/frotak-ia" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || "/frotak-ia", self.location.origin).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((client) => client.url.startsWith(self.location.origin));
+      if (open) return open.navigate(target).then((client) => (client || open).focus());
+      return self.clients.openWindow(target);
+    }),
+  );
+});

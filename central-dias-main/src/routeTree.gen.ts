@@ -41,6 +41,7 @@ import { Route as FinanceiroReceberRouteImport } from './routes/financeiro.receb
 import { Route as FinanceiroRecorrenciasRouteImport } from './routes/financeiro.recorrencias'
 import { Route as FinanceiroRentabilidadeRouteImport } from './routes/financeiro.rentabilidade'
 import { Route as FinanceiroSalariosRouteImport } from './routes/financeiro.salarios'
+import { Route as ApiFrotakIaPushDispatchRouteImport } from './routes/api/frotak-ia/push-dispatch'
 import { Route as ApiSascarSyncRouteImport } from './routes/api/sascar/sync'
 
 const IndexRoute = IndexRouteImport.update({
@@ -203,6 +204,11 @@ const FinanceiroSalariosRoute = FinanceiroSalariosRouteImport.update({
   path: '/salarios',
   getParentRoute: () => FinanceiroRoute,
 } as any)
+const ApiFrotakIaPushDispatchRoute = ApiFrotakIaPushDispatchRouteImport.update({
+  id: '/api/frotak-ia/push-dispatch',
+  path: '/api/frotak-ia/push-dispatch',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSascarSyncRoute = ApiSascarSyncRouteImport.update({
   id: '/api/sascar/sync',
   path: '/api/sascar/sync',
@@ -242,6 +248,7 @@ export interface FileRoutesByFullPath {
   '/financeiro/rentabilidade': typeof FinanceiroRentabilidadeRoute
   '/financeiro/salarios': typeof FinanceiroSalariosRoute
   '/financeiro/': typeof FinanceiroIndexRoute
+  '/api/frotak-ia/push-dispatch': typeof ApiFrotakIaPushDispatchRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
 }
 export interface FileRoutesByTo {
@@ -276,6 +283,7 @@ export interface FileRoutesByTo {
   '/financeiro/rentabilidade': typeof FinanceiroRentabilidadeRoute
   '/financeiro/salarios': typeof FinanceiroSalariosRoute
   '/financeiro': typeof FinanceiroIndexRoute
+  '/api/frotak-ia/push-dispatch': typeof ApiFrotakIaPushDispatchRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
 }
 export interface FileRoutesById {
@@ -312,6 +320,7 @@ export interface FileRoutesById {
   '/financeiro/rentabilidade': typeof FinanceiroRentabilidadeRoute
   '/financeiro/salarios': typeof FinanceiroSalariosRoute
   '/financeiro/': typeof FinanceiroIndexRoute
+  '/api/frotak-ia/push-dispatch': typeof ApiFrotakIaPushDispatchRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
 }
 export interface FileRouteTypes {
@@ -349,6 +358,7 @@ export interface FileRouteTypes {
     | '/financeiro/rentabilidade'
     | '/financeiro/salarios'
     | '/financeiro/'
+    | '/api/frotak-ia/push-dispatch'
     | '/api/sascar/sync'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -383,6 +393,7 @@ export interface FileRouteTypes {
     | '/financeiro/rentabilidade'
     | '/financeiro/salarios'
     | '/financeiro'
+    | '/api/frotak-ia/push-dispatch'
     | '/api/sascar/sync'
   id:
     | '__root__'
@@ -418,6 +429,7 @@ export interface FileRouteTypes {
     | '/financeiro/rentabilidade'
     | '/financeiro/salarios'
     | '/financeiro/'
+    | '/api/frotak-ia/push-dispatch'
     | '/api/sascar/sync'
   fileRoutesById: FileRoutesById
 }
@@ -441,6 +453,7 @@ export interface RootRouteChildren {
   UsuariosRoute: typeof UsuariosRoute
   VeiculosRoute: typeof VeiculosRoute
   VinculacaoRoute: typeof VinculacaoRoute
+  ApiFrotakIaPushDispatchRoute: typeof ApiFrotakIaPushDispatchRoute
   ApiSascarSyncRoute: typeof ApiSascarSyncRoute
 }
 
@@ -670,6 +683,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceiroSalariosRouteImport
       parentRoute: typeof FinanceiroRoute
     }
+    '/api/frotak-ia/push-dispatch': {
+      id: '/api/frotak-ia/push-dispatch'
+      path: '/api/frotak-ia/push-dispatch'
+      fullPath: '/api/frotak-ia/push-dispatch'
+      preLoaderRoute: typeof ApiFrotakIaPushDispatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/sascar/sync': {
       id: '/api/sascar/sync'
       path: '/api/sascar/sync'
@@ -736,6 +756,7 @@ const rootRouteChildren: RootRouteChildren = {
   UsuariosRoute: UsuariosRoute,
   VeiculosRoute: VeiculosRoute,
   VinculacaoRoute: VinculacaoRoute,
+  ApiFrotakIaPushDispatchRoute: ApiFrotakIaPushDispatchRoute,
   ApiSascarSyncRoute: ApiSascarSyncRoute,
 }
 export const routeTree = rootRouteImport
