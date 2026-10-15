@@ -36,6 +36,7 @@ import {
   requestFrotakLiveMicrophone,
   type FrotakLiveStatus,
 } from "@/lib/frotakLive";
+import { speakPortuguese } from "@/lib/frotakVoice";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/frotak-ia")({
