@@ -746,22 +746,8 @@ export class FrotakLiveSession {
       (response): response is NonNullable<typeof response> => response !== null,
     );
     if (activeResponses.length === 0) return;
-    const deterministicAnswers = activeResponses
-      .map((response) => deterministicAnswerFromUnknown(response.response.output))
-      .filter((answer): answer is string => Boolean(answer));
-    if (deterministicAnswers.length === activeResponses.length) {
-      this.deterministicTurnText = deterministicAnswers.join("\n\n");
-      this.transcriptBuffer = "";
-      this.player.stopNow();
-      this.options.onPartialText?.(this.deterministicTurnText);
-      void Promise.resolve(this.options.onDeterministicAnswer?.(this.deterministicTurnText)).catch(
-        (error) => {
-          console.error("[frotakLive] deterministic voice failed", {
-            message: error instanceof Error ? error.message : String(error),
-          });
-        },
-      );
-    }
+    // O texto pronto do servidor (deterministicAnswer) vai junto no resultado e a propria IA o
+    // le com a voz dela, para nao trocar de voz no meio da conversa.
     if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN || this.closed) return;
     this.websocket.send(JSON.stringify({ toolResponse: { functionResponses: activeResponses } }));
   }

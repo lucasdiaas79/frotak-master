@@ -36,7 +36,6 @@ import {
   requestFrotakLiveMicrophone,
   type FrotakLiveStatus,
 } from "@/lib/frotakLive";
-import { speakPortuguese } from "@/lib/frotakVoice";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/frotak-ia")({
@@ -299,9 +298,6 @@ function FrotakIaPage() {
           const action = extractFrotakAiPendingAction(result);
           if (action) setPendingAction(action);
           return stripFrotakAiActionToken(result);
-        },
-        onDeterministicAnswer: async (text) => {
-          await speakPortuguese(text);
         },
         onError: (message) => {
           toast.error(message);
