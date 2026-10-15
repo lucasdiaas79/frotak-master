@@ -12,7 +12,8 @@ export type FrotakAiEvaluationCase = {
     | "rentabilidade"
     | "tenant_inteiro"
     | "proativa"
-    | "acoes";
+    | "acoes"
+    | "web";
   question: string;
   expectedTool: FrotakAiToolName;
   // Dominio esperado quando a ferramenta e a consulta generica.
@@ -456,5 +457,15 @@ export const FROTAK_AI_V2_EVALUATION_CASES: FrotakAiEvaluationCase[] = [
     category: "acoes",
     question: "Registre uma ocorrencia na TNX6J30: pneu furado",
     expectedTool: "registrar_ocorrencia",
+  },
+  {
+    category: "web",
+    question: "Quanto custa em media um caminhao novo hoje?",
+    expectedTool: "pesquisar_web",
+  },
+  {
+    category: "web",
+    question: "Qual o preco medio do diesel S10 esta semana?",
+    expectedTool: "pesquisar_web",
   },
 ];

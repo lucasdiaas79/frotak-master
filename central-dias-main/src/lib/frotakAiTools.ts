@@ -23,6 +23,7 @@ import {
   searchFrotakAiTenant,
   summarizeFrotakAiDomain,
 } from "@/lib/frotakAiDomains";
+import { searchFrotakAiWeb } from "@/lib/frotakAiWebSearch";
 import { searchManualSupport } from "@/routes/manual";
 
 export type { FrotakAiToolName } from "@/lib/frotakAiToolCatalog";
@@ -391,6 +392,18 @@ export const FROTAK_AI_TOOL_DECLARATIONS = [
       required: ["placa", "descricao"],
     },
   },
+  {
+    name: "pesquisar_web",
+    description:
+      "Pesquisa na internet pela busca do Google. Use para assuntos fora do tenant que pedem informacao atual: precos de caminhoes, pneus e diesel, tabela de frete ANTT, noticias do setor, legislacao, mercado de trabalho, clima e estradas. Nunca use para dados da empresa do usuario.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        pergunta: { type: Type.STRING, description: "O que pesquisar, em portugues." },
+      },
+      required: ["pergunta"],
+    },
+  },
 ] as const satisfies readonly FunctionDeclaration[];
 
 export function normalizeFrotakAiToolCall(call: FunctionCall): FrotakAiToolCall | null {
@@ -524,6 +537,9 @@ async function runFrotakAiTool(
       break;
     case "alertas":
       data = await listFrotakAiAlerts(supabase, context);
+      break;
+    case "pesquisar_web":
+      data = await searchFrotakAiWeb(args);
       break;
     case "lancar_despesa_frete":
     case "atualizar_situacao_veiculo":

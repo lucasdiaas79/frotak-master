@@ -55,6 +55,7 @@ test("v2 evaluation suite has at least 50 unique real questions", () => {
       "proativa",
       "rentabilidade",
       "tenant_inteiro",
+      "web",
     ],
   );
 });

@@ -20,6 +20,7 @@ export const FROTAK_AI_TOOL_NAMES = [
   "lancar_despesa_frete",
   "atualizar_situacao_veiculo",
   "registrar_ocorrencia",
+  "pesquisar_web",
 ] as const;
 
 export type FrotakAiToolName = (typeof FROTAK_AI_TOOL_NAMES)[number];
