@@ -17,6 +17,7 @@ import {
   prepareFrotakAiAction,
 } from "@/lib/frotakAiActions";
 import { listFrotakAiAlerts } from "@/lib/frotakAiAlerts";
+import { computeFleetUtilization, listIdleVehicles } from "@/lib/frotakAiIdle";
 import {
   FROTAK_AI_DOMAIN_NAMES,
   frotakAiDomainCatalogText,
@@ -351,8 +352,36 @@ export const FROTAK_AI_TOOL_DECLARATIONS = [
   {
     name: "alertas",
     description:
-      "Lista o que precisa de atencao agora: veiculos parados ou quebrados, rastreados sem sinal, fretes longos, diarias pendentes, abastecimentos fora do padrao e, para o owner, contas vencidas ou vencendo. Use para 'como esta a operacao', 'o que precisa da minha atencao' e para o briefing do dia.",
+      "Lista o que precisa de atencao agora: veiculos sem viagem ha mais de 24h (com o motivo), veiculos parados ou quebrados, rastreados sem sinal, fretes longos, diarias pendentes, abastecimentos fora do padrao e, para o owner, contas vencidas ou vencendo. Use para 'como esta a operacao', 'o que precisa da minha atencao' e para o briefing do dia.",
     parameters: { type: Type.OBJECT, properties: {} },
+  },
+  {
+    name: "veiculos_parados",
+    description:
+      "Lista os veiculos sem viagem ha mais de X horas (padrao 24): placa, motorista, ha quantos dias, data da ultima viagem e o motivo (manutencao, sem motorista, motorista de folga, frete planejado, aguardando carga ou o motivo informado pelo gestor). Use para 'quais carros estao parados', 'quem nao esta rodando e por que'. Quando vier precisa_motivo, pergunte o motivo ao gestor.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        horas: {
+          type: Type.INTEGER,
+          description: "Minimo de horas sem viagem. Padrao 24; '2 dias' = 48.",
+        },
+        limit: limitProperty,
+      },
+    },
+  },
+  {
+    name: "rendimento_frota",
+    description:
+      "Rendimento da frota no periodo (padrao 30 dias): dias em viagem, dias parados e percentual parado por veiculo ou por motorista, e para o owner o frete estimado que deixou de ser feito. Use para 'qual caminhao mais fica parado', 'rendimento dos motoristas', 'quanto a frota ficou parada'.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        agrupar: { type: Type.STRING, enum: ["veiculo", "motorista"] },
+        days: { type: Type.INTEGER, description: "Janela em dias, entre 7 e 180." },
+        limit: limitProperty,
+      },
+    },
   },
   {
     name: "lancar_despesa_frete",
@@ -391,6 +420,16 @@ export const FROTAK_AI_TOOL_DECLARATIONS = [
       type: Type.OBJECT,
       properties: { placa: { type: Type.STRING }, descricao: { type: Type.STRING } },
       required: ["placa", "descricao"],
+    },
+  },
+  {
+    name: "registrar_motivo_parado",
+    description:
+      "Prepara o registro do motivo de um veiculo estar parado, dito pelo gestor (ex.: 'aguardando pneu'). Nao grava: o usuario confirma no botao da tela. Depois disso veiculos_parados mostra esse motivo.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: { placa: { type: Type.STRING }, motivo: { type: Type.STRING } },
+      required: ["placa", "motivo"],
     },
   },
   {
@@ -546,12 +585,26 @@ async function runFrotakAiTool(
     case "alertas":
       data = await listFrotakAiAlerts(supabase, context);
       break;
+    case "veiculos_parados":
+      data = await listIdleVehicles(supabase, context, {
+        hours: Number(args.horas ?? 24) || 24,
+        limit: limitFromArgs(args, 30),
+      });
+      break;
+    case "rendimento_frota":
+      data = await computeFleetUtilization(supabase, context, {
+        days: Number(args.days ?? 30) || 30,
+        groupBy: textArg(args, "agrupar") === "motorista" ? "motorista" : "veiculo",
+        limit: limitFromArgs(args, 20),
+      });
+      break;
     case "pesquisar_web":
       data = await searchFrotakAiWeb(args);
       break;
     case "lancar_despesa_frete":
     case "atualizar_situacao_veiculo":
     case "registrar_ocorrencia":
+    case "registrar_motivo_parado":
       data = isFrotakAiActionName(name) ? await prepareFrotakAiAction(context, name, args) : {};
       break;
   }

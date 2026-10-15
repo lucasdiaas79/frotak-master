@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseServerClient, type FrotakAiContext } from "@/lib/frotakAiContext";
+import { FROTAK_AI_IDLE_REASON_EVENT } from "@/lib/frotakAiIdle";
 
 // Acoes de escrita da Frotak IA. A IA so PREPARA a acao: a ferramenta devolve um resumo e um
 // token assinado. Nada e gravado ate o usuario tocar em "Confirmar" na tela, que chama
@@ -11,6 +12,7 @@ export const FROTAK_AI_ACTION_TOOL_NAMES = [
   "lancar_despesa_frete",
   "atualizar_situacao_veiculo",
   "registrar_ocorrencia",
+  "registrar_motivo_parado",
 ] as const;
 
 export type FrotakAiActionName = (typeof FROTAK_AI_ACTION_TOOL_NAMES)[number];
@@ -54,7 +56,8 @@ type ActionPayload =
       situation: VehicleSituation;
       note?: string;
     }
-  | { kind: "registrar_ocorrencia"; vehicleId: string; plate: string; description: string };
+  | { kind: "registrar_ocorrencia"; vehicleId: string; plate: string; description: string }
+  | { kind: "registrar_motivo_parado"; vehicleId: string; plate: string; description: string };
 
 type SignedAction = ActionPayload & {
   userId: string;
@@ -233,6 +236,14 @@ export async function prepareFrotakAiAction(
     const note = text(args, "observacao") || undefined;
     payload = { kind: name, vehicleId, plate, situation, note };
     summary = `Mudar o ${plate} para ${situation.replace(/_/g, " ")}${note ? ` (${note})` : ""}.`;
+  } else if (name === "registrar_motivo_parado") {
+    const description = text(args, "motivo", 300);
+    if (description.length < 3) return businessError("Diga o motivo da parada.", "INVALID_ACTION");
+    if (vehicle.current_freight_id) {
+      return businessError(`O ${plate} esta com frete ativo, nao esta parado.`, "ACTIVE_FREIGHT");
+    }
+    payload = { kind: name, vehicleId, plate, description };
+    summary = `Registrar o motivo do ${plate} estar parado: ${description}.`;
   } else {
     const description = text(args, "descricao", 500);
     if (description.length < 3) return businessError("Descreva a ocorrencia.", "INVALID_ACTION");
@@ -403,7 +414,8 @@ export async function executeFrotakAiAction(context: FrotakAiContext, token: str
       source: "Operador",
       description: action.description,
       created_by: context.userId,
-      event_type: "ocorrencia",
+      event_type:
+        action.kind === "registrar_motivo_parado" ? FROTAK_AI_IDLE_REASON_EVENT : "ocorrencia",
       action_origin: "frotak_ia",
     })
     .select("id")

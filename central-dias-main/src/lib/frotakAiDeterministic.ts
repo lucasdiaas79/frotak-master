@@ -208,6 +208,46 @@ function formatProfitability(data: RecordValue) {
   });
 }
 
+function formatIdleVehicles(data: RecordValue) {
+  const items = rows(data.veiculos);
+  const hours = number(data.horas_minimas);
+  if (!items.length) return `Nenhum veiculo sem viagem ha mais de ${decimal.format(hours)} horas.`;
+  const header = `${countLabel(data.quantidade, "veiculo esta", "veiculos estao")} sem viagem ha mais de ${decimal.format(hours)} horas${number(data.sem_motivo) ? `, ${decimal.format(number(data.sem_motivo))} sem motivo registrado` : ""}.`;
+  return [
+    header,
+    list(items, (item) => {
+      const days =
+        item.dias_parado === null
+          ? "sem viagem registrada"
+          : `${decimal.format(number(item.dias_parado))} dia(s) parado`;
+      const driver = text(item.motorista, "sem motorista");
+      const last = item.ultima_viagem ? `; ultima viagem ${text(item.ultima_viagem)}` : "";
+      return `${text(item.placa)} (${driver}): ${days}${last}; motivo: ${text(item.motivo)}.`;
+    }),
+  ].join("\n");
+}
+
+function formatUtilization(data: RecordValue) {
+  const fleet = record(data.frota);
+  const period = record(data.periodo);
+  const who = data.agrupado_por === "motorista" ? "motorista" : "veiculo";
+  const lost =
+    fleet.frete_nao_feito_estimado !== undefined
+      ? ` Frete estimado que deixou de ser feito: ${money.format(number(fleet.frete_nao_feito_estimado))}.`
+      : "";
+  return [
+    `Nos ultimos ${decimal.format(number(period.dias))} dias a frota ficou ${decimal.format(number(fleet.percentual_parado))}% do tempo parada (${decimal.format(number(fleet.dias_parados))} dias parados somando todos).${lost}`,
+    `Por ${who}, do mais parado para o menos:`,
+    list(rows(data.itens), (item) => {
+      const money_ =
+        item.frete_nao_feito_estimado !== undefined
+          ? `; frete nao feito estimado ${money.format(number(item.frete_nao_feito_estimado))}`
+          : "";
+      return `${text(item.nome)}: ${decimal.format(number(item.percentual_parado))}% parado (${decimal.format(number(item.dias_parados))} de ${decimal.format(number(item.dias_no_periodo))} dias)${money_}.`;
+    }),
+  ].join("\n");
+}
+
 export function createDeterministicFrotakAnswer(name: FrotakAiToolName, data: RecordValue) {
   switch (name) {
     case "consultar_tenant":
@@ -236,6 +276,10 @@ export function createDeterministicFrotakAnswer(name: FrotakAiToolName, data: Re
       return formatDre(data);
     case "consultar_rentabilidade":
       return formatProfitability(data);
+    case "veiculos_parados":
+      return formatIdleVehicles(data);
+    case "rendimento_frota":
+      return formatUtilization(data);
     case "consultar_suporte":
       return null;
   }

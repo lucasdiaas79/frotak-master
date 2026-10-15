@@ -17,9 +17,12 @@ export const FROTAK_AI_TOOL_NAMES = [
   "resumir",
   "buscar",
   "alertas",
+  "veiculos_parados",
+  "rendimento_frota",
   "lancar_despesa_frete",
   "atualizar_situacao_veiculo",
   "registrar_ocorrencia",
+  "registrar_motivo_parado",
   "pesquisar_web",
 ] as const;
 

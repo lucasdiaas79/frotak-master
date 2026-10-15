@@ -1,5 +1,6 @@
 import { canReadFinancial, type FrotakAiContext } from "@/lib/frotakAiContext";
 import type { getSupabaseServerClient } from "@/lib/frotakAiContext";
+import { FROTAK_AI_IDLE_DEFAULT_HOURS, listIdleVehicles } from "@/lib/frotakAiIdle";
 
 // Alertas calculados na hora, com o token do usuario (RLS). Alimentam a ferramenta
 // "alertas" e o briefing do dia; nenhum numero e calculado pela IA.
@@ -71,6 +72,22 @@ async function stoppedVehicles(supabase: SupabaseServer, context: FrotakAiContex
     titulo: "Veiculos parados, quebrados ou em manutencao",
     quantidade: count ?? data?.length ?? 0,
     itens: (data ?? []) as Row[],
+  } satisfies FrotakAiAlert;
+}
+
+async function vehiclesWithoutTrip(supabase: SupabaseServer, context: FrotakAiContext) {
+  const result = await listIdleVehicles(supabase, context, { limit: 10 });
+  return {
+    tipo: "sem_viagem",
+    titulo: `Veiculos sem viagem ha mais de ${FROTAK_AI_IDLE_DEFAULT_HOURS}h`,
+    quantidade: result.quantidade,
+    itens: result.veiculos.map((row) => ({
+      placa: row.placa,
+      motorista: row.motorista,
+      dias_parado: row.dias_parado,
+      motivo: row.motivo,
+      precisa_motivo: row.precisa_motivo,
+    })),
   } satisfies FrotakAiAlert;
 }
 
@@ -216,6 +233,7 @@ async function installments(supabase: SupabaseServer, context: FrotakAiContext) 
 
 export async function listFrotakAiAlerts(supabase: SupabaseServer, context: FrotakAiContext) {
   const checks: Array<Promise<FrotakAiAlert | FrotakAiAlert[]>> = [
+    vehiclesWithoutTrip(supabase, context),
     stoppedVehicles(supabase, context),
     vehiclesWithoutSignal(supabase, context),
     longFreights(supabase, context),
