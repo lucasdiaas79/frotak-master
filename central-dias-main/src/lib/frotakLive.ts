@@ -281,7 +281,7 @@ export class FrotakLiveSession {
 
   sendText(text: string) {
     if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) return;
-    if (requiresFrotakTool(text)) this.beginGroundedTurn();
+    this.player.stopNow();
     this.options.onStatus?.("thinking");
     this.sendRealtimeInput({ text });
   }
@@ -466,22 +466,6 @@ export class FrotakLiveSession {
     this.websocket = null;
   }
 
-  private requireGrounding(source: string) {
-    if (this.groundingRequired) return;
-    // A transcricao da fala pode chegar depois que a resposta ja comecou a tocar.
-    // Nesse caso nao corta a voz no meio; a trava vale para a proxima pergunta.
-    if (this.speaking) return;
-    this.groundingRequired = true;
-    this.player.stopNow();
-    console.info("[frotakLive] groundingRequired", { source });
-  }
-
-  private beginGroundedTurn() {
-    this.groundingRequired = true;
-    this.resetToolState();
-    this.player.stopNow();
-  }
-
   // Recebe um quadro de ~20 ms e devolve o quadro atrasado: audio real se faz parte de uma fala,
   // silencio se for ruido.
   private applyNoiseGate(frame: Float32Array) {
@@ -625,14 +609,12 @@ export class FrotakLiveSession {
     if (interimInputText) {
       const preview = appendTranscript(this.inputTranscriptBuffer, interimInputText);
       this.options.onInputText?.(sanitizeLiveText(preview));
-      if (requiresFrotakTool(preview)) this.requireGrounding("voice");
     }
 
     const inputText = message.serverContent?.inputTranscription?.text;
     if (inputText) {
       this.inputTranscriptBuffer = appendTranscript(this.inputTranscriptBuffer, inputText);
       this.options.onInputText?.(sanitizeLiveText(this.inputTranscriptBuffer));
-      if (requiresFrotakTool(this.inputTranscriptBuffer)) this.requireGrounding("voice");
     }
 
     const toolCalls = message.toolCall?.functionCalls ?? [];
@@ -899,5 +881,4 @@ function sanitizeLiveText(text: string) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
-import { requiresFrotakTool } from "@/lib/frotakAiIntent";
 import { isFrotakAiTechnicalFailure } from "@/lib/frotakAiToolCatalog";

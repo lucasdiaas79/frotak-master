@@ -154,10 +154,10 @@ function frotakAiSystemInstruction(
       ? "Esta conversa e por voz. Voce e uma mulher: fale sempre com a mesma voz feminina, calma e simpatica, como uma colega de trabalho. Fale de forma fluida e natural, com frases curtas e conectadas, sem listas, simbolos ou tabelas, em no maximo 3 frases. Quando precisar consultar uma ferramenta, antes diga uma frase curta e variada de espera, como 'Entendi, deixa so eu dar uma olhada aqui' ou 'Certo, ja vou ver isso pra voce', e entao consulte. Diga valores em reais e datas do jeito que se fala."
       : "Esta conversa e por texto: responda curto e objetivo, no maximo 3 frases ou 5 itens curtos; use lista quando ajudar. Quando o usuario pedir detalhe, abertura ou cada item, liste todos os itens que a ferramenta devolveu (ate 15), um por linha, com o valor.",
     "Responda em portugues do Brasil.",
-    "Para cada pergunta sobre o sistema ou sobre o tenant, escolha uma ou mais ferramentas especificas antes de responder.",
-    "O backend e a unica fonte de fatos, filtros, totais, saldos, margens e demais numeros criticos.",
-    "Nunca calcule, estime, some, subtraia, arredonde ou complete numeros. Apenas explique e formate os valores exatamente como vieram das ferramentas.",
-    "Nunca use conhecimento geral ou inferencia para afirmar dados do tenant atual. Voce pode usar resultados de ferramentas obtidos nesta mesma conversa.",
+    "Voce tambem e uma IA comum e inteligente: converse sobre qualquer assunto que o usuario quiser, como mercado de transporte, precos medios de caminhoes, pneus e diesel, mercado de trabalho, legislacao, manutencao, gestao, economia ou temas do dia a dia. Nesses assuntos gerais, responda com seu conhecimento, sem chamar ferramentas, e deixe claro quando o valor for uma media ou estimativa de mercado que pode variar.",
+    "Para perguntas sobre os dados da empresa do usuario (a frota, os fretes, motoristas, financeiro e qualquer registro do tenant) ou sobre como usar o sistema Frotak, consulte uma ou mais ferramentas antes de responder.",
+    "Nos dados do tenant, o backend e a unica fonte de fatos e numeros: nunca invente, estime, some ou complete valores do tenant; use exatamente o que as ferramentas devolveram, nesta pergunta ou antes nesta conversa.",
+    "Voce pode combinar os dois: por exemplo, comparar o diesel pago pela empresa (ferramenta) com a media de mercado (conhecimento geral), dizendo de onde vem cada numero.",
     "Quando o usuario se referir a algo citado antes, como 'desse caminhao', 'dele' ou 'e o outro', identifique na conversa a placa, o nome ou o codigo e use esse valor para chamar a ferramenta.",
     "Se uma ferramenta retornar nenhum registro, 'nao encontrado' ou falta de permissao, diga isso de forma natural e, se fizer sentido, pergunte o que o usuario quis dizer. Nao invente uma resposta.",
     "Prefira a ferramenta especifica quando existir. Para qualquer outra area (despesas de frete, caixa de viagem, documentos, eventos da frota, viagens, diarias, folha, lancamentos e parcelas financeiras) ou para totais e agrupamentos, use consultar ou resumir; para descobrir a que um nome ou placa se refere, use buscar. Pode encadear ferramentas.",
@@ -228,12 +228,13 @@ async function selectToolsWithFallback(
         model,
         contents,
         config: {
-          temperature: 0,
-          maxOutputTokens: 1024,
+          temperature: 0.2,
+          maxOutputTokens: 1200,
           systemInstruction,
           tools: [{ functionDeclarations: [...FROTAK_AI_TOOL_DECLARATIONS] }],
           toolConfig: {
-            functionCallingConfig: { mode: FunctionCallingConfigMode.ANY },
+            // AUTO: dados do tenant passam por ferramenta; assuntos gerais a IA responde direto.
+            functionCallingConfig: { mode: FunctionCallingConfigMode.AUTO },
           },
         },
       });
@@ -438,9 +439,6 @@ export const sendFrotakAiChatMessage = createServerFn({ method: "POST" })
           .map(normalizeFrotakAiToolCall)
           .filter((call): call is FrotakAiToolCall => Boolean(call))
           .slice(0, MAX_TOOL_CALLS);
-        if (round === 0 && (!modelContent || toolCalls.length === 0)) {
-          throw new Error("O modelo nao selecionou uma ferramenta Frotak valida.");
-        }
         if (!modelContent || toolCalls.length === 0) break;
 
         const toolResponses = await Promise.all(
