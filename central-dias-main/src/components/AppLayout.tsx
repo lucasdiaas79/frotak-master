@@ -516,9 +516,7 @@ function SidebarBody({
   const financialItems = financialNavFor(financialAccess);
 
   return (
-    <div className="glass relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-[28px] border-sidebar-border bg-sidebar/80 text-sidebar-foreground shadow-[var(--shadow-strong)]">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[radial-gradient(circle_at_28%_0%,oklch(1_0_0_/_0.08),transparent_58%)]" />
-
+    <div className="glass relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-[28px] border-sidebar-border bg-sidebar/80 text-sidebar-foreground shadow-[var(--shadow-soft)]">
       <div
         className={cn(
           "relative z-10 flex h-28 items-center overflow-visible border-b border-sidebar-border/80 transition-all",
@@ -946,14 +944,14 @@ export function AppLayout() {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4">
         <div className="max-w-md text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          <h1 className="text-2xl font-bold tracking-normal text-foreground">
             Não foi possível carregar o sistema
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">{initializationError}</p>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="mt-6 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            className="mt-6 inline-flex h-10 items-center justify-center rounded-full bg-primary px-4 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary-hover"
           >
             Tentar novamente
           </button>
@@ -972,10 +970,6 @@ export function AppLayout() {
 
   return (
     <div className="relative flex h-[100dvh] w-full overflow-hidden bg-background md:p-4">
-      <div className="pointer-events-none fixed inset-0 opacity-80">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_8%_8%,color-mix(in_oklch,var(--color-primary)_12%,transparent),transparent_28%),radial-gradient(circle_at_92%_12%,color-mix(in_oklch,var(--color-alert)_8%,transparent),transparent_26%),radial-gradient(circle_at_72%_92%,color-mix(in_oklch,var(--color-maintenance)_10%,transparent),transparent_34%)] dark:bg-[radial-gradient(circle_at_8%_8%,oklch(1_0_0_/_0.04),transparent_28%),radial-gradient(circle_at_92%_12%,oklch(1_0_0_/_0.025),transparent_26%),radial-gradient(circle_at_72%_92%,oklch(1_0_0_/_0.03),transparent_34%)]" />
-      </div>
-
       <aside
         className={cn(
           "group/sidebar relative z-30 hidden shrink-0 transition-[width] duration-300 ease-out md:flex",

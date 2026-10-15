@@ -34,7 +34,7 @@ const AlertDialogContent = React.forwardRef<
     <AlertDialogPrimitive.Content
       ref={ref}
       className={cn(
-        "glass fixed left-[50%] top-[50%] z-50 grid max-h-[calc(100dvh-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-[calc(100%-1rem)] max-w-md translate-x-[-50%] translate-y-[-50%] gap-0 overflow-hidden rounded-[24px] border border-border/80 bg-popover/94 p-0 text-popover-foreground shadow-[var(--shadow-strong),0_28px_90px_rgb(0_0_0_/_0.45)] ring-1 ring-white/8 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:w-[calc(100%-1.25rem)] sm:rounded-[26px]",
+        "glass fixed left-[50%] top-[50%] z-50 grid max-h-[calc(100dvh-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-[calc(100%-1rem)] max-w-md translate-x-[-50%] translate-y-[-50%] gap-0 overflow-hidden rounded-[28px] border border-border/80 bg-popover/94 p-0 text-popover-foreground shadow-[var(--shadow-strong)] ring-1 ring-white/8 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:w-[calc(100%-1.25rem)]",
         className,
       )}
       {...props}
@@ -71,7 +71,7 @@ const AlertDialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <AlertDialogPrimitive.Title
     ref={ref}
-    className={cn("text-[18px] font-extrabold leading-tight text-foreground", className)}
+    className={cn("text-[18px] font-bold leading-tight tracking-normal text-foreground", className)}
     {...props}
   />
 ));

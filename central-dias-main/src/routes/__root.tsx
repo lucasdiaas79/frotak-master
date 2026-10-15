@@ -15,7 +15,7 @@ function NotFoundComponent() {
         <p className="mt-2 text-sm text-muted-foreground">A rota solicitada não existe.</p>
         <a
           href="/"
-          className="mt-6 inline-flex items-center justify-center rounded-2xl bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition hover:bg-primary-hover"
+          className="mt-6 inline-flex items-center justify-center rounded-full bg-primary px-4 py-2 text-sm font-bold text-primary-foreground transition hover:bg-primary-hover"
         >
           Voltar ao Dashboard
         </a>
@@ -29,7 +29,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { name: "theme-color", content: "#16a34a" },
+      { name: "theme-color", content: "#237b3b" },
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
