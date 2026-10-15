@@ -539,6 +539,10 @@ function FrotakLiveView({
         >
           <FrotakOrb state={orbState} />
         </div>
+
+        <p className="mt-8 text-[15px] font-bold text-white/72" aria-live="polite">
+          {liveStatusLabel(liveStatus)}
+        </p>
       </div>
 
       {actionCard ? <div className="mx-auto mb-4 w-full max-w-md px-5">{actionCard}</div> : null}
