@@ -274,16 +274,14 @@
   .glass-card {
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
-    background: color-mix(in oklch, var(--color-card) 84%, transparent);
-    box-shadow: var(--shadow-card);
-    backdrop-filter: blur(14px);
+    background: var(--color-card);
+    box-shadow: none;
   }
   .premium-card {
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
-    background: color-mix(in oklch, var(--color-card) 86%, transparent);
-    box-shadow: var(--shadow-card);
-    backdrop-filter: blur(14px);
+    background: var(--color-card);
+    box-shadow: none;
     transition:
       border-color 180ms ease,
       transform 180ms ease,
@@ -292,7 +290,7 @@
   }
   .premium-card:hover {
     border-color: color-mix(in oklch, var(--color-primary) 44%, var(--color-border));
-    box-shadow: 0 0 0 1px color-mix(in oklch, var(--color-primary) 10%, transparent);
+    box-shadow: none;
   }
   .focus-ring {
     outline: 2px solid color-mix(in oklch, var(--color-ring) 65%, transparent);
@@ -337,17 +335,12 @@
     padding-bottom: 32px;
   }
   .financial-shell .premium-card {
-    border-radius: 12px;
-    box-shadow:
-      0 10px 34px oklch(0.12 0.02 160 / 0.06),
-      inset 0 1px 0 oklch(1 0 0 / 0.18);
+    border-radius: var(--radius);
+    box-shadow: none;
   }
   .financial-shell .premium-card:hover {
     transform: none;
-    box-shadow:
-      0 14px 42px oklch(0.12 0.02 160 / 0.09),
-      0 0 0 1px color-mix(in oklch, var(--color-primary) 10%, transparent),
-      inset 0 1px 0 oklch(1 0 0 / 0.2);
+    box-shadow: none;
   }
   .financial-nav {
     scrollbar-width: thin;
@@ -365,16 +358,16 @@
   .financial-period-bar {
     align-items: end;
     border: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
-    border-radius: 12px;
-    background: color-mix(in oklch, var(--color-card) 58%, transparent);
-    padding: 10px;
-    box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.12);
+    border-radius: var(--radius);
+    background: var(--color-card);
+    padding: 14px;
+    box-shadow: none;
   }
   .financial-period-bar .field-shell,
   .financial-period-bar button,
   .financial-period-bar input {
-    min-height: 36px;
-    border-radius: 9px;
+    min-height: 40px;
+    border-radius: 999px;
   }
   .financial-eyebrow,
   .financial-section-kicker {
@@ -399,36 +392,18 @@
     min-width: 0;
     overflow: hidden;
     border: 1px solid color-mix(in oklch, var(--color-border) 72%, transparent);
-    border-radius: 16px;
-    background: linear-gradient(
-      135deg,
-      color-mix(in oklch, var(--color-card) 88%, transparent),
-      color-mix(in oklch, var(--color-surface) 72%, transparent)
-    );
+    border-radius: var(--radius);
+    background: #202523;
+    color: #ffffff;
     padding: 18px;
-    box-shadow:
-      0 18px 48px oklch(0.1 0.012 255 / 0.11),
-      inset 0 1px 0 oklch(1 0 0 / 0.16);
+    box-shadow: none;
   }
   .financial-executive-metric::after {
-    content: "";
-    position: absolute;
-    inset: auto 18px 0 18px;
-    height: 2px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      color-mix(in oklch, var(--color-primary) 58%, transparent),
-      transparent
-    );
+    content: none;
   }
   .financial-executive-metric-success {
-    border-color: color-mix(in oklch, var(--color-primary) 32%, var(--color-border));
-    background: linear-gradient(
-      135deg,
-      color-mix(in oklch, var(--color-primary) 13%, var(--color-card)),
-      color-mix(in oklch, var(--color-card) 88%, transparent)
-    );
+    border-color: color-mix(in oklch, var(--color-primary) 38%, var(--color-border));
+    background: #202523;
   }
   .financial-executive-metric-danger {
     border-color: color-mix(in oklch, var(--color-destructive) 35%, var(--color-border));
@@ -440,16 +415,16 @@
     flex-shrink: 0;
     place-items: center;
     border: 1px solid color-mix(in oklch, var(--color-border) 78%, transparent);
-    border-radius: 12px;
-    background: color-mix(in oklch, var(--color-surface) 68%, transparent);
-    color: var(--color-primary);
+    border-radius: 999px;
+    background: rgb(255 255 255 / 0.1);
+    color: #ffffff;
   }
   .financial-hero-value {
     display: block;
     margin-top: 18px;
     overflow-wrap: anywhere;
     font-size: 30px;
-    font-weight: 900;
+    font-weight: 500;
     line-height: 1;
     letter-spacing: 0;
     font-variant-numeric: tabular-nums;
@@ -464,8 +439,8 @@
     align-items: center;
     gap: 12px;
     border: 1px solid color-mix(in oklch, var(--color-border) 66%, transparent);
-    border-radius: 12px;
-    background: color-mix(in oklch, var(--color-card) 52%, transparent);
+    border-radius: var(--radius);
+    background: var(--color-card);
     padding: 13px;
   }
   .financial-support-value,
@@ -475,7 +450,7 @@
     overflow-wrap: anywhere;
     color: var(--color-foreground);
     font-size: 17px;
-    font-weight: 900;
+    font-weight: 500;
     line-height: 1.1;
     letter-spacing: 0;
     font-variant-numeric: tabular-nums;
@@ -486,19 +461,17 @@
   .financial-intel-panel {
     min-width: 0;
     border: 1px solid color-mix(in oklch, var(--color-border) 70%, transparent);
-    border-radius: 14px;
-    background: color-mix(in oklch, var(--color-card) 66%, transparent);
-    box-shadow:
-      0 12px 34px oklch(0.1 0.012 255 / 0.08),
-      inset 0 1px 0 oklch(1 0 0 / 0.12);
+    border-radius: var(--radius);
+    background: var(--color-card);
+    box-shadow: none;
   }
   .financial-obligations {
     padding: 16px;
   }
   .financial-obligation-group {
     min-width: 0;
-    border-radius: 12px;
-    background: color-mix(in oklch, var(--color-surface) 52%, transparent);
+    border-radius: 18px;
+    background: var(--color-surface);
     padding: 13px;
   }
   .financial-obligation-row {
@@ -531,8 +504,8 @@
     min-width: 0;
     align-items: center;
     gap: 12px;
-    border-radius: 12px;
-    background: color-mix(in oklch, var(--color-surface) 52%, transparent);
+    border-radius: 18px;
+    background: var(--color-surface);
     padding: 13px;
   }
   .financial-cash-icon,
@@ -542,7 +515,7 @@
     height: 34px;
     flex-shrink: 0;
     place-items: center;
-    border-radius: 11px;
+    border-radius: 999px;
     background: color-mix(in oklch, var(--color-primary) 12%, transparent);
     color: var(--color-primary);
   }
@@ -552,22 +525,18 @@
     align-items: center;
     justify-content: space-between;
     gap: 14px;
-    border-radius: 12px;
-    background: color-mix(in oklch, var(--color-surface) 50%, transparent);
+    border-radius: 18px;
+    background: var(--color-surface);
     padding: 12px;
   }
   .financial-rank {
     font-size: 12px;
-    font-weight: 900;
+    font-weight: 600;
   }
   .financial-kpi {
     min-width: 0;
-    border-radius: 12px;
-    background: linear-gradient(
-      180deg,
-      color-mix(in oklch, var(--color-card) 94%, transparent),
-      color-mix(in oklch, var(--color-surface) 72%, transparent)
-    );
+    border-radius: var(--radius);
+    background: var(--color-card);
   }
   .financial-kpi-value {
     font-variant-numeric: tabular-nums;
@@ -577,15 +546,15 @@
   }
   .financial-filter-bar {
     border: 1px solid var(--color-border);
-    border-radius: 12px;
-    background: color-mix(in oklch, var(--color-card) 86%, transparent);
-    box-shadow: 0 10px 30px oklch(0.12 0.02 160 / 0.05);
+    border-radius: var(--radius);
+    background: var(--color-card);
+    box-shadow: none;
   }
   .financial-table-head {
     background: color-mix(in oklch, var(--color-surface-2) 76%, transparent);
     color: var(--color-muted-foreground);
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 500;
     letter-spacing: 0.1em;
     text-transform: uppercase;
   }
@@ -599,8 +568,8 @@
   }
   .financial-empty {
     border: 1px dashed color-mix(in oklch, var(--color-border) 82%, transparent);
-    border-radius: 12px;
-    background: color-mix(in oklch, var(--color-surface) 46%, transparent);
+    border-radius: var(--radius);
+    background: var(--color-surface);
   }
   .financial-receivables-shell {
     display: grid;

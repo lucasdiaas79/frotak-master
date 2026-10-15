@@ -1,0 +1,36 @@
+{
+  "id": "master",
+  "name": "FrotaK Master",
+  "description": "Administração dos clientes e provisionamento.",
+  "scope": "project",
+  "status": "active",
+  "version": "1.0.0",
+  "tags": [],
+  "documents": [],
+  "projectId": "master",
+  "currentState": "Monorepo FrotaK com master na raiz e aplicação multi-tenant do cliente em central-dias-main.",
+  "owner": "FrotaK",
+  "repository": "https://github.com/lucasdiaas79/frotak-master.git",
+  "localPath": "",
+  "technology": [
+    "React",
+    "TypeScript",
+    "TanStack Start",
+    "Supabase"
+  ],
+  "checks": [],
+  "skillIds": [],
+  "contractIds": [
+    "frotak-governance",
+    "frotak-visual"
+  ],
+  "extensions": {},
+  "onboarding": [
+    "Confirmar repositório e branch.",
+    "Registrar comandos reais de verificação.",
+    "Abrir sessão e produzir checkpoint atual."
+  ],
+  "repositorySubdirectory": ".",
+  "inventoryDate": "2026-10-14",
+  "inventoryEvidence": "Origem Git e documentação local conferidas; não é certificação atual de produção."
+}

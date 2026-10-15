@@ -1,0 +1,32 @@
+{
+  "platformVersion": "1.0.0",
+  "projectId": "master",
+  "adapter": "codex",
+  "catalogHash": "b04ad16359a70de9a76657b146aa679719f3b22542d7db5334cefa736ad5c0c6",
+  "files": {
+    "AGENTS.md": "0e1df9d1e97370c137aa79e9262904b39d8513a9c635bb5beebcfcc15976653e",
+    ".frotak/project.json": "b1d47fdfc63a4460e66ea47e971965b98ed806ed68864cb87ad4470235563722",
+    ".frotak/RESUME.md": "b5f7fa1190aef9a55ea9182ee84f668349a8a82780afeca521e8e27aa5bd7d95",
+    ".frotak/catalog.json": "affda05e699ea69f7a827e0d34b486c69c1ce7487a3809108aad30b4ff40ff9f",
+    ".frotak/knowledge/global/governance.md": "47fc3a428b5093ae0d721cc34fd0641188fc6197330e3b0d27cc382bbe822b1a",
+    ".frotak/knowledge/global/visual.md": "d6eec532dae738920052c44d2d4b45b76019d99818d7f3ab6abd986f373032b8",
+    ".frotak/knowledge/legacy/brand/README.md": "498081a394dfc80c48d933c5529858255bc43fc82c6422fae97b24b971ac47fb",
+    ".frotak/knowledge/legacy/brand/INTERIORS.md": "753c9ae5fb37916f0a168c62869f9c6c64325d564f4d0c87aa17bd7e4cda4218",
+    ".frotak/knowledge/legacy/brand/brand-theme.css": "47f1680986e56264e6b08ddd4f355eb19efa9837c53714ff29cd8dd1dbbdf7cd",
+    ".frotak/knowledge/projects/master/clientes.md": "9e0a0b5e4dfbf84dc2b59f2b6f13f30b97ad707f89ab0f2974ea3bdd1e75f5ae",
+    ".frotak/knowledge/projects/master/planos.md": "87a2f35bffef047d088aa5251ffeb64cffd0e36e120ed30686f0af53c48c4d86",
+    ".frotak/knowledge/projects/master/provisionamento.md": "bfdacbddf7acc04d68bbabc7ae6ee09d8d8540ab9a9f5504650aeacf987a17e5",
+    ".frotak/knowledge/projects/master/usuarios-permissoes.md": "26945604afe353315318cbe3943a8e5571226255369cf61740a2e77fbc41b881",
+    ".agents/skills/architecture-guardian/SKILL.md": "c2f0862f627f88439062e60043a6ed3027c85b427eb51087cda7150319d7178f",
+    ".agents/skills/context-manager/SKILL.md": "227e2de7710f15eb967ecff786653469bdab04caf8d7bc16e9b536e2eae34bdb",
+    ".agents/skills/design-system-guardian/SKILL.md": "59c41cbd6322a3290106b1e556d1d9f33f1d38bff5ab593f6307e1817291107e",
+    ".agents/skills/documentation-manager/SKILL.md": "21288a85c5414362c302ba92e08dd7b9634a371c1e92eacdacfbe531306ffbcb",
+    ".agents/skills/session-handoff/SKILL.md": "ea31be1c0ebfb11fc488dfb1d4fa48df19fd17a131d368338e5086f022565465",
+    ".agents/skills/verification-guide/SKILL.md": "2b6d52ca3e6cb537786a6daaf3cd3ea1fbee92627370bd99fba287782502a5b4",
+    ".agents/skills/master-clientes-guide/SKILL.md": "82547bfa3bb0f62f31b1e5eacc258b7ce2cc0234889e42d17c2bb54bd5476b46",
+    ".agents/skills/master-planos-guide/SKILL.md": "56df18c52f059a22bcd8e0a526ce688fc2942f0e094b31467c1a836f6b508d6f",
+    ".agents/skills/master-provisionamento-guide/SKILL.md": "05b22db76500e9ccd715ff6092f86e6ea5bb01652e65419ad1f6fa02436cc52b",
+    ".agents/skills/master-usuarios-permissoes-guide/SKILL.md": "8ca2f07b28e141117bb81c8b2a66b8b7cc29d28f8d3ac1c7d7e9f3326036ccc7"
+  },
+  "retainedStaleFiles": []
+}

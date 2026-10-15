@@ -1,0 +1,36 @@
+{
+  "id": "cliente",
+  "name": "FrotaK Cliente",
+  "description": "Operação e administração do cliente de frotas.",
+  "scope": "project",
+  "status": "active",
+  "version": "1.0.0",
+  "tags": [],
+  "documents": [],
+  "projectId": "cliente",
+  "currentState": "Aplicação cliente multi-tenant compartilhada; frontend regido pelo contrato visual FrotaK e isolamento por workspace.",
+  "owner": "FrotaK",
+  "repository": "https://github.com/lucasdiaas79/frotak-master.git",
+  "localPath": "",
+  "technology": [
+    "React",
+    "TypeScript",
+    "TanStack Start",
+    "Supabase"
+  ],
+  "checks": [],
+  "skillIds": [],
+  "contractIds": [
+    "frotak-governance",
+    "frotak-visual"
+  ],
+  "extensions": {},
+  "onboarding": [
+    "Confirmar repositório e branch.",
+    "Registrar comandos reais de verificação.",
+    "Abrir sessão e produzir checkpoint atual."
+  ],
+  "repositorySubdirectory": "central-dias-main",
+  "inventoryDate": "2026-10-14",
+  "inventoryEvidence": "Origem Git e documentação local conferidas; não é certificação atual de produção."
+}

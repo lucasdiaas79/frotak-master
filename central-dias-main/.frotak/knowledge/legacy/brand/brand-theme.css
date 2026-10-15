@@ -1,0 +1,179 @@
+/* FrotaK identity overrides color only; QorTrade remains the composition contract. */
+:root {
+  color-scheme: light;
+  --brand-green: #66bb1a;
+  /* Logo pigment is not the operational UI accent. */
+  --ui-green: #44ad60;
+  --q-brand: var(--ui-green);
+  --q-canvas: #edf1ef;
+  --q-card: #fafcfb;
+  --q-white: #fff;
+  --q-ink: #151918;
+  --q-accent: var(--ui-green);
+  --q-muted: #626b67;
+  --q-line: #d8dfdb;
+  --q-green: #237b3b;
+  --q-danger: #ad3929;
+  --q-amber: #896013;
+  --q-glow: transparent;
+  --q-control: #fff;
+  --q-soft: #eef1ef;
+  --q-hover: #e4eae6;
+  --q-avatar: #e0ece3;
+  --q-inverse-hover: #333a36;
+  --q-card-line: #e0e5e2;
+  --q-highlight: #e2f1e6;
+  --q-highlight-ink: #16251b;
+  --q-highlight-muted: #405b49;
+  --q-highlight-border: #a3cdae;
+  --q-hatch: #c9d2cc;
+  --q-bar-fill: #44ad6033;
+  --q-danger-soft: #fbe9e3;
+  --q-raised: #fbfcfb;
+  --q-selected: #e2f1e6;
+  --q-shadow: #10181324;
+  --q-overlay: #0b120d55;
+
+  /* Existing AlignUI interiors consume these same semantic foundations. */
+  --color-primary-dark: #155a2a;
+  --color-primary-darker: #1d6831;
+  --color-primary-base: #237b3b;
+  --color-primary-light: #c6e5ce;
+  --color-primary-lighter: #e9f4ec;
+  --color-primary-alpha-24: #44ad603d;
+  --color-primary-alpha-16: #44ad6029;
+  --color-primary-alpha-10: #44ad601a;
+  --color-static-black: #090c0a;
+  --color-static-white: #ffffff;
+  --color-bg-strong-950: #151918;
+  --color-bg-surface-800: #282d2a;
+  --color-bg-sub-300: #cbd3ce;
+  --color-bg-soft-200: #e0e5e2;
+  --color-bg-weak-50: var(--q-canvas);
+  --color-bg-weak-25: #f3f6f4;
+  --color-bg-white-0: var(--q-card);
+  --color-text-strong-950: var(--q-ink);
+  --color-text-sub-600: #53615a;
+  --color-text-soft-400: #68756d;
+  --color-text-disabled-300: #9ca6a0;
+  --color-text-white-0: #ffffff;
+  --color-stroke-strong-950: #151918;
+  --color-stroke-sub-300: #bfcbc3;
+  --color-stroke-soft-200: var(--q-line);
+  --color-stroke-white-0: #ffffff;
+  --color-faded-dark: #343e38;
+  --color-faded-base: #637068;
+  --color-faded-light: #dce5df;
+  --color-faded-lighter: #ecf1ed;
+  --color-success-dark: #1d4c2b;
+  --color-success-base: #237b3b;
+  --color-success-light: #c6e5ce;
+  --color-success-lighter: #e9f4ec;
+  --color-overlay: #0b120d55;
+  --map-road: #ffffffeb;
+  --map-road-secondary: #d4dcd7;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --q-canvas: #080a09;
+  --q-card: #111314;
+  --q-white: #111314;
+  --q-ink: #e4e6e7;
+  --q-muted: #9b9fa1;
+  --q-line: #2b2e2f;
+  --q-green: #44ad60;
+  --q-danger: #f28c79;
+  --q-amber: #dfb969;
+  --q-glow: transparent;
+  --q-control: #1a1d1e;
+  --q-soft: #171a1b;
+  --q-hover: #242829;
+  --q-avatar: #18281d;
+  --q-inverse-hover: #c6cac8;
+  --q-card-line: #2b2e2f;
+  --q-highlight: #0c1410;
+  --q-highlight-ink: #e4e6e7;
+  --q-highlight-muted: #a0a9a3;
+  --q-highlight-border: #285c37;
+  --q-hatch: #363c39;
+  --q-bar-fill: #7b85801f;
+  --q-danger-soft: #38241d;
+  --q-raised: #181b1c;
+  --q-selected: #13251a;
+  --q-shadow: #00000066;
+  --q-overlay: #00000099;
+  --color-primary-dark: #7dc68f;
+  --color-primary-darker: #1d6831;
+  --color-primary-base: #237b3b;
+  --color-primary-light: #24402c;
+  --color-primary-lighter: #101c14;
+  --color-bg-strong-950: #070909;
+  --color-bg-surface-800: #232628;
+  --color-bg-sub-300: #3d4340;
+  --color-bg-soft-200: #282c2d;
+  --color-bg-weak-25: #0e1011;
+  --color-text-sub-600: #b7bcbe;
+  --color-text-soft-400: #9ca3a5;
+  --color-text-disabled-300: #636b6d;
+  --color-stroke-strong-950: #a9b1ad;
+  --color-stroke-sub-300: #464d4a;
+  --color-stroke-white-0: #343b37;
+  --color-faded-dark: #c8cfcb;
+  --color-faded-base: #9b9fa1;
+  --color-faded-light: #343c37;
+  --color-faded-lighter: #1c211e;
+  --color-success-dark: #83c995;
+  --color-success-base: #44ad60;
+  --color-success-light: #24402c;
+  --color-success-lighter: #101c14;
+  --color-information-dark: #c5d8ff;
+  --color-information-base: #85adff;
+  --color-information-light: #243d63;
+  --color-information-lighter: #17283d;
+  --color-warning-dark: #ffd4ad;
+  --color-warning-base: #f8ab62;
+  --color-warning-light: #65441f;
+  --color-warning-lighter: #302317;
+  --color-error-dark: #ffbcc0;
+  --color-error-base: #f27a83;
+  --color-error-light: #602c31;
+  --color-error-lighter: #321c20;
+  --color-away-dark: #ffe5a3;
+  --color-away-base: #e9c767;
+  --color-away-light: #58491f;
+  --color-away-lighter: #302919;
+  --color-feature-dark: #d9cbff;
+  --color-feature-base: #b6a0f8;
+  --color-feature-light: #443466;
+  --color-feature-lighter: #281e3e;
+  --color-verified-dark: #bee9ff;
+  --color-verified-base: #76c5eb;
+  --color-verified-light: #25485b;
+  --color-verified-lighter: #182c36;
+  --color-highlighted-dark: #ffd0e8;
+  --color-highlighted-base: #ed90be;
+  --color-highlighted-light: #583447;
+  --color-highlighted-lighter: #311f29;
+  --color-stable-dark: #b5eee1;
+  --color-stable-base: #77d2bc;
+  --color-stable-light: #275046;
+  --color-stable-lighter: #182e28;
+  --color-overlay: #00000099;
+  --map-road: #363c39;
+  --map-road-secondary: #2c322f;
+}
+
+.q-wordmark { display: block; width: 116px; height: auto; }
+.q-wordmark-dark { display: none; }
+.q-compact-mark { display: none; width: 34px; height: 34px; border-radius: 10px; }
+[data-theme='dark'] .q-wordmark-light { display: none; }
+[data-theme='dark'] .q-wordmark-dark { display: block; }
+.q-brand-product { font-size: 17px; font-weight: 400; letter-spacing: -.5px; padding-left: 10px; border-left: 1px solid var(--q-line); color: var(--q-muted); }
+.q-theme-check { margin-left: auto; }
+.q-theme-option[data-state='checked'] { background: var(--q-selected); }
+[data-theme='dark'] .text-primary-base { color: var(--q-green); }
+[data-theme='dark'] .text-primary-darker { color: #7dc68f; }
+[data-theme='dark'] .q-highlight .q-icon { background: var(--q-selected); color: var(--q-green); }
+@media (max-width: 640px) { .q-wordmark { width: 95px; }.q-brand-product { font-size: 13px; padding-left: 7px; } }
+@media (max-width: 480px) { .q-brand .q-wordmark { display: none; }.q-compact-mark { display: block; } }

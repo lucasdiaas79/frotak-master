@@ -1,0 +1,640 @@
+{
+  "project": {
+    "id": "cliente",
+    "name": "FrotaK Cliente",
+    "description": "Operação e administração do cliente de frotas.",
+    "scope": "project",
+    "status": "active",
+    "version": "1.0.0",
+    "tags": [],
+    "documents": [],
+    "projectId": "cliente",
+    "currentState": "Checkout identificado como aplicação central-dias-main. Regras de domínio e validação atual precisam de inventário por módulo.",
+    "owner": "FrotaK",
+    "repository": "https://github.com/finty123/centralnovo.git",
+    "localPath": "",
+    "technology": [
+      "React",
+      "TypeScript",
+      "TanStack Start",
+      "Supabase"
+    ],
+    "checks": [],
+    "skillIds": [],
+    "contractIds": [
+      "frotak-governance",
+      "frotak-visual"
+    ],
+    "extensions": {},
+    "onboarding": [
+      "Confirmar repositório e branch.",
+      "Registrar comandos reais de verificação.",
+      "Abrir sessão e produzir checkpoint atual."
+    ],
+    "repositorySubdirectory": "central-dias-main",
+    "inventoryDate": "2026-10-14",
+    "inventoryEvidence": "Origem Git e documentação local conferidas; não é certificação atual de produção."
+  },
+  "modules": [
+    {
+      "id": "cliente-abastecimentos",
+      "name": "Abastecimentos",
+      "description": "Conhecimento dedicado a abastecimentos no cliente.",
+      "scope": "module",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/projects/cliente/abastecimentos.md"
+      ],
+      "projectId": "cliente",
+      "moduleId": "cliente-abastecimentos",
+      "dependsOn": [],
+      "skillIds": [
+        "cliente-abastecimentos-guide"
+      ],
+      "contractIds": [],
+      "maturity": "inventory-required",
+      "extensions": {},
+      "inventory": {
+        "entitiesToConfirm": "Abastecimento; combustível; volume; valor; odômetro; veículo; posto; comprovante.",
+        "rulesToConfirm": "Unidades; arredondamento; odômetro regressivo; duplicidade; consumo derivado; exclusão/estorno.",
+        "flowToInspect": "Registrar abastecimento → validar valores/odômetro → consultar histórico → analisar consumo.",
+        "checksToRun": "Duas cobranças reais semelhantes; período e placa; consumo sem base suficiente; permissões de edição."
+      }
+    },
+    {
+      "id": "cliente-documentos",
+      "name": "Documentos",
+      "description": "Conhecimento dedicado a documentos no cliente.",
+      "scope": "module",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/projects/cliente/documentos.md"
+      ],
+      "projectId": "cliente",
+      "moduleId": "cliente-documentos",
+      "dependsOn": [],
+      "skillIds": [
+        "cliente-documentos-guide"
+      ],
+      "contractIds": [],
+      "maturity": "inventory-required",
+      "extensions": {},
+      "inventory": {
+        "entitiesToConfirm": "Documento; veículo/motorista; validade; tipo; arquivo; aprovação; histórico.",
+        "rulesToConfirm": "Expiração; acesso ao arquivo; versão; exclusão; retenção; dados pessoais.",
+        "flowToInspect": "Adicionar → classificar → validar → acompanhar validade → renovar.",
+        "checksToRun": "Arquivo inválido; download autorizado; expiração em fuso correto; renovação mantém histórico."
+      }
+    },
+    {
+      "id": "cliente-financeiro",
+      "name": "Financeiro",
+      "description": "Conhecimento dedicado a financeiro no cliente.",
+      "scope": "module",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/projects/cliente/financeiro.md"
+      ],
+      "projectId": "cliente",
+      "moduleId": "cliente-financeiro",
+      "dependsOn": [],
+      "skillIds": [
+        "cliente-financeiro-guide"
+      ],
+      "contractIds": [],
+      "maturity": "inventory-required",
+      "extensions": {},
+      "inventory": {
+        "entitiesToConfirm": "Contas a pagar/receber; parcelas; liquidação; categorias; centros de custo; conciliação.",
+        "rulesToConfirm": "Precisão monetária; vencimento versus pagamento; pagamentos parciais; estorno; idempotência; autorizações por tenant.",
+        "flowToInspect": "Registrar título → conferir vencimento → liquidar → conciliar → consultar histórico.",
+        "checksToRun": "Saldo/total após liquidação; duplicidade; estorno; filtros de período/situação; exportação com os mesmos critérios."
+      }
+    },
+    {
+      "id": "cliente-gestao-de-frota",
+      "name": "Gestão de frota",
+      "description": "Conhecimento dedicado a gestao de frota no cliente.",
+      "scope": "module",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/projects/cliente/gestao-de-frota.md"
+      ],
+      "projectId": "cliente",
+      "moduleId": "cliente-gestao-de-frota",
+      "dependsOn": [],
+      "skillIds": [
+        "cliente-gestao-de-frota-guide"
+      ],
+      "contractIds": [],
+      "maturity": "inventory-required",
+      "extensions": {},
+      "inventory": {
+        "entitiesToConfirm": "Veículos; placas; grupos; motoristas; documentos; dispositivos; vínculos históricos.",
+        "rulesToConfirm": "Unicidade da placa no escopo definido; transferência; inativação; limites de grupo; vigência de vínculos.",
+        "flowToInspect": "Cadastrar veículo → vincular grupo/motorista → atualizar situação → consultar histórico.",
+        "checksToRun": "Filtros e paginação; acesso entre grupos; associação dispositivo-veículo; referência cruzada com viagens."
+      }
+    },
+    {
+      "id": "cliente-manutencao",
+      "name": "Manutenção",
+      "description": "Conhecimento dedicado a manutencao no cliente.",
+      "scope": "module",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/projects/cliente/manutencao.md"
+      ],
+      "projectId": "cliente",
+      "moduleId": "cliente-manutencao",
+      "dependsOn": [],
+      "skillIds": [
+        "cliente-manutencao-guide"
+      ],
+      "contractIds": [],
+      "maturity": "inventory-required",
+      "extensions": {},
+      "inventory": {
+        "entitiesToConfirm": "Plano; serviço; ordem; veículo; oficina; vencimento por data/km; custo; anexos.",
+        "rulesToConfirm": "Programada versus realizada; limites de odômetro; peças/serviços; reabertura; vínculo ao financeiro.",
+        "flowToInspect": "Planejar → gerar ordem → executar → registrar custo → atualizar próxima manutenção.",
+        "checksToRun": "Atraso; execução parcial; alertas; duplicação de ordem; atualização do veículo e financeiro."
+      }
+    },
+    {
+      "id": "cliente-relatorios",
+      "name": "Relatórios",
+      "description": "Conhecimento dedicado a relatorios no cliente.",
+      "scope": "module",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/projects/cliente/relatorios.md"
+      ],
+      "projectId": "cliente",
+      "moduleId": "cliente-relatorios",
+      "dependsOn": [],
+      "skillIds": [
+        "cliente-relatorios-guide"
+      ],
+      "contractIds": [],
+      "maturity": "inventory-required",
+      "extensions": {},
+      "inventory": {
+        "entitiesToConfirm": "Definição de relatório; filtros; escopo; colunas; geração; arquivo; agendamento.",
+        "rulesToConfirm": "Mesmos filtros entre tela/exportação; limite por tenant; fusos; precisão; jobs longos.",
+        "flowToInspect": "Definir escopo → pré-visualizar → gerar → baixar → registrar resultado.",
+        "checksToRun": "Dados vazios; grande volume; autorização; totais reconciliados; falha e repetição de job."
+      }
+    }
+  ],
+  "agents": [
+    {
+      "id": "architect",
+      "name": "Arquitetura",
+      "description": "Analisa domínio, contratos, dependências e impacto.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [],
+      "skillIds": [
+        "architecture-guardian"
+      ],
+      "instructions": "Analisa domínio, contratos, dependências e impacto. Atue com as skills listadas e com autorização para o alvo. Registre o escopo, resultados e limitações.",
+      "execution": "operator-profile",
+      "tools": [
+        "read",
+        "document",
+        "verify"
+      ],
+      "extensions": {}
+    },
+    {
+      "id": "backend-specialist",
+      "name": "Backend e integrações",
+      "description": "Revisa APIs, dados, tarefas e limites de provedores.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [],
+      "skillIds": [
+        "architecture-guardian",
+        "verification-guide"
+      ],
+      "instructions": "Revisa APIs, dados, tarefas e limites de provedores. Atue com as skills listadas e com autorização para o alvo. Registre o escopo, resultados e limitações.",
+      "execution": "operator-profile",
+      "tools": [
+        "read",
+        "document",
+        "verify"
+      ],
+      "extensions": {}
+    },
+    {
+      "id": "context-curator",
+      "name": "Contexto e memória",
+      "description": "Recupera decisões e mantém checkpoints verificáveis.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [],
+      "skillIds": [
+        "context-manager",
+        "documentation-manager",
+        "session-handoff"
+      ],
+      "instructions": "Recupera decisões e mantém checkpoints verificáveis. Atue com as skills listadas e com autorização para o alvo. Registre o escopo, resultados e limitações.",
+      "execution": "operator-profile",
+      "tools": [
+        "read",
+        "document",
+        "verify"
+      ],
+      "extensions": {}
+    },
+    {
+      "id": "coordinator",
+      "name": "Coordenador FrotaK",
+      "description": "Seleciona projeto, módulo, contexto e responsáveis.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [],
+      "skillIds": [
+        "context-manager",
+        "session-handoff"
+      ],
+      "instructions": "Seleciona projeto, módulo, contexto e responsáveis. Atue com as skills listadas e com autorização para o alvo. Registre o escopo, resultados e limitações.",
+      "execution": "operator-profile",
+      "tools": [
+        "read",
+        "document",
+        "verify"
+      ],
+      "extensions": {}
+    },
+    {
+      "id": "delivery-curator",
+      "name": "Documentação e entrega",
+      "description": "Prepara referências e ponto de retomada.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [],
+      "skillIds": [
+        "documentation-manager",
+        "session-handoff"
+      ],
+      "instructions": "Prepara referências e ponto de retomada. Atue com as skills listadas e com autorização para o alvo. Registre o escopo, resultados e limitações.",
+      "execution": "operator-profile",
+      "tools": [
+        "read",
+        "document",
+        "verify"
+      ],
+      "extensions": {}
+    },
+    {
+      "id": "frontend-specialist",
+      "name": "Frontend e identidade",
+      "description": "Compõe interfaces e revisa responsividade e acessibilidade.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [],
+      "skillIds": [
+        "design-system-guardian"
+      ],
+      "instructions": "Compõe interfaces e revisa responsividade e acessibilidade. Atue com as skills listadas e com autorização para o alvo. Registre o escopo, resultados e limitações.",
+      "execution": "operator-profile",
+      "tools": [
+        "read",
+        "document",
+        "verify"
+      ],
+      "extensions": {}
+    },
+    {
+      "id": "product-specialist",
+      "name": "Produto e domínio",
+      "description": "Revisa regras e critérios com as skills do módulo.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [],
+      "skillIds": [
+        "context-manager",
+        "verification-guide"
+      ],
+      "instructions": "Revisa regras e critérios com as skills do módulo. Atue com as skills listadas e com autorização para o alvo. Registre o escopo, resultados e limitações.",
+      "execution": "operator-profile",
+      "tools": [
+        "read",
+        "document",
+        "verify"
+      ],
+      "extensions": {}
+    },
+    {
+      "id": "qa-reviewer",
+      "name": "QA e validação",
+      "description": "Confere fluxos e resultados com evidências.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [],
+      "skillIds": [
+        "verification-guide"
+      ],
+      "instructions": "Confere fluxos e resultados com evidências. Atue com as skills listadas e com autorização para o alvo. Registre o escopo, resultados e limitações.",
+      "execution": "operator-profile",
+      "tools": [
+        "read",
+        "document",
+        "verify"
+      ],
+      "extensions": {}
+    },
+    {
+      "id": "security-reviewer",
+      "name": "Segurança e acesso",
+      "description": "Revisa tenant, permissões e tratamento de credenciais.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [],
+      "skillIds": [
+        "architecture-guardian"
+      ],
+      "instructions": "Revisa tenant, permissões e tratamento de credenciais. Atue com as skills listadas e com autorização para o alvo. Registre o escopo, resultados e limitações.",
+      "execution": "operator-profile",
+      "tools": [
+        "read",
+        "document",
+        "verify"
+      ],
+      "extensions": {}
+    }
+  ],
+  "skills": [
+    {
+      "id": "architecture-guardian",
+      "name": "Guardião de arquitetura",
+      "description": "Revisar arquitetura, dependências, dados e integrações em projetos FrotaK.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/global/governance.md"
+      ],
+      "instructions": "Inspecione o código atual e as decisões vigentes antes de criar serviços ou abstrações. Identifique domínio, tenant, autorização, contratos e impacto. Reuse mecanismos existentes que atendam ao requisito. Registre escolhas estruturais com alternativas, consequências e estado de aprovação. Execute verificações do produto afetado.",
+      "extensions": {},
+      "provenance": {
+        "source": ".agent/skills/architecture-guardian.md",
+        "adapted": true
+      }
+    },
+    {
+      "id": "context-manager",
+      "name": "Contexto e continuidade",
+      "description": "Recuperar contexto e retomar uma tarefa no projeto e módulo corretos.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/global/governance.md"
+      ],
+      "instructions": "Use o manifesto do projeto e o pacote de contexto gerado pela CLI. Compare checkpoint, branch, commit e alterações locais. Leia regras globais, do projeto e dos módulos afetados de forma progressiva. Reavalie verificações quando código, dependências ou contratos mudarem. Registre uma nova sessão; preserve decisões aprovadas e dúvidas ainda não resolvidas.",
+      "extensions": {},
+      "provenance": {
+        "source": ".agent/skills/context-manager.md",
+        "adapted": true
+      }
+    },
+    {
+      "id": "design-system-guardian",
+      "name": "Guardião visual",
+      "description": "Aplicar e revisar identidade, componentes, filtros e responsividade FrotaK.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/global/visual.md"
+      ],
+      "instructions": "Consulte o contrato frotak-visual e referências de marca vigentes. Reuse tokens e componentes reais do projeto. Confira padrões no Storybook configurado antes de criar controles. Inspecione claro/escuro, mobile, teclado, foco e estados. Use verde operacional e neutros aprovados. O pigmento da logo não vira cor de preenchimento geral.",
+      "extensions": {},
+      "provenance": {
+        "source": ".agent/skills/design-system-guardian.md",
+        "adapted": true
+      }
+    },
+    {
+      "id": "documentation-manager",
+      "name": "Documentação",
+      "description": "Manter contratos, referências, decisões e onboarding alinhados ao código.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/global/governance.md"
+      ],
+      "instructions": "Atualize a fonte canônica afetada, identifique projeto/módulo e versão. Documente somente fatos observados e decisões aprovadas. Preserve origem, data e limitações do material herdado. Evite cópias editáveis de estado. Exporte o catálogo para revisão Git após alterações no portal.",
+      "extensions": {},
+      "provenance": {
+        "source": ".agent/skills/documentation-manager.md",
+        "adapted": true
+      }
+    },
+    {
+      "id": "session-handoff",
+      "name": "Passagem de trabalho",
+      "description": "Criar checkpoints e um pacote de retomada para outro operador.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/global/governance.md"
+      ],
+      "instructions": "Abra uma sessão com projeto, módulo, operador e objetivo. Registre ações importantes enquanto trabalha. Faça checkpoints intermediários em tarefas longas. Inclua concluído, pendente, próxima ação, Git, testes, ambiente e evidências. Exporte um handoff legível para o repositório do produto. Não declarar retomada exata além do último estado persistido.",
+      "extensions": {}
+    },
+    {
+      "id": "verification-guide",
+      "name": "Verificação e evidência",
+      "description": "Validar entregas técnicas e funcionais com evidência rastreável.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/global/governance.md"
+      ],
+      "instructions": "Execute os comandos reais do projeto; não trate ausência de comando como aprovação. Relacione cada resultado ao commit, ambiente e evidência. Verifique o fluxo do usuário proporcionalmente à alteração. Validação técnica não certifica interface, permissões ou integração por si só. Só registre revisão independente quando outro executor realmente atuou.",
+      "extensions": {}
+    },
+    {
+      "id": "cliente-abastecimentos-guide",
+      "name": "Guia abastecimentos",
+      "description": "Planejar, alterar ou revisar abastecimentos especificamente no FrotaK cliente.",
+      "scope": "module",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/projects/cliente/abastecimentos.md"
+      ],
+      "projectId": "cliente",
+      "moduleId": "cliente-abastecimentos",
+      "instructions": "Trabalhe no módulo abastecimentos do projeto cliente. Consulte o contrato do projeto e knowledge/projects/cliente/abastecimentos.md. Antes de alterar, identifique as entidades, permissões, rotas e fonte real de dados. Registre regras verificadas e dúvidas no documento do módulo. Teste o fluxo solicitado e seus estados de falha. Ao concluir, registre commit, ambiente, evidências, pendências e próxima ação em um checkpoint. Não transfira regras de outros produtos sem decisão explícita.\n\nInventário de entidades: Abastecimento; combustível; volume; valor; odômetro; veículo; posto; comprovante.\nRegras a confirmar no código/contrato: Unidades; arredondamento; odômetro regressivo; duplicidade; consumo derivado; exclusão/estorno.\nFluxo para inspecionar: Registrar abastecimento → validar valores/odômetro → consultar histórico → analisar consumo.\nVerificações específicas: Duas cobranças reais semelhantes; período e placa; consumo sem base suficiente; permissões de edição.\nO inventário é um roteiro, não aprovação de comportamento ainda não verificado.",
+      "maturity": "inventory-required",
+      "extensions": {}
+    },
+    {
+      "id": "cliente-documentos-guide",
+      "name": "Guia documentos",
+      "description": "Planejar, alterar ou revisar documentos especificamente no FrotaK cliente.",
+      "scope": "module",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/projects/cliente/documentos.md"
+      ],
+      "projectId": "cliente",
+      "moduleId": "cliente-documentos",
+      "instructions": "Trabalhe no módulo documentos do projeto cliente. Consulte o contrato do projeto e knowledge/projects/cliente/documentos.md. Antes de alterar, identifique as entidades, permissões, rotas e fonte real de dados. Registre regras verificadas e dúvidas no documento do módulo. Teste o fluxo solicitado e seus estados de falha. Ao concluir, registre commit, ambiente, evidências, pendências e próxima ação em um checkpoint. Não transfira regras de outros produtos sem decisão explícita.\n\nInventário de entidades: Documento; veículo/motorista; validade; tipo; arquivo; aprovação; histórico.\nRegras a confirmar no código/contrato: Expiração; acesso ao arquivo; versão; exclusão; retenção; dados pessoais.\nFluxo para inspecionar: Adicionar → classificar → validar → acompanhar validade → renovar.\nVerificações específicas: Arquivo inválido; download autorizado; expiração em fuso correto; renovação mantém histórico.\nO inventário é um roteiro, não aprovação de comportamento ainda não verificado.",
+      "maturity": "inventory-required",
+      "extensions": {}
+    },
+    {
+      "id": "cliente-financeiro-guide",
+      "name": "Guia financeiro",
+      "description": "Planejar, alterar ou revisar financeiro especificamente no FrotaK cliente.",
+      "scope": "module",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/projects/cliente/financeiro.md"
+      ],
+      "projectId": "cliente",
+      "moduleId": "cliente-financeiro",
+      "instructions": "Trabalhe no módulo financeiro do projeto cliente. Consulte o contrato do projeto e knowledge/projects/cliente/financeiro.md. Antes de alterar, identifique as entidades, permissões, rotas e fonte real de dados. Registre regras verificadas e dúvidas no documento do módulo. Teste o fluxo solicitado e seus estados de falha. Ao concluir, registre commit, ambiente, evidências, pendências e próxima ação em um checkpoint. Não transfira regras de outros produtos sem decisão explícita.\nIdentifique antes as regras de contas a pagar/receber, vencimento, liquidação, parcelas, categorias, centros de custo, conciliação e permissões por tenant. Dinheiro exige precisão e política explícita de arredondamento. Teste estorno, duplicidade, pendência e timezone. Não derive receitas ou pagamentos pela aparência da tela.\n\nInventário de entidades: Contas a pagar/receber; parcelas; liquidação; categorias; centros de custo; conciliação.\nRegras a confirmar no código/contrato: Precisão monetária; vencimento versus pagamento; pagamentos parciais; estorno; idempotência; autorizações por tenant.\nFluxo para inspecionar: Registrar título → conferir vencimento → liquidar → conciliar → consultar histórico.\nVerificações específicas: Saldo/total após liquidação; duplicidade; estorno; filtros de período/situação; exportação com os mesmos critérios.\nO inventário é um roteiro, não aprovação de comportamento ainda não verificado.",
+      "maturity": "inventory-required",
+      "extensions": {}
+    },
+    {
+      "id": "cliente-gestao-de-frota-guide",
+      "name": "Guia gestao de frota",
+      "description": "Planejar, alterar ou revisar gestao de frota especificamente no FrotaK cliente.",
+      "scope": "module",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/projects/cliente/gestao-de-frota.md"
+      ],
+      "projectId": "cliente",
+      "moduleId": "cliente-gestao-de-frota",
+      "instructions": "Trabalhe no módulo gestao de frota do projeto cliente. Consulte o contrato do projeto e knowledge/projects/cliente/gestao-de-frota.md. Antes de alterar, identifique as entidades, permissões, rotas e fonte real de dados. Registre regras verificadas e dúvidas no documento do módulo. Teste o fluxo solicitado e seus estados de falha. Ao concluir, registre commit, ambiente, evidências, pendências e próxima ação em um checkpoint. Não transfira regras de outros produtos sem decisão explícita.\nInventarie veículos, placas, vínculos com motoristas, grupos, dispositivos e situação operacional. Confira unicidade, transferência de grupo, histórico de vínculos e limites de tenant. Verifique filtros, paginação, permissões e sincronização com a fonte real.\n\nInventário de entidades: Veículos; placas; grupos; motoristas; documentos; dispositivos; vínculos históricos.\nRegras a confirmar no código/contrato: Unicidade da placa no escopo definido; transferência; inativação; limites de grupo; vigência de vínculos.\nFluxo para inspecionar: Cadastrar veículo → vincular grupo/motorista → atualizar situação → consultar histórico.\nVerificações específicas: Filtros e paginação; acesso entre grupos; associação dispositivo-veículo; referência cruzada com viagens.\nO inventário é um roteiro, não aprovação de comportamento ainda não verificado.",
+      "maturity": "inventory-required",
+      "extensions": {}
+    },
+    {
+      "id": "cliente-manutencao-guide",
+      "name": "Guia manutencao",
+      "description": "Planejar, alterar ou revisar manutencao especificamente no FrotaK cliente.",
+      "scope": "module",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/projects/cliente/manutencao.md"
+      ],
+      "projectId": "cliente",
+      "moduleId": "cliente-manutencao",
+      "instructions": "Trabalhe no módulo manutencao do projeto cliente. Consulte o contrato do projeto e knowledge/projects/cliente/manutencao.md. Antes de alterar, identifique as entidades, permissões, rotas e fonte real de dados. Registre regras verificadas e dúvidas no documento do módulo. Teste o fluxo solicitado e seus estados de falha. Ao concluir, registre commit, ambiente, evidências, pendências e próxima ação em um checkpoint. Não transfira regras de outros produtos sem decisão explícita.\n\nInventário de entidades: Plano; serviço; ordem; veículo; oficina; vencimento por data/km; custo; anexos.\nRegras a confirmar no código/contrato: Programada versus realizada; limites de odômetro; peças/serviços; reabertura; vínculo ao financeiro.\nFluxo para inspecionar: Planejar → gerar ordem → executar → registrar custo → atualizar próxima manutenção.\nVerificações específicas: Atraso; execução parcial; alertas; duplicação de ordem; atualização do veículo e financeiro.\nO inventário é um roteiro, não aprovação de comportamento ainda não verificado.",
+      "maturity": "inventory-required",
+      "extensions": {}
+    },
+    {
+      "id": "cliente-relatorios-guide",
+      "name": "Guia relatorios",
+      "description": "Planejar, alterar ou revisar relatorios especificamente no FrotaK cliente.",
+      "scope": "module",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/projects/cliente/relatorios.md"
+      ],
+      "projectId": "cliente",
+      "moduleId": "cliente-relatorios",
+      "instructions": "Trabalhe no módulo relatorios do projeto cliente. Consulte o contrato do projeto e knowledge/projects/cliente/relatorios.md. Antes de alterar, identifique as entidades, permissões, rotas e fonte real de dados. Registre regras verificadas e dúvidas no documento do módulo. Teste o fluxo solicitado e seus estados de falha. Ao concluir, registre commit, ambiente, evidências, pendências e próxima ação em um checkpoint. Não transfira regras de outros produtos sem decisão explícita.\n\nInventário de entidades: Definição de relatório; filtros; escopo; colunas; geração; arquivo; agendamento.\nRegras a confirmar no código/contrato: Mesmos filtros entre tela/exportação; limite por tenant; fusos; precisão; jobs longos.\nFluxo para inspecionar: Definir escopo → pré-visualizar → gerar → baixar → registrar resultado.\nVerificações específicas: Dados vazios; grande volume; autorização; totais reconciliados; falha e repetição de job.\nO inventário é um roteiro, não aprovação de comportamento ainda não verificado.",
+      "maturity": "inventory-required",
+      "extensions": {}
+    }
+  ],
+  "contracts": [
+    {
+      "id": "frotak-governance",
+      "name": "Governança FrotaK",
+      "description": "Precedência, continuidade, verificação e autonomia dos produtos.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/global/governance.md"
+      ],
+      "rules": [
+        "Identificar projeto e módulo.",
+        "Preservar decisões e evidências.",
+        "Separar validação histórica e estado atual."
+      ],
+      "extensions": {}
+    },
+    {
+      "id": "frotak-visual",
+      "name": "Identidade visual FrotaK",
+      "description": "Marca, tokens, geometria, temas e padrões de interação.",
+      "scope": "global",
+      "status": "active",
+      "version": "1.0.0",
+      "tags": [],
+      "documents": [
+        "knowledge/global/visual.md",
+        "knowledge/legacy/brand/README.md",
+        "knowledge/legacy/brand/INTERIORS.md",
+        "knowledge/legacy/brand/brand-theme.css"
+      ],
+      "approval": "inherited-D-010-D-011-D-012",
+      "extensions": {}
+    }
+  ]
+}

@@ -40,11 +40,10 @@ export function Modal({
       <DialogContent
         className={`${SIZE[size]} max-h-[calc(100dvh-1rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] gap-0 overflow-hidden p-0`}
       >
-        <DialogHeader className="border-b border-border/80 bg-[linear-gradient(180deg,color-mix(in_oklch,var(--color-primary)_10%,transparent),transparent)] px-6 py-5">
-          <div className="mb-3 h-1 w-12 rounded-full bg-primary/75 shadow-none" />
-          <DialogTitle className="text-[18px] font-extrabold">{title}</DialogTitle>
+        <DialogHeader className="border-b border-border bg-popover px-6 py-5">
+          <DialogTitle className="text-[18px] font-medium tracking-normal">{title}</DialogTitle>
           {description && (
-            <DialogDescription className="font-sans text-[10px] font-semibold uppercase tracking-[0.18em]">
+            <DialogDescription className="font-sans text-xs leading-relaxed tracking-normal">
               {description}
             </DialogDescription>
           )}
@@ -53,7 +52,7 @@ export function Modal({
           {children}
         </div>
         {footer && (
-          <DialogFooter className="border-t border-border/80 bg-surface-2/90 px-4 py-4 shadow-[0_-12px_32px_rgb(0_0_0_/_0.14)] sm:px-6">
+          <DialogFooter className="border-t border-border bg-surface-2 px-4 py-4 sm:px-6">
             {footer}
           </DialogFooter>
         )}

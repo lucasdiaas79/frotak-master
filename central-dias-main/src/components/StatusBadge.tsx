@@ -22,7 +22,7 @@ export function StatusBadge({ status, full = false, className }: Props) {
   return (
     <span
       className={cn(
-        "inline-flex max-w-full items-center rounded-full border px-2.5 py-1 font-sans text-[10px] font-black uppercase leading-none tracking-[0.12em]",
+        "inline-flex max-w-full items-center rounded-full border px-2.5 py-1 font-sans text-[10px] font-semibold uppercase leading-none tracking-[0.08em]",
         WRAP_CLASS[tone],
         className,
       )}

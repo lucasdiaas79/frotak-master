@@ -998,7 +998,9 @@ export function AppLayout() {
         />
 
         <main className="flex-1 overflow-auto overscroll-contain pb-[calc(92px+env(safe-area-inset-bottom))] md:pb-0 md:pt-5">
-          <Outlet />
+          <div className="mx-auto w-full max-w-[1680px]">
+            <Outlet />
+          </div>
         </main>
 
         <nav className="glass fixed inset-x-3 bottom-3 z-40 grid h-[76px] grid-cols-6 rounded-[28px] border border-sidebar-border bg-sidebar/88 px-1.5 pb-[env(safe-area-inset-bottom)] text-sidebar-foreground shadow-[var(--shadow-strong)] ring-1 ring-white/8 md:hidden">

@@ -9,6 +9,7 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
+    "test:visual": "node --experimental-strip-types --test scripts/test-frotak-visual-contract.ts",
     "test:frotak-ai": "node --experimental-strip-types --test scripts/test-frotak-ai-intents.ts",
     "format": "prettier --write .",
     "check:production": "powershell -ExecutionPolicy Bypass -File .\\scripts\\check-production-alignment.ps1",
