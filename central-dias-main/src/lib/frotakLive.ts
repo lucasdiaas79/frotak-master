@@ -40,12 +40,12 @@ const OUTPUT_RATE = 24_000;
 const CAPTURE_CHUNK_SIZE = 4096;
 // Portao de ruido: so manda audio real para o Gemini quando ha voz sustentada. Ruido curto
 // (batida, porta, carro passando) vira silencio e nao interrompe nem faz a IA "ouvir".
-const GATE_MIN_RMS = 0.018;
-const GATE_NOISE_RATIO = 3.5;
-const GATE_SPEAKING_BOOST = 1.8;
-const GATE_ONSET_FRAMES = 6; // ~120 ms de voz seguida para abrir
+const GATE_MIN_RMS = 0.035;
+const GATE_NOISE_RATIO = 5;
+const GATE_SPEAKING_BOOST = 2.5;
+const GATE_ONSET_FRAMES = 10; // ~200 ms de voz seguida para abrir
 const GATE_HANGOVER_FRAMES = 35; // ~700 ms aberto depois da ultima fala
-const GATE_PREROLL_FRAMES = 12; // ~240 ms de atraso para nao cortar o inicio da palavra
+const GATE_PREROLL_FRAMES = 15; // ~300 ms de atraso para nao cortar o inicio da palavra
 const FACTUAL_FAIL_CLOSED_MESSAGE =
   "Nao foi possivel consultar os dados da Frotak neste momento. Tente novamente em instantes.";
 // Enviado uma vez quando a IA tenta responder um dado do tenant sem consultar as ferramentas.
