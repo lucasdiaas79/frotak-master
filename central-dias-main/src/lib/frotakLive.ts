@@ -37,7 +37,14 @@ const GEMINI_LIVE_WS =
 const INPUT_RATE = 16_000;
 const OUTPUT_RATE = 24_000;
 const CAPTURE_CHUNK_SIZE = 4096;
-const ACTIVITY_RMS_THRESHOLD = 0.01;
+// Portao de ruido: so manda audio real para o Gemini quando ha voz sustentada. Ruido curto
+// (batida, porta, carro passando) vira silencio e nao interrompe nem faz a IA "ouvir".
+const GATE_MIN_RMS = 0.018;
+const GATE_NOISE_RATIO = 3.5;
+const GATE_SPEAKING_BOOST = 1.8;
+const GATE_ONSET_FRAMES = 6; // ~120 ms de voz seguida para abrir
+const GATE_HANGOVER_FRAMES = 35; // ~700 ms aberto depois da ultima fala
+const GATE_PREROLL_FRAMES = 12; // ~240 ms de atraso para nao cortar o inicio da palavra
 const FACTUAL_FAIL_CLOSED_MESSAGE =
   "Nao foi possivel consultar os dados da Frotak neste momento. Tente novamente em instantes.";
 // Enviado uma vez quando a IA tenta responder um dado do tenant sem consultar as ferramentas.
@@ -229,6 +236,12 @@ export class FrotakLiveSession {
   private toolFailures = 0;
   private groundingRetried = false;
   private preToolAudioMs = 0;
+  private gateQueue: Float32Array[] = [];
+  private gateFrame = 0;
+  private gateOpenFrom = Number.POSITIVE_INFINITY;
+  private gateOpenUntil = -1;
+  private gateVoicedRun = 0;
+  private noiseFloor = 0.005;
   private cancelledToolCallIds = new Set<string>();
   private resolveReady: (() => void) | null = null;
   private rejectReady: ((error: Error) => void) | null = null;
@@ -277,6 +290,8 @@ export class FrotakLiveSession {
     if (this.closed || this.microphoneEnabled === enabled) return;
     this.microphoneEnabled = enabled;
     this.captureBuffer = [];
+    this.gateQueue = [];
+    this.gateVoicedRun = 0;
     this.stream?.getAudioTracks().forEach((track) => {
       track.enabled = enabled;
     });
@@ -419,19 +434,8 @@ export class FrotakLiveSession {
       ) {
         return;
       }
-      const input = event.data;
-      const rms = calculateRms(input);
-
-      if (rms > ACTIVITY_RMS_THRESHOLD) {
-        if (!this.speaking) this.options.onStatus?.("listening");
-        if (this.silenceTimer) window.clearTimeout(this.silenceTimer);
-        this.silenceTimer = window.setTimeout(() => {
-          if (!this.closed && !this.speaking && this.microphoneEnabled) {
-            this.options.onStatus?.("thinking");
-          }
-        }, 900);
-      }
-
+      const input = this.applyNoiseGate(event.data);
+      if (!input) return;
       this.captureBuffer.push(...input);
       if (this.captureBuffer.length < CAPTURE_CHUNK_SIZE) return;
 
@@ -476,6 +480,51 @@ export class FrotakLiveSession {
     this.groundingRequired = true;
     this.resetToolState();
     this.player.stopNow();
+  }
+
+  // Recebe um quadro de ~20 ms e devolve o quadro atrasado: audio real se faz parte de uma fala,
+  // silencio se for ruido.
+  private applyNoiseGate(frame: Float32Array) {
+    const rms = calculateRms(frame);
+    const threshold =
+      Math.max(GATE_MIN_RMS, this.noiseFloor * GATE_NOISE_RATIO) *
+      (this.speaking ? GATE_SPEAKING_BOOST : 1);
+    const index = this.gateFrame;
+    this.gateFrame += 1;
+
+    if (rms > threshold) {
+      this.gateVoicedRun += 1;
+      if (this.gateVoicedRun >= GATE_ONSET_FRAMES) {
+        if (index > this.gateOpenUntil) {
+          this.gateOpenFrom = index - GATE_ONSET_FRAMES - GATE_PREROLL_FRAMES + 1;
+        }
+        this.gateOpenUntil = index + GATE_HANGOVER_FRAMES;
+      }
+    } else {
+      this.gateVoicedRun = 0;
+      this.noiseFloor = this.noiseFloor * 0.97 + rms * 0.03;
+    }
+
+    const open = index <= this.gateOpenUntil && index >= this.gateOpenFrom;
+    if (open && !this.speaking) {
+      this.options.onStatus?.("listening");
+      if (this.silenceTimer) window.clearTimeout(this.silenceTimer);
+      this.silenceTimer = window.setTimeout(
+        () => {
+          if (!this.closed && !this.speaking && this.microphoneEnabled) {
+            this.options.onStatus?.("thinking");
+          }
+        },
+        (GATE_HANGOVER_FRAMES + GATE_PREROLL_FRAMES) * 20 + 300,
+      );
+    }
+
+    this.gateQueue.push(frame);
+    if (this.gateQueue.length <= GATE_PREROLL_FRAMES) return null;
+    const delayed = this.gateQueue.shift()!;
+    const delayedIndex = index - GATE_PREROLL_FRAMES;
+    const delayedOpen = delayedIndex >= this.gateOpenFrom && delayedIndex <= this.gateOpenUntil;
+    return delayedOpen ? delayed : new Float32Array(delayed.length);
   }
 
   private canPlayWaitingPhrase() {
