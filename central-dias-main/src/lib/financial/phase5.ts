@@ -15,6 +15,11 @@ function numberValue(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+// Month inputs use YYYY-MM; PostgreSQL date parameters require a day.
+function recurringMonthDate(value: string) {
+  return /^\d{4}-\d{2}$/.test(value) ? `${value}-01` : value;
+}
+
 function mapRule(row: Record<string, unknown>): FinancialRecurringRule {
   return {
     id: String(row.id),
@@ -102,7 +107,7 @@ export async function generateFinancialRecurringDocuments(
 ): Promise<FinancialRecurringGenerationResult> {
   const { data, error } = await supabase.rpc("generate_financial_recurring_documents", {
     p_workspace_id: workspaceId,
-    p_competence_month: competenceMonth,
+    p_competence_month: recurringMonthDate(competenceMonth),
     p_rule_id: ruleId ?? null,
   });
   fail("Nao foi possivel gerar os titulos recorrentes", error);
@@ -120,7 +125,7 @@ export async function generateDueFinancialRecurringDocuments(
 ): Promise<FinancialRecurringGenerationResult> {
   const { data, error } = await supabase.rpc("generate_due_financial_recurring_documents", {
     p_workspace_id: workspaceId,
-    p_until_month: untilMonth,
+    p_until_month: recurringMonthDate(untilMonth),
   });
   fail("Nao foi possivel atualizar os titulos recorrentes", error);
   const row = (data ?? {}) as Record<string, unknown>;
