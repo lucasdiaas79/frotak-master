@@ -1,0 +1,70 @@
+[
+  {
+    "status": "M",
+    "path": "central-dias-main/public/sw.js"
+  },
+  {
+    "status": "A",
+    "path": "central-dias-main/src/components/frotak/FrotakPushToggle.tsx"
+  },
+  {
+    "status": "M",
+    "path": "central-dias-main/src/lib/frotakAi.ts"
+  },
+  {
+    "status": "M",
+    "path": "central-dias-main/src/lib/frotakAiActions.ts"
+  },
+  {
+    "status": "M",
+    "path": "central-dias-main/src/lib/frotakAiAlerts.ts"
+  },
+  {
+    "status": "M",
+    "path": "central-dias-main/src/lib/frotakAiDeterministic.ts"
+  },
+  {
+    "status": "A",
+    "path": "central-dias-main/src/lib/frotakAiIdle.ts"
+  },
+  {
+    "status": "M",
+    "path": "central-dias-main/src/lib/frotakAiIntent.ts"
+  },
+  {
+    "status": "M",
+    "path": "central-dias-main/src/lib/frotakAiToolCatalog.ts"
+  },
+  {
+    "status": "M",
+    "path": "central-dias-main/src/lib/frotakAiTools.ts"
+  },
+  {
+    "status": "M",
+    "path": "central-dias-main/src/lib/frotakLive.ts"
+  },
+  {
+    "status": "A",
+    "path": "central-dias-main/src/lib/frotakPush.ts"
+  },
+  {
+    "status": "A",
+    "path": "central-dias-main/src/lib/webPush.ts"
+  },
+  {
+    "status": "M",
+    "path": "central-dias-main/src/routeTree.gen.ts"
+  },
+  {
+    "status": "A",
+    "path": "central-dias-main/src/routes/api/frotak-ia/push-dispatch.tsx"
+  },
+  {
+    "status": "M",
+    "path": "central-dias-main/src/routes/frotak-ia.tsx"
+  },
+  {
+    "status": "A",
+    "path": "supabase/migrations/202610150001_frotak_ia_push_subscriptions.sql"
+  }
+]

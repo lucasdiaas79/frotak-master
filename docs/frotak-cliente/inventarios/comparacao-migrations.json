@@ -1,0 +1,1126 @@
+[
+  {
+    "version": "20260806203332",
+    "name": "create_tenant_workspace_foundation",
+    "path": "supabase/migrations/20260806203332_create_tenant_workspace_foundation.sql",
+    "remoteSameVersion": {
+      "version": "20260806203332",
+      "name": "create_tenant_workspace_foundation"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260806203332",
+        "name": "create_tenant_workspace_foundation"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260806210115",
+    "name": "create_plan_module_entitlements",
+    "path": "supabase/migrations/20260806210115_create_plan_module_entitlements.sql",
+    "remoteSameVersion": {
+      "version": "20260806210115",
+      "name": "create_plan_module_entitlements"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260806210115",
+        "name": "create_plan_module_entitlements"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260806210116",
+    "name": "seed_initial_frotak_catalog",
+    "path": "supabase/migrations/20260806210116_seed_initial_frotak_catalog.sql",
+    "remoteSameVersion": {
+      "version": "20260806210116",
+      "name": "seed_initial_frotak_catalog"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260806210116",
+        "name": "seed_initial_frotak_catalog"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260806212813",
+    "name": "create_identity_rbac_foundation",
+    "path": "supabase/migrations/20260806212813_create_identity_rbac_foundation.sql",
+    "remoteSameVersion": {
+      "version": "20260806212813",
+      "name": "create_identity_rbac_foundation"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260806212813",
+        "name": "create_identity_rbac_foundation"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260806212814",
+    "name": "create_private_authorization_functions",
+    "path": "supabase/migrations/20260806212814_create_private_authorization_functions.sql",
+    "remoteSameVersion": {
+      "version": "20260806212814",
+      "name": "create_private_authorization_functions"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260806212814",
+        "name": "create_private_authorization_functions"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260806212815",
+    "name": "create_identity_read_policies",
+    "path": "supabase/migrations/20260806212815_create_identity_read_policies.sql",
+    "remoteSameVersion": {
+      "version": "20260806212815",
+      "name": "create_identity_read_policies"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260806212815",
+        "name": "create_identity_read_policies"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260806212816",
+    "name": "seed_initial_permission_catalog",
+    "path": "supabase/migrations/20260806212816_seed_initial_permission_catalog.sql",
+    "remoteSameVersion": {
+      "version": "20260806212816",
+      "name": "seed_initial_permission_catalog"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260806212816",
+        "name": "seed_initial_permission_catalog"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260806221200",
+    "name": "create_tenant_provisioning_rpc",
+    "path": "supabase/migrations/20260806221200_create_tenant_provisioning_rpc.sql",
+    "remoteSameVersion": {
+      "version": "20260806221200",
+      "name": "create_tenant_provisioning_rpc"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260806221200",
+        "name": "create_tenant_provisioning_rpc"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260807002500",
+    "name": "fix_provision_tenant_workspace_role_lookup",
+    "path": "supabase/migrations/20260807002500_fix_provision_tenant_workspace_role_lookup.sql",
+    "remoteSameVersion": {
+      "version": "20260807002500",
+      "name": "fix_provision_tenant_workspace_role_lookup"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260807002500",
+        "name": "fix_provision_tenant_workspace_role_lookup"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202608080001",
+    "name": "create_operational_fleet_schema",
+    "path": "supabase/migrations/202608080001_create_operational_fleet_schema.sql",
+    "remoteSameVersion": {
+      "version": "202608080001",
+      "name": "create_operational_fleet_schema"
+    },
+    "remoteSameName": [
+      {
+        "version": "202608080001",
+        "name": "create_operational_fleet_schema"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260811141000",
+    "name": "add_profile_sector",
+    "path": "supabase/migrations/20260811141000_add_profile_sector.sql",
+    "remoteSameVersion": {
+      "version": "20260811141000",
+      "name": "add_profile_sector"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260811141000",
+        "name": "add_profile_sector"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260818170000",
+    "name": "create_driver_app_integration",
+    "path": "supabase/migrations/20260818170000_create_driver_app_integration.sql",
+    "remoteSameVersion": {
+      "version": "20260818170000",
+      "name": "create_driver_app_integration"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260818170000",
+        "name": "create_driver_app_integration"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260819203000",
+    "name": "driver_app_password_setup",
+    "path": "supabase/migrations/20260819203000_driver_app_password_setup.sql",
+    "remoteSameVersion": {
+      "version": "20260819203000",
+      "name": "driver_app_password_setup"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260819203000",
+        "name": "driver_app_password_setup"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260820120000",
+    "name": "add_party_locations",
+    "path": "supabase/migrations/20260820120000_add_party_locations.sql",
+    "remoteSameVersion": {
+      "version": "20260820120000",
+      "name": "add_party_locations"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260820120000",
+        "name": "add_party_locations"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260820123000",
+    "name": "create_freight_expenses",
+    "path": "supabase/migrations/20260820123000_create_freight_expenses.sql",
+    "remoteSameVersion": {
+      "version": "20260820123000",
+      "name": "create_freight_expenses"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260820123000",
+        "name": "create_freight_expenses"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202608240001",
+    "name": "align_driver_app_with_kanban",
+    "path": "supabase/migrations/202608240001_align_driver_app_with_kanban.sql",
+    "remoteSameVersion": {
+      "version": "202608240001",
+      "name": "align_driver_app_with_kanban"
+    },
+    "remoteSameName": [
+      {
+        "version": "202608240001",
+        "name": "align_driver_app_with_kanban"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609010001",
+    "name": "financial_foundation_phase1",
+    "path": "supabase/migrations/202609010001_financial_foundation_phase1.sql",
+    "remoteSameVersion": {
+      "version": "202609010001",
+      "name": "financial_foundation_phase1"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609010001",
+        "name": "financial_foundation_phase1"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609010002",
+    "name": "financial_tenant_relationship_guards",
+    "path": "supabase/migrations/202609010002_financial_tenant_relationship_guards.sql",
+    "remoteSameVersion": {
+      "version": "202609010002",
+      "name": "financial_tenant_relationship_guards"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609010002",
+        "name": "financial_tenant_relationship_guards"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609010003",
+    "name": "financial_phase2_core",
+    "path": "supabase/migrations/202609010003_financial_phase2_core.sql",
+    "remoteSameVersion": {
+      "version": "202609010003",
+      "name": "financial_phase2_core"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609010003",
+        "name": "financial_phase2_core"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609010004",
+    "name": "financial_phase2_structure_editing",
+    "path": "supabase/migrations/202609010004_financial_phase2_structure_editing.sql",
+    "remoteSameVersion": {
+      "version": "202609010004",
+      "name": "financial_phase2_structure_editing"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609010004",
+        "name": "financial_phase2_structure_editing"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609030001",
+    "name": "financial_phase3_operational_integration",
+    "path": "supabase/migrations/202609030001_financial_phase3_operational_integration.sql",
+    "remoteSameVersion": {
+      "version": "202609030001",
+      "name": "financial_phase3_operational_integration"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609030001",
+        "name": "financial_phase3_operational_integration"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609030002",
+    "name": "financial_phase3_retry_refinement",
+    "path": "supabase/migrations/202609030002_financial_phase3_retry_refinement.sql",
+    "remoteSameVersion": {
+      "version": "202609030002",
+      "name": "financial_phase3_retry_refinement"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609030002",
+        "name": "financial_phase3_retry_refinement"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609030003",
+    "name": "financial_phase35_cif_fob",
+    "path": "supabase/migrations/202609030003_financial_phase35_cif_fob.sql",
+    "remoteSameVersion": {
+      "version": "202609030003",
+      "name": "financial_phase35_cif_fob"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609030003",
+        "name": "financial_phase35_cif_fob"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609030004",
+    "name": "financial_phase35_demo_sanitization",
+    "path": "supabase/migrations/202609030004_financial_phase35_demo_sanitization.sql",
+    "remoteSameVersion": {
+      "version": "202609030004",
+      "name": "financial_phase35_demo_sanitization"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609030004",
+        "name": "financial_phase35_demo_sanitization"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609030005",
+    "name": "financial_phase36_payment_terms",
+    "path": "supabase/migrations/202609030005_financial_phase36_payment_terms.sql",
+    "remoteSameVersion": {
+      "version": "202609030005",
+      "name": "financial_phase36_payment_terms"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609030005",
+        "name": "financial_phase36_payment_terms"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609030006",
+    "name": "financial_phase4_fleet_profitability",
+    "path": "supabase/migrations/202609030006_financial_phase4_fleet_profitability.sql",
+    "remoteSameVersion": {
+      "version": "202609030006",
+      "name": "financial_phase4_fleet_profitability"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609030006",
+        "name": "financial_phase4_fleet_profitability"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609030007",
+    "name": "financial_phase5_salaries_recurring",
+    "path": "supabase/migrations/202609030007_financial_phase5_salaries_recurring.sql",
+    "remoteSameVersion": {
+      "version": "202609030007",
+      "name": "financial_phase5_salaries_recurring"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609030007",
+        "name": "financial_phase5_salaries_recurring"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609030008",
+    "name": "financial_phase51_payroll_recurring_gaps",
+    "path": "supabase/migrations/202609030008_financial_phase51_payroll_recurring_gaps.sql",
+    "remoteSameVersion": {
+      "version": "202609030008",
+      "name": "financial_phase51_payroll_recurring_gaps"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609030008",
+        "name": "financial_phase51_payroll_recurring_gaps"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609030009",
+    "name": "financial_phase51_audit_fix",
+    "path": "supabase/migrations/202609030009_financial_phase51_audit_fix.sql",
+    "remoteSameVersion": {
+      "version": "202609030009",
+      "name": "financial_phase51_audit_fix"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609030009",
+        "name": "financial_phase51_audit_fix"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609030010",
+    "name": "financial_phase6_reports",
+    "path": "supabase/migrations/202609030010_financial_phase6_reports.sql",
+    "remoteSameVersion": {
+      "version": "202609030010",
+      "name": "financial_phase6_reports"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609030010",
+        "name": "financial_phase6_reports"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609030011",
+    "name": "financial_phase6_dashboard_alert_fix",
+    "path": "supabase/migrations/202609030011_financial_phase6_dashboard_alert_fix.sql",
+    "remoteSameVersion": {
+      "version": "202609030011",
+      "name": "financial_phase6_dashboard_alert_fix"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609030011",
+        "name": "financial_phase6_dashboard_alert_fix"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609030012",
+    "name": "financial_phase6_enable_financial_module",
+    "path": "supabase/migrations/202609030012_financial_phase6_enable_financial_module.sql",
+    "remoteSameVersion": {
+      "version": "202609030012",
+      "name": "financial_phase6_enable_financial_module"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609030012",
+        "name": "financial_phase6_enable_financial_module"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609030013",
+    "name": "financial_phase6_unallocated_residue_fix",
+    "path": "supabase/migrations/202609030013_financial_phase6_unallocated_residue_fix.sql",
+    "remoteSameVersion": {
+      "version": "202609030013",
+      "name": "financial_phase6_unallocated_residue_fix"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609030013",
+        "name": "financial_phase6_unallocated_residue_fix"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609080001",
+    "name": "driver_fuel_documents",
+    "path": "supabase/migrations/202609080001_driver_fuel_documents.sql",
+    "remoteSameVersion": {
+      "version": "202609080001",
+      "name": "driver_fuel_documents"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609080001",
+        "name": "driver_fuel_documents"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609090002",
+    "name": "driver_note_camera_flow",
+    "path": "supabase/migrations/202609090002_driver_note_camera_flow.sql",
+    "remoteSameVersion": {
+      "version": "202609090002",
+      "name": "driver_note_camera_flow"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609090002",
+        "name": "driver_note_camera_flow"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609090003",
+    "name": "freight_ton_pricing",
+    "path": "supabase/migrations/202609090003_freight_ton_pricing.sql",
+    "remoteSameVersion": {
+      "version": "202609090003",
+      "name": "freight_ton_pricing"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609090003",
+        "name": "freight_ton_pricing"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609090004",
+    "name": "driver_complete_return",
+    "path": "supabase/migrations/202609090004_driver_complete_return.sql",
+    "remoteSameVersion": {
+      "version": "202609090004",
+      "name": "driver_complete_return"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609090004",
+        "name": "driver_complete_return"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609100001",
+    "name": "financial_operational_auto_posting",
+    "path": "supabase/migrations/202609100001_financial_operational_auto_posting.sql",
+    "remoteSameVersion": {
+      "version": "202609100001",
+      "name": "financial_operational_auto_posting"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609100001",
+        "name": "financial_operational_auto_posting"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609100002",
+    "name": "freight_tax_rate_net_receivable",
+    "path": "supabase/migrations/202609100002_freight_tax_rate_net_receivable.sql",
+    "remoteSameVersion": {
+      "version": "202609100002",
+      "name": "freight_tax_rate_net_receivable"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609100002",
+        "name": "freight_tax_rate_net_receivable"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609110001",
+    "name": "drop_freight_tax_rpc_overload",
+    "path": "supabase/migrations/202609110001_drop_freight_tax_rpc_overload.sql",
+    "remoteSameVersion": {
+      "version": "202609110001",
+      "name": "drop_freight_tax_rpc_overload"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609110001",
+        "name": "drop_freight_tax_rpc_overload"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609140001",
+    "name": "driver_freight_cash_entries",
+    "path": "supabase/migrations/202609140001_driver_freight_cash_entries.sql",
+    "remoteSameVersion": {
+      "version": "202609140001",
+      "name": "driver_freight_cash_entries"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609140001",
+        "name": "driver_freight_cash_entries"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609170001",
+    "name": "driver_app_tenant_modes",
+    "path": "supabase/migrations/202609170001_driver_app_tenant_modes.sql",
+    "remoteSameVersion": {
+      "version": "202609170001",
+      "name": "driver_app_tenant_modes"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609170001",
+        "name": "driver_app_tenant_modes"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609170002",
+    "name": "driver_trip_cycles",
+    "path": "supabase/migrations/202609170002_driver_trip_cycles.sql",
+    "remoteSameVersion": {
+      "version": "202609170002",
+      "name": "driver_trip_cycles"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609170002",
+        "name": "driver_trip_cycles"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609170003",
+    "name": "driver_trip_cycle_driver_entries",
+    "path": "supabase/migrations/202609170003_driver_trip_cycle_driver_entries.sql",
+    "remoteSameVersion": {
+      "version": "202609170003",
+      "name": "driver_trip_cycle_driver_entries"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609170003",
+        "name": "driver_trip_cycle_driver_entries"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609170004",
+    "name": "driver_long_trip_context",
+    "path": "supabase/migrations/202609170004_driver_long_trip_context.sql",
+    "remoteSameVersion": {
+      "version": "202609170004",
+      "name": "driver_long_trip_context"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609170004",
+        "name": "driver_long_trip_context"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609170005",
+    "name": "jo_long_trip_queue",
+    "path": "supabase/migrations/202609170005_jo_long_trip_queue.sql",
+    "remoteSameVersion": {
+      "version": "202609170005",
+      "name": "jo_long_trip_queue"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609170005",
+        "name": "jo_long_trip_queue"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609210001",
+    "name": "auto_freight_icms_by_route",
+    "path": "supabase/migrations/202609210001_auto_freight_icms_by_route.sql",
+    "remoteSameVersion": {
+      "version": "202609210001",
+      "name": "auto_freight_icms_by_route"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609210001",
+        "name": "auto_freight_icms_by_route"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609240001",
+    "name": "financial_managerial_simplification",
+    "path": "supabase/migrations/202609240001_financial_managerial_simplification.sql",
+    "remoteSameVersion": {
+      "version": "202609240001",
+      "name": "financial_managerial_simplification"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609240001",
+        "name": "financial_managerial_simplification"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609240002",
+    "name": "financial_documents_paged_listing",
+    "path": "supabase/migrations/202609240002_financial_documents_paged_listing.sql",
+    "remoteSameVersion": {
+      "version": "202609240002",
+      "name": "financial_documents_paged_listing"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609240002",
+        "name": "financial_documents_paged_listing"
+      },
+      {
+        "version": "20260924224930",
+        "name": "financial_documents_paged_listing"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609240003",
+    "name": "settlement_adjustment_allocation_fallback",
+    "path": "supabase/migrations/202609240003_settlement_adjustment_allocation_fallback.sql",
+    "remoteSameVersion": {
+      "version": "202609240003",
+      "name": "settlement_adjustment_allocation_fallback"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609240003",
+        "name": "settlement_adjustment_allocation_fallback"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260924224930",
+    "name": "financial_documents_paged_listing_studio_record",
+    "path": "supabase/migrations/20260924224930_financial_documents_paged_listing_studio_record.sql",
+    "remoteSameVersion": {
+      "version": "20260924224930",
+      "name": "financial_documents_paged_listing"
+    },
+    "remoteSameName": [],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609250001",
+    "name": "settlement_adjustments_managerial_accounts",
+    "path": "supabase/migrations/202609250001_settlement_adjustments_managerial_accounts.sql",
+    "remoteSameVersion": {
+      "version": "202609250001",
+      "name": "settlement_adjustments_managerial_accounts"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609250001",
+        "name": "settlement_adjustments_managerial_accounts"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609250002",
+    "name": "frotak_dre_managerial_model",
+    "path": "supabase/migrations/202609250002_frotak_dre_managerial_model.sql",
+    "remoteSameVersion": {
+      "version": "202609250002",
+      "name": "frotak_dre_managerial_model"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609250002",
+        "name": "frotak_dre_managerial_model"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260925190858",
+    "name": "dre_12m_statement_basis_fix",
+    "path": "supabase/migrations/20260925190858_dre_12m_statement_basis_fix.sql",
+    "remoteSameVersion": {
+      "version": "20260925190858",
+      "name": "dre_12m_statement_basis_fix"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260925190858",
+        "name": "dre_12m_statement_basis_fix"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260928091642",
+    "name": "workspace_sascar_integrations",
+    "path": "supabase/migrations/20260928091642_workspace_sascar_integrations.sql",
+    "remoteSameVersion": {
+      "version": "20260928091642",
+      "name": "workspace_sascar_integrations"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260928091642",
+        "name": "workspace_sascar_integrations"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260928095010",
+    "name": "sascar_workspace_cron_dispatch",
+    "path": "supabase/migrations/20260928095010_sascar_workspace_cron_dispatch.sql",
+    "remoteSameVersion": {
+      "version": "20260928095010",
+      "name": "sascar_workspace_cron_dispatch"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260928095010",
+        "name": "sascar_workspace_cron_dispatch"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260928123000",
+    "name": "normalize_operational_managerial_accounts",
+    "path": "supabase/migrations/20260928123000_normalize_operational_managerial_accounts.sql",
+    "remoteSameVersion": {
+      "version": "20260928123000",
+      "name": "normalize_operational_managerial_accounts"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260928123000",
+        "name": "normalize_operational_managerial_accounts"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260928134500",
+    "name": "use_canonical_operational_managerial_accounts",
+    "path": "supabase/migrations/20260928134500_use_canonical_operational_managerial_accounts.sql",
+    "remoteSameVersion": {
+      "version": "20260928134500",
+      "name": "use_canonical_operational_managerial_accounts"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260928134500",
+        "name": "use_canonical_operational_managerial_accounts"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260928150000",
+    "name": "long_trip_closing_summary",
+    "path": "supabase/migrations/20260928150000_long_trip_closing_summary.sql",
+    "remoteSameVersion": {
+      "version": "20260928150000",
+      "name": "long_trip_closing_summary"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260928150000",
+        "name": "long_trip_closing_summary"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260928154946",
+    "name": "financial_integration_automatic_reconciliation",
+    "path": "supabase/migrations/20260928154946_financial_integration_automatic_reconciliation.sql",
+    "remoteSameVersion": {
+      "version": "20260928154946",
+      "name": "financial_integration_automatic_reconciliation"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260928154946",
+        "name": "financial_integration_automatic_reconciliation"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260928173312",
+    "name": "driver_station_cash_advances",
+    "path": "supabase/migrations/20260928173312_driver_station_cash_advances.sql",
+    "remoteSameVersion": {
+      "version": "20260928173312",
+      "name": "driver_station_cash_advances"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260928173312",
+        "name": "driver_station_cash_advances"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260928193200",
+    "name": "dre_period_and_vehicle_statement",
+    "path": "supabase/migrations/20260928193200_dre_period_and_vehicle_statement.sql",
+    "remoteSameVersion": {
+      "version": "20260928193200",
+      "name": "dre_period_and_vehicle_statement"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260928193200",
+        "name": "dre_period_and_vehicle_statement"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "20260929124319",
+    "name": "driver_long_trip_daily_allowances",
+    "path": "supabase/migrations/20260929124319_driver_long_trip_daily_allowances.sql",
+    "remoteSameVersion": {
+      "version": "20260929124319",
+      "name": "driver_long_trip_daily_allowances"
+    },
+    "remoteSameName": [
+      {
+        "version": "20260929124319",
+        "name": "driver_long_trip_daily_allowances"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609300001",
+    "name": "driver_cash_excludes_fuel",
+    "path": "supabase/migrations/202609300001_driver_cash_excludes_fuel.sql",
+    "remoteSameVersion": {
+      "version": "202609300001",
+      "name": "driver_cash_excludes_fuel"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609300001",
+        "name": "driver_cash_excludes_fuel"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609300002",
+    "name": "long_trip_return_and_next_status",
+    "path": "supabase/migrations/202609300002_long_trip_return_and_next_status.sql",
+    "remoteSameVersion": {
+      "version": "202609300002",
+      "name": "long_trip_return_and_next_status"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609300002",
+        "name": "long_trip_return_and_next_status"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609300003",
+    "name": "driver_app_file_access_fix",
+    "path": "supabase/migrations/202609300003_driver_app_file_access_fix.sql",
+    "remoteSameVersion": {
+      "version": "202609300003",
+      "name": "driver_app_file_access_fix"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609300003",
+        "name": "driver_app_file_access_fix"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609300004",
+    "name": "long_trip_fuel_efficiency",
+    "path": "supabase/migrations/202609300004_long_trip_fuel_efficiency.sql",
+    "remoteSameVersion": {
+      "version": "202609300004",
+      "name": "long_trip_fuel_efficiency"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609300004",
+        "name": "long_trip_fuel_efficiency"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609300005",
+    "name": "driver_long_trip_return_context",
+    "path": "supabase/migrations/202609300005_driver_long_trip_return_context.sql",
+    "remoteSameVersion": {
+      "version": "202609300005",
+      "name": "driver_long_trip_return_context"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609300005",
+        "name": "driver_long_trip_return_context"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202609300006",
+    "name": "realtime_sync_stabilization",
+    "path": "supabase/migrations/202609300006_realtime_sync_stabilization.sql",
+    "remoteSameVersion": {
+      "version": "202609300006",
+      "name": "realtime_sync_stabilization"
+    },
+    "remoteSameName": [
+      {
+        "version": "202609300006",
+        "name": "realtime_sync_stabilization"
+      }
+    ],
+    "status": "versao-presente-conferir-nome"
+  },
+  {
+    "version": "202610050001",
+    "name": "financial_settlement_batch_labels",
+    "path": "supabase/migrations/202610050001_financial_settlement_batch_labels.sql",
+    "remoteSameVersion": null,
+    "remoteSameName": [
+      {
+        "version": "20261005164813",
+        "name": "financial_settlement_batch_labels"
+      }
+    ],
+    "status": "nome-presente-com-versao-diferente"
+  },
+  {
+    "version": "202610150001",
+    "name": "frotak_ia_push_subscriptions",
+    "path": "supabase/migrations/202610150001_frotak_ia_push_subscriptions.sql",
+    "remoteSameVersion": null,
+    "remoteSameName": [],
+    "status": "ausente-no-projeto-consultado"
+  }
+]

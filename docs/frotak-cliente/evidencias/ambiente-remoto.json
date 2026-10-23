@@ -1,0 +1,331 @@
+{
+  "evidenceId": "EV-REMOTE-01",
+  "date": "2026-10-19",
+  "readOnly": true,
+  "deployment": {
+    "project": "central-dias",
+    "target": "production",
+    "id": "dpl_Mai8gd2SSRKk2UzWPvCV54n8pU4b",
+    "status": "READY",
+    "domain": "https://central-dias.vercel.app",
+    "sha": "974adae7cde3b1d02eec09fb7abf2b065df3a153",
+    "branch": "main",
+    "localSha": "9acb0592f57db6299594035b1a17e4c0160a67af",
+    "matchesLocal": false,
+    "source": "Vercel CLI inspect + GET deployment; MCP indisponivel por escopo 403"
+  },
+  "database": {
+    "project": "Frotak",
+    "ref": "ujssyufhyvxfpfkwxdux",
+    "source": "link CLI local + projeto correspondente no Supabase MCP",
+    "migrations": [
+      {
+        "version": "20260806203332",
+        "name": "create_tenant_workspace_foundation"
+      },
+      {
+        "version": "20260806210115",
+        "name": "create_plan_module_entitlements"
+      },
+      {
+        "version": "20260806210116",
+        "name": "seed_initial_frotak_catalog"
+      },
+      {
+        "version": "20260806212813",
+        "name": "create_identity_rbac_foundation"
+      },
+      {
+        "version": "20260806212814",
+        "name": "create_private_authorization_functions"
+      },
+      {
+        "version": "20260806212815",
+        "name": "create_identity_read_policies"
+      },
+      {
+        "version": "20260806212816",
+        "name": "seed_initial_permission_catalog"
+      },
+      {
+        "version": "20260806221200",
+        "name": "create_tenant_provisioning_rpc"
+      },
+      {
+        "version": "20260807002500",
+        "name": "fix_provision_tenant_workspace_role_lookup"
+      },
+      {
+        "version": "202608080001",
+        "name": "create_operational_fleet_schema"
+      },
+      {
+        "version": "20260811141000",
+        "name": "add_profile_sector"
+      },
+      {
+        "version": "20260818170000",
+        "name": "create_driver_app_integration"
+      },
+      {
+        "version": "20260819203000",
+        "name": "driver_app_password_setup"
+      },
+      {
+        "version": "20260820120000",
+        "name": "add_party_locations"
+      },
+      {
+        "version": "20260820123000",
+        "name": "create_freight_expenses"
+      },
+      {
+        "version": "202608240001",
+        "name": "align_driver_app_with_kanban"
+      },
+      {
+        "version": "202609010001",
+        "name": "financial_foundation_phase1"
+      },
+      {
+        "version": "202609010002",
+        "name": "financial_tenant_relationship_guards"
+      },
+      {
+        "version": "202609010003",
+        "name": "financial_phase2_core"
+      },
+      {
+        "version": "202609010004",
+        "name": "financial_phase2_structure_editing"
+      },
+      {
+        "version": "202609030001",
+        "name": "financial_phase3_operational_integration"
+      },
+      {
+        "version": "202609030002",
+        "name": "financial_phase3_retry_refinement"
+      },
+      {
+        "version": "202609030003",
+        "name": "financial_phase35_cif_fob"
+      },
+      {
+        "version": "202609030004",
+        "name": "financial_phase35_demo_sanitization"
+      },
+      {
+        "version": "202609030005",
+        "name": "financial_phase36_payment_terms"
+      },
+      {
+        "version": "202609030006",
+        "name": "financial_phase4_fleet_profitability"
+      },
+      {
+        "version": "202609030007",
+        "name": "financial_phase5_salaries_recurring"
+      },
+      {
+        "version": "202609030008",
+        "name": "financial_phase51_payroll_recurring_gaps"
+      },
+      {
+        "version": "202609030009",
+        "name": "financial_phase51_audit_fix"
+      },
+      {
+        "version": "202609030010",
+        "name": "financial_phase6_reports"
+      },
+      {
+        "version": "202609030011",
+        "name": "financial_phase6_dashboard_alert_fix"
+      },
+      {
+        "version": "202609030012",
+        "name": "financial_phase6_enable_financial_module"
+      },
+      {
+        "version": "202609030013",
+        "name": "financial_phase6_unallocated_residue_fix"
+      },
+      {
+        "version": "202609080001",
+        "name": "driver_fuel_documents"
+      },
+      {
+        "version": "202609090002",
+        "name": "driver_note_camera_flow"
+      },
+      {
+        "version": "202609090003",
+        "name": "freight_ton_pricing"
+      },
+      {
+        "version": "202609090004",
+        "name": "driver_complete_return"
+      },
+      {
+        "version": "202609100001",
+        "name": "financial_operational_auto_posting"
+      },
+      {
+        "version": "202609100002",
+        "name": "freight_tax_rate_net_receivable"
+      },
+      {
+        "version": "202609110001",
+        "name": "drop_freight_tax_rpc_overload"
+      },
+      {
+        "version": "202609140001",
+        "name": "driver_freight_cash_entries"
+      },
+      {
+        "version": "202609170001",
+        "name": "driver_app_tenant_modes"
+      },
+      {
+        "version": "202609170002",
+        "name": "driver_trip_cycles"
+      },
+      {
+        "version": "202609170003",
+        "name": "driver_trip_cycle_driver_entries"
+      },
+      {
+        "version": "202609170004",
+        "name": "driver_long_trip_context"
+      },
+      {
+        "version": "202609170005",
+        "name": "jo_long_trip_queue"
+      },
+      {
+        "version": "202609210001",
+        "name": "auto_freight_icms_by_route"
+      },
+      {
+        "version": "202609240001",
+        "name": "financial_managerial_simplification"
+      },
+      {
+        "version": "202609240002",
+        "name": "financial_documents_paged_listing"
+      },
+      {
+        "version": "202609240003",
+        "name": "settlement_adjustment_allocation_fallback"
+      },
+      {
+        "version": "20260924224930",
+        "name": "financial_documents_paged_listing"
+      },
+      {
+        "version": "202609250001",
+        "name": "settlement_adjustments_managerial_accounts"
+      },
+      {
+        "version": "202609250002",
+        "name": "frotak_dre_managerial_model"
+      },
+      {
+        "version": "20260925190858",
+        "name": "dre_12m_statement_basis_fix"
+      },
+      {
+        "version": "20260928091642",
+        "name": "workspace_sascar_integrations"
+      },
+      {
+        "version": "20260928095010",
+        "name": "sascar_workspace_cron_dispatch"
+      },
+      {
+        "version": "20260928123000",
+        "name": "normalize_operational_managerial_accounts"
+      },
+      {
+        "version": "20260928134500",
+        "name": "use_canonical_operational_managerial_accounts"
+      },
+      {
+        "version": "20260928150000",
+        "name": "long_trip_closing_summary"
+      },
+      {
+        "version": "20260928154946",
+        "name": "financial_integration_automatic_reconciliation"
+      },
+      {
+        "version": "20260928173312",
+        "name": "driver_station_cash_advances"
+      },
+      {
+        "version": "20260928193200",
+        "name": "dre_period_and_vehicle_statement"
+      },
+      {
+        "version": "20260929124319",
+        "name": "driver_long_trip_daily_allowances"
+      },
+      {
+        "version": "202609300001",
+        "name": "driver_cash_excludes_fuel"
+      },
+      {
+        "version": "202609300002",
+        "name": "long_trip_return_and_next_status"
+      },
+      {
+        "version": "202609300003",
+        "name": "driver_app_file_access_fix"
+      },
+      {
+        "version": "202609300004",
+        "name": "long_trip_fuel_efficiency"
+      },
+      {
+        "version": "202609300005",
+        "name": "driver_long_trip_return_context"
+      },
+      {
+        "version": "202609300006",
+        "name": "realtime_sync_stabilization"
+      },
+      {
+        "version": "20261005164813",
+        "name": "financial_settlement_batch_labels"
+      }
+    ],
+    "jobs": [
+      {
+        "jobname": "financial-integrations-every-5-minutes",
+        "schedule": "*/5 * * * *",
+        "active": true
+      },
+      {
+        "jobname": "financial-recurring-daily",
+        "schedule": "15 3 * * *",
+        "active": true
+      },
+      {
+        "jobname": "sascar-sync-every-minute",
+        "schedule": "* * * * *",
+        "active": true
+      },
+      {
+        "jobname": "vehicle-positions-retention-hourly",
+        "schedule": "7 * * * *",
+        "active": true
+      }
+    ],
+    "limitations": [
+      "Metadados consultados sem linhas de negocio/Auth.",
+      "Status ativo de job nao comprova execucao ou integracao bem-sucedida.",
+      "Vinculo CLI nao prova sozinho que todo deployment use o mesmo banco."
+    ]
+  }
+}

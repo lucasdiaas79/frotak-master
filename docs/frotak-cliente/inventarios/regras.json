@@ -1,0 +1,188 @@
+[
+  {
+    "id": "RULE-AUTH",
+    "document": "modulos/acesso-administracao.md",
+    "section": "MOD-ACCESS",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-USERS",
+    "document": "modulos/acesso-administracao.md",
+    "section": "MOD-USERS",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-DRIVER-ACCESS",
+    "document": "modulos/acesso-administracao.md",
+    "section": "MOD-DRIVER-ACCESS",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-CRUD",
+    "document": "modulos/cadastros.md",
+    "section": "Cadastros",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-STAGE",
+    "document": "modulos/operacao.md",
+    "section": "RULE-STAGE",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-CREATE",
+    "document": "modulos/operacao.md",
+    "section": "RULE-CREATE",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-ASSET",
+    "document": "modulos/operacao.md",
+    "section": "RULE-ASSET",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-ICMS",
+    "document": "modulos/operacao.md",
+    "section": "RULE-ICMS",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-DOCUMENT",
+    "document": "modulos/operacao.md",
+    "section": "FLOW-DOC",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-MANUAL",
+    "document": "modulos/operacao.md",
+    "section": "FLOW-MANUAL",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-RETURN",
+    "document": "modulos/operacao.md",
+    "section": "FLOW-END",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-HISTORY",
+    "document": "modulos/consultas-consumo.md",
+    "section": "MOD-HISTORY",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-KML-INTERVAL",
+    "document": "modulos/consultas-consumo.md",
+    "section": "RULE-KML-INTERVAL",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-KML-CYCLE",
+    "document": "modulos/consultas-consumo.md",
+    "section": "RULE-KML-CYCLE",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-CASH",
+    "document": "modulos/consultas-consumo.md",
+    "section": "RULE-CASH",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-SASCAR",
+    "document": "modulos/consultas-consumo.md",
+    "section": "MOD-MAP",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-FIN-ACCESS",
+    "document": "dados-permissoes.md",
+    "section": "AUTHZ-02",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-FIN-SETTLE",
+    "document": "modulos/financeiro.md",
+    "section": "FLOW-SETTLE",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-FIN-BULK",
+    "document": "modulos/financeiro.md",
+    "section": "FLOW-BULK",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-FIN-REPORT",
+    "document": "modulos/financeiro.md",
+    "section": "MOD-FIN-DRE",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-FIN-RECUR",
+    "document": "modulos/financeiro.md",
+    "section": "MOD-FIN-RECUR",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-FIN-PAYROLL",
+    "document": "modulos/financeiro.md",
+    "section": "MOD-FIN-PAYROLL",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-ALLOWANCE",
+    "document": "modulos/financeiro.md",
+    "section": "MOD-ALLOWANCE",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-AI-SCOPE",
+    "document": "modulos/ia-suporte.md",
+    "section": "RULE-AI-SCOPE",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-AI-ACTION",
+    "document": "modulos/ia-suporte.md",
+    "section": "FLOW-AI-ACTION",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-AI-VOICE",
+    "document": "modulos/ia-suporte.md",
+    "section": "MOD-AI-VOICE",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-SUPPORT",
+    "document": "modulos/ia-suporte.md",
+    "section": "MOD-SUPPORT",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-UI",
+    "document": "padroes.md",
+    "section": "UI-01",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-IDLE",
+    "document": "versao-publicada.md",
+    "section": "MOD-IDLE",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-PUSH",
+    "document": "versao-publicada.md",
+    "section": "MOD-PUSH",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  },
+  {
+    "id": "RULE-LIVE-DELTA",
+    "document": "versao-publicada.md",
+    "section": "MOD-LIVE-DELTA",
+    "evidence": "COD; OBS/TEST apenas quando explicitamente apontados no modulo ou evidencias"
+  }
+]

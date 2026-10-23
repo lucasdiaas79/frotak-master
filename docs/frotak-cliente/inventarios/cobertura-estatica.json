@@ -1,0 +1,24 @@
+{
+  "revision": "9acb0592f57db6299594035b1a17e4c0160a67af",
+  "date": "2026-10-19",
+  "sourceFiles": 154,
+  "routes": 33,
+  "controls": 1047,
+  "surfaces": 70,
+  "symbols": 2567,
+  "dataCalls": 263,
+  "effects": 67,
+  "typeDeclarations": 292,
+  "migrations": 70,
+  "sqlDeclarations": 836,
+  "columnDeclarations": 828,
+  "relationDeclarations": 300,
+  "testFiles": 3,
+  "limitations": [
+    "AST nao e runtime; controles dinamicos podem gerar varios itens ou nenhum.",
+    "SQL e inventario lexical historico, nao dump de schema aplicado; blocos condicionais, SQL dinamico, redefinicoes e drops exigem leitura humana.",
+    "Nao foram lidos valores de ambiente nem dados de usuarios pelo gerador.",
+    "IDs estaveis por arquivo/contexto/tipo/rotulo; ocorrencias duplicadas usam ordinal, nao linha.",
+    "Matriz CTL -> GRP e candidata por componente; nao implica validacao semantica individual, OBS ou TEST."
+  ]
+}

@@ -1,0 +1,453 @@
+[
+  {
+    "surfaceId": "SUP-f1c4b10f461f",
+    "status": "OBS-variante-especifica",
+    "evidence": [
+      "EV-SUP-21"
+    ],
+    "limitation": "Apenas variantes explicitadas em evidencias/navegacao.md; nao todos os estados/edicoes."
+  },
+  {
+    "surfaceId": "SUP-bc928bc673c8",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-57e4c33520a7",
+    "status": "OBS-variante-especifica",
+    "evidence": [
+      "EV-SUP-06"
+    ],
+    "limitation": "Apenas variantes explicitadas em evidencias/navegacao.md; nao todos os estados/edicoes."
+  },
+  {
+    "surfaceId": "SUP-1309568029c3",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-55e0cad53e12",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-5f4b59900dd3",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-1d70fc03dd73",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-55d06b3330a5",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-e534f279e6dd",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-599289f98e21",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-1dc8d0ea5cc3",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-5d67b7ca4546",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-61cdbe2fb7d4",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-10b3de5a5a38",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-6cfaef5eede8",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-9a0e2802e8ba",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-e5b52d0e91b5",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-fa516cb3ef5a",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-6d5e4b7b22db",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-1190919c30cd",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-f0cc8535ed52",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-d5b645d0e010",
+    "status": "OBS-variante-especifica",
+    "evidence": [
+      "EV-SUP-14"
+    ],
+    "limitation": "Apenas variantes explicitadas em evidencias/navegacao.md; nao todos os estados/edicoes."
+  },
+  {
+    "surfaceId": "SUP-2326c2dbd1f9",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-7204515b44b6",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-595645ace353",
+    "status": "OBS-variante-especifica",
+    "evidence": [
+      "EV-SUP-13"
+    ],
+    "limitation": "Apenas variantes explicitadas em evidencias/navegacao.md; nao todos os estados/edicoes."
+  },
+  {
+    "surfaceId": "SUP-bf96608a310d",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-55bce2e85ed5",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-b27d8cb7fa1a",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-40751caa6cff",
+    "status": "OBS-variante-especifica",
+    "evidence": [
+      "EV-SUP-10"
+    ],
+    "limitation": "Apenas variantes explicitadas em evidencias/navegacao.md; nao todos os estados/edicoes."
+  },
+  {
+    "surfaceId": "SUP-8269acfc9bba",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-83e3f48277ad",
+    "status": "OBS-variante-especifica",
+    "evidence": [
+      "EV-SUP-11",
+      "EV-SUP-12"
+    ],
+    "limitation": "Apenas variantes explicitadas em evidencias/navegacao.md; nao todos os estados/edicoes."
+  },
+  {
+    "surfaceId": "SUP-9351ae51bbb2",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-2bbdfa89de05",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-4f37d9106b65",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-077f0d4c296b",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-95f5fe9a6893",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-c6f710eb5ee5",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-3debd92e212b",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-e6b5d7e16c99",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-8cdb77bd591c",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-a22aa75a391d",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-17f20ca1f543",
+    "status": "OBS-variante-especifica",
+    "evidence": [
+      "EV-SUP-07"
+    ],
+    "limitation": "Apenas variantes explicitadas em evidencias/navegacao.md; nao todos os estados/edicoes."
+  },
+  {
+    "surfaceId": "SUP-c02b50928f7c",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-0039e984fe3f",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-8f6e1b167095",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-de58c1b1e7bf",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-edb0c034de7d",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-962e6ad667af",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-3697b751e5ee",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-6e3803b85dcb",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-8320102ecc6c",
+    "status": "OBS-variante-especifica",
+    "evidence": [
+      "EV-SUP-08"
+    ],
+    "limitation": "Apenas variantes explicitadas em evidencias/navegacao.md; nao todos os estados/edicoes."
+  },
+  {
+    "surfaceId": "SUP-6ad363a677c1",
+    "status": "OBS-variante-especifica",
+    "evidence": [
+      "EV-SUP-17"
+    ],
+    "limitation": "Apenas variantes explicitadas em evidencias/navegacao.md; nao todos os estados/edicoes."
+  },
+  {
+    "surfaceId": "SUP-14358a94d5c4",
+    "status": "OBS-variante-especifica",
+    "evidence": [
+      "EV-SUP-01",
+      "EV-SUP-02",
+      "EV-SUP-03"
+    ],
+    "limitation": "Apenas variantes explicitadas em evidencias/navegacao.md; nao todos os estados/edicoes."
+  },
+  {
+    "surfaceId": "SUP-e2a7e859bc25",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-0fd590872d3e",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-fbfb4bf1801e",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-4d88d7760332",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-e72fec6baa4d",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-a1675a2e0ed7",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-9c35bc35b703",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-823ad7301af1",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-c224590f2517",
+    "status": "OBS-variante-especifica",
+    "evidence": [
+      "EV-SUP-18"
+    ],
+    "limitation": "Apenas variantes explicitadas em evidencias/navegacao.md; nao todos os estados/edicoes."
+  },
+  {
+    "surfaceId": "SUP-75a70f60d486",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-170ba7828db7",
+    "status": "OBS-variante-especifica",
+    "evidence": [
+      "EV-SUP-05"
+    ],
+    "limitation": "Apenas variantes explicitadas em evidencias/navegacao.md; nao todos os estados/edicoes."
+  },
+  {
+    "surfaceId": "SUP-f677f68cbe01",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-a1292291461d",
+    "status": "OBS-variante-especifica",
+    "evidence": [
+      "EV-SUP-15"
+    ],
+    "limitation": "Apenas variantes explicitadas em evidencias/navegacao.md; nao todos os estados/edicoes."
+  },
+  {
+    "surfaceId": "SUP-03516b7f9a26",
+    "status": "COD-wrapper",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-337d4f6c2ef5",
+    "status": "OBS-variante-especifica",
+    "evidence": [
+      "EV-SUP-04"
+    ],
+    "limitation": "Apenas variantes explicitadas em evidencias/navegacao.md; nao todos os estados/edicoes."
+  },
+  {
+    "surfaceId": "SUP-d3744a4719ef",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  },
+  {
+    "surfaceId": "SUP-14a85cb9eb24",
+    "status": "COD-NE",
+    "evidence": [],
+    "limitation": "Implementacao inventariada; abertura nao certificada. Restricao de browser ou condicao de perfil/registro."
+  }
+]

@@ -1,0 +1,240 @@
+[
+  {
+    "routeId": "ROT-0b421559d70a",
+    "route": "/abastecimentos",
+    "evidence": "EV-NAV-07",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-4ebb9a082e70",
+    "route": "/api/frotak-ia/push-dispatch",
+    "evidence": null,
+    "status": "NE-API",
+    "limitation": "Endpoint mutavel; nao chamado."
+  },
+  {
+    "routeId": "ROT-9fb47dfddeb5",
+    "route": "/api/sascar/sync",
+    "evidence": null,
+    "status": "NE-API",
+    "limitation": "Endpoint mutavel; nao chamado."
+  },
+  {
+    "routeId": "ROT-a96895c539fd",
+    "route": "/carretas",
+    "evidence": "EV-NAV-04",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-6c7bfedca7f2",
+    "route": "/clientes",
+    "evidence": "EV-NAV-05",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-7fcb5cb5244d",
+    "route": "/destinatarios",
+    "evidence": "EV-NAV-25",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-ae8abd1e87f3",
+    "route": "/financeiro/centros-custo",
+    "evidence": "EV-NAV-21",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-a515cadaa6d6",
+    "route": "/financeiro/contas-pagar",
+    "evidence": null,
+    "status": "BLQ-NAV-TITLES",
+    "limitation": "Montagem pode gerar titulos reais automaticamente."
+  },
+  {
+    "routeId": "ROT-e2e7f90708b1",
+    "route": "/financeiro/contas-receber",
+    "evidence": null,
+    "status": "BLQ-NAV-TITLES",
+    "limitation": "Montagem pode gerar titulos reais automaticamente."
+  },
+  {
+    "routeId": "ROT-5d83e297c8ae",
+    "route": "/financeiro/contas",
+    "evidence": "EV-NAV-17",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-9770cd529bb2",
+    "route": "/financeiro/dre",
+    "evidence": "EV-NAV-15",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-fc3be1323c4f",
+    "route": "/financeiro/fluxo-caixa",
+    "evidence": "EV-NAV-14",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-46a04e1f2dbb",
+    "route": "/financeiro/",
+    "evidence": "EV-NAV-13",
+    "status": "OBS-index-compartilhado",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-4994fd614737",
+    "route": "/financeiro/pagar",
+    "evidence": null,
+    "status": "BLQ-NAV-TITLES",
+    "limitation": "Montagem pode gerar titulos reais automaticamente."
+  },
+  {
+    "routeId": "ROT-23976e88f1f9",
+    "route": "/financeiro/plano-contas",
+    "evidence": "EV-NAV-20",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-44d57fce79d9",
+    "route": "/financeiro/receber",
+    "evidence": null,
+    "status": "BLQ-NAV-TITLES",
+    "limitation": "Montagem pode gerar titulos reais automaticamente."
+  },
+  {
+    "routeId": "ROT-e88b980caa14",
+    "route": "/financeiro/recorrencias",
+    "evidence": "EV-NAV-19",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-678d08625a0b",
+    "route": "/financeiro/rentabilidade",
+    "evidence": "EV-NAV-16",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-5dac6ac9767f",
+    "route": "/financeiro/salarios",
+    "evidence": "EV-NAV-18",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-1038802d8bda",
+    "route": "/financeiro",
+    "evidence": "EV-NAV-13",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-26e7b1b039bb",
+    "route": "/frotak-ia",
+    "evidence": "EV-NAV-10",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-c19ce1aafe59",
+    "route": "/gestao-frota",
+    "evidence": "EV-NAV-00",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-0f39c238e1a7",
+    "route": "/historicos",
+    "evidence": "EV-NAV-08",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-8a5edab28263",
+    "route": "/",
+    "evidence": "EV-NAV-01",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-7e93fba0bc7a",
+    "route": "/login",
+    "evidence": "EV-NAV-26",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-ea2d0359e2e7",
+    "route": "/lucros-despesas",
+    "evidence": "EV-NAV-22",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-0b93b942ccf0",
+    "route": "/manual",
+    "evidence": "EV-NAV-11",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-b7250d3cb7e1",
+    "route": "/mapa",
+    "evidence": "EV-NAV-09",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-8ac8b5b8b4b1",
+    "route": "/motoristas",
+    "evidence": "EV-NAV-03",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-6d1fc97945a1",
+    "route": "/produtos",
+    "evidence": "EV-NAV-06",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-c30d824d2afe",
+    "route": "/remetentes",
+    "evidence": "EV-NAV-24",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-2351ecfd1b46",
+    "route": "/usuarios",
+    "evidence": "EV-NAV-12",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-75ab7b5d76a1",
+    "route": "/veiculos",
+    "evidence": "EV-NAV-02",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  },
+  {
+    "routeId": "ROT-2eac8ef6b38c",
+    "route": "/vinculacao",
+    "evidence": "EV-NAV-23",
+    "status": "OBS-interface",
+    "limitation": "OBS nao comprova acao de negocio, todos os estados ou perfis."
+  }
+]
