@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { assertWorkspaceModule, isModuleDisabledError } from "@/lib/entitlements";
 import { runSascarSync, type SascarSyncInput } from "../../../../server/lib/sascar-sync.ts";
 import { getSupabaseAdmin } from "../../../../server/lib/supabase-admin.ts";
 
@@ -115,6 +116,9 @@ export const Route = createFileRoute("/api/sascar/sync")({
           if (!hasCronToken(request)) {
             await validateWorkspaceMembership(request, body.workspaceId);
           }
+          if (body.workspaceId) {
+            await assertWorkspaceModule(getSupabaseAdmin(), body.workspaceId, "frotak_tracking");
+          }
           const result = await runSascarSync(body);
           return jsonResponse(result);
         } catch (error) {
@@ -123,7 +127,9 @@ export const Route = createFileRoute("/api/sascar/sync")({
           const status =
             message === "UNAUTHORIZED"
               ? 401
-              : message === "WORKSPACE_REQUIRED" || message === "WORKSPACE_FORBIDDEN"
+              : message === "WORKSPACE_REQUIRED" ||
+                  message === "WORKSPACE_FORBIDDEN" ||
+                  isModuleDisabledError(error)
                 ? 403
                 : message.includes("ja esta em andamento")
                   ? 202
@@ -138,7 +144,9 @@ export const Route = createFileRoute("/api/sascar/sync")({
               message:
                 status === 401
                   ? "Unauthorized"
-                  : message || "Erro ao sincronizar Sascar.",
+                  : isModuleDisabledError(error)
+                    ? "Rastreadores nao liberados para esta empresa."
+                    : message || "Erro ao sincronizar Sascar.",
             },
             { status },
           );

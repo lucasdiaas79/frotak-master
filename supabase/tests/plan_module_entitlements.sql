@@ -17,8 +17,9 @@ begin
   end if;
 
   select count(*) into v_count from public.modules;
-  if v_count <> 5 then
-    raise exception 'Expected seed to contain exactly 5 modules, found %', v_count;
+  -- 202610310001 adiciona driver_app ao catalogo inicial.
+  if v_count <> 6 then
+    raise exception 'Expected seed to contain exactly 6 modules, found %', v_count;
   end if;
 
   select count(*) into v_count from public.plan_modules;

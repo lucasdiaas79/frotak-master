@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
+import { assertWorkspaceModule, isModuleDisabledError } from "@/lib/entitlements";
 
 export type CreateDriverAppAccessInput = {
   accessToken: string;
@@ -68,15 +69,24 @@ async function assertOwnerCanManageDriver(input: {
     .eq("is_owner", true);
   if (membershipError) throw membershipError;
 
-  const allowed = (memberships ?? []).some((membership) => {
+  const ownerMembership = (memberships ?? []).find((membership) => {
     const workspace = Array.isArray(membership.workspaces)
       ? membership.workspaces[0]
       : membership.workspaces;
     return workspace?.tenant_id === driver.tenant_id && workspace?.status === "active";
   });
 
-  if (!allowed) {
+  if (!ownerMembership) {
     throw new Error("Apenas o owner do tenant pode criar acesso de motorista.");
+  }
+
+  try {
+    await assertWorkspaceModule(input.supabase, ownerMembership.workspace_id, "driver_app");
+  } catch (error) {
+    if (isModuleDisabledError(error)) {
+      throw new Error("O App Motorista nao esta liberado para a sua empresa. Fale com a FrotaK.");
+    }
+    throw error;
   }
 
   return {

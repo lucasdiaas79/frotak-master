@@ -13,6 +13,7 @@ import {
   Landmark,
   LayoutDashboard,
   ListChecks,
+  Lock,
   LogOut,
   Map as MapIcon,
   Menu,
@@ -49,6 +50,20 @@ import type { FinancialAccess } from "@/lib/financial/types";
 import { vehicleTrailerLabel } from "@/lib/vehicle-trailers";
 import { perfCount, perfStart } from "@/lib/performance";
 import { hasSupabaseConfig, supabase } from "@/lib/supabase";
+import {
+  MODULE_LABELS,
+  hasTmsAccess,
+  isAlwaysAvailablePath,
+  isModuleEnabled,
+  isTenantActive,
+  moduleForPath,
+  type WorkspaceEntitlements,
+} from "@/lib/entitlements";
+import {
+  clearWorkspaceEntitlementsCache,
+  getWorkspaceEntitlements,
+} from "@/lib/entitlementsAccess";
+import { FrotakEmptyState, FrotakPage } from "@/components/frotak/FrotakPage";
 import logoCentral from "@/assets/logo-central.png";
 import faviconCentral from "@/assets/favicon.png";
 
@@ -145,6 +160,52 @@ const FINANCIAL_NAV: NavItem[] = [
 
 function financialNavFor(access: FinancialAccess | null) {
   return access?.canView ? FINANCIAL_NAV : [];
+}
+
+function operationalNavFor(entitlements: WorkspaceEntitlements | null) {
+  return OPERACIONAL.filter((item) => isModuleEnabled(entitlements, moduleForPath(item.to)));
+}
+
+/** Sem TMS, com o cliente suspenso ou sem o modulo base, o menu fica so com a Ajuda. */
+function canUseFleet(entitlements: WorkspaceEntitlements | null) {
+  return (
+    isTenantActive(entitlements) &&
+    hasTmsAccess(entitlements) &&
+    isModuleEnabled(entitlements, "fleet_core")
+  );
+}
+
+function canSeeFinancial(
+  access: FinancialAccess | null,
+  entitlements: WorkspaceEntitlements | null,
+) {
+  return Boolean(access?.canView) && isModuleEnabled(entitlements, "financial");
+}
+
+/** Rota de modulo nao liberado, cliente sem TMS ou suspenso: explica em vez de abrir a tela. */
+function accessBlockFor(entitlements: WorkspaceEntitlements | null, pathname: string) {
+  if (isAlwaysAvailablePath(pathname)) return null;
+  if (!isTenantActive(entitlements)) {
+    return {
+      title: "Acesso da empresa suspenso",
+      description:
+        "O acesso ao sistema está bloqueado para a sua empresa. Fale com a FrotaK para reativar.",
+    };
+  }
+  if (!hasTmsAccess(entitlements)) {
+    return {
+      title: "TMS FrotaK não liberado",
+      description: "A sua empresa não tem o TMS FrotaK liberado. Fale com a FrotaK para contratar.",
+    };
+  }
+  const module = moduleForPath(pathname);
+  if (!isModuleEnabled(entitlements, module)) {
+    return {
+      title: `${MODULE_LABELS[module]} não liberado`,
+      description: `O módulo ${MODULE_LABELS[module]} não está contratado para a sua empresa. Fale com a FrotaK para liberar.`,
+    };
+  }
+  return null;
 }
 const ROUTE_TITLES: Record<string, string> = {
   "/": "Dashboard Operacional",
@@ -504,12 +565,18 @@ function SidebarBody({
   onLogout,
   profile,
   financialAccess,
+  showFinancial,
+  operationalItems,
+  fleetUsable,
 }: {
   collapsed: boolean;
   onToggle: () => void;
   onLogout: () => void;
   profile: Profile | null;
   financialAccess: FinancialAccess | null;
+  showFinancial: boolean;
+  operationalItems: NavItem[];
+  fleetUsable: boolean;
 }) {
   const initials = getInitials(profile);
   const profileLabel = profile?.name || profile?.email || "Operador Logístico";
@@ -576,19 +643,28 @@ function SidebarBody({
             </button>
           </div>
         )}
-        <NavSection title="Operacional" items={OPERACIONAL} collapsed={collapsed} />
-        <div className="mx-5 my-2 h-px bg-sidebar-border/80" />
-        <CadastrosSection collapsed={collapsed} />
-        {financialAccess?.canView && (
+        {fleetUsable && (
           <>
+            <NavSection title="Operacional" items={operationalItems} collapsed={collapsed} />
             <div className="mx-5 my-2 h-px bg-sidebar-border/80" />
-            <NavSection title="Financeiro" items={financialItems} collapsed={collapsed} compact />
-          </>
-        )}
-        {profile?.isOwner && (
-          <>
-            <div className="mx-5 my-2 h-px bg-sidebar-border/80" />
-            <NavSection title="Administração" items={ADMIN_NAV} collapsed={collapsed} compact />
+            <CadastrosSection collapsed={collapsed} />
+            {showFinancial && (
+              <>
+                <div className="mx-5 my-2 h-px bg-sidebar-border/80" />
+                <NavSection
+                  title="Financeiro"
+                  items={financialItems}
+                  collapsed={collapsed}
+                  compact
+                />
+              </>
+            )}
+            {profile?.isOwner && (
+              <>
+                <div className="mx-5 my-2 h-px bg-sidebar-border/80" />
+                <NavSection title="Administração" items={ADMIN_NAV} collapsed={collapsed} compact />
+              </>
+            )}
           </>
         )}
       </div>
@@ -793,6 +869,7 @@ function Topbar({
 type ApplicationInitialization = {
   profile: Profile | null;
   financialAccess: FinancialAccess | null;
+  entitlements: WorkspaceEntitlements | null;
 };
 
 let appInitialization: {
@@ -835,11 +912,27 @@ async function initializeApplication(loadAll: () => Promise<void>) {
         finish();
       }
     })();
-    const [financialResult] = await Promise.allSettled([financialPromise, fleetPromise]);
+    const entitlementsPromise = (async () => {
+      const finish = perfStart("app:entitlements");
+      try {
+        return await getWorkspaceEntitlements(loadedProfile?.workspaceId);
+      } finally {
+        finish();
+      }
+    })();
+    const [financialResult, , entitlementsResult] = await Promise.allSettled([
+      financialPromise,
+      fleetPromise,
+      entitlementsPromise,
+    ]);
+    if (entitlementsResult.status === "rejected") {
+      console.error("[app] Falha ao carregar os módulos liberados", entitlementsResult.reason);
+    }
 
     return {
       profile: loadedProfile,
       financialAccess: financialResult.status === "fulfilled" ? financialResult.value : null,
+      entitlements: entitlementsResult.status === "fulfilled" ? entitlementsResult.value : null,
     };
   })().catch((error) => {
     if (appInitialization?.promise === promise) appInitialization = null;
@@ -859,6 +952,7 @@ export function AppLayout() {
   const [initializationError, setInitializationError] = React.useState<string | null>(null);
   const [profile, setProfile] = React.useState<Profile | null>(null);
   const [financialAccess, setFinancialAccess] = React.useState<FinancialAccess | null>(null);
+  const [entitlements, setEntitlements] = React.useState<WorkspaceEntitlements | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -873,6 +967,7 @@ export function AppLayout() {
           if (event === "SIGNED_OUT" && !cancelled) {
             appInitialization = null;
             clearFinancialAccessCache();
+            clearWorkspaceEntitlementsCache();
             window.location.href = getMasterLoginUrl();
           }
         }).data.subscription
@@ -889,6 +984,7 @@ export function AppLayout() {
         if (!cancelled) {
           setProfile(initialized.profile);
           setFinancialAccess(initialized.financialAccess);
+          setEntitlements(initialized.entitlements);
           unsubscribeRealtime = subscribeRealtime();
           setCheckingAuth(false);
         }
@@ -915,6 +1011,32 @@ export function AppLayout() {
       authSubscription?.unsubscribe();
     };
   }, [isLoginRoute, loadAll, subscribeRealtime]);
+
+  // O Master liga e desliga modulos sem deploy: revalida a cada minuto e na volta do foco.
+  const workspaceId = profile?.workspaceId;
+  React.useEffect(() => {
+    if (!workspaceId) return;
+    let cancelled = false;
+
+    const refresh = () => {
+      if (document.visibilityState === "hidden") return;
+      getWorkspaceEntitlements(workspaceId)
+        .then((next) => {
+          if (!cancelled) setEntitlements(next);
+        })
+        .catch((error) => console.error("[app] Falha ao atualizar os módulos liberados", error));
+    };
+
+    const timer = window.setInterval(refresh, 60_000);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [workspaceId]);
 
   React.useEffect(() => {
     const finish = perfStart("navigation:usable", { path: loc.pathname });
@@ -963,10 +1085,15 @@ export function AppLayout() {
   async function handleLogout() {
     appInitialization = null;
     clearFinancialAccessCache();
+    clearWorkspaceEntitlementsCache();
     await signOut();
     window.location.href = getMasterLoginUrl();
   }
   const financialItems = financialNavFor(financialAccess);
+  const showFinancial = canSeeFinancial(financialAccess, entitlements);
+  const operationalItems = operationalNavFor(entitlements);
+  const fleetUsable = canUseFleet(entitlements);
+  const accessBlock = accessBlockFor(entitlements, loc.pathname);
 
   return (
     <div className="relative flex h-[100dvh] w-full overflow-hidden bg-background md:p-4">
@@ -982,6 +1109,9 @@ export function AppLayout() {
           onLogout={handleLogout}
           profile={profile}
           financialAccess={financialAccess}
+          showFinancial={showFinancial}
+          operationalItems={operationalItems}
+          fleetUsable={fleetUsable}
         />
       </aside>
 
@@ -999,11 +1129,26 @@ export function AppLayout() {
 
         <main className="flex-1 overflow-auto overscroll-contain pb-[calc(92px+env(safe-area-inset-bottom))] md:pb-0 md:pt-5">
           <div className="mx-auto w-full max-w-[1680px]">
-            <Outlet />
+            {accessBlock ? (
+              <FrotakPage>
+                <FrotakEmptyState
+                  title={accessBlock.title}
+                  description={accessBlock.description}
+                  icon={<Lock className="size-5" />}
+                />
+              </FrotakPage>
+            ) : (
+              <Outlet />
+            )}
           </div>
         </main>
 
-        <nav className="glass fixed inset-x-3 bottom-3 z-40 grid h-[76px] grid-cols-6 rounded-[28px] border border-sidebar-border bg-sidebar/88 px-1.5 pb-[env(safe-area-inset-bottom)] text-sidebar-foreground shadow-[var(--shadow-strong)] ring-1 ring-white/8 md:hidden">
+        <nav
+          className={cn(
+            "glass fixed inset-x-3 bottom-3 z-40 grid h-[76px] grid-cols-6 rounded-[28px] border border-sidebar-border bg-sidebar/88 px-1.5 pb-[env(safe-area-inset-bottom)] text-sidebar-foreground shadow-[var(--shadow-strong)] ring-1 ring-white/8 md:hidden",
+            !fleetUsable && "hidden",
+          )}
+        >
           {MOBILE_NAV.map((item) => {
             const active = item.activePaths?.includes(loc.pathname) ?? loc.pathname === item.to;
             const Icon = item.icon;
@@ -1058,33 +1203,37 @@ export function AppLayout() {
             </div>
           </SheetHeader>
           <div className="space-y-4 p-3">
-            <MobileMenuSection
-              title="Operacional"
-              items={OPERACIONAL}
-              currentPath={loc.pathname}
-              onNavigate={() => setMobileMenuOpen(false)}
-            />
-            <MobileMenuSection
-              title="Cadastros"
-              items={CADASTROS}
-              currentPath={loc.pathname}
-              onNavigate={() => setMobileMenuOpen(false)}
-            />
-            {financialAccess?.canView && (
-              <MobileMenuSection
-                title="Financeiro"
-                items={financialItems}
-                currentPath={loc.pathname}
-                onNavigate={() => setMobileMenuOpen(false)}
-              />
-            )}
-            {profile?.isOwner && (
-              <MobileMenuSection
-                title="Administração"
-                items={ADMIN_NAV}
-                currentPath={loc.pathname}
-                onNavigate={() => setMobileMenuOpen(false)}
-              />
+            {fleetUsable && (
+              <>
+                <MobileMenuSection
+                  title="Operacional"
+                  items={operationalItems}
+                  currentPath={loc.pathname}
+                  onNavigate={() => setMobileMenuOpen(false)}
+                />
+                <MobileMenuSection
+                  title="Cadastros"
+                  items={CADASTROS}
+                  currentPath={loc.pathname}
+                  onNavigate={() => setMobileMenuOpen(false)}
+                />
+                {showFinancial && (
+                  <MobileMenuSection
+                    title="Financeiro"
+                    items={financialItems}
+                    currentPath={loc.pathname}
+                    onNavigate={() => setMobileMenuOpen(false)}
+                  />
+                )}
+                {profile?.isOwner && (
+                  <MobileMenuSection
+                    title="Administração"
+                    items={ADMIN_NAV}
+                    currentPath={loc.pathname}
+                    onNavigate={() => setMobileMenuOpen(false)}
+                  />
+                )}
+              </>
             )}
             <MobileMenuSection
               title="Ajuda"

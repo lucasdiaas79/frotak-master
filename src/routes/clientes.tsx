@@ -2,21 +2,24 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  Boxes,
   Building2,
   Eye,
   Grid2x2,
   KeyRound,
   LayoutList,
   LogIn,
-  Pencil,
   Plus,
+  RefreshCw,
   Search,
+  SlidersHorizontal,
   Sparkles,
   Truck,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/AppShell";
 import {
   Avatar,
+  EmptyState,
   KpiCard,
   PageHeader,
   Panel,
@@ -47,13 +50,20 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { buildClientAccessUrl, getSession } from "@/lib/auth";
 import {
-  buildClientAccessUrl,
-  getCurrentAccessToken,
-  getSession,
-} from "@/lib/auth";
-import { listManagedTenants, tenantFeatureCatalog, type ManagedTenant } from "@/lib/masterControl";
-import { provisionTenant } from "@/lib/tenantProvisioning";
+  findModule,
+  modulesOf,
+  products,
+  type ModuleCode,
+  type ProductCode,
+} from "@/modules/catalog/domain/catalog";
+import type { TenantEntitlements } from "@/modules/entitlements/domain/entitlements";
+import { TenantEntitlementsPanel } from "@/modules/entitlements/ui/TenantEntitlementsPanel";
+import { subscriptionPeriods, slugify } from "@/modules/provisioning/domain/provisioning-request";
+import { provisionTenantFn } from "@/modules/provisioning/server";
+import { isTenantOperational, type Tenant } from "@/modules/tenants/domain/tenant";
+import { listTenantsFn } from "@/modules/tenants/server";
 
 export const Route = createFileRoute("/clientes")({
   head: () => ({
@@ -61,7 +71,7 @@ export const Route = createFileRoute("/clientes")({
       { title: "Clientes - FrotaK Master" },
       {
         name: "description",
-        content: "Cadastro e gestao dos clientes FrotaK.",
+        content: "Cadastro, produtos e módulos liberados para cada cliente FrotaK.",
       },
     ],
   }),
@@ -74,41 +84,12 @@ type ClientFormState = {
   cnpj: string;
   subscriptionPeriod: string;
   maxVehicles: string;
-  planCode: string;
-  enabledModuleCodes: string[];
+  products: ProductCode[];
+  modules: ModuleCode[];
   ownerName: string;
   ownerEmail: string;
   temporaryPassword: string;
 };
-
-const moduleCatalog = [
-  {
-    code: "fleet_core",
-    label: "Frotak Core",
-    description: "Gestao de frota, Smart Flow e operacao atual.",
-    required: true,
-  },
-  { code: "cte_issuance", label: "Emissao de CT-e" },
-  { code: "financial", label: "Financeiro" },
-  { code: "frotak_ai", label: "Frotak IA" },
-  { code: "frotak_tracking", label: "Rastreadores Frotak" },
-];
-
-const subscriptionOptions = ["Mensal", "12 meses"];
-
-function slugify(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/-{2,}/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
-
-function onlyDigits(value: string) {
-  return value.replace(/\D/g, "");
-}
 
 const emptyForm = (): ClientFormState => ({
   legalName: "",
@@ -116,46 +97,49 @@ const emptyForm = (): ClientFormState => ({
   cnpj: "",
   subscriptionPeriod: "Mensal",
   maxVehicles: "10",
-  planCode: "BASIC",
-  enabledModuleCodes: ["fleet_core"],
+  products: ["tms"],
+  modules: ["fleet_core", "driver_app"],
   ownerName: "",
   ownerEmail: "",
   temporaryPassword: "",
 });
 
+function canOperateMaster() {
+  const role = getSession()?.role;
+  return role === "super_admin" || role === "operations";
+}
+
 function Clientes() {
   const [view, setView] = useState<"tabela" | "cards">("tabela");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
-  const [clients, setClients] = useState<ManagedTenant[]>([]);
+  const [clients, setClients] = useState<Tenant[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
-  const [details, setDetails] = useState<ManagedTenant | null>(null);
-  const [editing, setEditing] = useState<ManagedTenant | null>(null);
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  const [managingId, setManagingId] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState<ClientFormState>(emptyForm);
+  const canOperate = canOperateMaster();
 
-  async function refreshClients() {
-    const data = await listManagedTenants();
-    setClients(data);
+  const details = clients.find((client) => client.id === detailsId) ?? null;
+  const managing = clients.find((client) => client.id === managingId) ?? null;
+
+  async function loadClients() {
+    setLoadError(null);
+    try {
+      setClients(await listTenantsFn());
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Não foi possível carregar os clientes.",
+      );
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    let active = true;
-
-    async function load() {
-      try {
-        const data = await listManagedTenants();
-        if (active) setClients(data);
-      } finally {
-        if (active) setLoading(false);
-      }
-    }
-
-    void load();
-
-    return () => {
-      active = false;
-    };
+    void loadClients();
   }, []);
 
   const filteredClients = useMemo(() => {
@@ -163,8 +147,8 @@ function Clientes() {
     if (!query) return clients;
 
     return clients.filter((client) =>
-      [client.name, client.cnpj, client.loginEmail, client.slug].some((value) =>
-        value.toLowerCase().includes(query),
+      [client.name, client.legalName, client.cnpj, client.ownerEmail ?? "", client.slug].some(
+        (value) => value.toLowerCase().includes(query),
       ),
     );
   }, [clients, search]);
@@ -172,13 +156,14 @@ function Clientes() {
   const totals = useMemo(() => {
     return filteredClients.reduce(
       (acc, client) => {
-        if (client.status === "Ativo") acc.active += 1;
-        acc.trucks += client.vehicles;
-        acc.truckLimit += client.truckLimit;
-        acc.drivers += client.drivers;
+        if (isTenantOperational(client.status)) acc.active += 1;
+        acc.trucks += client.usage.vehicles;
+        acc.truckLimit += client.vehicleLimit;
+        acc.drivers += client.usage.drivers;
+        acc.modules += client.entitlements.modules.length;
         return acc;
       },
-      { active: 0, trucks: 0, truckLimit: 0, drivers: 0 },
+      { active: 0, trucks: 0, truckLimit: 0, drivers: 0, modules: 0 },
     );
   }, [filteredClients]);
 
@@ -195,13 +180,28 @@ function Clientes() {
     }));
   }
 
-  function toggleCreateModule(moduleCode: string, checked: boolean) {
+  function toggleCreateProduct(product: ProductCode, checked: boolean) {
     setCreateForm((current) => {
-      const modules = new Set(current.enabledModuleCodes);
-      modules.add("fleet_core");
-      if (checked) modules.add(moduleCode);
-      else if (moduleCode !== "fleet_core") modules.delete(moduleCode);
-      return { ...current, enabledModuleCodes: Array.from(modules) };
+      const next = new Set(current.products);
+      if (checked) next.add(product);
+      else next.delete(product);
+      return {
+        ...current,
+        products: [...next],
+        // Modulos de um produto desmarcado saem junto; o banco guardaria sem efeito.
+        modules: current.modules.filter(
+          (module) => findModule(module).core || next.has(findModule(module).product),
+        ),
+      };
+    });
+  }
+
+  function toggleCreateModule(module: ModuleCode, checked: boolean) {
+    setCreateForm((current) => {
+      const next = new Set(current.modules);
+      if (checked) next.add(module);
+      else if (!findModule(module).core) next.delete(module);
+      return { ...current, modules: [...next] };
     });
   }
 
@@ -209,71 +209,56 @@ function Clientes() {
     event.preventDefault();
     if (saving) return;
 
-    if (!createForm.legalName.trim()) {
-      toast.error("Informe o nome da empresa.");
-      return;
-    }
-
-    if (
-      !createForm.ownerName.trim() ||
-      !createForm.ownerEmail.trim() ||
-      !createForm.temporaryPassword.trim()
-    ) {
-      toast.error("Informe o administrador inicial, login e senha temporaria.");
-      return;
-    }
-
-    const accessToken = await getCurrentAccessToken();
-    if (!accessToken) {
-      toast.error("Sessao master nao encontrada. Faca login novamente.");
+    if (!createForm.products.length) {
+      toast.error("Escolha ao menos um produto.");
       return;
     }
 
     setSaving(true);
     try {
-      const result = await provisionTenant({
+      const result = await provisionTenantFn({
         data: {
-          masterAccessToken: accessToken,
           legalName: createForm.legalName,
           tradeName: createForm.tradeName,
-          cnpj: onlyDigits(createForm.cnpj),
+          cnpj: createForm.cnpj,
           ownerName: createForm.ownerName,
-          ownerEmail: createForm.ownerEmail.trim().toLowerCase(),
+          ownerEmail: createForm.ownerEmail,
           temporaryPassword: createForm.temporaryPassword,
-          planCode: createForm.planCode,
+          planCode: "BASIC",
           subscriptionPeriod: createForm.subscriptionPeriod,
           maxVehicles: Number(createForm.maxVehicles || 0),
-          enabledModuleCodes: createForm.enabledModuleCodes.filter(
-            (moduleCode) => moduleCode !== "fleet_core",
-          ),
+          products: createForm.products,
+          modules: createForm.modules,
         },
       });
 
-      if (result.status !== "ok") {
-        toast.error(result.reason || "Nao foi possivel criar o cliente.");
-        return;
-      }
-
       setCreateForm(emptyForm());
       setCreateOpen(false);
-      await refreshClients();
-      toast.success("Cliente provisionado com sucesso.");
+      await loadClients();
+      if (result.pendingProducts.length) {
+        toast.warning(
+          `Cliente criado, mas revise os produtos em "Gerenciar": ${result.pendingProducts.join(", ")}.`,
+        );
+      } else {
+        toast.success("Cliente provisionado com sucesso.");
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Falha ao criar o cliente.";
-      toast.error(message);
+      toast.error(error instanceof Error ? error.message : "Falha ao criar o cliente.");
     } finally {
       setSaving(false);
     }
   }
 
-  function openEdit(client: ManagedTenant) {
-    setEditing(client);
+  function updateEntitlements(tenantId: string, entitlements: TenantEntitlements) {
+    setClients((current) =>
+      current.map((client) => (client.id === tenantId ? { ...client, entitlements } : client)),
+    );
   }
 
-  function accessClient(client: ManagedTenant) {
+  function accessClient(client: Tenant) {
     const session = getSession();
     if (!session?.accessToken) {
-      toast.error("Sessao do Master expirada. Entre novamente.");
+      toast.error("Sessão do Master expirada. Entre novamente.");
       return;
     }
 
@@ -282,9 +267,9 @@ function Clientes() {
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
         clientId: client.id,
-        tenantId: client.tenantId,
+        tenantId: client.id,
         clientName: client.name,
-        email: client.loginEmail || session.email,
+        email: client.ownerEmail || session.email,
       }),
       "_blank",
       "noopener,noreferrer",
@@ -294,9 +279,9 @@ function Clientes() {
   return (
     <AppShell>
       <PageHeader
-        eyebrow={`${clients.length} tenants sincronizados`}
+        eyebrow={`${clients.length} clientes no catálogo`}
         title="Clientes"
-        description="Cadastro central real dos tenants, acessos, modulos e limite de caminhoes."
+        description="Cadastro dos clientes, produtos e módulos liberados para cada um."
         crumbs={[{ label: "Clientes" }]}
         actions={
           <>
@@ -318,7 +303,7 @@ function Clientes() {
             </div>
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
-                <Button size="sm" className="gap-2 rounded-xl font-bold">
+                <Button size="sm" className="gap-2 rounded-xl font-bold" disabled={!canOperate}>
                   <Plus className="size-4" />
                   Novo cliente
                 </Button>
@@ -327,6 +312,7 @@ function Clientes() {
                 <CreateClientForm
                   form={createForm}
                   onChange={updateCreateForm}
+                  onToggleProduct={toggleCreateProduct}
                   onToggleModule={toggleCreateModule}
                   onCancel={() => setCreateOpen(false)}
                   onSubmit={createClient}
@@ -339,26 +325,44 @@ function Clientes() {
       />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label="Clientes ativos" value={String(totals.active)} delta="tenants ativos" trend="up" icon={Building2} />
-        <KpiCard label="Caminhoes cadastrados" value={String(totals.trucks)} delta={`limite total ${totals.truckLimit}`} trend="flat" icon={Truck} />
-        <KpiCard label="Motoristas" value={String(totals.drivers)} delta="base real" trend="flat" icon={KeyRound} />
         <KpiCard
-          label="Modulos ativos"
-          value={String(filteredClients.reduce((sum, client) => sum + client.features.length, 0))}
-          delta="somadas por tenant"
+          label="Clientes ativos"
+          value={String(totals.active)}
+          delta="ativos ou em trial"
+          trend="up"
+          icon={Building2}
+        />
+        <KpiCard
+          label="Caminhões cadastrados"
+          value={String(totals.trucks)}
+          delta={`limite total ${totals.truckLimit}`}
+          trend="flat"
+          icon={Truck}
+        />
+        <KpiCard
+          label="Motoristas"
+          value={String(totals.drivers)}
+          delta="ativos na base"
+          trend="flat"
+          icon={KeyRound}
+        />
+        <KpiCard
+          label="Módulos ligados"
+          value={String(totals.modules)}
+          delta="somados por cliente"
           trend="flat"
           icon={Sparkles}
         />
       </div>
 
-      <Panel className="mt-3" eyebrow="Base de clientes" title="Tenants do master">
+      <Panel className="mt-3" eyebrow="Base de clientes" title="Clientes do Master">
         <div className="mb-4 max-w-md">
           <div className="relative">
             <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar cliente, CNPJ, login ou slug"
+              placeholder="Buscar cliente, CNPJ, login ou endereço"
               className="rounded-xl pl-9"
             />
           </div>
@@ -366,16 +370,49 @@ function Clientes() {
 
         {loading ? (
           <div className="rounded-2xl border border-border bg-elevated/30 px-4 py-8 text-sm text-muted-foreground">
-            Carregando tenants reais...
+            Carregando clientes...
           </div>
+        ) : loadError ? (
+          <EmptyState
+            title="Não foi possível carregar os clientes"
+            description={loadError}
+            action={
+              <Button
+                variant="outline"
+                className="gap-2 rounded-xl"
+                onClick={() => void loadClients()}
+              >
+                <RefreshCw className="size-4" />
+                Tentar de novo
+              </Button>
+            }
+          />
+        ) : !filteredClients.length ? (
+          <EmptyState
+            title={search ? "Nenhum cliente encontrado" : "Nenhum cliente cadastrado"}
+            description={
+              search
+                ? "Ajuste a busca para ver outros clientes."
+                : 'Use "Novo cliente" para provisionar o primeiro.'
+            }
+          />
         ) : view === "tabela" ? (
-          <ClientTable clients={filteredClients} onDetails={setDetails} onAccess={accessClient} onEdit={openEdit} />
+          <ClientTable
+            clients={filteredClients}
+            onDetails={(client) => setDetailsId(client.id)}
+            onAccess={accessClient}
+            onManage={(client) => setManagingId(client.id)}
+          />
         ) : (
-          <ClientCards clients={filteredClients} onAccess={accessClient} onEdit={openEdit} />
+          <ClientCards
+            clients={filteredClients}
+            onAccess={accessClient}
+            onManage={(client) => setManagingId(client.id)}
+          />
         )}
       </Panel>
 
-      <Sheet open={!!details} onOpenChange={(open) => !open && setDetails(null)}>
+      <Sheet open={!!details} onOpenChange={(open) => !open && setDetailsId(null)}>
         <SheetContent className="w-full overflow-y-auto scroll-slim sm:max-w-xl">
           {details ? (
             <>
@@ -386,42 +423,55 @@ function Clientes() {
               <div className="grid gap-3 px-4 pb-8 sm:grid-cols-2">
                 <DataItem label="Assinatura" value={details.subscriptionPeriod} />
                 <DataItem label="Status" value={details.status} />
-                <DataItem label="Tenant" value={details.tenantId} />
-                <DataItem label="Login" value={details.loginEmail} />
+                <DataItem label="Tenant" value={details.id} />
+                <DataItem label="Login" value={details.ownerEmail ?? "-"} />
                 <DataItem
-                  label="Caminhoes"
-                  value={`${details.vehicles} cadastrados / ${details.truckLimit} limite`}
+                  label="Caminhões"
+                  value={`${details.usage.vehicles} cadastrados / ${details.vehicleLimit} limite`}
                 />
-                <DataItem label="Motoristas" value={String(details.drivers)} />
-                <DataItem label="Cacambas" value={String(details.trailers)} />
+                <DataItem label="Motoristas" value={String(details.usage.drivers)} />
+                <DataItem label="Caçambas" value={String(details.usage.trailers)} />
+                <DataItem label="Usuários" value={String(details.usage.users)} />
+                <div className="sm:col-span-2">
+                  <EntitlementSummary entitlements={details.entitlements} />
+                </div>
               </div>
             </>
           ) : null}
         </SheetContent>
       </Sheet>
 
-      <Sheet open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
-        <SheetContent className="w-full overflow-y-auto scroll-slim sm:max-w-4xl">
-          {editing ? (
+      <Sheet open={!!managing} onOpenChange={(open) => !open && setManagingId(null)}>
+        <SheetContent className="w-full overflow-y-auto scroll-slim sm:max-w-2xl">
+          {managing ? (
             <div className="px-4 pb-8 pt-4">
-              <SheetHeader>
-                <SheetTitle>Editar cliente</SheetTitle>
+              <SheetHeader className="px-0">
+                <SheetTitle>Gerenciar {managing.name}</SheetTitle>
                 <SheetDescription>
-                  A edicao administrativa sera liberada em um fluxo separado da criacao.
+                  Produtos e módulos valem em segundos no app do cliente. Desligar bloqueia o
+                  acesso, sem apagar dados.
                 </SheetDescription>
               </SheetHeader>
-              <div className="mt-4 rounded-2xl border border-border bg-elevated/40 p-4 text-sm text-muted-foreground">
-                O provisionamento legado esta bloqueado. Por enquanto, este painel serve apenas
-                para consulta segura dos dados do tenant.
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <DataItem label="Status" value={managing.status} />
+                <DataItem label="CNPJ" value={managing.cnpj || "-"} />
+                <DataItem label="Limite de caminhões" value={String(managing.vehicleLimit)} />
               </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <DataItem label="Empresa" value={editing.name} />
-                <DataItem label="CNPJ" value={editing.cnpj || "-"} />
-                <DataItem label="Assinatura" value={editing.subscriptionPeriod} />
-                <DataItem label="Limite de caminhoes" value={String(editing.truckLimit)} />
+              <div className="mt-4">
+                <TenantEntitlementsPanel
+                  tenantId={managing.id}
+                  tenantStatus={managing.status}
+                  entitlements={managing.entitlements}
+                  canOperate={canOperate}
+                  onChange={(next) => updateEntitlements(managing.id, next)}
+                />
               </div>
               <div className="mt-5 flex justify-end">
-                <Button variant="outline" className="rounded-xl" onClick={() => setEditing(null)}>
+                <Button
+                  variant="outline"
+                  className="rounded-xl"
+                  onClick={() => setManagingId(null)}
+                >
                   Fechar
                 </Button>
               </div>
@@ -433,16 +483,56 @@ function Clientes() {
   );
 }
 
+function productLabels(entitlements: TenantEntitlements) {
+  return products.filter((product) => entitlements.products.includes(product.code));
+}
+
+function EntitlementSummary({ entitlements }: { entitlements: TenantEntitlements }) {
+  const enabledProducts = productLabels(entitlements);
+
+  return (
+    <div className="rounded-xl border border-border bg-elevated/50 p-3">
+      <p className="eyebrow">Liberado para o cliente</p>
+      {enabledProducts.length ? (
+        <div className="mt-2 grid gap-2">
+          {enabledProducts.map((product) => (
+            <div key={product.code}>
+              <p className="text-sm font-bold">{product.name}</p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {modulesOf(product.code)
+                  .filter((module) => entitlements.modules.includes(module.code))
+                  .map((module) => (
+                    <ModulePill key={module.code} label={module.name} />
+                  ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1 text-sm font-bold">Nenhum produto liberado</p>
+      )}
+    </div>
+  );
+}
+
+function ModulePill({ label }: { label: string }) {
+  return (
+    <span className="rounded-full border border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground">
+      {label}
+    </span>
+  );
+}
+
 function ClientTable({
   clients,
   onDetails,
   onAccess,
-  onEdit,
+  onManage,
 }: {
-  clients: ManagedTenant[];
-  onDetails: (client: ManagedTenant) => void;
-  onAccess: (client: ManagedTenant) => void;
-  onEdit: (client: ManagedTenant) => void;
+  clients: Tenant[];
+  onDetails: (client: Tenant) => void;
+  onAccess: (client: Tenant) => void;
+  onManage: (client: Tenant) => void;
 }) {
   return (
     <TableWrap>
@@ -453,15 +543,15 @@ function ClientTable({
             <Th>CNPJ</Th>
             <Th>Assinatura</Th>
             <Th>Login</Th>
-            <Th>Caminhoes</Th>
-            <Th>Motoristas</Th>
+            <Th>Caminhões</Th>
+            <Th>Produtos</Th>
             <Th>Status</Th>
-            <Th className="text-right">Acoes</Th>
+            <Th className="text-right">Ações</Th>
           </tr>
         </thead>
         <tbody>
           {clients.map((client) => (
-            <Tr key={client.tenantId}>
+            <Tr key={client.id}>
               <Td>
                 <div className="flex min-w-0 items-center gap-3">
                   <Avatar name={client.name} />
@@ -473,19 +563,37 @@ function ClientTable({
               </Td>
               <Td>{client.cnpj || "-"}</Td>
               <Td>{client.subscriptionPeriod}</Td>
-              <Td>{client.loginEmail}</Td>
+              <Td>{client.ownerEmail ?? "-"}</Td>
               <Td className="font-semibold">
-                {client.vehicles} / {client.truckLimit}
+                {client.usage.vehicles} / {client.vehicleLimit}
               </Td>
-              <Td>{client.drivers}</Td>
+              <Td>
+                <div className="flex flex-wrap gap-1.5">
+                  {productLabels(client.entitlements).map((product) => (
+                    <ModulePill key={product.code} label={product.name} />
+                  ))}
+                </div>
+              </Td>
               <Td>
                 <StatusPill tone={toneFor(client.status)}>{client.status}</StatusPill>
               </Td>
               <Td>
                 <div className="flex items-center justify-end gap-1">
-                  <IconButton label="Visualizar" onClick={() => onDetails(client)} icon={<Eye className="size-4" />} />
-                  <IconButton label="Login como cliente" onClick={() => onAccess(client)} icon={<LogIn className="size-4" />} />
-                  <IconButton label="Editar" onClick={() => onEdit(client)} icon={<Pencil className="size-4" />} />
+                  <IconButton
+                    label="Visualizar"
+                    onClick={() => onDetails(client)}
+                    icon={<Eye className="size-4" />}
+                  />
+                  <IconButton
+                    label="Gerenciar produtos e módulos"
+                    onClick={() => onManage(client)}
+                    icon={<SlidersHorizontal className="size-4" />}
+                  />
+                  <IconButton
+                    label="Login como cliente"
+                    onClick={() => onAccess(client)}
+                    icon={<LogIn className="size-4" />}
+                  />
                 </div>
               </Td>
             </Tr>
@@ -499,45 +607,55 @@ function ClientTable({
 function ClientCards({
   clients,
   onAccess,
-  onEdit,
+  onManage,
 }: {
-  clients: ManagedTenant[];
-  onAccess: (client: ManagedTenant) => void;
-  onEdit: (client: ManagedTenant) => void;
+  clients: Tenant[];
+  onAccess: (client: Tenant) => void;
+  onManage: (client: Tenant) => void;
 }) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {clients.map((client) => (
-        <article key={client.tenantId} className="panel p-5">
+        <article key={client.id} className="panel p-5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-center gap-3">
               <Avatar name={client.name} className="size-11 rounded-xl text-sm" />
               <div className="min-w-0">
                 <p className="truncate font-bold">{client.name}</p>
-                <p className="text-xs text-muted-foreground">{client.loginEmail}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {client.ownerEmail ?? client.slug}
+                </p>
               </div>
             </div>
             <StatusPill tone={toneFor(client.status)}>{client.status}</StatusPill>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
             <DataBox label="Assinatura" value={client.subscriptionPeriod} />
-            <DataBox label="Caminhoes" value={`${client.vehicles} / ${client.truckLimit}`} />
+            <DataBox
+              label="Caminhões"
+              value={`${client.usage.vehicles} / ${client.vehicleLimit}`}
+            />
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
-            {client.features.slice(0, 4).map((feature) => (
-              <span
-                key={`${client.tenantId}-${feature}`}
-                className="rounded-full border border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground"
-              >
-                {tenantFeatureCatalog.find((item) => item.key === feature)?.label ?? feature}
-              </span>
+            {client.entitlements.modules.slice(0, 4).map((module) => (
+              <ModulePill key={`${client.id}-${module}`} label={findModule(module).name} />
             ))}
           </div>
           <div className="mt-4 flex gap-2">
-            <Button size="sm" variant="outline" className="flex-1 rounded-xl" onClick={() => onEdit(client)}>
-              Editar
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 gap-2 rounded-xl"
+              onClick={() => onManage(client)}
+            >
+              <SlidersHorizontal className="size-4" />
+              Gerenciar
             </Button>
-            <Button size="sm" className="flex-1 rounded-xl font-bold" onClick={() => onAccess(client)}>
+            <Button
+              size="sm"
+              className="flex-1 rounded-xl font-bold"
+              onClick={() => onAccess(client)}
+            >
               Acessar
             </Button>
           </div>
@@ -550,6 +668,7 @@ function ClientCards({
 function CreateClientForm({
   form,
   onChange,
+  onToggleProduct,
   onToggleModule,
   onCancel,
   onSubmit,
@@ -557,7 +676,8 @@ function CreateClientForm({
 }: {
   form: ClientFormState;
   onChange: (field: keyof ClientFormState, value: string) => void;
-  onToggleModule: (moduleCode: string, checked: boolean) => void;
+  onToggleProduct: (product: ProductCode, checked: boolean) => void;
+  onToggleModule: (module: ModuleCode, checked: boolean) => void;
   onCancel: () => void;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
   saving: boolean;
@@ -567,7 +687,7 @@ function CreateClientForm({
       <DialogHeader>
         <DialogTitle>Novo cliente</DialogTitle>
         <DialogDescription>
-          Crie a empresa, configure sua assinatura e defina o administrador inicial.
+          Crie a empresa, escolha os produtos e módulos e defina o administrador inicial.
         </DialogDescription>
       </DialogHeader>
 
@@ -576,73 +696,116 @@ function CreateClientForm({
           <div className="sm:col-span-2">
             <p className="text-sm font-bold">Empresa</p>
           </div>
-        <div className="sm:col-span-2">
-          <Label className="text-xs">Nome da empresa</Label>
-          <Input required value={form.legalName} onChange={(event) => onChange("legalName", event.target.value)} placeholder="Central Transportes" className="mt-1.5 rounded-xl" />
-        </div>
-        <div className="sm:col-span-2">
-          <Label className="text-xs">Nome fantasia (opcional)</Label>
-          <Input value={form.tradeName} onChange={(event) => onChange("tradeName", event.target.value)} placeholder="Central" className="mt-1.5 rounded-xl" />
-        </div>
-        <div>
-          <Label className="text-xs">CNPJ</Label>
-          <Input required value={form.cnpj} onChange={(event) => onChange("cnpj", event.target.value)} placeholder="00.000.000/0001-00" className="mt-1.5 rounded-xl" />
-        </div>
-        <div>
-          <Label className="text-xs">Periodo da assinatura</Label>
-          <div className="mt-1.5 grid grid-cols-2 gap-2">
-            {subscriptionOptions.map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => onChange("subscriptionPeriod", option)}
-                className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
-                  form.subscriptionPeriod === option
-                    ? "border-primary bg-primary/15 text-primary"
-                    : "border-border bg-background/45 text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <Label className="text-xs">Quantidade maxima de veiculos</Label>
-          <Input required min={1} type="number" value={form.maxVehicles} onChange={(event) => onChange("maxVehicles", event.target.value)} className="mt-1.5 rounded-xl" />
-        </div>
-        </section>
-
-        <section className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <p className="text-sm font-bold">Plano</p>
+            <Label className="text-xs">Nome da empresa</Label>
+            <Input
+              required
+              value={form.legalName}
+              onChange={(event) => onChange("legalName", event.target.value)}
+              placeholder="Central Transportes"
+              className="mt-1.5 rounded-xl"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Label className="text-xs">Nome fantasia (opcional)</Label>
+            <Input
+              value={form.tradeName}
+              onChange={(event) => onChange("tradeName", event.target.value)}
+              placeholder="Central"
+              className="mt-1.5 rounded-xl"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">CNPJ</Label>
+            <Input
+              required
+              value={form.cnpj}
+              onChange={(event) => onChange("cnpj", event.target.value)}
+              placeholder="00.000.000/0001-00"
+              className="mt-1.5 rounded-xl"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Período da assinatura</Label>
+            <div className="mt-1.5 grid grid-cols-2 gap-2">
+              {subscriptionPeriods.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => onChange("subscriptionPeriod", option)}
+                  className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+                    form.subscriptionPeriod === option
+                      ? "border-primary bg-primary/15 text-primary"
+                      : "border-border bg-background/45 text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Quantidade máxima de veículos</Label>
+            <Input
+              required
+              min={1}
+              type="number"
+              value={form.maxVehicles}
+              onChange={(event) => onChange("maxVehicles", event.target.value)}
+              className="mt-1.5 rounded-xl"
+            />
           </div>
           <div>
             <Label className="text-xs">Plano</Label>
-            <Input required value="Plano Basico" disabled className="mt-1.5 rounded-xl" />
+            <Input required value="Plano Básico" disabled className="mt-1.5 rounded-xl" />
           </div>
         </section>
 
         <section>
-          <ClientModules modules={form.enabledModuleCodes} onToggleModule={onToggleModule} />
+          <ProductModulePicker
+            selectedProducts={form.products}
+            selectedModules={form.modules}
+            onToggleProduct={onToggleProduct}
+            onToggleModule={onToggleModule}
+          />
         </section>
 
         <section className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <p className="text-sm font-bold">Administrador inicial</p>
           </div>
-        <div>
-          <Label className="text-xs">Nome completo</Label>
-          <Input required value={form.ownerName} onChange={(event) => onChange("ownerName", event.target.value)} placeholder="Marina Silva" className="mt-1.5 rounded-xl" />
-        </div>
-        <div>
-          <Label className="text-xs">E-mail</Label>
-          <Input required type="email" value={form.ownerEmail} onChange={(event) => onChange("ownerEmail", event.target.value)} placeholder="admin@cliente.com.br" className="mt-1.5 rounded-xl" />
-        </div>
-        <div className="sm:col-span-2">
-          <Label className="text-xs">Senha temporaria</Label>
-          <Input required type="password" value={form.temporaryPassword} onChange={(event) => onChange("temporaryPassword", event.target.value)} className="mt-1.5 rounded-xl" />
-        </div>
+          <div>
+            <Label className="text-xs">Nome completo</Label>
+            <Input
+              required
+              value={form.ownerName}
+              onChange={(event) => onChange("ownerName", event.target.value)}
+              placeholder="Marina Silva"
+              className="mt-1.5 rounded-xl"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">E-mail</Label>
+            <Input
+              required
+              type="email"
+              value={form.ownerEmail}
+              onChange={(event) => onChange("ownerEmail", event.target.value)}
+              placeholder="admin@cliente.com.br"
+              className="mt-1.5 rounded-xl"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Label className="text-xs">Senha temporária</Label>
+            <Input
+              required
+              minLength={8}
+              type="password"
+              value={form.temporaryPassword}
+              onChange={(event) => onChange("temporaryPassword", event.target.value)}
+              className="mt-1.5 rounded-xl"
+            />
+          </div>
         </section>
       </div>
 
@@ -658,42 +821,67 @@ function CreateClientForm({
   );
 }
 
-function ClientModules({
-  modules,
+function ProductModulePicker({
+  selectedProducts,
+  selectedModules,
+  onToggleProduct,
   onToggleModule,
 }: {
-  modules: string[];
-  onToggleModule: (moduleCode: string, checked: boolean) => void;
+  selectedProducts: ProductCode[];
+  selectedModules: ModuleCode[];
+  onToggleProduct: (product: ProductCode, checked: boolean) => void;
+  onToggleModule: (module: ModuleCode, checked: boolean) => void;
 }) {
   return (
     <div className="rounded-2xl border border-border bg-elevated/30 p-4">
       <div className="flex items-center gap-2">
-        <Sparkles className="size-4 text-primary" />
-        <p className="text-sm font-bold">Modulos contratados</p>
+        <Boxes className="size-4 text-primary" />
+        <p className="text-sm font-bold">Produtos e módulos</p>
       </div>
-      <div className="mt-3 grid gap-2">
-        {moduleCatalog.map((module) => {
-          const checked = module.required || modules.includes(module.code);
+      <div className="mt-3 grid gap-3">
+        {products.map((product) => {
+          const productChecked = selectedProducts.includes(product.code);
+          const productModules = modulesOf(product.code);
+
           return (
-            <label
-              key={module.code}
-              className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-background/45 px-3 py-3 text-sm"
-            >
-              <Checkbox
-                checked={checked}
-                disabled={module.required}
-                onCheckedChange={(value) => onToggleModule(module.code, value === true)}
-                className="mt-0.5"
-              />
-              <span>
-                <span className="block font-bold">{module.label}</span>
-                {module.description ? (
+            <div key={product.code} className="rounded-xl border border-border bg-background/45">
+              <label className="flex cursor-pointer items-start gap-3 px-3 py-3 text-sm">
+                <Checkbox
+                  checked={productChecked}
+                  onCheckedChange={(value) => onToggleProduct(product.code, value === true)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="block font-bold">{product.name}</span>
                   <span className="mt-1 block text-xs text-muted-foreground">
-                    {module.description} Obrigatorio e nao pode ser desmarcado.
+                    {product.description}
                   </span>
-                ) : null}
-              </span>
-            </label>
+                </span>
+              </label>
+              {productChecked && productModules.length ? (
+                <div className="grid gap-2 border-t border-border/70 px-3 py-3 sm:grid-cols-2">
+                  {productModules.map((module) => (
+                    <label
+                      key={module.code}
+                      className="flex cursor-pointer items-start gap-3 text-sm"
+                    >
+                      <Checkbox
+                        checked={module.core || selectedModules.includes(module.code)}
+                        disabled={module.core}
+                        onCheckedChange={(value) => onToggleModule(module.code, value === true)}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="block font-semibold">{module.name}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {module.core ? "Base do produto, sempre incluída." : module.description}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           );
         })}
       </div>
@@ -713,6 +901,7 @@ function IconButton({
   return (
     <button
       onClick={onClick}
+      title={label}
       className="grid size-8 place-items-center rounded-lg text-muted-foreground transition hover:bg-elevated hover:text-primary"
       aria-label={label}
     >

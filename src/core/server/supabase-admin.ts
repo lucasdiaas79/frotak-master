@@ -16,7 +16,7 @@ function requiredEnv(name: string) {
 export function hasSupabaseAdminConfig() {
   return Boolean(
     (readEnv("SUPABASE_URL") || readEnv("VITE_SUPABASE_URL")) &&
-      readEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    readEnv("SUPABASE_SERVICE_ROLE_KEY"),
   );
 }
 

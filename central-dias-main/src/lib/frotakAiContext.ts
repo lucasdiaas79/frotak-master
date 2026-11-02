@@ -1,4 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
+// Caminho relativo: os testes de IA importam este arquivo direto pelo Node, sem o alias "@/".
+import { assertWorkspaceModule } from "./entitlements.ts";
 
 export type FrotakAiContext = {
   accessToken: string;
@@ -121,6 +123,9 @@ export async function resolveFrotakAiContext(
 
   const tenantRow = tenant as TenantRow;
   if (!["active", "trial"].includes(tenantRow.status)) throw new Error("tenant inativo");
+
+  // Toda chamada da IA (chat, voz, ferramentas, acoes) passa por aqui.
+  await assertWorkspaceModule(supabase, membershipRow.workspace_id, "frotak_ai");
 
   return {
     accessToken,

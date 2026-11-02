@@ -367,6 +367,16 @@ export async function getCurrentAccessToken() {
   return state.status === "AUTHENTICATED_PLATFORM_USER" ? state.session.accessToken : null;
 }
 
+/** Token da sessao atual para chamadas ao servidor; quem valida o acesso e o servidor. */
+export async function getAccessToken() {
+  try {
+    const { data } = await getSupabaseBrowser().auth.getSession();
+    return data.session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function authenticate(email: string, password: string, fallbackRedirect = "/") {
   const supabase = getSupabaseBrowser();
   const { data: signInData, error } = await supabase.auth.signInWithPassword({

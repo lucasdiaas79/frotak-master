@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { assertWorkspaceModule, isModuleDisabledError } from "@/lib/entitlements";
 import { resolveFrotakAiContext, type FrotakAiContext } from "@/lib/frotakAiContext";
 import { listIdleVehicles } from "@/lib/frotakAiIdle";
 import { getVapidPublicKey, sendWebPush } from "@/lib/webPush";
@@ -133,8 +134,29 @@ export async function dispatchFrotakIdlePush() {
     byWorkspace.set(row.workspace_id, [...(byWorkspace.get(row.workspace_id) ?? []), row]),
   );
 
-  const stats = { workspaces: byWorkspace.size, enviados: 0, removidos: 0, falhas: 0 };
+  const stats = {
+    workspaces: byWorkspace.size,
+    enviados: 0,
+    removidos: 0,
+    falhas: 0,
+    semModulo: 0,
+  };
   for (const [workspaceId, rows] of byWorkspace) {
+    try {
+      await assertWorkspaceModule(admin, workspaceId, "frotak_ai");
+    } catch (moduleError) {
+      if (isModuleDisabledError(moduleError)) {
+        stats.semModulo += rows.length;
+      } else {
+        stats.falhas += rows.length;
+        console.error("[frotakPush] entitlement check failed", {
+          workspaceId,
+          message: moduleError instanceof Error ? moduleError.message : String(moduleError),
+        });
+      }
+      continue;
+    }
+
     const { data: members } = await admin
       .from("workspace_memberships")
       .select("user_id")

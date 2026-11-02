@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import {
   Activity,
   ArrowUpRight,
@@ -62,7 +63,11 @@ import {
   stateHeat,
   systemHealth,
 } from "@/lib/mock";
-import { getMasterDashboardSnapshot, type MasterDashboardSnapshot } from "@/lib/masterControl";
+import {
+  emptyDashboardSnapshot,
+  type MasterDashboardSnapshot,
+} from "@/modules/tenants/domain/tenant";
+import { getDashboardSnapshotFn } from "@/modules/tenants/server";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -116,33 +121,25 @@ const kpiIcons = [
   ArrowUpRight,
 ];
 
-const emptySnapshot: MasterDashboardSnapshot = {
-  tenantCount: 0,
-  activeTenants: 0,
-  suspendedTenants: 0,
-  cancelledTenants: 0,
-  totalUsers: 0,
-  totalDrivers: 0,
-  totalTrailers: 0,
-  totalVehicles: 0,
-  totalTruckLimit: 0,
-  totalSenders: 0,
-  totalRecipients: 0,
-  totalProducts: 0,
-  inRouteVehicles: 0,
-  maintenanceVehicles: 0,
-  brokenVehicles: 0,
-};
-
 function Dashboard() {
-  const [snapshot, setSnapshot] = useState<MasterDashboardSnapshot>(emptySnapshot);
+  const [snapshot, setSnapshot] = useState<MasterDashboardSnapshot>(emptyDashboardSnapshot);
 
   useEffect(() => {
     let active = true;
 
     async function load() {
-      const data = await getMasterDashboardSnapshot();
-      if (active) setSnapshot(data);
+      try {
+        const data = await getDashboardSnapshotFn();
+        if (active) setSnapshot(data);
+      } catch (error) {
+        if (active) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Não foi possível carregar os números dos clientes.",
+          );
+        }
+      }
     }
 
     void load();

@@ -79,6 +79,9 @@ function historyToContents(history: FrotakAiMessage[]) {
 
 function publicError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("MODULE_DISABLED")) {
+    return "A Frotak IA nao esta liberada para a sua empresa. Fale com a FrotaK.";
+  }
   if (message.includes("GEMINI_API_KEY")) return "Chave da IA nao configurada.";
   if (message.includes("API key")) return "Chave da IA invalida ou nao autorizada.";
   if (message.includes("not found")) return "Modelo de IA nao encontrado ou indisponivel.";
