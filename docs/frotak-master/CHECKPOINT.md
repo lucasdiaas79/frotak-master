@@ -7,7 +7,8 @@ Atualizado em 2026-11-02. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", 
 | Item | Estado |
 |---|---|
 | Base | `main` @ `92a7213` (igual a `origin/main` em 2026-11-02) |
-| Branch | `feat/master-modulos-por-cliente`, commit local, **sem push** |
+| Branch | `feat/master-modulos-por-cliente`, commits locais, **sem push** |
+| Commits | `0cc1f2a` Master modular e liberação; `1f98144` registro de módulos do TMS; `659faef` Frotak IA; `e77489b` Rastreadores; `08de70b` App Motorista; `cad1469` Financeiro; `0643e97` Gestão de Frota |
 | Teste de ponta a ponta | Supabase local descartável (`project_id` `frotak-e2e`, portas 553xx) criado do zero e removido no fim |
 | Banco remoto e banco local `frota-master` | Não alterados |
 
@@ -17,6 +18,7 @@ Atualizado em 2026-11-02. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", 
 2. Master em `src/core` e `src/modules/{catalog,entitlements,tenants,provisioning}`. Toda server function exige login da equipe FrotaK.
 3. Tela Clientes com a ficha "Gerenciar" (produtos e módulos), cadastro com produtos e módulos, estados de erro e vazio, contagens reais.
 4. Cliente: menu, rotas e servidor obedecem às liberações. Sem TMS ou com o cliente suspenso, o menu fica só com Ajuda e a barra inferior do celular some; Suporte continua acessível.
+5. TMS separado em módulos (`src/modules/{fleet-core,financial,frotak-ai,frotak-tracking,driver-app,cte-issuance}`), cada um com manifesto e camadas `domain`, `application`, `infrastructure`, `api` e `ui`. Menu e bloqueio de rota vêm do registro de módulos. As rotas ficaram finas. Código movido, não reescrito; um commit por módulo.
 
 ## Verificações executadas
 
@@ -40,6 +42,11 @@ Atualizado em 2026-11-02. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", 
 - IA no servidor (`resolveFrotakAiContext`): aceita com o módulo ligado e recusa com `MODULE_DISABLED:frotak_ai`.
 
 **Código:** build OK nos dois apps; `tsc` sem erros novos (6 no Master e 19 no Cliente, os mesmos de antes); lint OK nos arquivos alterados; `test:frotak-ai` com 16 aprovados; `test:visual` com 3 aprovados.
+
+**Separação do TMS em módulos (2026-11-02):** em cada uma das 6 etapas, `tsc` com as mesmas 19 mensagens da base, build OK, `test:frotak-ai` (16), `test:visual` (3) e, a partir do financeiro, `test-financial-recurring.mjs` (6). Os avisos de lint que restam nos arquivos movidos já existiam antes. Depois da última etapa, num banco de teste novo:
+
+- os três roteiros acima rodaram de novo: 29 de 29 verificações OK;
+- um roteiro novo abriu as 28 telas do TMS (frota, cadastros, IA, financeiro, Suporte) com o dono do cliente de teste: 28 de 28 sem erro de execução, sem tela de erro e com conteúdo.
 
 ## Achados fora do escopo
 

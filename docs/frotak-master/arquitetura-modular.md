@@ -66,11 +66,46 @@ Regras que o build garante:
 - Toda server function do Master usa `.middleware([platformAuth])`. Leitura vale para qualquer papel; escrita exige `super_admin` ou `operations` (`assertCanOperate` no caso de uso e `private.require_master_operator` no banco).
 - Erros saem pelo `runUseCase`: um `DomainError` chega à tela com a mensagem; falha de infraestrutura vai para o log e o operador vê uma mensagem genérica.
 
+## Estrutura do código do TMS (`central-dias-main`)
+
+Cada módulo que o Master liga e desliga tem sua pasta, com o mesmo código usado no banco e no Master:
+
+```
+src/
+  modules/
+    registry.ts        lista dos módulos; monta menu e decide o dono de cada rota
+    types.ts           formato do manifesto (TmsModule)
+    fleet-core/        Gestão de Frota, o módulo base
+    financial/         Financeiro
+    frotak-ai/         Frotak IA
+    frotak-tracking/   Rastreadores (Sascar)
+    driver-app/        App Motorista
+    cte-issuance/      Emissão de CT-e (só manifesto; ainda sem telas)
+  lib/                 núcleo compartilhado: auth, supabase, tipos, formatação, liberações
+  components/          casca do app (AppLayout, ThemeToggle) e componentes visuais compartilhados
+  routes/              só definição de rota (URL, título, SSR); a tela vem do módulo
+```
+
+Dentro de cada módulo:
+
+| Pasta | O que tem |
+|---|---|
+| `module.ts` | Manifesto: código, rótulo, rotas que são do módulo e itens de menu |
+| `domain/` | Regras e tipos puros, sem acesso a banco ou rede |
+| `application/` | Orquestração: store da frota, ferramentas e ações da IA, sincronização Sascar |
+| `infrastructure/` | Acesso a Supabase, RPCs, Sascar SOAP, Web Push, voz e dados locais |
+| `api/` | Server functions e handlers HTTP chamados pelo navegador ou pelo agendador |
+| `ui/` | Telas (`ui/pages/`) e componentes do módulo |
+
+O `AppLayout` não tem mais listas de menu fixas. Ele pede ao registro os itens dos módulos liberados (`operationalNav`) e usa `moduleForPath` para bloquear a rota de um módulo desligado. A pasta `api/` não se chama `server/` porque o TanStack Start bloqueia no navegador qualquer import de uma pasta com esse nome.
+
+Limite desta etapa (escolha de 2026-11-02: separar sem reescrever): o código foi movido e classificado, mas não reescrito. Telas ainda chamam `infrastructure/` diretamente, e o financeiro e a frota não têm casos de uso separados das RPCs.
+
 ## Adicionar um módulo novo
 
 1. **Banco**: uma migration nova insere o módulo em `public.modules` com `platform_product_id` e `sort_order`. Se o módulo já existe em uso, faça o backfill de `workspace_modules` para não cortar ninguém.
 2. **Master**: acrescente o código em `ModuleCode` e em `modules` de `src/modules/catalog/domain/catalog.ts`. A tela de gerenciar e o formulário de cliente novo passam a mostrar o módulo sozinhos.
-3. **Cliente**: acrescente o código em `central-dias-main/src/lib/entitlements.ts` (`ModuleCode`, `MODULE_LABELS` e, se o módulo tiver rotas, `ROUTE_MODULES`).
+3. **TMS**: acrescente o código em `ModuleCode` (`central-dias-main/src/lib/entitlements.ts`), crie `src/modules/<modulo>/module.ts` com rotas e menu e inclua o manifesto em `src/modules/registry.ts`. O código do módulo vai nas pastas do próprio módulo; a rota em `src/routes` só importa a tela.
 4. **Bloqueio de verdade**: chame `assertWorkspaceModule` na server function do módulo e/ou `private.workspace_has_module` na RPC ou policy. Esconder no menu não basta.
 5. Atualize a tabela acima e `supabase/tests/master_product_module_entitlements.sql`.
 
@@ -107,3 +142,5 @@ Antes da migration, o código novo continua funcionando: o Master mostra todos o
 | Sincronização Sascar global (sem `workspaceId`) | Modo legado sem checagem de módulo. |
 | "Login como cliente" | Ainda envia o token do próprio usuário Master ao app cliente. Precisa de um fluxo de personificação próprio. |
 | Usuários do Master (tela `/usuarios`) e demais telas com dados fictícios | Fora deste escopo; continuam no protótipo. |
+| Camadas internas do TMS | Código movido e classificado, não reescrito. Próximo passo: casos de uso entre telas e `infrastructure/`, começando pelo financeiro. |
+| `central-dias-main/server/api/sascar/sync.post.ts` | Handler antigo do Nitro para `/api/sascar/sync`. Não entra no build (o endereço é atendido pela rota do TanStack); pode ser apagado. |
