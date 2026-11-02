@@ -29,10 +29,6 @@ function numberValue(value: unknown) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function hasFinancialPermission(access: FinancialAccess | null, permission: string) {
-  return Boolean(access?.isOwner || access?.permissions.includes(permission));
-}
-
 const FINANCIAL_ACCESS_TTL_MS = 60_000;
 let financialAccessCache: {
   scopeKey: string;

@@ -31,14 +31,12 @@ import {
 } from "@/components/ui/select";
 import {
   getFinancialAccess,
-  listFinancialPartners,
-} from "@/modules/financial/infrastructure/financialDocuments";
-import {
   getFleetProfitabilitySummary,
   getFreightProfitability,
   getPartnerProfitability,
   getVehicleProfitability,
-} from "@/modules/financial/infrastructure/profitability";
+  listFinancialPartners,
+} from "@/modules/financial/container";
 import type {
   BusinessPartner,
   FleetProfitabilitySummary,

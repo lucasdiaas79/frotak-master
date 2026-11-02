@@ -96,7 +96,7 @@ import {
   getFinancialAccess,
   getFinancialIntegrationSettings,
   listFinancialPartners,
-} from "@/modules/financial/infrastructure/financialDocuments";
+} from "@/modules/financial/container";
 import type {
   BusinessPartner,
   FinancialIntegrationSettings,

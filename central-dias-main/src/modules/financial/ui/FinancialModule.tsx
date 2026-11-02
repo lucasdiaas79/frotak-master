@@ -90,56 +90,51 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { listCanonicalFreights } from "@/modules/financial/infrastructure/financialMasterData";
 import {
+  approvePayrollEntry,
+  calculatePayrollEntry,
+  createPayrollEntry,
+  deletePayrollItem,
+  generateDueFinancialRecurringDocuments,
+  generateFinancialRecurringDocuments,
+  getCashFlowEntries,
+  getCashFlowSettlementBatchDetails,
+  getCashFlowSummary,
+  getDreDetail,
+  getDrePeriodStatement,
+  getDreSummary,
   getFinancialAccess,
-  getFinancialIntegrationHealth,
+  getFinancialDashboard,
   getFinancialDocumentDetails,
-  hasFinancialPermission,
+  getFinancialIntegrationHealth,
+  listCanonicalFreights,
+  listEmployeeFinancialProfiles,
   listFinancialAccounts,
   listFinancialChart,
   listFinancialCostCenters,
   listFinancialDocuments,
   listFinancialDocumentsPage,
   listFinancialPartners,
+  listFinancialRecurringRules,
+  listPayrollEntries,
+  postPayrollEntry,
   reverseSettlement,
   saveBusinessPartner,
   saveChartAccount,
   saveCostCenter,
+  saveEmployeeFinancialProfile,
   saveFinancialAccount,
   saveFinancialDocument,
+  saveFinancialDocumentWithRecurring,
+  saveFinancialRecurringRule,
+  savePayrollItem,
+  setFinancialRecurringRuleStatus,
   settleInstallment,
   voidFinancialDocument,
-} from "@/modules/financial/infrastructure/financialDocuments";
-import {
-  generateDueFinancialRecurringDocuments,
-  generateFinancialRecurringDocuments,
-  listFinancialRecurringRules,
-  saveFinancialRecurringRule,
-  saveFinancialDocumentWithRecurring,
-  setFinancialRecurringRuleStatus,
-} from "@/modules/financial/infrastructure/financialRecurring";
-import {
-  approvePayrollEntry,
-  calculatePayrollEntry,
-  createPayrollEntry,
-  deletePayrollItem,
-  listEmployeeFinancialProfiles,
-  listPayrollEntries,
-  postPayrollEntry,
-  saveEmployeeFinancialProfile,
-  savePayrollItem,
   voidPayrollEntry,
-} from "@/modules/financial/infrastructure/payroll";
-import {
-  getCashFlowSettlementBatchDetails,
-  getCashFlowEntries,
-  getCashFlowSummary,
-  getDreDetail,
-  getDrePeriodStatement,
-  getDreSummary,
-  getFinancialDashboard,
-} from "@/modules/financial/infrastructure/reports";
+  watchFinancialChanges,
+} from "@/modules/financial/container";
+import { hasFinancialPermission } from "@/modules/financial/domain/financialAccess";
 import type {
   BusinessPartner,
   CashFlowEntry,
@@ -173,7 +168,6 @@ import type {
   PayrollItemType,
 } from "@/modules/financial/domain/types";
 import { useFleet } from "@/modules/fleet-core/application/fleetStore";
-import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -200,7 +194,7 @@ function useFinancialRealtimeVersion(access: FinancialAccess) {
 
   useEffect(() => {
     let refreshTimer: number | null = null;
-    let subscribedOnce = false;
+
     const reconcile = (force = false) => {
       if (document.visibilityState === "hidden") return;
       if (!force && Date.now() - lastReconciledAt.current < 60_000) return;
@@ -215,34 +209,11 @@ function useFinancialRealtimeVersion(access: FinancialAccess) {
       }, 250);
     };
     const reconcileWhenVisible = () => reconcile(false);
-    const workspaceFilter = `workspace_id=eq.${access.workspaceId}`;
-    const channel = supabase
-      .channel(`financial-workspace:${access.workspaceId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "financial_documents", filter: workspaceFilter },
-        scheduleReconcile,
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "financial_integration_jobs",
-          filter: workspaceFilter,
-        },
-        scheduleReconcile,
-      )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          if (subscribedOnce) reconcile(true);
-          subscribedOnce = true;
-          return;
-        }
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          reconcile(false);
-        }
-      });
+    const stopWatching = watchFinancialChanges(access.workspaceId, {
+      onChange: scheduleReconcile,
+      onReconnected: () => reconcile(true),
+      onDisconnected: () => reconcile(false),
+    });
 
     window.addEventListener("focus", reconcileWhenVisible);
     window.addEventListener("pageshow", reconcileWhenVisible);
@@ -255,7 +226,7 @@ function useFinancialRealtimeVersion(access: FinancialAccess) {
       window.removeEventListener("focus", reconcileWhenVisible);
       window.removeEventListener("pageshow", reconcileWhenVisible);
       document.removeEventListener("visibilitychange", reconcileWhenVisible);
-      void supabase.removeChannel(channel);
+      stopWatching();
     };
   }, [access.workspaceId]);
 

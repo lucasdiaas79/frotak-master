@@ -12,7 +12,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getFinancialAccess } from "@/modules/financial/infrastructure/financialDocuments";
+import { getFinancialAccess } from "@/modules/financial/container";
 import type { FinancialAccess } from "@/modules/financial/domain/types";
 import { cn } from "@/lib/utils";
 
