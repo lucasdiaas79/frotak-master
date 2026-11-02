@@ -7,7 +7,7 @@ import type {
   PayrollEntryInput,
   PayrollItem,
   PayrollItemInput,
-} from "./types";
+} from "../domain/types";
 
 function fail(operation: string, error: { message: string } | null) {
   if (error) throw new Error(`${operation}: ${error.message}`);

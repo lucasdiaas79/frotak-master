@@ -17,7 +17,7 @@ import type {
   FinancialIntegrationSettings,
   FinancialSettlement,
   SettlementInput,
-} from "./types";
+} from "../domain/types";
 import { perfCount, perfStart } from "@/lib/performance";
 
 function fail(operation: string, error: { message: string } | null) {

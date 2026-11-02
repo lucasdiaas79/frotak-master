@@ -4,7 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 
-const source = readFileSync(new URL("../src/lib/financial/phase5.ts", import.meta.url), "utf8");
+const source = readFileSync(new URL("../src/modules/financial/infrastructure/financialRecurring.ts", import.meta.url), "utf8");
 
 function service(error = null) {
   const calls = [];

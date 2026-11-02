@@ -52,7 +52,7 @@ import {
 } from "recharts";
 import { PageHeader } from "@/components/PageHeader";
 import { perfRender } from "@/lib/performance";
-import { FinancialNav } from "@/components/financial/FinancialNav";
+import { FinancialNav } from "@/modules/financial/ui/FinancialNav";
 import frotakLogo from "@/assets/logo-central.png";
 import joTransportesLogo from "@/assets/logo-jo-transportes.png";
 import { Badge } from "@/components/ui/badge";
@@ -90,7 +90,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { listCanonicalFreights } from "@/lib/financial/foundation";
+import { listCanonicalFreights } from "@/modules/financial/infrastructure/financialMasterData";
 import {
   getFinancialAccess,
   getFinancialIntegrationHealth,
@@ -110,7 +110,7 @@ import {
   saveFinancialDocument,
   settleInstallment,
   voidFinancialDocument,
-} from "@/lib/financial/phase2";
+} from "@/modules/financial/infrastructure/financialDocuments";
 import {
   generateDueFinancialRecurringDocuments,
   generateFinancialRecurringDocuments,
@@ -118,7 +118,7 @@ import {
   saveFinancialRecurringRule,
   saveFinancialDocumentWithRecurring,
   setFinancialRecurringRuleStatus,
-} from "@/lib/financial/phase5";
+} from "@/modules/financial/infrastructure/financialRecurring";
 import {
   approvePayrollEntry,
   calculatePayrollEntry,
@@ -130,7 +130,7 @@ import {
   saveEmployeeFinancialProfile,
   savePayrollItem,
   voidPayrollEntry,
-} from "@/lib/financial/payroll";
+} from "@/modules/financial/infrastructure/payroll";
 import {
   getCashFlowSettlementBatchDetails,
   getCashFlowEntries,
@@ -139,7 +139,7 @@ import {
   getDrePeriodStatement,
   getDreSummary,
   getFinancialDashboard,
-} from "@/lib/financial/reports";
+} from "@/modules/financial/infrastructure/reports";
 import type {
   BusinessPartner,
   CashFlowEntry,
@@ -171,7 +171,7 @@ import type {
   PayrollEntry,
   PayrollEntryStatus,
   PayrollItemType,
-} from "@/lib/financial/types";
+} from "@/modules/financial/domain/types";
 import { useFleet } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";

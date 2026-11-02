@@ -6,7 +6,7 @@ import type {
   ChartAccount,
   CostCenter,
   FinancialDocument,
-} from "./types";
+} from "../domain/types";
 
 function requireData<T>(data: T | null, error: { message: string } | null, operation: string): T {
   if (error) throw new Error(`${operation}: ${error.message}`);

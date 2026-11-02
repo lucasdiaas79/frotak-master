@@ -96,8 +96,11 @@ import {
   getFinancialAccess,
   getFinancialIntegrationSettings,
   listFinancialPartners,
-} from "@/lib/financial/phase2";
-import type { BusinessPartner, FinancialIntegrationSettings } from "@/lib/financial/types";
+} from "@/modules/financial/infrastructure/financialDocuments";
+import type {
+  BusinessPartner,
+  FinancialIntegrationSettings,
+} from "@/modules/financial/domain/types";
 import { vehicleTrailerIds, vehicleTrailerLabel } from "@/lib/vehicle-trailers";
 import {
   ALL_STATUSES,

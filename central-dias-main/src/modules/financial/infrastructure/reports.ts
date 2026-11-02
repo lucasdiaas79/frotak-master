@@ -9,7 +9,7 @@ import type {
   DreSummary,
   FinancialDashboard,
   FinancialReportPeriod,
-} from "./types";
+} from "../domain/types";
 import { perfCount, perfStart } from "@/lib/performance";
 
 const financialDashboardInFlight = new Map<string, Promise<FinancialDashboard>>();
@@ -102,9 +102,7 @@ export async function getCashFlowEntries(
         .select("id,batch_id,batch_name")
         .in("id", settlementIds);
       if (!batchError) {
-        const batchBySettlement = new Map(
-          (batchRows ?? []).map((row) => [row.id, row]),
-        );
+        const batchBySettlement = new Map((batchRows ?? []).map((row) => [row.id, row]));
         return entries.map((entry) => {
           const batch = entry.settlement_id
             ? batchBySettlement.get(entry.settlement_id)

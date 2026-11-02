@@ -47,12 +47,7 @@ export interface BusinessPartner {
 }
 
 export type AccountType =
-  | "asset"
-  | "liability"
-  | "equity"
-  | "revenue"
-  | "expense"
-  | "contra_revenue";
+  "asset" | "liability" | "equity" | "revenue" | "expense" | "contra_revenue";
 
 export type DreGroup =
   | "gross_revenue"
@@ -92,11 +87,7 @@ export interface CostCenter {
 
 export type FinancialDocumentDirection = "receivable" | "payable";
 export type FinancialDocumentStatus =
-  | "draft"
-  | "posted"
-  | "partially_settled"
-  | "settled"
-  | "voided";
+  "draft" | "posted" | "partially_settled" | "settled" | "voided";
 
 export interface FinancialDocument {
   id: string;
@@ -323,10 +314,7 @@ export interface FinancialIntegrationHealth {
 }
 
 export type FinancialRecurringKind =
-  | "salary"
-  | "recurring_expense"
-  | "recurring_income"
-  | "fixed_cost";
+  "salary" | "recurring_expense" | "recurring_income" | "fixed_cost";
 export type FinancialRecurringFrequency = "MONTHLY" | "WEEKLY" | "YEARLY";
 export type FinancialRecurringStatus = "active" | "paused" | "ended";
 
@@ -801,10 +789,7 @@ export interface FinancialDashboard {
 }
 
 export type ProfitabilitySort =
-  | "most_profitable"
-  | "lowest_profit"
-  | "highest_revenue"
-  | "highest_cost";
+  "most_profitable" | "lowest_profit" | "highest_revenue" | "highest_cost";
 
 export type ProfitabilityView = "vehicles" | "freights" | "partners";
 

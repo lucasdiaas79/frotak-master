@@ -12,7 +12,7 @@
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
-import { FinancialNav } from "@/components/financial/FinancialNav";
+import { FinancialNav } from "@/modules/financial/ui/FinancialNav";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,13 +29,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getFinancialAccess, listFinancialPartners } from "@/lib/financial/phase2";
+import {
+  getFinancialAccess,
+  listFinancialPartners,
+} from "@/modules/financial/infrastructure/financialDocuments";
 import {
   getFleetProfitabilitySummary,
   getFreightProfitability,
   getPartnerProfitability,
   getVehicleProfitability,
-} from "@/lib/financial/profitability";
+} from "@/modules/financial/infrastructure/profitability";
 import type {
   BusinessPartner,
   FleetProfitabilitySummary,
@@ -45,7 +48,7 @@ import type {
   ProfitabilitySort,
   ProfitabilityView,
   VehicleProfitabilityRow,
-} from "@/lib/financial/types";
+} from "@/modules/financial/domain/types";
 import { useFleet } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -141,8 +144,14 @@ const demoFreightsProfit: FreightProfitabilityRow[] = demoVehiclesProfit.map((ve
   productId: "demo-product-1",
   productName: index % 2 ? "Milho" : "Açúcar",
   paymentType: index % 3 === 0 ? "FOB" : "CIF",
-  billingPartnerId: index === 0 ? "demo-partner-neutral" : index === 9 ? "demo-partner-risk" : "demo-partner-strong",
-  billingPartnerName: index === 0 ? "Cliente Neutro" : index === 9 ? "Cliente Risco" : "Cliente Forte",
+  billingPartnerId:
+    index === 0
+      ? "demo-partner-neutral"
+      : index === 9
+        ? "demo-partner-risk"
+        : "demo-partner-strong",
+  billingPartnerName:
+    index === 0 ? "Cliente Neutro" : index === 9 ? "Cliente Risco" : "Cliente Forte",
   revenue: Math.round(vehicle.revenue * 0.55),
   costs: Math.round(vehicle.costs * 0.55),
   result: Math.round(vehicle.result * 0.55),
@@ -422,7 +431,8 @@ function RankingCard({
   onClick: () => void;
 }) {
   const isNegative = item.result < 0;
-  const barWidth = maxResult > 0 ? Math.max(6, Math.min(100, (Math.abs(item.result) / maxResult) * 100)) : 0;
+  const barWidth =
+    maxResult > 0 ? Math.max(6, Math.min(100, (Math.abs(item.result) / maxResult) * 100)) : 0;
   return (
     <button
       type="button"
@@ -435,7 +445,13 @@ function RankingCard({
     >
       <div className="financial-profitability-rank-top">
         <span>#{String(index + 1).padStart(2, "0")}</span>
-        {item.dimension === "vehicles" ? <Truck className="size-4" /> : item.dimension === "freights" ? <RouteIcon className="size-4" /> : <Landmark className="size-4" />}
+        {item.dimension === "vehicles" ? (
+          <Truck className="size-4" />
+        ) : item.dimension === "freights" ? (
+          <RouteIcon className="size-4" />
+        ) : (
+          <Landmark className="size-4" />
+        )}
       </div>
       <div className="financial-profitability-rank-title">
         <strong>{item.title}</strong>
@@ -455,8 +471,12 @@ function RankingCard({
             {percent(item.margin)}
           </strong>
         </span>
-        <span>Receita <strong>{money(item.revenue)}</strong></span>
-        <span>Custos <strong>{money(item.costs)}</strong></span>
+        <span>
+          Receita <strong>{money(item.revenue)}</strong>
+        </span>
+        <span>
+          Custos <strong>{money(item.costs)}</strong>
+        </span>
       </div>
       <div className="financial-profitability-bar" aria-hidden="true">
         <span style={{ width: `${barWidth}%` }} />
@@ -465,7 +485,13 @@ function RankingCard({
   );
 }
 
-function FreightList({ rows, onSelect }: { rows: FreightProfitabilityRow[]; onSelect?: (item: RankingItem) => void }) {
+function FreightList({
+  rows,
+  onSelect,
+}: {
+  rows: FreightProfitabilityRow[];
+  onSelect?: (item: RankingItem) => void;
+}) {
   if (!rows.length) {
     return <EmptyState />;
   }
@@ -648,7 +674,9 @@ export function FleetProfitabilityPage() {
     const searched = rankingSearch.trim().toLocaleLowerCase("pt-BR");
     const rows = searched
       ? activeRanking.filter((item) =>
-          `${item.title} ${item.subtitle} ${item.meta}`.toLocaleLowerCase("pt-BR").includes(searched),
+          `${item.title} ${item.subtitle} ${item.meta}`
+            .toLocaleLowerCase("pt-BR")
+            .includes(searched),
         )
       : activeRanking;
     return sortRankingItems(rows, rankingSort);
@@ -660,7 +688,9 @@ export function FleetProfitabilityPage() {
       return freightsProfit.filter((freight) => freight.vehicleId === selectedItem.raw.vehicleId);
     }
     if (selectedItem.dimension === "partners") {
-      return freightsProfit.filter((freight) => freight.billingPartnerId === selectedItem.raw.partnerId);
+      return freightsProfit.filter(
+        (freight) => freight.billingPartnerId === selectedItem.raw.partnerId,
+      );
     }
     return [selectedItem.raw];
   }, [freightsProfit, selectedItem]);
@@ -960,9 +990,7 @@ export function FleetProfitabilityPage() {
         </div>
       )}
 
-      {error && (
-        <div className="financial-profitability-error">{error}</div>
-      )}
+      {error && <div className="financial-profitability-error">{error}</div>}
 
       <section className="financial-profitability-ranking">
         <div className="financial-profitability-ranking-head">
@@ -1042,8 +1070,16 @@ export function FleetProfitabilityPage() {
             sinônimo de performance.
           </p>
           <div>
-            <MetricMini label="Itens analisados" value={String(activeRanking.length)} icon={RouteIcon} />
-            <MetricMini label="Prejuízos" value={String(activeRanking.filter((item) => item.result < 0).length)} icon={ArrowDown} />
+            <MetricMini
+              label="Itens analisados"
+              value={String(activeRanking.length)}
+              icon={RouteIcon}
+            />
+            <MetricMini
+              label="Prejuízos"
+              value={String(activeRanking.filter((item) => item.result < 0).length)}
+              icon={ArrowDown}
+            />
           </div>
         </div>
       </section>

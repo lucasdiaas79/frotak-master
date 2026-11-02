@@ -12,8 +12,8 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getFinancialAccess } from "@/lib/financial/phase2";
-import type { FinancialAccess } from "@/lib/financial/types";
+import { getFinancialAccess } from "@/modules/financial/infrastructure/financialDocuments";
+import type { FinancialAccess } from "@/modules/financial/domain/types";
 import { cn } from "@/lib/utils";
 
 const financeNav = [
