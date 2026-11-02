@@ -6,11 +6,7 @@ export type FreightStageId = VehicleFreightStage;
 export type FreightTone = "primary" | "success" | "warning" | "maintenance" | "muted" | "info";
 
 export type FreightMacroStageId =
-  | "DISPONIVEIS"
-  | "INDO_CARREGAR"
-  | "AGUARDANDO_CTE"
-  | "EM_ROTA_ENTREGA"
-  | "ROTA_FINALIZADA";
+  "DISPONIVEIS" | "INDO_CARREGAR" | "AGUARDANDO_CTE" | "EM_ROTA_ENTREGA" | "ROTA_FINALIZADA";
 
 export interface FreightStage {
   id: FreightStageId;

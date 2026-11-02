@@ -1,4 +1,8 @@
-import { freightStageById, nextFreightStage, type FreightStageId } from "@/lib/freight-workflow";
+import {
+  freightStageById,
+  nextFreightStage,
+  type FreightStageId,
+} from "@/modules/fleet-core/domain/freightWorkflow";
 import { supabase } from "@/lib/supabase";
 import type {
   Driver,

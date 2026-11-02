@@ -21,11 +21,14 @@ import {
   missingDocumentsForTarget,
   pendingDocumentLabel,
   skippedTargetLabels,
-} from "@/lib/freight-kanban";
-import type { ManualTargetCode } from "@/lib/freight-kanban";
-import { freightMacroStageById } from "@/lib/freight-workflow";
-import type { FreightMacroStageId } from "@/lib/freight-workflow";
-import { manualMoveFreightCard, WorkflowConflictError } from "@/lib/services/manual-kanban";
+} from "@/modules/fleet-core/domain/freightKanban";
+import type { ManualTargetCode } from "@/modules/fleet-core/domain/freightKanban";
+import { freightMacroStageById } from "@/modules/fleet-core/domain/freightWorkflow";
+import type { FreightMacroStageId } from "@/modules/fleet-core/domain/freightWorkflow";
+import {
+  manualMoveFreightCard,
+  WorkflowConflictError,
+} from "@/modules/fleet-core/infrastructure/manual-kanban";
 import type { FreightDocument, Vehicle } from "@/lib/types";
 
 const INFORMATION_SOURCES = [

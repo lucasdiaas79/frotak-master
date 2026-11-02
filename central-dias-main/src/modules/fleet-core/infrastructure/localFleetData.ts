@@ -1,7 +1,7 @@
-import assignmentsSql from "../../supabase/migrations/202606100002_reset_fleet_from_spreadsheet.sql?raw";
-import trailersCatalogSql from "../../supabase/migrations/202606150001_refresh_trailers_from_final_fleet_sheet.sql?raw";
-import vehicleMetadataSql from "../../supabase/migrations/202606150004_refresh_vehicle_metadata_from_final_fleet_sheet.sql?raw";
-import driverPhonesSql from "../../supabase/migrations/202606150005_refresh_driver_phones_from_final_fleet_sheet.sql?raw";
+import assignmentsSql from "../../../../supabase/migrations/202606100002_reset_fleet_from_spreadsheet.sql?raw";
+import trailersCatalogSql from "../../../../supabase/migrations/202606150001_refresh_trailers_from_final_fleet_sheet.sql?raw";
+import vehicleMetadataSql from "../../../../supabase/migrations/202606150004_refresh_vehicle_metadata_from_final_fleet_sheet.sql?raw";
+import driverPhonesSql from "../../../../supabase/migrations/202606150005_refresh_driver_phones_from_final_fleet_sheet.sql?raw";
 import type {
   Driver,
   FleetEvent,
@@ -12,7 +12,7 @@ import type {
   Vehicle,
   VehicleSituation,
   VehicleStatus,
-} from "./types";
+} from "../../../lib/types";
 
 export const CENTRAL_TENANT_ID = "00000000-0000-0000-0000-000000000001";
 

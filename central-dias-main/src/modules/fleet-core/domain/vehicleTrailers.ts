@@ -1,7 +1,11 @@
 import type { Trailer, Vehicle } from "@/lib/types";
 
 export function vehicleTrailerIds(vehicle: Pick<Vehicle, "trailerId" | "trailerIds">): string[] {
-  return vehicle.trailerIds?.length ? vehicle.trailerIds : vehicle.trailerId ? [vehicle.trailerId] : [];
+  return vehicle.trailerIds?.length
+    ? vehicle.trailerIds
+    : vehicle.trailerId
+      ? [vehicle.trailerId]
+      : [];
 }
 
 export function vehicleTrailerLabel(

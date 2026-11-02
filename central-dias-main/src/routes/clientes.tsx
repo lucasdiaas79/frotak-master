@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { CustomersPage } from "@/components/CustomersPage";
+import { CustomersPage } from "@/modules/fleet-core/ui/CustomersPage";
 
 export const Route = createFileRoute("/clientes")({
   head: () => ({

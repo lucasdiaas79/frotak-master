@@ -172,7 +172,7 @@ import type {
   PayrollEntryStatus,
   PayrollItemType,
 } from "@/modules/financial/domain/types";
-import { useFleet } from "@/lib/store";
+import { useFleet } from "@/modules/fleet-core/application/fleetStore";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 

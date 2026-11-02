@@ -1,6 +1,9 @@
 import { hasSupabaseConfig, supabase } from "@/lib/supabase";
 import { getActiveTenantId, getCurrentAccessToken, getCurrentUser, getProfile } from "@/lib/auth";
-import { getLocalSascarSyncState, saveLocalSascarSyncState } from "@/lib/localFleetData";
+import {
+  getLocalSascarSyncState,
+  saveLocalSascarSyncState,
+} from "@/modules/fleet-core/infrastructure/localFleetData";
 
 export type SascarSyncSource = "cron" | "manual";
 

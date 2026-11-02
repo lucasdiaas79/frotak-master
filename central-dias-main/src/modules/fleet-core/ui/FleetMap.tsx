@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { Map as LeafletMap, Marker } from "leaflet";
-import { pendingActionKindOfVehicle, vehicleMapColor } from "@/lib/freight-workflow";
+import {
+  pendingActionKindOfVehicle,
+  vehicleMapColor,
+} from "@/modules/fleet-core/domain/freightWorkflow";
 import type { Vehicle } from "@/lib/types";
 
 interface Props {

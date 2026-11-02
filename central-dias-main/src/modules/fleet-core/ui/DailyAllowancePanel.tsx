@@ -18,7 +18,7 @@ import {
   type DailyAllowanceSettings,
   type DailyAllowanceStatus,
   type DriverDailyAllowance,
-} from "@/lib/services/daily-allowances";
+} from "@/modules/fleet-core/infrastructure/daily-allowances";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const dateTime = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });

@@ -32,14 +32,14 @@ import {
   isAuthSessionError,
   signOut,
 } from "@/lib/auth";
-import { useFleet } from "@/lib/store";
+import { useFleet } from "@/modules/fleet-core/application/fleetStore";
 import type { Profile } from "@/lib/types";
 import {
   clearFinancialAccessCache,
   getFinancialAccess,
 } from "@/modules/financial/infrastructure/financialDocuments";
 import type { FinancialAccess } from "@/modules/financial/domain/types";
-import { vehicleTrailerLabel } from "@/lib/vehicle-trailers";
+import { vehicleTrailerLabel } from "@/modules/fleet-core/domain/vehicleTrailers";
 import { perfCount, perfStart } from "@/lib/performance";
 import { hasSupabaseConfig, supabase } from "@/lib/supabase";
 import {

@@ -1,5 +1,5 @@
 import type { FreightDocument, Vehicle, VehicleFreightStage, VehicleStatus } from "@/lib/types";
-import type { FreightMacroStageId } from "@/lib/freight-workflow";
+import type { FreightMacroStageId } from "@/modules/fleet-core/domain/freightWorkflow";
 
 export type PendingFreightDocument = "nota_fiscal" | "cte_mdfe";
 

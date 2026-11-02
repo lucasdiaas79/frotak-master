@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useFleet } from "@/lib/store";
+import { useFleet } from "@/modules/fleet-core/application/fleetStore";
 import type { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 

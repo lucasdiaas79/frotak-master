@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
-import { vehicleFromRow } from "@/lib/services/mappers";
-import type { ManualTargetCode } from "@/lib/freight-kanban";
+import { vehicleFromRow } from "@/modules/fleet-core/infrastructure/mappers";
+import type { ManualTargetCode } from "@/modules/fleet-core/domain/freightKanban";
 import type { Vehicle } from "@/lib/types";
 
 export interface ManualFreightMoveInput {

@@ -4,7 +4,7 @@ import { Building2, LinkIcon, Loader2, MapPin, Pencil, Plus, Search } from "luci
 import {
   GoogleLocationPicker,
   type GoogleLocationSelection,
-} from "@/components/GoogleLocationPicker";
+} from "@/modules/fleet-core/ui/GoogleLocationPicker";
 import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,8 @@ import {
   resolveGoogleMapsLink,
   searchPlaceSuggestions,
   type PlaceSuggestion,
-} from "@/lib/geocoding";
-import { useFleet } from "@/lib/store";
+} from "@/modules/fleet-core/api/geocoding";
+import { useFleet } from "@/modules/fleet-core/application/fleetStore";
 import { UFS } from "@/lib/types";
 import type { Recipient, Sender } from "@/lib/types";
 import { cn } from "@/lib/utils";

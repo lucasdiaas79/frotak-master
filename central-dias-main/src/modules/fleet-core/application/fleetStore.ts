@@ -9,13 +9,13 @@ import type {
   Vehicle,
   VehicleFreightStage,
   VehicleStatus,
-} from "./types";
-import * as vehicleService from "./services/vehicles";
-import * as driverService from "./services/drivers";
-import * as trailerService from "./services/trailers";
-import * as partiesService from "./services/parties";
-import * as productsService from "./services/products";
-import * as eventsService from "./services/fleet-events";
+} from "../../../lib/types";
+import * as vehicleService from "../infrastructure/vehicles";
+import * as driverService from "../infrastructure/drivers";
+import * as trailerService from "../infrastructure/trailers";
+import * as partiesService from "../infrastructure/parties";
+import * as productsService from "../infrastructure/products";
+import * as eventsService from "../infrastructure/fleet-events";
 import {
   driverFromRow,
   fleetEventFromRow,
@@ -24,11 +24,15 @@ import {
   senderFromRow,
   trailerFromRow,
   vehicleFromRow,
-} from "./services/mappers";
-import { supabase } from "./supabase";
-import { getActiveTenantId, shouldUseLocalTenantData } from "./auth";
-import { loadLocalFleetData, nextLocalId, saveLocalFleetData } from "./localFleetData";
-import { perfCount, perfStart } from "./performance";
+} from "../infrastructure/mappers";
+import { supabase } from "../../../lib/supabase";
+import { getActiveTenantId, shouldUseLocalTenantData } from "../../../lib/auth";
+import {
+  loadLocalFleetData,
+  nextLocalId,
+  saveLocalFleetData,
+} from "../infrastructure/localFleetData";
+import { perfCount, perfStart } from "../../../lib/performance";
 
 const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -37,13 +41,7 @@ function dbId(id?: string) {
 }
 
 export type FleetDomain =
-  | "vehicles"
-  | "drivers"
-  | "trailers"
-  | "senders"
-  | "recipients"
-  | "products"
-  | "events";
+  "vehicles" | "drivers" | "trailers" | "senders" | "recipients" | "products" | "events";
 
 type LoadOptions = { force?: boolean; silent?: boolean };
 

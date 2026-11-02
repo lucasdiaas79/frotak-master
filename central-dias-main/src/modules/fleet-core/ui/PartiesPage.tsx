@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useFleet } from "@/lib/store";
+import { useFleet } from "@/modules/fleet-core/application/fleetStore";
 import { PageHeader } from "@/components/PageHeader";
 import { Modal } from "@/components/Modal";
-import { LocationPickerMap } from "@/components/LocationPickerMap";
+import { LocationPickerMap } from "@/modules/fleet-core/ui/LocationPickerMap";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { searchPlaceSuggestions, type PlaceSuggestion } from "@/lib/geocoding";
+import { searchPlaceSuggestions, type PlaceSuggestion } from "@/modules/fleet-core/api/geocoding";
 import { UFS } from "@/lib/types";
 import type { Recipient, Sender } from "@/lib/types";
 import { Building2, Loader2, MapPin, Pencil, Plus, Search } from "lucide-react";
