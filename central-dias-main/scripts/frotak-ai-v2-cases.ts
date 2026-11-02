@@ -1,4 +1,4 @@
-import type { FrotakAiToolName } from "../src/lib/frotakAiToolCatalog.ts";
+import type { FrotakAiToolName } from "../src/modules/frotak-ai/domain/frotakAiToolCatalog.ts";
 
 export type FrotakAiEvaluationCase = {
   category:

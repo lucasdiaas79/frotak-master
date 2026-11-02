@@ -1,5 +1,8 @@
-import { canReadFinancial, type FrotakAiContext } from "@/lib/frotakAiContext";
-import type { getSupabaseServerClient } from "@/lib/frotakAiContext";
+import {
+  canReadFinancial,
+  type FrotakAiContext,
+} from "@/modules/frotak-ai/infrastructure/frotakAiContext";
+import type { getSupabaseServerClient } from "@/modules/frotak-ai/infrastructure/frotakAiContext";
 
 // Veiculos sem viagem e rendimento da frota. Tudo e calculado aqui com o token do usuario
 // (RLS); a IA so repete. O motivo vem do que o sistema ja sabe (manutencao, motorista,

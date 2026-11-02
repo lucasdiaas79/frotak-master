@@ -3,32 +3,35 @@ import {
   canReadFinancial,
   type FrotakAiContext,
   getSupabaseServerClient,
-} from "@/lib/frotakAiContext";
+} from "@/modules/frotak-ai/infrastructure/frotakAiContext";
 import {
   FROTAK_AI_FINANCIAL_TOOL_NAMES,
   isKnownFrotakAiToolName,
   type FrotakAiToolName,
-} from "@/lib/frotakAiToolCatalog";
-import { createDeterministicFrotakAnswer } from "@/lib/frotakAiDeterministic";
+} from "@/modules/frotak-ai/domain/frotakAiToolCatalog";
+import { createDeterministicFrotakAnswer } from "@/modules/frotak-ai/domain/frotakAiDeterministic";
 import {
   FROTAK_AI_EXPENSE_CATEGORIES,
   FROTAK_AI_VEHICLE_SITUATIONS,
   isFrotakAiActionName,
   prepareFrotakAiAction,
-} from "@/lib/frotakAiActions";
-import { listFrotakAiAlerts } from "@/lib/frotakAiAlerts";
-import { computeFleetUtilization, listIdleVehicles } from "@/lib/frotakAiIdle";
+} from "@/modules/frotak-ai/application/frotakAiActions";
+import { listFrotakAiAlerts } from "@/modules/frotak-ai/application/frotakAiAlerts";
+import {
+  computeFleetUtilization,
+  listIdleVehicles,
+} from "@/modules/frotak-ai/application/frotakAiIdle";
 import {
   FROTAK_AI_DOMAIN_NAMES,
   frotakAiDomainCatalogText,
   queryFrotakAiDomain,
   searchFrotakAiTenant,
   summarizeFrotakAiDomain,
-} from "@/lib/frotakAiDomains";
-import { searchFrotakAiWeb } from "@/lib/frotakAiWebSearch";
+} from "@/modules/frotak-ai/application/frotakAiDomains";
+import { searchFrotakAiWeb } from "@/modules/frotak-ai/infrastructure/frotakAiWebSearch";
 import { searchManualSupport } from "@/routes/manual";
 
-export type { FrotakAiToolName } from "@/lib/frotakAiToolCatalog";
+export type { FrotakAiToolName } from "@/modules/frotak-ai/domain/frotakAiToolCatalog";
 
 export type FrotakAiToolCall = {
   id?: string;

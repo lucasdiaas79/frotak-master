@@ -8,15 +8,18 @@ import {
   type FunctionResponse,
 } from "@google/genai";
 import { createServerFn } from "@tanstack/react-start";
-import { createFrotakAiContextSummary, resolveFrotakAiContext } from "@/lib/frotakAiContext";
-import { executeFrotakAiAction } from "@/lib/frotakAiActions";
-import { deterministicAnswerFromToolResult } from "@/lib/frotakAiDeterministic";
+import {
+  createFrotakAiContextSummary,
+  resolveFrotakAiContext,
+} from "@/modules/frotak-ai/infrastructure/frotakAiContext";
+import { executeFrotakAiAction } from "@/modules/frotak-ai/application/frotakAiActions";
+import { deterministicAnswerFromToolResult } from "@/modules/frotak-ai/domain/frotakAiDeterministic";
 import {
   extractFrotakAiPendingAction,
   FROTAK_AI_BRIEFING_TRIGGER,
   stripFrotakAiActionToken,
   type FrotakAiPendingAction,
-} from "@/lib/frotakAiToolCatalog";
+} from "@/modules/frotak-ai/domain/frotakAiToolCatalog";
 import {
   createFrotakAiTenantSnapshot,
   executeFrotakAiTool,
@@ -24,7 +27,7 @@ import {
   isFrotakAiToolName,
   normalizeFrotakAiToolCall,
   type FrotakAiToolCall,
-} from "@/lib/frotakAiTools";
+} from "@/modules/frotak-ai/application/frotakAiTools";
 
 export const FROTAK_AI_TEXT_MODEL = "gemini-3.8-flash";
 export const FROTAK_AI_TEXT_FALLBACK_MODEL = "gemini-3.6-flash";

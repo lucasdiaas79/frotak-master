@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 // Caminho relativo: os testes de IA importam este arquivo direto pelo Node, sem o alias "@/".
-import { assertWorkspaceModule } from "./entitlements.ts";
+import { assertWorkspaceModule } from "../../../lib/entitlements.ts";
 
 export type FrotakAiContext = {
   accessToken: string;

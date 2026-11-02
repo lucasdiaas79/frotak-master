@@ -5,7 +5,7 @@ import {
   getFrotakPushPublicKey,
   removeFrotakPushSubscription,
   saveFrotakPushSubscription,
-} from "@/lib/frotakPush";
+} from "@/modules/frotak-ai/api/frotakPush";
 import { cn } from "@/lib/utils";
 
 type Props = {

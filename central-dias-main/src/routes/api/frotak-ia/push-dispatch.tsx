@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { dispatchFrotakIdlePush } from "@/lib/frotakPush";
+import { dispatchFrotakIdlePush } from "@/modules/frotak-ai/api/frotakPush";
 
 // Chamado pelo agendador (pg_cron no Supabase) com o token FROTAK_PUSH_CRON_TOKEN.
 

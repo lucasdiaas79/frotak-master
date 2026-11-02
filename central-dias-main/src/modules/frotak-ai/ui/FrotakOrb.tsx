@@ -201,7 +201,8 @@ class ParticleOrbRenderer {
     const amp = this.config.amp + level * this.config.gain;
     // Encolhe a base conforme a deformacao cresce, para os picos nao sairem do canvas.
     const radius =
-      (Math.min(W, H) * RADIUS * this.config.scale * (1 + level * 0.05)) / (1 + (amp - 0.075) * 0.9);
+      (Math.min(W, H) * RADIUS * this.config.scale * (1 + level * 0.05)) /
+      (1 + (amp - 0.075) * 0.9);
     const centerX = W / 2;
     const centerY = H / 2;
     const phase = this.phase;

@@ -1,9 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { assertWorkspaceModule, isModuleDisabledError } from "@/lib/entitlements";
-import { resolveFrotakAiContext, type FrotakAiContext } from "@/lib/frotakAiContext";
-import { listIdleVehicles } from "@/lib/frotakAiIdle";
-import { getVapidPublicKey, sendWebPush } from "@/lib/webPush";
-import { getSupabaseAdmin } from "../../server/lib/supabase-admin.ts";
+import {
+  resolveFrotakAiContext,
+  type FrotakAiContext,
+} from "@/modules/frotak-ai/infrastructure/frotakAiContext";
+import { listIdleVehicles } from "@/modules/frotak-ai/application/frotakAiIdle";
+import { getVapidPublicKey, sendWebPush } from "@/modules/frotak-ai/infrastructure/webPush";
+import { getSupabaseAdmin } from "../../../../server/lib/supabase-admin.ts";
 
 // Aviso por push no celular. O aparelho de cada usuario fica em frotak_push_subscriptions
 // (gravado so pelo servidor, com service role). O agendador chama dispatchFrotakIdlePush.

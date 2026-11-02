@@ -1,6 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
-import { getSupabaseServerClient, type FrotakAiContext } from "@/lib/frotakAiContext";
-import { FROTAK_AI_IDLE_REASON_EVENT } from "@/lib/frotakAiIdle";
+import {
+  getSupabaseServerClient,
+  type FrotakAiContext,
+} from "@/modules/frotak-ai/infrastructure/frotakAiContext";
+import { FROTAK_AI_IDLE_REASON_EVENT } from "@/modules/frotak-ai/application/frotakAiIdle";
 
 // Acoes de escrita da Frotak IA. A IA so PREPARA a acao: a ferramenta devolve um resumo e um
 // token assinado. Nada e gravado ate o usuario tocar em "Confirmar" na tela, que chama

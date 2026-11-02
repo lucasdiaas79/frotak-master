@@ -894,4 +894,4 @@ function sanitizeLiveText(text: string) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
-import { isFrotakAiTechnicalFailure } from "@/lib/frotakAiToolCatalog";
+import { isFrotakAiTechnicalFailure } from "@/modules/frotak-ai/domain/frotakAiToolCatalog";

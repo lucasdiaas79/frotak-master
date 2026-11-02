@@ -1,5 +1,8 @@
-import { canReadFinancial, type FrotakAiContext } from "@/lib/frotakAiContext";
-import type { getSupabaseServerClient } from "@/lib/frotakAiContext";
+import {
+  canReadFinancial,
+  type FrotakAiContext,
+} from "@/modules/frotak-ai/infrastructure/frotakAiContext";
+import type { getSupabaseServerClient } from "@/modules/frotak-ai/infrastructure/frotakAiContext";
 
 // Catalogo de leitura da Frotak IA. Cada dominio aponta para uma tabela que ja tem RLS por
 // tenant; as consultas rodam com o token do usuario, entao o banco continua decidindo o que

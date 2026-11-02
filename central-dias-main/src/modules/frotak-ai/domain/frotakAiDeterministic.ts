@@ -1,4 +1,4 @@
-import type { FrotakAiToolName } from "@/lib/frotakAiToolCatalog";
+import type { FrotakAiToolName } from "@/modules/frotak-ai/domain/frotakAiToolCatalog";
 
 type RecordValue = Record<string, unknown>;
 

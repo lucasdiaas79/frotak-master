@@ -1,6 +1,12 @@
-import { canReadFinancial, type FrotakAiContext } from "@/lib/frotakAiContext";
-import type { getSupabaseServerClient } from "@/lib/frotakAiContext";
-import { FROTAK_AI_IDLE_DEFAULT_HOURS, listIdleVehicles } from "@/lib/frotakAiIdle";
+import {
+  canReadFinancial,
+  type FrotakAiContext,
+} from "@/modules/frotak-ai/infrastructure/frotakAiContext";
+import type { getSupabaseServerClient } from "@/modules/frotak-ai/infrastructure/frotakAiContext";
+import {
+  FROTAK_AI_IDLE_DEFAULT_HOURS,
+  listIdleVehicles,
+} from "@/modules/frotak-ai/application/frotakAiIdle";
 
 // Alertas calculados na hora, com o token do usuario (RLS). Alimentam a ferramenta
 // "alertas" e o briefing do dia; nenhum numero e calculado pela IA.
