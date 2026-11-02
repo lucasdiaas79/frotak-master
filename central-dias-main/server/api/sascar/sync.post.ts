@@ -1,5 +1,5 @@
 import { createError, defineEventHandler, getHeader, readBody } from "h3";
-import { runSascarSync } from "../../lib/sascar-sync.ts";
+import { runSascarSync } from "../../../src/modules/frotak-tracking/application/sascarSync.ts";
 
 interface SyncBody {
   quantity?: number;

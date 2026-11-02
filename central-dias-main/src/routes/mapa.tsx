@@ -21,7 +21,7 @@ import {
   mapSascarSyncStateRow,
   type SascarSyncState,
   syncSascarPositions,
-} from "@/lib/integrations/sascar";
+} from "@/modules/frotak-tracking/infrastructure/sascarClient";
 import { getActiveTenantId } from "@/lib/auth";
 import { hasSupabaseConfig, supabase } from "@/lib/supabase";
 import { useFleet } from "@/lib/store";

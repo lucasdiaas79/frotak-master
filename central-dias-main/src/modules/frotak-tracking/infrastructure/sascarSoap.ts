@@ -121,7 +121,11 @@ function getSoapUrl(credentials?: SascarCredentials) {
 }
 
 function getSoapTimeoutMs(credentials?: SascarCredentials) {
-  if (credentials?.timeoutMs && Number.isFinite(credentials.timeoutMs) && credentials.timeoutMs > 0) {
+  if (
+    credentials?.timeoutMs &&
+    Number.isFinite(credentials.timeoutMs) &&
+    credentials.timeoutMs > 0
+  ) {
     return credentials.timeoutMs;
   }
   const configured = Number(readEnv("SASCAR_SOAP_TIMEOUT_MS"));
@@ -392,12 +396,16 @@ export async function getVehiclesPage(
   quantity = VEHICLE_BATCH_LIMIT,
   credentials?: SascarCredentials,
 ) {
-  const xml = await callSoap("getVehiclesJSON", {
-    user: credentials?.user ?? requiredEnv("SASCAR_USER"),
-    password: credentials?.password ?? requiredEnv("SASCAR_PASSWORD"),
-    quantity,
-    vehicleId: cursor,
-  }, credentials);
+  const xml = await callSoap(
+    "getVehiclesJSON",
+    {
+      user: credentials?.user ?? requiredEnv("SASCAR_USER"),
+      password: credentials?.password ?? requiredEnv("SASCAR_PASSWORD"),
+      quantity,
+      vehicleId: cursor,
+    },
+    credentials,
+  );
 
   return parseJsonReturns<Record<string, unknown>>(xml)
     .map(normalizeVehicle)
@@ -425,11 +433,15 @@ export async function getLatestPositionPackets(
   quantity = POSITION_BATCH_LIMIT,
   credentials?: SascarCredentials,
 ) {
-  const xml = await callSoap("getPositionPacketWithLicensePlateJSON", {
-    user: credentials?.user ?? requiredEnv("SASCAR_USER"),
-    password: credentials?.password ?? requiredEnv("SASCAR_PASSWORD"),
-    quantity: Math.min(Math.max(quantity, 1), POSITION_BATCH_LIMIT),
-  }, credentials);
+  const xml = await callSoap(
+    "getPositionPacketWithLicensePlateJSON",
+    {
+      user: credentials?.user ?? requiredEnv("SASCAR_USER"),
+      password: credentials?.password ?? requiredEnv("SASCAR_PASSWORD"),
+      quantity: Math.min(Math.max(quantity, 1), POSITION_BATCH_LIMIT),
+    },
+    credentials,
+  );
 
   return parseJsonReturns<Record<string, unknown>>(xml)
     .map(normalizePosition)
@@ -442,13 +454,17 @@ export async function getPositionPacketsByRange(
   quantity = 3000,
   credentials?: SascarCredentials,
 ) {
-  const xml = await callSoap("getPositionPacketByRangeJSON", {
-    user: credentials?.user ?? requiredEnv("SASCAR_USER"),
-    password: credentials?.password ?? requiredEnv("SASCAR_PASSWORD"),
-    startId,
-    endId,
-    quantity: Math.min(Math.max(quantity, 1), POSITION_BATCH_LIMIT),
-  }, credentials);
+  const xml = await callSoap(
+    "getPositionPacketByRangeJSON",
+    {
+      user: credentials?.user ?? requiredEnv("SASCAR_USER"),
+      password: credentials?.password ?? requiredEnv("SASCAR_PASSWORD"),
+      startId,
+      endId,
+      quantity: Math.min(Math.max(quantity, 1), POSITION_BATCH_LIMIT),
+    },
+    credentials,
+  );
 
   return parseJsonReturns<Record<string, unknown>>(xml)
     .map(normalizePosition)
@@ -461,13 +477,17 @@ export async function getVehiclePositionHistory(
   end: string,
   credentials?: SascarCredentials,
 ) {
-  const xml = await callSoap("obterPacotePosicaoHistorico", {
-    usuario: credentials?.user ?? requiredEnv("SASCAR_USER"),
-    senha: credentials?.password ?? requiredEnv("SASCAR_PASSWORD"),
-    dataInicio: start,
-    dataFinal: end,
-    idVeiculo: vehicleId,
-  }, credentials);
+  const xml = await callSoap(
+    "obterPacotePosicaoHistorico",
+    {
+      usuario: credentials?.user ?? requiredEnv("SASCAR_USER"),
+      senha: credentials?.password ?? requiredEnv("SASCAR_PASSWORD"),
+      dataInicio: start,
+      dataFinal: end,
+      idVeiculo: vehicleId,
+    },
+    credentials,
+  );
 
   return parsePositionXmlReturns(xml)
     .map(normalizeHistoricalPosition)

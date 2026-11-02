@@ -1,4 +1,4 @@
-import { getSupabaseAdmin } from "./supabase-admin.ts";
+import { getSupabaseAdmin } from "../../../../server/lib/supabase-admin.ts";
 import {
   enrichPacketsWithPlate,
   getAllVehicles,
@@ -7,7 +7,7 @@ import {
   getVehiclePositionHistory,
   type SascarCredentials,
   type SascarPositionPacket,
-} from "./sascar.ts";
+} from "../infrastructure/sascarSoap.ts";
 
 export interface SascarSyncInput {
   workspaceId?: string;

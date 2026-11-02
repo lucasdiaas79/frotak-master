@@ -120,9 +120,7 @@ export async function syncSascarPositions(
   });
 
   const data = (await response.json().catch(() => null)) as
-    | SascarSyncResponse
-    | { message?: string; statusMessage?: string }
-    | null;
+    SascarSyncResponse | { message?: string; statusMessage?: string } | null;
 
   if (!response.ok) {
     const message =
