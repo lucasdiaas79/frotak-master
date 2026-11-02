@@ -8,8 +8,7 @@ function normalizeAssetAssignmentMode(settings: unknown): AssetAssignmentMode {
   const settingsRecord =
     settings && typeof settings === "object" ? (settings as Record<string, unknown>) : {};
   const value = (settingsRecord.driverApp ?? settingsRecord.driver_app) as
-    | Record<string, unknown>
-    | undefined;
+    Record<string, unknown> | undefined;
   const mode = value?.assetAssignmentMode ?? value?.asset_assignment_mode;
   return mode === "manual_per_freight" ? "manual_per_freight" : "fixed_vehicle";
 }

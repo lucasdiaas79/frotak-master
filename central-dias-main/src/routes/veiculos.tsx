@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useFleet } from "@/lib/store";
-import { useManualFreightAssetMode } from "@/lib/tenantDriverApp";
+import { useManualFreightAssetMode } from "@/modules/driver-app/ui/useManualFreightAssetMode";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Modal } from "@/components/Modal";
