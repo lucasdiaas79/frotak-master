@@ -17,13 +17,11 @@ import {
 } from "@/components/ui/select";
 import { formatRelative } from "@/lib/format";
 import {
-  getSascarSyncState,
-  mapSascarSyncStateRow,
-  type SascarSyncState,
-  syncSascarPositions,
-} from "@/modules/frotak-tracking/infrastructure/sascarClient";
-import { getActiveTenantId } from "@/lib/auth";
-import { hasSupabaseConfig, supabase } from "@/lib/supabase";
+  getTrackerSyncState,
+  requestTrackerSync,
+  watchTrackerSyncState,
+  type TrackerSyncState as SascarSyncState,
+} from "@/modules/frotak-tracking/container";
 import { useFleet } from "@/modules/fleet-core/application/fleetStore";
 import { ALL_STATUSES, STATUS_HEX, VEHICLE_STATUS_LABEL, statusGroup } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -84,9 +82,8 @@ export function MapaPage() {
 
   useEffect(() => {
     let cancelled = false;
-    const activeTenantId = getActiveTenantId();
 
-    void getSascarSyncState()
+    void getTrackerSyncState()
       .then((state) => {
         if (cancelled) return;
         setSascarSyncState(state);
@@ -96,47 +93,22 @@ export function MapaPage() {
         console.error("Falha ao carregar estado da sincronização Sascar.", error);
       });
 
-    if (!hasSupabaseConfig()) {
-      return () => {
-        cancelled = true;
-      };
-    }
+    const stopWatching = watchTrackerSyncState(
+      (state) => {
+        lastRealtimeSyncAtRef.current = state.syncedAt;
+        setSascarSyncState(state);
+        void refreshDomain("vehicles", { force: true, silent: true });
 
-    const channel = supabase
-      .channel("sascar-sync-state")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "integration_sync_state",
-          filter: `tenant_id=eq.${activeTenantId}`,
-        },
-        (payload) => {
-          const row = payload.new as {
-            integration?: string;
-            synced_at: string | null;
-            metadata: Record<string, unknown> | null;
-          };
-          if (row.integration !== "sascar") return;
-
-          const state = mapSascarSyncStateRow(row);
-          if (!state.syncedAt || state.syncedAt === lastRealtimeSyncAtRef.current) return;
-
-          lastRealtimeSyncAtRef.current = state.syncedAt;
-          setSascarSyncState(state);
-          void refreshDomain("vehicles", { force: true, silent: true });
-
-          if (state.source === "cron") {
-            showSascarSyncToast(state);
-          }
-        },
-      )
-      .subscribe();
+        if (state.source === "cron") {
+          showSascarSyncToast(state);
+        }
+      },
+      () => lastRealtimeSyncAtRef.current,
+    );
 
     return () => {
       cancelled = true;
-      void supabase.removeChannel(channel);
+      stopWatching();
     };
   }, [refreshDomain]);
 
@@ -240,7 +212,7 @@ export function MapaPage() {
     syncInFlightRef.current = true;
     setSyncing(true);
     try {
-      const result = await syncSascarPositions({ quantity: 3000, forceFull: false });
+      const result = await requestTrackerSync({ quantity: 3000, forceFull: false });
       await refreshDomain("vehicles", { force: true, silent: true });
       const syncedAt = new Date().toISOString();
       const state: SascarSyncState = {

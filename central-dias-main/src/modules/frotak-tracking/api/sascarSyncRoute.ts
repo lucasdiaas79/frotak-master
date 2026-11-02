@@ -1,6 +1,33 @@
 import { assertWorkspaceModule, isModuleDisabledError } from "@/lib/entitlements";
-import { runSascarSync, type SascarSyncInput } from "../application/sascarSync.ts";
+import {
+  syncTrackerPositions,
+  type TrackerSyncInput,
+} from "../application/syncTrackerPositions.ts";
+import type { TrackerSyncSettings } from "../application/ports.ts";
+import { SupabaseTrackingRepository } from "../infrastructure/supabaseTrackingRepository.ts";
+import { trackerProviders } from "../infrastructure/trackerProviders.ts";
 import { getSupabaseAdmin } from "../../../../server/lib/supabase-admin.ts";
+
+function readPositiveIntegerEnv(name: string, fallback: number) {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function readBooleanEnv(name: string) {
+  const value = process.env[name]?.trim().toLowerCase();
+  return Boolean(value) && ["1", "true", "yes", "sim"].includes(value as string);
+}
+
+/** Ajustes da sincronizacao, lidos a cada chamada (mesmas variaveis de antes). */
+function readSyncSettings(): TrackerSyncSettings {
+  return {
+    includeCurrentHistoryByDefault: readBooleanEnv("SASCAR_INCLUDE_CURRENT_HISTORY_DEFAULT"),
+    currentHistoryConcurrency: readPositiveIntegerEnv("SASCAR_CURRENT_HISTORY_CONCURRENCY", 10),
+    currentHistoryStaleMinutes: readPositiveIntegerEnv("SASCAR_CURRENT_HISTORY_STALE_MINUTES", 15),
+    currentHistoryLookbackHours: readPositiveIntegerEnv("SASCAR_CURRENT_HISTORY_LOOKBACK_HOURS", 3),
+    maxRecoveryPages: readPositiveIntegerEnv("SASCAR_MAX_RECOVERY_PAGES", 2),
+  };
+}
 
 function jsonResponse(body: unknown, init?: ResponseInit) {
   return new Response(JSON.stringify(body), {
@@ -88,7 +115,7 @@ function syncInProgressResponse() {
     message: "Sincronização Sascar já está em andamento.",
     stats: {
       quantityRequested: 0,
-      sascarVehicles: 0,
+      trackerVehicles: 0,
       vehicleBindingsUpdated: 0,
       packetsFetched: 0,
       packetsApplied: 0,
@@ -109,14 +136,21 @@ function syncInProgressResponse() {
 export async function handleSascarSyncRequest(request: Request) {
   try {
     requireCronTokenOrSameOrigin(request);
-    const body = ((await request.json().catch(() => ({}))) ?? {}) as SascarSyncInput;
+    const body = ((await request.json().catch(() => ({}))) ?? {}) as TrackerSyncInput;
     if (!hasCronToken(request)) {
       await validateWorkspaceMembership(request, body.workspaceId);
     }
     if (body.workspaceId) {
       await assertWorkspaceModule(getSupabaseAdmin(), body.workspaceId, "frotak_tracking");
     }
-    const result = await runSascarSync(body);
+    const result = await syncTrackerPositions(
+      {
+        repository: new SupabaseTrackingRepository(getSupabaseAdmin()),
+        providers: trackerProviders,
+        settings: readSyncSettings(),
+      },
+      body,
+    );
     return jsonResponse(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro ao sincronizar Sascar.";

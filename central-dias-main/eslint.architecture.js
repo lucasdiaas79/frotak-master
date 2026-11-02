@@ -8,7 +8,7 @@
 //   container.ts    composicao no navegador: unico lugar que liga ui ao adaptador
 //
 // Um modulo entra na lista quando ja respeita a regra; dali em diante o lint impede regressao.
-export const cleanModules = ["driver-app"];
+export const cleanModules = ["driver-app", "frotak-tracking"];
 
 const external = {
   supabase: "^@supabase/",
@@ -19,6 +19,15 @@ const external = {
 };
 const layer = (...names) => `(^|/)(${names.join("|")})(/|$)`;
 const container = "(^|/)container$";
+
+const erasableOnly = {
+  // domain e application rodam nos testes pelo Node, que so remove tipos (sem transformar).
+  "@typescript-eslint/parameter-properties": "error",
+  "no-restricted-syntax": [
+    "error",
+    { selector: "TSEnumDeclaration", message: "Use uniao de strings em vez de enum." },
+  ],
+};
 
 function restrict(patterns, message) {
   return ["error", { patterns: patterns.map((regex) => ({ regex, message })) }];
@@ -34,6 +43,7 @@ export function architectureConfig(modules = cleanModules) {
     {
       files: filesOf(modules, "domain"),
       rules: {
+        ...erasableOnly,
         "no-restricted-imports": restrict(
           [
             external.supabase,
@@ -51,6 +61,7 @@ export function architectureConfig(modules = cleanModules) {
     {
       files: filesOf(modules, "application"),
       rules: {
+        ...erasableOnly,
         "no-restricted-imports": restrict(
           [
             external.supabase,
