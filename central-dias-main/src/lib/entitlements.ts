@@ -17,36 +17,7 @@ export type WorkspaceEntitlements = {
   legacy: boolean;
 };
 
-export const MODULE_LABELS: Record<ModuleCode, string> = {
-  fleet_core: "Gestão de Frota",
-  financial: "Financeiro",
-  cte_issuance: "Emissão de CT-e",
-  frotak_ai: "Frotak IA",
-  driver_app: "App Motorista",
-  frotak_tracking: "Rastreadores",
-};
-
-const ROUTE_MODULES: Array<[prefix: string, module: ModuleCode]> = [
-  ["/frotak-ia", "frotak_ai"],
-  ["/financeiro", "financial"],
-  ["/lucros-despesas", "financial"],
-];
-
-// Suporte fica aberto mesmo sem TMS ou com o cliente suspenso.
-const ALWAYS_AVAILABLE_PATHS = ["/manual"];
-
-export function isAlwaysAvailablePath(pathname: string) {
-  return ALWAYS_AVAILABLE_PATHS.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
-}
-
-export function moduleForPath(pathname: string): ModuleCode {
-  const match = ROUTE_MODULES.find(
-    ([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
-  return match?.[1] ?? "fleet_core";
-}
+// Rotas, menu e rotulos de cada modulo ficam nos manifestos (src/modules/registry.ts).
 
 /** Sem informacao (falha de rede, modo local) o app nao bloqueia; o servidor decide. */
 export function isModuleEnabled(entitlements: WorkspaceEntitlements | null, module: ModuleCode) {

@@ -2,27 +2,16 @@ import * as React from "react";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Bell,
-  Bot,
-  Building2,
   ChevronRight,
-  Container,
-  FolderKanban,
-  Fuel,
   Headphones,
-  History,
-  Landmark,
-  LayoutDashboard,
-  ListChecks,
   Lock,
   LogOut,
-  Map as MapIcon,
   Menu,
   Package,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
   Truck,
-  Users,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -51,14 +40,20 @@ import { vehicleTrailerLabel } from "@/lib/vehicle-trailers";
 import { perfCount, perfStart } from "@/lib/performance";
 import { hasSupabaseConfig, supabase } from "@/lib/supabase";
 import {
-  MODULE_LABELS,
   hasTmsAccess,
-  isAlwaysAvailablePath,
   isModuleEnabled,
   isTenantActive,
-  moduleForPath,
   type WorkspaceEntitlements,
 } from "@/lib/entitlements";
+import {
+  financialNav,
+  fleetCoreModule,
+  isAlwaysAvailablePath,
+  moduleForPath,
+  moduleLabel,
+  operationalNav,
+} from "@/modules/registry";
+import type { NavGroup, NavItem } from "@/modules/types";
 import {
   clearWorkspaceEntitlementsCache,
   getWorkspaceEntitlements,
@@ -67,103 +62,18 @@ import { FrotakEmptyState, FrotakPage } from "@/components/frotak/FrotakPage";
 import logoCentral from "@/assets/logo-central.png";
 import faviconCentral from "@/assets/favicon.png";
 
-interface NavItem {
-  to: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  activePaths?: string[];
-}
-
-interface NavGroup {
-  title: string;
-  icon: React.ComponentType<{ className?: string }>;
-  to?: string;
-  items: NavItem[];
-}
-
-const OPERACIONAL: NavItem[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/gestao-frota", label: "Gestão de Frota", icon: ListChecks },
-  { to: "/frotak-ia", label: "Frotak IA", icon: Bot },
-  { to: "/historicos", label: "Históricos", icon: History },
-  { to: "/abastecimentos", label: "Abastecimentos", icon: Fuel },
-  { to: "/mapa", label: "Mapa da Frota", icon: MapIcon },
-];
-
-const CADASTROS: NavGroup[] = [
-  {
-    title: "Cadastro de Frota",
-    icon: FolderKanban,
-    items: [
-      { to: "/veiculos", label: "Veículos", icon: Truck },
-      { to: "/motoristas", label: "Motoristas", icon: Users },
-      { to: "/carretas", label: "Caçambas", icon: Container },
-    ],
-  },
-  {
-    title: "Cadastro de Clientes",
-    icon: Building2,
-    to: "/clientes",
-    items: [{ to: "/clientes", label: "Clientes", icon: Building2 }],
-  },
-];
-
-const MOBILE_NAV: NavItem[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/gestao-frota", label: "Gestão", icon: ListChecks },
-  {
-    to: "/historicos",
-    label: "Históricos",
-    icon: History,
-    activePaths: ["/historicos", "/abastecimentos", "/lucros-despesas"],
-  },
-  { to: "/mapa", label: "Mapa", icon: MapIcon },
-  {
-    to: "/veiculos",
-    label: "Frota",
-    icon: FolderKanban,
-    activePaths: ["/veiculos", "/motoristas", "/carretas"],
-  },
-  {
-    to: "/clientes",
-    label: "Clientes",
-    icon: Building2,
-    activePaths: ["/clientes", "/remetentes", "/destinatarios", "/produtos"],
-  },
-];
-
-const ADMIN_NAV: NavItem[] = [{ to: "/usuarios", label: "Usuários", icon: Users }];
+// Menu dos modulos vem dos manifestos em src/modules; aqui so o que e da casca do app.
+const CADASTROS: NavGroup[] = fleetCoreModule.nav?.registrations ?? [];
+const MOBILE_NAV: NavItem[] = fleetCoreModule.nav?.mobile ?? [];
+const ADMIN_NAV: NavItem[] = fleetCoreModule.nav?.admin ?? [];
 const SUPPORT_NAV: NavItem[] = [{ to: "/manual", label: "Suporte", icon: Headphones }];
 
-const FINANCIAL_NAV: NavItem[] = [
-  {
-    to: "/financeiro",
-    label: "Financeiro",
-    icon: Landmark,
-    activePaths: [
-      "/financeiro",
-      "/financeiro/fluxo-caixa",
-      "/financeiro/dre",
-      "/financeiro/rentabilidade",
-      "/financeiro/receber",
-      "/financeiro/contas-receber",
-      "/financeiro/pagar",
-      "/financeiro/contas-pagar",
-      "/financeiro/contas",
-      "/financeiro/salarios",
-      "/financeiro/plano-contas",
-      "/financeiro/centros-custo",
-      "/lucros-despesas",
-    ],
-  },
-];
-
 function financialNavFor(access: FinancialAccess | null) {
-  return access?.canView ? FINANCIAL_NAV : [];
+  return access?.canView ? financialNav : [];
 }
 
 function operationalNavFor(entitlements: WorkspaceEntitlements | null) {
-  return OPERACIONAL.filter((item) => isModuleEnabled(entitlements, moduleForPath(item.to)));
+  return operationalNav(entitlements);
 }
 
 /** Sem TMS, com o cliente suspenso ou sem o modulo base, o menu fica so com a Ajuda. */
@@ -201,8 +111,8 @@ function accessBlockFor(entitlements: WorkspaceEntitlements | null, pathname: st
   const module = moduleForPath(pathname);
   if (!isModuleEnabled(entitlements, module)) {
     return {
-      title: `${MODULE_LABELS[module]} não liberado`,
-      description: `O módulo ${MODULE_LABELS[module]} não está contratado para a sua empresa. Fale com a FrotaK para liberar.`,
+      title: `${moduleLabel(module)} não liberado`,
+      description: `O módulo ${moduleLabel(module)} não está contratado para a sua empresa. Fale com a FrotaK para liberar.`,
     };
   }
   return null;
