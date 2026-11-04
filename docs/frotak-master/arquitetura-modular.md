@@ -86,20 +86,34 @@ src/
   routes/              só definição de rota (URL, título, SSR); a tela vem do módulo
 ```
 
-Dentro de cada módulo:
+Dentro de cada módulo as dependências apontam para dentro, e o lint barra o que quebrar a regra (`central-dias-main/eslint.architecture.js`):
 
-| Pasta | O que tem |
-|---|---|
-| `module.ts` | Manifesto: código, rótulo, rotas que são do módulo e itens de menu |
-| `domain/` | Regras e tipos puros, sem acesso a banco ou rede |
-| `application/` | Orquestração: store da frota, ferramentas e ações da IA, sincronização Sascar |
-| `infrastructure/` | Acesso a Supabase, RPCs, Sascar SOAP, Web Push, voz e dados locais |
-| `api/` | Server functions e handlers HTTP chamados pelo navegador ou pelo agendador |
-| `ui/` | Telas (`ui/pages/`) e componentes do módulo |
+| Pasta | O que tem | Pode importar |
+|---|---|---|
+| `module.ts` | Manifesto: código, rótulo, rotas que são do módulo e itens de menu | — |
+| `domain/` | Regras e tipos puros, sem acesso a banco, rede ou sessão | Só `domain/` |
+| `application/` | Casos de uso e `ports.ts`, as interfaces do que o módulo precisa de fora | `domain/` e as próprias portas |
+| `infrastructure/` | Adaptadores que implementam as portas: Supabase, RPCs, Sascar SOAP, Gemini, Web Push, voz | `application/` (portas) e `domain/` |
+| `api/` | Server functions e handlers HTTP: autenticam, montam o caso de uso com os adaptadores e devolvem mensagens seguras | Todas as camadas do módulo |
+| `container.ts` | Composição no navegador: liga casos de uso aos adaptadores | Todas as camadas do módulo |
+| `ui/` | Telas (`ui/pages/`) e componentes | `domain/`, `container.ts` e `api/`, nunca `infrastructure/` |
 
 O `AppLayout` não tem mais listas de menu fixas. Ele pede ao registro os itens dos módulos liberados (`operationalNav`) e usa `moduleForPath` para bloquear a rota de um módulo desligado. A pasta `api/` não se chama `server/` porque o TanStack Start bloqueia no navegador qualquer import de uma pasta com esse nome.
 
-Limite desta etapa (escolha de 2026-11-02: separar sem reescrever): o código foi movido e classificado, mas não reescrito. Telas ainda chamam `infrastructure/` diretamente, e o financeiro e a frota não têm casos de uso separados das RPCs.
+### Como integrar um fornecedor novo
+
+Cada integração externa fica atrás de uma porta, e trocar ou somar um fornecedor não mexe em caso de uso nem em tela:
+
+| Integração | Porta | Adaptador atual | Onde escolher |
+|---|---|---|---|
+| Rastreador | `TrackerProvider` | `SascarTrackerProvider` | `trackerProviders` |
+| Modelo de IA | `AiModel`, `AiLiveSessionIssuer` | `GeminiAiModel`, `geminiLiveSessionIssuer` | `frotak-ai/api/frotakAi.ts` |
+| Envio de push | `PushSender` | `sendWebPush` | `frotak-ai/api/frotakPush.ts` |
+| Dados da frota | portas de `fleet-core/application/ports.ts` | `supabaseFleetAdapters` | `fleet-core/container.ts` |
+
+Passos: escreva o adaptador em `infrastructure/` implementando a porta, troque a composição no `api/` ou no `container.ts` e cubra o caso de uso com portas falsas em `scripts/test-<modulo>-module.ts`. Esses testes rodam em Node puro com `npm run test:modules`, sem banco e sem rede; por isso `domain/` e `application/` não usam `enum` nem parameter properties.
+
+`cte-issuance` ainda é só manifesto, porque não há funcionalidade de CT-e.
 
 ## Adicionar um módulo novo
 
@@ -142,5 +156,4 @@ Antes da migration, o código novo continua funcionando: o Master mostra todos o
 | Sincronização Sascar global (sem `workspaceId`) | Modo legado sem checagem de módulo. |
 | "Login como cliente" | Ainda envia o token do próprio usuário Master ao app cliente. Precisa de um fluxo de personificação próprio. |
 | Usuários do Master (tela `/usuarios`) e demais telas com dados fictícios | Fora deste escopo; continuam no protótipo. |
-| Camadas internas do TMS | Código movido e classificado, não reescrito. Próximo passo: casos de uso entre telas e `infrastructure/`, começando pelo financeiro. |
 | `central-dias-main/server/api/sascar/sync.post.ts` | Handler antigo do Nitro para `/api/sascar/sync`. Não entra no build (o endereço é atendido pela rota do TanStack); pode ser apagado. |

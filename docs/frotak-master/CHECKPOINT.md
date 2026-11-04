@@ -1,6 +1,6 @@
 # Checkpoint · Master modular e liberação por cliente
 
-Atualizado em 2026-11-02. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", adaptada ao Supabase compartilhado atual (decisão do usuário em 2026-10-31). Detalhes em [arquitetura-modular](arquitetura-modular.md).
+Atualizado em 2026-11-04. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", adaptada ao Supabase compartilhado atual (decisão do usuário em 2026-10-31). Detalhes em [arquitetura-modular](arquitetura-modular.md).
 
 ## Git e ambiente
 
@@ -8,7 +8,7 @@ Atualizado em 2026-11-02. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", 
 |---|---|
 | Base | `main` @ `92a7213` (igual a `origin/main` em 2026-11-02) |
 | Branch | `feat/master-modulos-por-cliente`, commits locais, **sem push** |
-| Commits | `0cc1f2a` Master modular e liberação; `1f98144` registro de módulos do TMS; `659faef` Frotak IA; `e77489b` Rastreadores; `08de70b` App Motorista; `cad1469` Financeiro; `0643e97` Gestão de Frota |
+| Commits | `0cc1f2a` Master modular e liberação; `1f98144` registro de módulos do TMS; `659faef` Frotak IA; `e77489b` Rastreadores; `08de70b` App Motorista; `cad1469` Financeiro; `0643e97` Gestão de Frota; `df82eec` documentação; clean architecture: `848b3ab` App Motorista e guarda de dependências, `b99e26b` Rastreadores, `e7cdebc` Financeiro, `66b3851` Gestão de Frota, `4008c4c` Frotak IA |
 | Teste de ponta a ponta | Supabase local descartável (`project_id` `frotak-e2e`, portas 553xx) criado do zero e removido no fim |
 | Banco remoto e banco local `frota-master` | Não alterados |
 
@@ -18,7 +18,8 @@ Atualizado em 2026-11-02. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", 
 2. Master em `src/core` e `src/modules/{catalog,entitlements,tenants,provisioning}`. Toda server function exige login da equipe FrotaK.
 3. Tela Clientes com a ficha "Gerenciar" (produtos e módulos), cadastro com produtos e módulos, estados de erro e vazio, contagens reais.
 4. Cliente: menu, rotas e servidor obedecem às liberações. Sem TMS ou com o cliente suspenso, o menu fica só com Ajuda e a barra inferior do celular some; Suporte continua acessível.
-5. TMS separado em módulos (`src/modules/{fleet-core,financial,frotak-ai,frotak-tracking,driver-app,cte-issuance}`), cada um com manifesto e camadas `domain`, `application`, `infrastructure`, `api` e `ui`. Menu e bloqueio de rota vêm do registro de módulos. As rotas ficaram finas. Código movido, não reescrito; um commit por módulo.
+5. TMS separado em módulos (`src/modules/{fleet-core,financial,frotak-ai,frotak-tracking,driver-app,cte-issuance}`), cada um com manifesto e camadas `domain`, `application`, `infrastructure`, `api` e `ui`. Menu e bloqueio de rota vêm do registro de módulos. As rotas ficaram finas. Um commit por módulo.
+6. Clean architecture no TMS: casos de uso e portas em `application/`, adaptadores em `infrastructure/`, composição em `api/` e `container.ts`. Rastreador, modelo de IA e envio de push ficam atrás de portas, então um fornecedor novo é um adaptador novo. O lint barra import fora da regra, e `npm run test:modules` testa os casos de uso com portas falsas, sem banco e sem rede.
 
 ## Verificações executadas
 
@@ -47,6 +48,17 @@ Atualizado em 2026-11-02. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", 
 
 - os três roteiros acima rodaram de novo: 29 de 29 verificações OK;
 - um roteiro novo abriu as 28 telas do TMS (frota, cadastros, IA, financeiro, Suporte) com o dono do cliente de teste: 28 de 28 sem erro de execução, sem tela de erro e com conteúdo.
+
+**Clean architecture no TMS (2026-11-04), depois da última etapa, num banco de teste novo:**
+
+- `tsc`: 11 mensagens no Cliente, todas anteriores a esta frente (eram 19); nenhuma nova.
+- Lint das camadas sem violação nos módulos `driver-app`, `frotak-tracking`, `financial`, `fleet-core` e `frotak-ai`.
+- Testes: `test:modules` 30, `test:frotak-ai` 16, `test:visual` 3, `test-financial-recurring` 6. Build OK. Nenhum vestígio de `GEMINI_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `@google/genai` ou `generateContent` no pacote do navegador.
+- Os três roteiros de navegador: 29 de 29 verificações OK.
+- As 28 telas do TMS: 28 de 28 sem erro.
+- IA no servidor: aceita com o módulo ligado e recusa com `MODULE_DISABLED:frotak_ai`.
+
+A Frotak IA foi testada com modelo e ferramentas falsos e com a checagem de módulo no servidor. Não houve chamada real ao Gemini, porque o ambiente de teste não tem a chave.
 
 ## Achados fora do escopo
 
