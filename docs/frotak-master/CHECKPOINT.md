@@ -76,7 +76,7 @@ O ambiente é **novo e vazio**: a produção atual (Lovable, Vercel e Supabase) 
 
 Evidências, rodadas contra os endereços públicos:
 
-- Instalação do zero repetida 3 vezes com as 72 migrations mais 2 arquivos de ajuste em `deploy/db/shim`.
+- Banco reinstalado do zero 3 vezes depois da primeira instalação. A versão final aplica as 72 migrations mais 2 arquivos de ajuste em `deploy/db/shim`. A última reinstalação veio depois dos testes abaixo, para apagar os dados de teste, e foi conferida com login do operador, backup, restauração e reboot.
 - Os três roteiros de navegador: 29 de 29. As 28 telas do TMS: 28 de 28. IA no servidor: aceita e recusa por módulo.
 - Realtime: inserção com RLS chegou pelo WebSocket através de Caddy, WireGuard e Kong. Storage: enviar, baixar e apagar; anônimo não baixa.
 - API: cadastro público recusado, REST sem `apikey` recusado, anônimo não lê `platform_users`, administração do Realtime bloqueada.
