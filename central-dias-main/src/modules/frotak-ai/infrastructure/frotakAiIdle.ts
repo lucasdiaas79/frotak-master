@@ -1,7 +1,4 @@
-import {
-  canReadFinancial,
-  type FrotakAiContext,
-} from "@/modules/frotak-ai/infrastructure/frotakAiContext";
+import { canReadFinancial, type FrotakAiContext } from "@/modules/frotak-ai/domain/frotakAiContext";
 import type { getSupabaseServerClient } from "@/modules/frotak-ai/infrastructure/frotakAiContext";
 
 // Veiculos sem viagem e rendimento da frota. Tudo e calculado aqui com o token do usuario

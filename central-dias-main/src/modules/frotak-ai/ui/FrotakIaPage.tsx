@@ -35,7 +35,7 @@ import {
   FrotakLiveSession,
   requestFrotakLiveMicrophone,
   type FrotakLiveStatus,
-} from "@/modules/frotak-ai/infrastructure/frotakLive";
+} from "@/modules/frotak-ai/container";
 import { cn } from "@/lib/utils";
 
 type ChatMessage = {

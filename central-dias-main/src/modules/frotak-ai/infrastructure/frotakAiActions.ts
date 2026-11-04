@@ -1,45 +1,18 @@
 import { createClient } from "@supabase/supabase-js";
+import { type FrotakAiContext } from "@/modules/frotak-ai/domain/frotakAiContext";
+import { getSupabaseServerClient } from "@/modules/frotak-ai/infrastructure/frotakAiContext";
 import {
-  getSupabaseServerClient,
-  type FrotakAiContext,
-} from "@/modules/frotak-ai/infrastructure/frotakAiContext";
-import { FROTAK_AI_IDLE_REASON_EVENT } from "@/modules/frotak-ai/application/frotakAiIdle";
+  FROTAK_AI_VEHICLE_SITUATIONS,
+  type FrotakAiActionName,
+  FROTAK_AI_EXPENSE_CATEGORIES,
+} from "@/modules/frotak-ai/domain/frotakAiActionCatalog";
+import { FROTAK_AI_IDLE_REASON_EVENT } from "@/modules/frotak-ai/infrastructure/frotakAiIdle";
 
 // Acoes de escrita da Frotak IA. A IA so PREPARA a acao: a ferramenta devolve um resumo e um
 // token assinado. Nada e gravado ate o usuario tocar em "Confirmar" na tela, que chama
 // executeFrotakAiAction com esse token. Toda execucao fica registrada em audit_logs.
 
 type Row = Record<string, unknown>;
-
-export const FROTAK_AI_ACTION_TOOL_NAMES = [
-  "lancar_despesa_frete",
-  "atualizar_situacao_veiculo",
-  "registrar_ocorrencia",
-  "registrar_motivo_parado",
-] as const;
-
-export type FrotakAiActionName = (typeof FROTAK_AI_ACTION_TOOL_NAMES)[number];
-
-export function isFrotakAiActionName(name: string): name is FrotakAiActionName {
-  return (FROTAK_AI_ACTION_TOOL_NAMES as readonly string[]).includes(name);
-}
-
-export const FROTAK_AI_EXPENSE_CATEGORIES = [
-  "pedagio",
-  "alimentacao",
-  "estacionamento",
-  "manutencao",
-  "outros",
-] as const;
-
-// Situacoes que a IA pode aplicar. Mudancas de etapa de frete continuam so pela Gestao da Frota.
-export const FROTAK_AI_VEHICLE_SITUATIONS = {
-  disponivel_patio: "disponivel-patio",
-  disponivel_oficina: "disponivel-oficina",
-  manutencao: "manutencao",
-  quebrado: "parado-quebrado",
-  parado: "parado-aguardando-comando",
-} as const;
 
 type VehicleSituation = keyof typeof FROTAK_AI_VEHICLE_SITUATIONS;
 

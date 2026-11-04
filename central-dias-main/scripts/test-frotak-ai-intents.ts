@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   canReadFinancial,
   type FrotakAiContext,
-} from "../src/modules/frotak-ai/infrastructure/frotakAiContext.ts";
+} from "../src/modules/frotak-ai/domain/frotakAiContext.ts";
 import {
   isFrotakSupportQuestion,
   requiresFrotakTool,
@@ -90,13 +90,18 @@ test("all financial evaluation questions are owner-only", () => {
 
 test("v2 tool executor remains read-only and removes the generic query", () => {
   const source = readFileSync(
-    new URL("../src/modules/frotak-ai/application/frotakAiTools.ts", import.meta.url),
+    new URL("../src/modules/frotak-ai/infrastructure/frotakAiTools.ts", import.meta.url),
+    "utf8",
+  );
+  const declarations = readFileSync(
+    new URL("../src/modules/frotak-ai/domain/frotakAiToolDeclarations.ts", import.meta.url),
     "utf8",
   );
   assert.equal(source.includes("consultar_frotak"), false);
+  assert.equal(declarations.includes("consultar_frotak"), false);
   assert.equal(/\.(insert|update|upsert|delete)\s*\(/.test(source), false);
   FROTAK_AI_TOOL_NAMES.forEach((name) => {
-    assert.ok(source.includes(`name: "${name}"`), name);
+    assert.ok(declarations.includes(`name: "${name}"`), name);
   });
   assert.ok(source.includes("FROTAK_AI_FINANCIAL_TOOLS.has(name) && !canReadFinancial(context)"));
   assert.ok(source.includes('.eq("tenant_id", context.tenantId)'));
@@ -128,14 +133,14 @@ test("business answers do not count as technical tool failures", () => {
 test("generic domains, alerts and the action preview never write", () => {
   for (const file of ["frotakAiDomains.ts", "frotakAiAlerts.ts"]) {
     const source = readFileSync(
-      new URL(`../src/modules/frotak-ai/application/${file}`, import.meta.url),
+      new URL(`../src/modules/frotak-ai/infrastructure/${file}`, import.meta.url),
       "utf8",
     );
     assert.equal(/\.(insert|update|upsert|delete|rpc)\s*\(/.test(source), false, file);
     assert.ok(source.includes('.eq("tenant_id", context.tenantId)'), file);
   }
   const actions = readFileSync(
-    new URL("../src/modules/frotak-ai/application/frotakAiActions.ts", import.meta.url),
+    new URL("../src/modules/frotak-ai/infrastructure/frotakAiActions.ts", import.meta.url),
     "utf8",
   );
   const prepare = actions.slice(
@@ -150,7 +155,11 @@ test("generic domains, alerts and the action preview never write", () => {
 
 test("financial domains in the catalog are owner-only", () => {
   const source = readFileSync(
-    new URL("../src/modules/frotak-ai/application/frotakAiDomains.ts", import.meta.url),
+    new URL("../src/modules/frotak-ai/domain/frotakAiDomainCatalog.ts", import.meta.url),
+    "utf8",
+  );
+  const queries = readFileSync(
+    new URL("../src/modules/frotak-ai/infrastructure/frotakAiDomains.ts", import.meta.url),
     "utf8",
   );
   for (const domain of [
@@ -163,7 +172,7 @@ test("financial domains in the catalog are owner-only", () => {
     const end = block.indexOf("\n  },\n");
     assert.ok(block.slice(0, end).includes("financial: true"), domain);
   }
-  assert.ok(source.includes("domain.spec.financial && !canReadFinancial(context)"));
+  assert.ok(queries.includes("domain.spec.financial && !canReadFinancial(context)"));
 });
 
 test("the confirmation token reaches the screen but not the model", () => {

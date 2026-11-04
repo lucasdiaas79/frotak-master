@@ -8,7 +8,13 @@
 //   container.ts    composicao no navegador: unico lugar que liga ui ao adaptador
 //
 // Um modulo entra na lista quando ja respeita a regra; dali em diante o lint impede regressao.
-export const cleanModules = ["driver-app", "frotak-tracking", "financial", "fleet-core"];
+export const cleanModules = [
+  "driver-app",
+  "frotak-tracking",
+  "financial",
+  "fleet-core",
+  "frotak-ai",
+];
 
 const external = {
   supabase: "^@supabase/",
