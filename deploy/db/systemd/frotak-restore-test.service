@@ -1,0 +1,7 @@
+[Unit]
+Description=FrotaK: restaura o ultimo backup numa copia descartavel e confere
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/frotak/deploy/db/restore-test.sh

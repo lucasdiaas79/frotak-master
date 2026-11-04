@@ -1,0 +1,39 @@
+# HTTPS automatico para os tres enderecos publicos. Gerado por service/install.sh.
+{
+	# Sem HTTP/3: no Chrome com antivirus que intercepta TLS, os recursos da pagina falharam com
+	# ERR_QUIC_PROTOCOL_ERROR. HTTP/2 atende bem e nao depende de UDP aberto na rede do cliente.
+	servers {
+		protocols h1 h2
+	}
+}
+
+(common) {
+	encode zstd gzip
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 50mb
+			roll_keep 5
+		}
+	}
+}
+
+__MASTER_HOST__ {
+	import common
+	reverse_proxy 127.0.0.1:3001
+}
+
+__TMS_HOST__ {
+	import common
+	reverse_proxy 127.0.0.1:3002
+}
+
+# API do Supabase: o navegador chega aqui e o Caddy segue pela WireGuard ate o banco.
+__API_HOST__ {
+	import common
+	reverse_proxy __WG_DB__:8000
+}

@@ -1,0 +1,29 @@
+# frotak-app@master (porta 3001) e frotak-app@tms (porta 3002).
+[Unit]
+Description=FrotaK %i
+After=network-online.target wg-quick@wg0.service
+Wants=network-online.target
+
+[Service]
+User=frotak
+Group=frotak
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/frotak/%i.env
+EnvironmentFile=-/etc/frotak/%i.secrets.env
+ExecStart=/usr/bin/node /opt/frotak/current/%i/server/index.mjs
+Restart=on-failure
+RestartSec=3
+MemoryMax=1500M
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

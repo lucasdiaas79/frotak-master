@@ -125,6 +125,8 @@ Passos: escreva o adaptador em `infrastructure/` implementando a porta, troque a
 
 ## Implantação
 
+Para as VPS, siga [deploy/README.md](../../deploy/README.md). O roteiro abaixo vale para a produção atual (Supabase e Lovable).
+
 Ordem obrigatória: **migration primeiro, deploy depois**.
 
 1. Conferir que nenhum cliente em uso está com status `provisioning`. A própria migration aborta com a lista de slugs se encontrar algum:
@@ -147,7 +149,8 @@ Antes da migration, o código novo continua funcionando: o Master mostra todos o
 
 | Item | Situação |
 |---|---|
-| Banco por cliente, agente provisionador na VPS, PgBouncer, cofre e jobs repetíveis (PDF, Fases 1 a 3) | Não iniciado. Exige reescrever o acesso a dados do TMS, que hoje fala direto com o Supabase. A porta `TenantProvisioner` é o ponto de troca no Master. |
+| Banco por cliente, agente provisionador na VPS, cofre e jobs repetíveis (PDF, Fases 1 a 3) | Não iniciado. Exige reescrever o acesso a dados do TMS, que hoje fala direto com o Supabase. A porta `TenantProvisioner` é o ponto de troca no Master. As VPS já têm WireGuard, PgBouncer e Redis: ver [deploy/README.md](../../deploy/README.md). |
+| 2FA no Master | O PDF exige; o código não tem. |
 | Roteamento por subdomínio | Não feito; o cliente é descoberto pela membership do usuário. |
 | Tabelas de frota (veículos, fretes etc.) | RLS por tenant, sem checagem de módulo. Só importa se o TMS for desligado: o app bloqueia as telas, mas a API do Supabase ainda responde a esse usuário. |
 | Produto View | Gravado no catálogo; nenhum sistema consome ainda. O backend do View deve ler `get_workspace_entitlements` ou o catálogo. |

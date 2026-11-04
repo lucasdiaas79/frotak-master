@@ -1,0 +1,7 @@
+[Unit]
+Description=FrotaK: backup do banco e do Storage
+After=docker.service wg-quick@wg0.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/frotak/deploy/db/backup.sh

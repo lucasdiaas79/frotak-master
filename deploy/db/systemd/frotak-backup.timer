@@ -1,0 +1,9 @@
+[Unit]
+Description=FrotaK: backup diario as 06:30 UTC (03:30 em Brasilia)
+
+[Timer]
+OnCalendar=*-*-* 06:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
