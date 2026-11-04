@@ -1,36 +1,9 @@
 import { supabase } from "@/lib/supabase";
-
-export type DailyAllowanceStatus = "submitted" | "approved" | "rejected" | "cancelled";
-
-export interface DailyAllowanceSettings {
-  workspaceId: string;
-  tenantId: string;
-  available: boolean;
-  enabled: boolean;
-  dailyAmount: number;
-  paymentDueDays: number;
-}
-
-export interface DriverDailyAllowance {
-  id: string;
-  tripCycleId: string;
-  driverId: string;
-  driverName: string;
-  vehicleId?: string;
-  vehiclePlate: string;
-  quantity: number;
-  unitAmount: number;
-  totalAmount: number;
-  status: DailyAllowanceStatus;
-  notes?: string;
-  submittedAt: string;
-  reviewedAt?: string;
-  reviewNotes?: string;
-  financialDocumentId?: string;
-  tripStartedAt: string;
-  tripClosedAt?: string;
-  freightCount: number;
-}
+import type {
+  DailyAllowanceStatus,
+  DailyAllowanceSettings,
+  DriverDailyAllowance,
+} from "@/modules/fleet-core/domain/fleetOperations";
 
 function rpcError(operation: string, error: { message: string } | null) {
   if (error) throw new Error(`${operation}: ${error.message}`);

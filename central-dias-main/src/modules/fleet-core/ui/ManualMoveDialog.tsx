@@ -25,10 +25,8 @@ import {
 import type { ManualTargetCode } from "@/modules/fleet-core/domain/freightKanban";
 import { freightMacroStageById } from "@/modules/fleet-core/domain/freightWorkflow";
 import type { FreightMacroStageId } from "@/modules/fleet-core/domain/freightWorkflow";
-import {
-  manualMoveFreightCard,
-  WorkflowConflictError,
-} from "@/modules/fleet-core/infrastructure/manual-kanban";
+import { manualMoveFreightCard } from "@/modules/fleet-core/container";
+import { WorkflowConflictError } from "@/modules/fleet-core/domain/fleetOperations";
 import type { FreightDocument, Vehicle } from "@/lib/types";
 
 const INFORMATION_SOURCES = [

@@ -1,38 +1,9 @@
 import { supabase } from "@/lib/supabase";
 import type { FreightHistory, VehicleFreightStage, VehicleStatus } from "@/lib/types";
-
-export interface LongTripHistoryMovement {
-  id: string;
-  type: "entry" | "expense";
-  label: string;
-  amount: number;
-  notes?: string;
-  recordedAt: string;
-}
-
-export interface LongTripHistory {
-  id: string;
-  driverId: string;
-  driverName: string;
-  vehicleId?: string;
-  vehiclePlate: string;
-  trailerIdentifier?: string;
-  startedAt: string;
-  closedAt: string;
-  closeReason?: string;
-  totalEntries: number;
-  totalExpenses: number;
-  closingBalance: number;
-  freightCount: number;
-  completedFreightCount: number;
-  dailyAllowance?: {
-    quantity: number;
-    unitAmount: number;
-    totalAmount: number;
-    status: "submitted" | "approved" | "rejected" | "cancelled";
-  };
-  movements: LongTripHistoryMovement[];
-}
+import type {
+  LongTripHistoryMovement,
+  LongTripHistory,
+} from "@/modules/fleet-core/domain/fleetOperations";
 
 type FreightHistoryRow = {
   id: string;

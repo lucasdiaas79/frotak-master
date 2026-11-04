@@ -1,4 +1,7 @@
-const performanceEnabled = import.meta.env.DEV || import.meta.env.VITE_PERF_DEBUG === "1";
+// Fora do Vite (testes no Node) nao existe import.meta.env e a instrumentacao fica desligada.
+const performanceEnabled =
+  typeof import.meta.env !== "undefined" &&
+  (import.meta.env.DEV || import.meta.env.VITE_PERF_DEBUG === "1");
 
 const counters = new Map<string, number>();
 

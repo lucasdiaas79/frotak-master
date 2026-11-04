@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useFleet } from "@/modules/fleet-core/application/fleetStore";
+import { useFleet } from "@/modules/fleet-core/container";
 import { getCurrentAccessToken } from "@/lib/auth";
 import { createDriverAppAccess } from "@/modules/driver-app/api/driverAppAccess";
 import { useManualFreightAssetMode } from "@/modules/driver-app/ui/useManualFreightAssetMode";

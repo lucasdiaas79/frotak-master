@@ -40,9 +40,9 @@ import {
   deleteFuelRecords,
   listFuelRecords,
   listTripFuelEfficiencyCycles,
-  type TripFuelEfficiencyCycle,
-} from "@/modules/fleet-core/infrastructure/fuel-records";
-import { useFleet } from "@/modules/fleet-core/application/fleetStore";
+} from "@/modules/fleet-core/container";
+import type { TripFuelEfficiencyCycle } from "@/modules/fleet-core/domain/fleetOperations";
+import { useFleet } from "@/modules/fleet-core/container";
 import { FUEL_TYPE_LABEL, type FuelRecord, type FuelType, type Vehicle } from "@/lib/types";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";

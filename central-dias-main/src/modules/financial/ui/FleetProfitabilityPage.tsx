@@ -47,7 +47,7 @@ import type {
   ProfitabilityView,
   VehicleProfitabilityRow,
 } from "@/modules/financial/domain/types";
-import { useFleet } from "@/modules/fleet-core/application/fleetStore";
+import { useFleet } from "@/modules/fleet-core/container";
 import { cn } from "@/lib/utils";
 
 const ALL = "all";

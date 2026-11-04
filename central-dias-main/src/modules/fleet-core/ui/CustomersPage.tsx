@@ -22,7 +22,7 @@ import {
   searchPlaceSuggestions,
   type PlaceSuggestion,
 } from "@/modules/fleet-core/api/geocoding";
-import { useFleet } from "@/modules/fleet-core/application/fleetStore";
+import { useFleet } from "@/modules/fleet-core/container";
 import { UFS } from "@/lib/types";
 import type { Recipient, Sender } from "@/lib/types";
 import { cn } from "@/lib/utils";

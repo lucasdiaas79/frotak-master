@@ -2,23 +2,10 @@ import { supabase } from "@/lib/supabase";
 import { vehicleFromRow } from "@/modules/fleet-core/infrastructure/mappers";
 import type { ManualTargetCode } from "@/modules/fleet-core/domain/freightKanban";
 import type { Vehicle } from "@/lib/types";
-
-export interface ManualFreightMoveInput {
-  vehicle: Vehicle;
-  targetCode: ManualTargetCode;
-  reason: string;
-  informationSource: string;
-  occurredAt: string;
-  observation?: string;
-  confirmDocuments: boolean;
-}
-
-export class WorkflowConflictError extends Error {
-  constructor(message = "O card foi atualizado. Recarregue a tela e tente novamente.") {
-    super(message);
-    this.name = "WorkflowConflictError";
-  }
-}
+import {
+  WorkflowConflictError,
+  type ManualFreightMoveInput,
+} from "@/modules/fleet-core/domain/fleetOperations";
 
 export async function manualMoveFreightCard(input: ManualFreightMoveInput): Promise<Vehicle> {
   const { data, error } = await supabase.rpc("manual_move_freight_card", {

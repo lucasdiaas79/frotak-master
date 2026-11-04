@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useFleet } from "@/modules/fleet-core/application/fleetStore";
+import { useFleet } from "@/modules/fleet-core/container";
 import { useManualFreightAssetMode } from "@/modules/driver-app/ui/useManualFreightAssetMode";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";

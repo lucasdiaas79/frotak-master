@@ -1,13 +1,14 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { useFleet } from "@/modules/fleet-core/application/fleetStore";
+import { useFleet } from "@/modules/fleet-core/container";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { FleetMap } from "@/modules/fleet-core/ui/FleetMap";
 import { Modal } from "@/components/Modal";
 import { getActiveTenantId, shouldUseLocalTenantData } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import { listRecentTripMovements, watchTripCosts } from "@/modules/fleet-core/container";
+import type { FreightCostMovement } from "@/modules/fleet-core/domain/fleetOperations";
 import { statusGroup } from "@/lib/types";
 import { VEHICLE_STATUS_LABEL } from "@/lib/types";
 import type { FleetEvent, FleetEventSource, Vehicle, VehicleStatus } from "@/lib/types";
@@ -47,16 +48,6 @@ interface DashboardUpdate {
   source: FleetEventSource | "Sistema";
   description: string;
   timestamp: string;
-}
-
-interface FreightCostMovement {
-  id: string;
-  vehicleId?: string | null;
-  driverId?: string | null;
-  freightId?: string | null;
-  tripCycleId?: string | null;
-  amount: number;
-  recordedAt: string;
 }
 
 interface RecentTripCostSummary {
@@ -330,18 +321,6 @@ function buildRecentTripCosts({
     .map((summary) => ({ ...summary, balance: summary.entries - summary.expenses }))
     .sort((a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime())
     .slice(0, 9);
-}
-
-function movementFromRow(row: Record<string, unknown>): FreightCostMovement {
-  return {
-    id: String(row.id),
-    vehicleId: typeof row.vehicle_id === "string" ? row.vehicle_id : null,
-    driverId: typeof row.driver_id === "string" ? row.driver_id : null,
-    freightId: typeof row.freight_id === "string" ? row.freight_id : null,
-    tripCycleId: typeof row.trip_cycle_id === "string" ? row.trip_cycle_id : null,
-    amount: Number(row.amount ?? 0),
-    recordedAt: String(row.recorded_at ?? new Date().toISOString()),
-  };
 }
 
 function buildCurrentVehicleUpdates(vehicles: Vehicle[]): DashboardUpdate[] {
@@ -738,39 +717,23 @@ export function Dashboard() {
       const since = new Date();
       since.setDate(since.getDate() - 45);
 
-      const [entriesResult, expensesResult] = await Promise.all([
-        supabase
-          .from("freight_cash_entries")
-          .select("id, vehicle_id, driver_id, freight_id, trip_cycle_id, amount, recorded_at")
-          .eq("tenant_id", tenantId)
-          .gte("recorded_at", since.toISOString())
-          .order("recorded_at", { ascending: false })
-          .limit(240),
-        supabase
-          .from("freight_expenses")
-          .select("id, vehicle_id, driver_id, freight_id, trip_cycle_id, amount, recorded_at")
-          .eq("tenant_id", tenantId)
-          .eq("payment_source", "trip_cash")
-          .gte("recorded_at", since.toISOString())
-          .order("recorded_at", { ascending: false })
-          .limit(240),
-      ]);
-
-      if (cancelled) return;
-      if (entriesResult.error || expensesResult.error) {
-        const message =
-          entriesResult.error?.message ||
-          expensesResult.error?.message ||
-          "Não foi possível carregar custos de viagem.";
-        setTripCostsError(message);
+      let movements: Awaited<ReturnType<typeof listRecentTripMovements>>;
+      try {
+        movements = await listRecentTripMovements(tenantId, since);
+      } catch (error) {
+        if (cancelled) return;
+        setTripCostsError(
+          error instanceof Error ? error.message : "Não foi possível carregar custos de viagem.",
+        );
         setTripCostsLoading(false);
         return;
       }
 
+      if (cancelled) return;
       setTripCosts(
         buildRecentTripCosts({
-          entries: ((entriesResult.data ?? []) as Record<string, unknown>[]).map(movementFromRow),
-          expenses: ((expensesResult.data ?? []) as Record<string, unknown>[]).map(movementFromRow),
+          entries: movements.entries,
+          expenses: movements.expenses,
           vehicles,
           drivers,
         }),
@@ -787,24 +750,12 @@ export function Dashboard() {
 
     void loadTripCosts();
 
-    const channel = supabase
-      .channel("dashboard-trip-costs")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "freight_cash_entries" },
-        scheduleReload,
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "freight_expenses" },
-        scheduleReload,
-      )
-      .subscribe();
+    const stopWatching = watchTripCosts(scheduleReload);
 
     return () => {
       cancelled = true;
       if (reloadTimer) window.clearTimeout(reloadTimer);
-      void supabase.removeChannel(channel);
+      stopWatching();
     };
   }, [vehicles, drivers]);
 

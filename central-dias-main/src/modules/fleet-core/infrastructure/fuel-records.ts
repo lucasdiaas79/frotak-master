@@ -1,33 +1,9 @@
 import { supabase } from "@/lib/supabase";
 import type { FuelRecord, FuelType } from "@/lib/types";
-
-export type TripFuelEfficiencyFreight = {
-  id: string;
-  sequence?: number | null;
-  sourceKind?: string | null;
-  lifecycleStatus?: string | null;
-  startedAt?: string | null;
-  completedAt?: string | null;
-  senderName?: string | null;
-  recipientName?: string | null;
-};
-
-export type TripFuelEfficiencyCycle = {
-  id: string;
-  vehicleId?: string | null;
-  driverId?: string | null;
-  status: string;
-  startedAt: string;
-  closedAt?: string | null;
-  startOdometer?: number | null;
-  endOdometer?: number | null;
-  odometerStartedAt?: string | null;
-  odometerEndedAt?: string | null;
-  freightCount: number;
-  completedFreightCount: number;
-  freights: TripFuelEfficiencyFreight[];
-  fuelRecords: FuelRecord[];
-};
+import type {
+  TripFuelEfficiencyFreight,
+  TripFuelEfficiencyCycle,
+} from "@/modules/fleet-core/domain/fleetOperations";
 
 type FuelRecordRow = {
   id: string;

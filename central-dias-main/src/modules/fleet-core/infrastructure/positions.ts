@@ -1,16 +1,5 @@
 import { supabase } from "@/lib/supabase";
-
-export interface RegisterVehiclePositionInput {
-  vehicleId: string;
-  lat: number;
-  lng: number;
-  city?: string;
-  state?: string;
-  speed?: number;
-  direction?: number;
-  source?: string;
-  rawPayload?: unknown;
-}
+import type { RegisterVehiclePositionInput } from "@/modules/fleet-core/domain/fleetOperations";
 
 export async function registerVehiclePosition(input: RegisterVehiclePositionInput): Promise<void> {
   const { error } = await supabase.rpc("register_vehicle_position", {

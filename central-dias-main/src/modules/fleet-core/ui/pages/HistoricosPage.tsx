@@ -40,8 +40,8 @@ import {
   deleteFreightHistory,
   listFreightHistory,
   listLongTripHistory,
-  type LongTripHistory,
-} from "@/modules/fleet-core/infrastructure/freight-history";
+} from "@/modules/fleet-core/container";
+import type { LongTripHistory } from "@/modules/fleet-core/domain/fleetOperations";
 import type { FreightHistory } from "@/lib/types";
 import { toast } from "sonner";
 

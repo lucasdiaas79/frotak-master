@@ -63,12 +63,20 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatRelative } from "@/lib/format";
-import * as freightDocumentsService from "@/modules/fleet-core/infrastructure/freight-documents";
+import {
+  createLongTripFreightsOperation,
+  getWorkspaceTenantSettings,
+  listFreightDocuments,
+  listLegacyPartnerLinks,
+  recordFleetEvent,
+  updateFreightDocumentStatus,
+  uploadFreightDocument,
+} from "@/modules/fleet-core/container";
+import type { LegacyPartnerLink } from "@/modules/fleet-core/domain/fleetOperations";
 import {
   advanceFreightStage as advanceFreightStageOperation,
   applyFinalFreightCommand,
   createFreightOperation,
-  createLongTripFreightsOperation,
 } from "@/modules/fleet-core/application/freightOperations";
 import {
   FREIGHT_MACRO_STAGES,
@@ -90,7 +98,7 @@ import type {
   FreightStageId,
   FreightTone,
 } from "@/modules/fleet-core/domain/freightWorkflow";
-import { useFleet } from "@/modules/fleet-core/application/fleetStore";
+import { useFleet } from "@/modules/fleet-core/container";
 import { perfRender } from "@/lib/performance";
 import {
   getFinancialAccess,
@@ -128,7 +136,6 @@ import type {
   VehicleStatus,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/lib/supabase";
 
 type Situacao = "all" | "operacao" | "parado" | "quebrado" | "manutencao" | "sem-vinculo";
 type ViewMode = "pipeline" | "table";
@@ -187,12 +194,6 @@ interface AvailableDriverResource {
   implementModelLabel: string;
   implementModel: string;
   cityLabel: string;
-}
-
-interface LegacyPartnerLink {
-  legacy_table: "senders" | "recipients";
-  legacy_id: string;
-  partner_id: string;
 }
 
 interface FreightFormState {
@@ -615,29 +616,17 @@ export function GestaoFrotaPage() {
     async function loadPaymentTermDefaults() {
       try {
         const access = await getFinancialAccess();
-        const [partners, settings, links, workspaceSettings] = await Promise.all([
+        const [partners, settings, links, tenantSettings] = await Promise.all([
           listFinancialPartners(),
           getFinancialIntegrationSettings(access.workspaceId),
-          supabase
-            .from("legacy_partner_links")
-            .select("legacy_table, legacy_id, partner_id")
-            .in("legacy_table", ["senders", "recipients"]),
-          supabase
-            .from("workspaces")
-            .select("tenant_id, tenants(settings)")
-            .eq("id", access.workspaceId)
-            .maybeSingle(),
+          listLegacyPartnerLinks(),
+          getWorkspaceTenantSettings(access.workspaceId),
         ]);
-        if (links.error) throw links.error;
-        if (workspaceSettings.error) throw workspaceSettings.error;
         if (cancelled) return;
-        const tenant = Array.isArray(workspaceSettings.data?.tenants)
-          ? workspaceSettings.data?.tenants[0]
-          : workspaceSettings.data?.tenants;
         setFinancialPartners(partners);
         setFinancialSettings(settings);
-        setLegacyPartnerLinks((links.data ?? []) as LegacyPartnerLink[]);
-        setAssetAssignmentMode(readAssetAssignmentMode(tenant?.settings));
+        setLegacyPartnerLinks(links);
+        setAssetAssignmentMode(readAssetAssignmentMode(tenantSettings));
       } catch (error) {
         if (!cancelled) {
           console.warn("[gestao-frota] payment term defaults unavailable", error);
@@ -750,8 +739,7 @@ export function GestaoFrotaPage() {
       freightId: vehicle.currentFreightId,
     }));
 
-    freightDocumentsService
-      .listFreightDocuments(documentRefs)
+    listFreightDocuments(documentRefs)
       .then((documents) => {
         if (cancelled) return;
         setFreightDocuments(documents);
@@ -1176,7 +1164,7 @@ export function GestaoFrotaPage() {
   };
 
   const handleDocument = async (demand: FreightDemand, kind: DocumentKind, file: File) => {
-    const uploaded = await freightDocumentsService.uploadFreightDocument({
+    const uploaded = await uploadFreightDocument({
       vehicleId: demand.id,
       freightId: demand.currentFreightId,
       driverId: demand.driver?.id,
@@ -1220,10 +1208,7 @@ export function GestaoFrotaPage() {
 
   const approveNote = async (demand: FreightDemand) => {
     if (demand.documents.note?.id) {
-      await freightDocumentsService.updateFreightDocumentStatus(
-        demand.documents.note.id,
-        "aprovado",
-      );
+      await updateFreightDocumentStatus(demand.documents.note.id, "aprovado");
     }
     setDocumentsByVehicle((current) => ({
       ...current,
@@ -1244,22 +1229,19 @@ export function GestaoFrotaPage() {
   const rejectNote = async (demand: FreightDemand) => {
     if (!demand.documents.note?.id) return;
 
-    await freightDocumentsService.updateFreightDocumentStatus(
-      demand.documents.note.id,
-      "rejeitado",
-    );
+    await updateFreightDocumentStatus(demand.documents.note.id, "rejeitado");
     await setVehicleStatus(demand.id, "aguardando-cte", "NOTA_APROVADA_AG_CTE");
-    await supabase.from("fleet_events").insert({
-      vehicle_id: demand.id,
-      freight_id: demand.currentFreightId ?? null,
+    await recordFleetEvent({
+      vehicleId: demand.id,
+      freightId: demand.currentFreightId ?? null,
       status: "aguardando-cte",
-      freight_stage: "NOTA_APROVADA_AG_CTE",
+      freightStage: "NOTA_APROVADA_AG_CTE",
       city: demand.city,
       state: demand.state,
       source: "Operador",
       description: "Expedição não conseguiu ler a nota fiscal. Solicitar nova foto.",
-      event_type: "nota_fiscal_rejeitada",
-      action_origin: "gestao_central",
+      eventType: "nota_fiscal_rejeitada",
+      actionOrigin: "gestao_central",
       metadata: { noteDocumentId: demand.documents.note.id },
     });
 

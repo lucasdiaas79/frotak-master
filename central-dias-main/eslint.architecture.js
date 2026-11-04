@@ -8,11 +8,12 @@
 //   container.ts    composicao no navegador: unico lugar que liga ui ao adaptador
 //
 // Um modulo entra na lista quando ja respeita a regra; dali em diante o lint impede regressao.
-export const cleanModules = ["driver-app", "frotak-tracking", "financial"];
+export const cleanModules = ["driver-app", "frotak-tracking", "financial", "fleet-core"];
 
 const external = {
   supabase: "^@supabase/",
-  supabaseClient: "^@/lib/supabase$",
+  supabaseClient: "(^@|/)lib/supabase$",
+  session: "(^@|/)lib/auth$",
   gemini: "^@google/genai$",
   react: "^react(-dom)?(/|$)",
   router: "^@tanstack/",
@@ -48,6 +49,7 @@ export function architectureConfig(modules = cleanModules) {
           [
             external.supabase,
             external.supabaseClient,
+            external.session,
             external.gemini,
             external.react,
             external.router,
@@ -66,6 +68,7 @@ export function architectureConfig(modules = cleanModules) {
           [
             external.supabase,
             external.supabaseClient,
+            external.session,
             external.gemini,
             external.react,
             layer("infrastructure", "api", "ui"),

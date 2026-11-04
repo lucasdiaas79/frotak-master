@@ -22,7 +22,7 @@ import {
   watchTrackerSyncState,
   type TrackerSyncState as SascarSyncState,
 } from "@/modules/frotak-tracking/container";
-import { useFleet } from "@/modules/fleet-core/application/fleetStore";
+import { useFleet } from "@/modules/fleet-core/container";
 import { ALL_STATUSES, STATUS_HEX, VEHICLE_STATUS_LABEL, statusGroup } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { perfRender } from "@/lib/performance";

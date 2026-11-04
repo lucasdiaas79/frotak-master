@@ -167,7 +167,7 @@ import type {
   PayrollEntryStatus,
   PayrollItemType,
 } from "@/modules/financial/domain/types";
-import { useFleet } from "@/modules/fleet-core/application/fleetStore";
+import { useFleet } from "@/modules/fleet-core/container";
 import { cn } from "@/lib/utils";
 
 const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
