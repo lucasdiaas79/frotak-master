@@ -1,5 +1,10 @@
 import type { Session, User } from "@supabase/supabase-js";
-import { hasSupabaseConfig, supabase, supabaseAuthStorageKey } from "@/lib/supabase";
+import {
+  hasSupabaseConfig,
+  supabase,
+  supabaseAuthStorageKey,
+  isClientDatabaseBuild,
+} from "@/lib/supabase";
 import type { Profile } from "@/lib/types";
 
 const LOCAL_AUTH_KEY = "central-client-local-session";
@@ -294,6 +299,9 @@ export async function acceptMasterSsoFromUrl(search: string) {
 }
 
 export function getMasterLoginUrl() {
+  // Banco por cliente: cada cliente entra pelo próprio endereço.
+  if (isClientDatabaseBuild) return "/login";
+
   const configuredUrl = import.meta.env.VITE_FROTAK_MASTER_LOGIN_URL;
   if (typeof configuredUrl === "string" && configuredUrl.trim()) return configuredUrl.trim();
 

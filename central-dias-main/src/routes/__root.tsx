@@ -43,6 +43,8 @@ export const Route = createRootRoute({
       { rel: "icon", type: "image/png", href: faviconPng },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
     ],
+    // Banco por cliente: script comum, sem defer, para rodar antes do código do app.
+    scripts: import.meta.env.VITE_FROTAK_MULTI_DB === "true" ? [{ src: "/frotak-client.js" }] : [],
   }),
   shellComponent: RootShell,
   component: RootComponent,

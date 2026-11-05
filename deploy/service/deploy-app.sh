@@ -52,7 +52,7 @@ check() {
   return 1
 }
 check master 3001 /login
-check tms 3002 /login
+check tms 3002 /__frotak/health
 
 # Mantem as 3 versoes mais recentes para poder voltar atras.
 ls -1dt /opt/frotak/releases/* | tail -n +4 | xargs -r rm -rf

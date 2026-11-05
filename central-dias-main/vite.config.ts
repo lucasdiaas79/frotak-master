@@ -9,5 +9,7 @@ import { nitro } from "nitro/vite";
 
 export default defineConfig({
   cloudflare: false,
+  // src/server.ts escolhe o banco de cada cliente antes de atender a requisição.
+  tanstackStart: { server: { entry: "server" } },
   plugins: [nitro()],
 });

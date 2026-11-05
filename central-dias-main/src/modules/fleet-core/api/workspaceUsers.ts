@@ -1,3 +1,7 @@
+import {
+  serverServiceRoleKey,
+  serverSupabaseUrl,
+} from "../../../../server/lib/tenant-connection.ts";
 import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 
@@ -126,8 +130,8 @@ function requiredEnv(name: string) {
 
 function getSupabaseAdmin() {
   return createClient(
-    readEnv("SUPABASE_URL") || requiredEnv("VITE_SUPABASE_URL"),
-    requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    serverSupabaseUrl() || requiredEnv("VITE_SUPABASE_URL"),
+    serverServiceRoleKey() || requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
     {
       auth: {
         persistSession: false,

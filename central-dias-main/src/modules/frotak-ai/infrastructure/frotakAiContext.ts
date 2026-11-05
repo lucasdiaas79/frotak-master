@@ -1,3 +1,4 @@
+import { serverAnonKey, serverSupabaseUrl } from "../../../../server/lib/tenant-connection.ts";
 import { createClient } from "@supabase/supabase-js";
 // Caminho relativo: os testes de IA importam este arquivo direto pelo Node, sem o alias "@/".
 import { assertWorkspaceModule } from "../../../lib/entitlements.ts";
@@ -38,11 +39,11 @@ function requiredEnv(name: string) {
 }
 
 function supabaseUrl() {
-  return readEnv("SUPABASE_URL") || requiredEnv("VITE_SUPABASE_URL");
+  return serverSupabaseUrl() || requiredEnv("VITE_SUPABASE_URL");
 }
 
 function supabaseAnonKey() {
-  return readEnv("SUPABASE_ANON_KEY") || requiredEnv("VITE_SUPABASE_ANON_KEY");
+  return serverAnonKey() || requiredEnv("VITE_SUPABASE_ANON_KEY");
 }
 
 export function getSupabaseServerClient(accessToken?: string) {

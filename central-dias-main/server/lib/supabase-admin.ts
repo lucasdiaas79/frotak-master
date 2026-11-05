@@ -1,4 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
+import {
+  isClientDatabaseMode,
+  serverServiceRoleKey,
+  serverSupabaseUrl,
+} from "./tenant-connection.ts";
 
 function readEnv(name: string): string | undefined {
   const value = process.env[name];
@@ -19,8 +24,8 @@ const supabaseServiceRoleKey = readEnv("SUPABASE_SERVICE_ROLE_KEY");
 
 export function getSupabaseAdmin() {
   return createClient(
-    supabaseUrl ?? requiredEnv("VITE_SUPABASE_URL"),
-    requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
+    serverSupabaseUrl() ?? requiredEnv("VITE_SUPABASE_URL"),
+    serverServiceRoleKey() ?? requiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
     {
       auth: {
         persistSession: false,
@@ -30,7 +35,7 @@ export function getSupabaseAdmin() {
   );
 }
 
-if ((!supabaseUrl && !viteSupabaseUrl) || !supabaseServiceRoleKey) {
+if (!isClientDatabaseMode() && ((!supabaseUrl && !viteSupabaseUrl) || !supabaseServiceRoleKey)) {
   console.warn(
     "Supabase admin env vars are not fully configured. Set SUPABASE_URL or VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
   );

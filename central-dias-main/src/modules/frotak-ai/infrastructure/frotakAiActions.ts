@@ -1,3 +1,7 @@
+import {
+  serverServiceRoleKey,
+  serverSupabaseUrl,
+} from "../../../../server/lib/tenant-connection.ts";
 import { createClient } from "@supabase/supabase-js";
 import { type FrotakAiContext } from "@/modules/frotak-ai/domain/frotakAiContext";
 import { getSupabaseServerClient } from "@/modules/frotak-ai/infrastructure/frotakAiContext";
@@ -52,14 +56,14 @@ function readEnv(name: string) {
 }
 
 function actionSecret() {
-  const secret = readEnv("FROTAK_AI_ACTION_SECRET") || readEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const secret = readEnv("FROTAK_AI_ACTION_SECRET") || serverServiceRoleKey();
   if (!secret) throw new Error("Acoes da Frotak IA indisponiveis: segredo nao configurado.");
   return secret;
 }
 
 function serviceClient() {
-  const url = readEnv("SUPABASE_URL") || readEnv("VITE_SUPABASE_URL");
-  const key = readEnv("SUPABASE_SERVICE_ROLE_KEY");
+  const url = serverSupabaseUrl();
+  const key = serverServiceRoleKey();
   if (!url || !key) throw new Error("Auditoria indisponivel: service role nao configurada.");
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }

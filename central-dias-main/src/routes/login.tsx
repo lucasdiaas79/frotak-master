@@ -1,16 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { TenantLoginPage } from "@/components/TenantLoginPage";
 import { acceptMasterSsoFromUrl, getMasterLoginUrl } from "@/lib/auth";
+import { isClientDatabaseBuild } from "@/lib/supabase";
 
 export const Route = createFileRoute("/login")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Redirecionando - Frotak" },
+      { title: isClientDatabaseBuild ? "Entrar - FrotaK" : "Redirecionando - Frotak" },
       { name: "description", content: "Acesso centralizado pelo Frotak Master." },
     ],
   }),
-  component: LoginRedirect,
+  component: isClientDatabaseBuild ? TenantLoginPage : LoginRedirect,
 });
 
 function LoginRedirect() {

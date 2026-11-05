@@ -50,7 +50,7 @@ if [ ! -f /etc/frotak/vapid.env ]; then
   ' > /etc/frotak/vapid.env
 fi
 
-# O servidor fala com a API pela WireGuard; o navegador usa o endereco publico.
+# O servidor fala com a API e com o agente pela WireGuard; o navegador usa o endereco publico.
 cat > /etc/frotak/master.env <<EOF
 HOST=127.0.0.1
 PORT=3001
@@ -58,21 +58,21 @@ SUPABASE_URL=http://${WG_DB}:8000
 VITE_SUPABASE_URL=https://${API_HOST}
 VITE_SUPABASE_ANON_KEY=${ANON_KEY}
 SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+FROTAK_AGENT_URL=http://${WG_DB}:9100
+FROTAK_AGENT_TOKEN=${FROTAK_AGENT_TOKEN}
 EOF
 
 {
   cat <<EOF
 HOST=127.0.0.1
 PORT=3002
-SUPABASE_URL=http://${WG_DB}:8000
-SUPABASE_ANON_KEY=${ANON_KEY}
-VITE_SUPABASE_URL=https://${API_HOST}
-VITE_SUPABASE_ANON_KEY=${ANON_KEY}
-SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+FROTAK_AGENT_URL=http://${WG_DB}:9100
+FROTAK_AGENT_TOKEN=${FROTAK_AGENT_TOKEN}
+FROTAK_CLIENT_BASE_DOMAIN=${CLIENT_BASE_DOMAIN}
 FROTAK_PUSH_CRON_TOKEN=${FROTAK_PUSH_CRON_TOKEN}
 SASCAR_SYNC_TOKEN=${SASCAR_SYNC_TOKEN}
 REDIS_URL=redis://:${redis_password}@127.0.0.1:6379/0
-VAPID_SUBJECT=https://${TMS_HOST}
+VAPID_SUBJECT=https://${MASTER_HOST}
 EOF
   cat /etc/frotak/vapid.env
 } > /etc/frotak/tms.env
@@ -93,9 +93,8 @@ fi
 cat > /etc/frotak/build.env <<EOF
 VITE_SUPABASE_URL=https://${API_HOST}
 VITE_SUPABASE_ANON_KEY=${ANON_KEY}
-VITE_FROTAK_CLIENT_APP_URL=https://${TMS_HOST}
-VITE_FROTAK_MASTER_LOGIN_URL=https://${MASTER_HOST}/login
 VITE_FROTAK_HIDE_PROTOTYPES=true
+VITE_FROTAK_MULTI_DB=true
 EOF
 chown root:frotak /etc/frotak /etc/frotak/build.env
 chmod 750 /etc/frotak
@@ -104,7 +103,7 @@ chmod 640 /etc/frotak/build.env
 install -m 644 "$here/systemd/frotak-app@.service" /etc/systemd/system/frotak-app@.service
 systemctl daemon-reload
 
-sed -e "s|__MASTER_HOST__|${MASTER_HOST}|" -e "s|__TMS_HOST__|${TMS_HOST}|" \
+sed -e "s|__MASTER_HOST__|${MASTER_HOST}|" -e "s|__CLIENT_BASE_DOMAIN__|${CLIENT_BASE_DOMAIN}|" \
   -e "s|__API_HOST__|${API_HOST}|" -e "s|__WG_DB__|${WG_DB}|" \
   "$here/Caddyfile.template" > /etc/caddy/Caddyfile
 chmod 644 /etc/caddy/Caddyfile

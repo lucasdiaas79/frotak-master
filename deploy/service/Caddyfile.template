@@ -1,5 +1,9 @@
-# HTTPS automatico para os tres enderecos publicos. Gerado por service/install.sh.
+# HTTPS automatico. Gerado por service/install.sh.
 {
+	# Certificado de cliente sai na primeira visita, e so se o TMS confirmar que o cliente existe.
+	on_demand_tls {
+		ask http://127.0.0.1:3002/__frotak/tls-ask
+	}
 	# Sem HTTP/3: no Chrome com antivirus que intercepta TLS, os recursos da pagina falharam com
 	# ERR_QUIC_PROTOCOL_ERROR. HTTP/2 atende bem e nao depende de UDP aberto na rede do cliente.
 	servers {
@@ -27,7 +31,11 @@ __MASTER_HOST__ {
 	reverse_proxy 127.0.0.1:3001
 }
 
-__TMS_HOST__ {
+# Qualquer outro endereco e um cliente: <cliente>.__CLIENT_BASE_DOMAIN__
+https:// {
+	tls {
+		on_demand
+	}
 	import common
 	reverse_proxy 127.0.0.1:3002
 }
