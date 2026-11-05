@@ -382,7 +382,7 @@ def render_kong():
 
 def create_database(slug, env):
     names = names_for(slug)
-    psql("postgres", f'CREATE DATABASE "{names["db"]}" TEMPLATE {TEMPLATE_DB};')
+    psql("postgres", f'CREATE DATABASE "{names["db"]}" TEMPLATE {TEMPLATE_DB} OWNER postgres;')
     psql(
         "postgres",
         f"""

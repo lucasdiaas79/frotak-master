@@ -98,13 +98,15 @@ if ! db_exists frotak_jobs; then
 fi
 
 if ! db_exists frotak_template; then
-  as_admin -d postgres -c 'CREATE DATABASE frotak_template TEMPLATE postgres' </dev/null
+  # So ganha o nome final depois de pronto: uma falha aqui nao deixa modelo pela metade.
+  as_admin -d postgres -c 'DROP DATABASE IF EXISTS frotak_template_build WITH (FORCE)' </dev/null
+  as_admin -d postgres -c 'CREATE DATABASE frotak_template_build TEMPLATE postgres OWNER postgres' </dev/null
 
   # Auth e Storage trazem as proprias tabelas ao subir. As migrations dependem delas.
   stage="$(mktemp -d)"
   cat > "$stage/template.env" <<EOF
 CLIENT_SLUG=template
-CLIENT_DB=frotak_template
+CLIENT_DB=frotak_template_build
 API_HOST=${API_HOST}
 CLIENT_BASE_DOMAIN=${CLIENT_BASE_DOMAIN}
 JWT_SECRET=${JWT_SECRET}
@@ -125,14 +127,15 @@ EOF
   template_compose down -v
   rm -rf "$stage"
 
-  "$here/migrate.sh" "$migrations_dir" frotak_template
+  "$here/migrate.sh" "$migrations_dir" frotak_template_build
+  as_admin -d postgres -c 'ALTER DATABASE frotak_template_build RENAME TO frotak_template' </dev/null
   # Nada conecta no modelo; copia-lo exige banco sem conexoes.
   as_admin -d postgres -c 'ALTER DATABASE frotak_template ALLOW_CONNECTIONS false' </dev/null
   echo "modelo dos clientes pronto"
 fi
 
 if ! db_exists frotak_central; then
-  as_admin -d postgres -c 'CREATE DATABASE frotak_central TEMPLATE frotak_template' </dev/null
+  as_admin -d postgres -c 'CREATE DATABASE frotak_central TEMPLATE frotak_template OWNER postgres' </dev/null
   as_admin -d postgres <<'SQL'
 REVOKE CONNECT ON DATABASE frotak_central FROM PUBLIC;
 GRANT CONNECT ON DATABASE frotak_central TO authenticator, supabase_auth_admin, supabase_storage_admin, postgres, pgbouncer;

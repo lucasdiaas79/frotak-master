@@ -25,7 +25,7 @@ as_admin() { docker exec -i frotak-db psql -v ON_ERROR_STOP=1 -q -X -At -U supab
 
 stack stop
 as_admin -d postgres -c "DROP DATABASE IF EXISTS \"$CLIENT_DB\" WITH (FORCE)" </dev/null
-as_admin -d postgres -c "CREATE DATABASE \"$CLIENT_DB\" TEMPLATE template0" </dev/null
+as_admin -d postgres -c "CREATE DATABASE \"$CLIENT_DB\" TEMPLATE template0 OWNER postgres" </dev/null
 
 # Avisos sobre objetos do proprio Supabase sao esperados; a conferencia abaixo e que decide.
 docker exec -i frotak-db pg_restore -U supabase_admin -h 127.0.0.1 -d "$CLIENT_DB" --no-comments < "$dump" 2>/tmp/restore-"$slug".log || true
