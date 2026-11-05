@@ -41,8 +41,8 @@ export function ClientEnvironmentTab({ resources }: { resources: ClientResources
       >
         <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <Field label="Nome">
-            <span className="inline-flex items-center gap-1">
-              <Mono>{database.name}</Mono>
+            <span className="inline-flex max-w-full items-center gap-1">
+              <Mono className="min-w-0 break-all">{database.name}</Mono>
               <CopyButton value={database.name} />
             </span>
           </Field>
@@ -60,8 +60,8 @@ export function ClientEnvironmentTab({ resources }: { resources: ClientResources
           </Field>
           <Field label="Criado em">{formatDateTime(toEpoch(resources.createdAt))}</Field>
           <Field label="Identificador interno">
-            <span className="inline-flex items-center gap-1">
-              <Mono>{resources.slug}</Mono>
+            <span className="inline-flex max-w-full items-center gap-1">
+              <Mono className="min-w-0 break-all">{resources.slug}</Mono>
               <CopyButton value={resources.slug} />
             </span>
           </Field>
@@ -180,7 +180,10 @@ export function ClientEnvironmentTab({ resources }: { resources: ClientResources
         </div>
       </Section>
 
-      <Section title="Tempo real" description="Atualizações na tela sem recarregar.">
+      <Section
+        title="Tempo real"
+        description="Atualizações na tela sem recarregar. A leitura do banco começa quando alguém abre o TMS."
+      >
         <dl className="grid grid-cols-2 gap-4">
           <Field label="Registro">
             <LevelBadge level={probes.realtimeRegistered ? "ok" : "critical"}>
@@ -189,7 +192,7 @@ export function ClientEnvironmentTab({ resources }: { resources: ClientResources
           </Field>
           <Field label="Leitura do banco">
             <LevelBadge level={database.slot?.active ? "ok" : "idle"}>
-              {database.slot?.active ? "Ativa" : "Em espera: ninguém conectado"}
+              {database.slot?.active ? "Ativa" : "Em espera"}
             </LevelBadge>
           </Field>
           <Field label="Slot de replicação">
