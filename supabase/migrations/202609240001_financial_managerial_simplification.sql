@@ -3,7 +3,13 @@
 -- financial_allocations como dimensao/apropriacao ate a baixa.
 
 -- Em banco novo o pg_cron precisa existir aqui, senao os jobs financeiros abaixo nao sao agendados.
-create extension if not exists pg_cron with schema pg_catalog;
+do $$
+begin
+  if current_database() = coalesce(current_setting('cron.database_name', true), 'postgres') then
+    create extension if not exists pg_cron with schema pg_catalog;
+  end if;
+end;
+$$;
 
 alter table public.financial_documents
   add column if not exists entry_date date not null default current_date;

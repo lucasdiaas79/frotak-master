@@ -1,0 +1,101 @@
+# Servicos de um cliente: login, API e arquivos, cada um com credencial propria e ligado so ao banco
+# dele. O Postgres, o Realtime e o portao (Kong) sao compartilhados. Quem sobe e o agente.
+#
+# Os nomes dos servicos nao podem coincidir com os do Central: na rede compartilhada, nome igual vira
+# rodizio de DNS e a API de um poderia cair no outro. Por isso o Kong usa o nome do conteiner.
+services:
+  c-auth:
+    container_name: frotak-${CLIENT_SLUG}-auth
+    image: supabase/gotrue:v2.197.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: https://${API_HOST}/c/${CLIENT_SLUG}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://${AUTH_DB_USER}:${AUTH_DB_PASSWORD}@frotak-db:5432/${CLIENT_DB}
+      GOTRUE_DB_MAX_POOL_SIZE: "3"
+      GOTRUE_SITE_URL: https://${CLIENT_SLUG}.${CLIENT_BASE_DOMAIN}
+      GOTRUE_URI_ALLOW_LIST: https://${CLIENT_SLUG}.${CLIENT_BASE_DOMAIN}/**
+      GOTRUE_DISABLE_SIGNUP: "true"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_ISSUER: https://${API_HOST}/c/${CLIENT_SLUG}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+      GOTRUE_MFA_TOTP_ENROLL_ENABLED: "true"
+      GOTRUE_MFA_TOTP_VERIFY_ENABLED: "true"
+      GOTRUE_SMTP_PORT: "587"
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/v1/verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /auth/v1/verify
+
+  c-rest:
+    container_name: frotak-${CLIENT_SLUG}-rest
+    image: postgrest/postgrest:v14.18
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "postgrest", "--ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    environment:
+      PGRST_DB_URI: postgres://${REST_DB_USER}:${REST_DB_PASSWORD}@frotak-db:5432/${CLIENT_DB}
+      PGRST_DB_SCHEMAS: public,graphql_public
+      PGRST_DB_MAX_ROWS: 1000
+      PGRST_DB_POOL: 4
+      PGRST_DB_EXTRA_SEARCH_PATH: public,extensions
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_ADMIN_SERVER_PORT: 3001
+      PGRST_ADMIN_SERVER_HOST: localhost
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_APP_SETTINGS_JWT_EXP: 3600
+
+  c-storage:
+    container_name: frotak-${CLIENT_SLUG}-storage
+    image: supabase/storage-api:v1.81.0
+    restart: unless-stopped
+    depends_on:
+      c-rest:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:5000/status"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 10s
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://frotak-${CLIENT_SLUG}-rest:3000
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://${STORAGE_DB_USER}:${STORAGE_DB_PASSWORD}@frotak-db:5432/${CLIENT_DB}
+      DATABASE_MAX_CONNECTIONS: 4
+      STORAGE_PUBLIC_URL: https://${API_HOST}/c/${CLIENT_SLUG}
+      REQUEST_ALLOW_X_FORWARDED_PATH: "true"
+      FILE_SIZE_LIMIT: 52428800
+      STORAGE_BACKEND: file
+      GLOBAL_S3_BUCKET: frotak
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: ${CLIENT_SLUG}
+      REGION: local
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+    volumes:
+      - ${CLIENT_STORAGE_DIR}:/var/lib/storage
+
+networks:
+  default:
+    name: frotak_default
+    external: true

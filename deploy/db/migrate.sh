@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Aplica as migrations pendentes, na ordem do nome do arquivo, como o Supabase CLI faz.
 # Registra em supabase_migrations.schema_migrations, entao o CLI enxerga o mesmo historico.
-# Uso: ./migrate.sh DIRETORIO_DAS_MIGRATIONS
+# Uso: ./migrate.sh DIRETORIO_DAS_MIGRATIONS [BANCO]   (padrao: frotak_central)
 set -euo pipefail
 
 migrations_dir="${1:?informe o diretorio das migrations}"
+database="${2:-frotak_central}"
 
 # Cada chamada recebe a entrada de forma explicita: "docker exec -i" consome o stdin que herdar.
-run_psql() { docker exec -i -e PGOPTIONS='-c client_min_messages=warning' frotak-db psql -v ON_ERROR_STOP=1 -q -X -U postgres -h 127.0.0.1 -d postgres "$@"; }
+run_psql() { docker exec -i -e PGOPTIONS='-c client_min_messages=warning' frotak-db psql -v ON_ERROR_STOP=1 -q -X -U postgres -h 127.0.0.1 -d "$database" "$@"; }
 
 run_psql <<'SQL'
 create schema if not exists supabase_migrations;
@@ -30,4 +31,4 @@ for file in "${files[@]}"; do
   run_psql -c "insert into supabase_migrations.schema_migrations (version, name) values ('$version', '${base#*_}')" </dev/null
   count=$((count + 1))
 done
-echo "migrations aplicadas agora: $count; total registrado: $(run_psql -At -c 'select count(*) from supabase_migrations.schema_migrations' </dev/null)"
+echo "$database: migrations aplicadas agora: $count; total registrado: $(run_psql -At -c 'select count(*) from supabase_migrations.schema_migrations' </dev/null)"

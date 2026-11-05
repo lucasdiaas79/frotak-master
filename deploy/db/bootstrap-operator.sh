@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Cria o primeiro operador do Master com senha aleatoria, gravada so em /root neste servidor.
+# Cria o primeiro operador do Master, no banco do Central, com senha gravada so em /root neste
+# servidor. Sem OPERATOR_PASSWORD, a senha e aleatoria.
 # Uso: OPERATOR_EMAIL=admin@empresa.com.br ./bootstrap-operator.sh
 set -euo pipefail
 umask 077
@@ -10,7 +11,7 @@ umask 077
 # shellcheck disable=SC1091
 . /etc/frotak/db.env
 
-password="$(openssl rand -base64 18 | tr -d '/+=')"
+password="${OPERATOR_PASSWORD:-$(openssl rand -base64 18 | tr -d '/+=')}"
 payload="$(OPERATOR_EMAIL="$OPERATOR_EMAIL" OPERATOR_PASSWORD="$password" python3 -c '
 import json, os
 print(json.dumps({"email": os.environ["OPERATOR_EMAIL"], "password": os.environ["OPERATOR_PASSWORD"], "email_confirm": True}))')"
@@ -24,7 +25,7 @@ if [ -z "$user_id" ]; then
   exit 1
 fi
 
-docker exec -i frotak-db psql -v ON_ERROR_STOP=1 -q -X -U postgres -h 127.0.0.1 -d postgres \
+docker exec -i frotak-db psql -v ON_ERROR_STOP=1 -q -X -U postgres -h 127.0.0.1 -d frotak_central \
   -c "insert into public.platform_users (user_id, platform_role, active) values ('${user_id}', 'super_admin', true)"
 
 cat > /root/frotak-acesso-inicial.txt <<EOF

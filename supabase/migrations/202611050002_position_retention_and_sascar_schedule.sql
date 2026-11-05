@@ -29,6 +29,10 @@ grant execute on function public.purge_old_vehicle_positions(interval) to servic
 
 do $$
 begin
+  if to_regnamespace('cron') is null then
+    return;
+  end if;
+
   if not exists (select 1 from cron.job where jobname = 'vehicle-positions-retention-hourly') then
     perform cron.schedule(
       'vehicle-positions-retention-hourly',

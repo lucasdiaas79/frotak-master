@@ -19,6 +19,7 @@ ufw allow from "$PEER_PUBLIC_IP" to any port 51820 proto udp comment 'wireguard'
 case "$ROLE" in
   db)
     ufw allow in on wg0 from "$WG_PEER" to any port 6432 proto tcp comment 'pgbouncer' >/dev/null
+    ufw allow in on wg0 from "$WG_PEER" to any port 9100 proto tcp comment 'agente' >/dev/null
     # O Docker publica portas por fora do UFW. Os servicos ja escutam so na WireGuard e em
     # localhost; esta regra tambem barra quem tentar rotear ate eles pela interface publica.
     if ! grep -q 'BEGIN FROTAK DOCKER' /etc/ufw/after.rules; then

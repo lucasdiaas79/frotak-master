@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Prova que o ultimo backup restaura: sobe uma copia num conteiner descartavel e compara com o
-# banco em uso. Roda sem rede (--network none) para os jobs do pg_cron da copia nao chamarem nada.
+# Prova que o ultimo backup restaura: sobe uma copia fisica num conteiner descartavel e compara com
+# os bancos em uso; depois restaura o arquivo de cada cliente dentro dessa copia e confere. Roda sem
+# rede (--network none) para nada da copia chamar o mundo de fora.
 set -euo pipefail
 umask 077
 
@@ -25,7 +26,8 @@ chmod 700 "$work/data"
 docker run -d --name frotak-restore-test --network none \
   -v "$work/data:/var/lib/postgresql/data" -v "$work/config:/etc/postgresql-custom" \
   -e POSTGRES_PASSWORD=restore-test "$image" \
-  postgres -c config_file=/etc/postgresql/postgresql.conf -c shared_buffers=256MB >/dev/null
+  postgres -c config_file=/etc/postgresql/postgresql.conf -c shared_buffers=256MB \
+  -c cron.database_name=frotak_jobs -c pg_net.database_name=frotak_jobs >/dev/null
 
 ready=""
 for _ in $(seq 1 90); do
@@ -41,24 +43,36 @@ if [ -z "$ready" ]; then
   exit 1
 fi
 
-query='select (select count(*) from supabase_migrations.schema_migrations),
-              (select count(*) from auth.users),
-              (select count(*) from public.tenants),
-              (select count(*) from public.modules),
-              (select count(*) from storage.buckets)'
-live="$(docker exec frotak-db psql -X -At -U supabase_admin -h 127.0.0.1 -d postgres -c "$query")"
-restored="$(docker exec -e PGPASSWORD=restore-test frotak-restore-test psql -X -At -U supabase_admin -h 127.0.0.1 -d postgres -c "$query")"
+live() { docker exec frotak-db psql -X -At -U supabase_admin -h 127.0.0.1 -d "$1" -c "$2"; }
+copy() { docker exec -e PGPASSWORD=restore-test frotak-restore-test psql -X -At -U supabase_admin -h 127.0.0.1 -d "$1" -c "$2"; }
+query='select (select count(*) from supabase_migrations.schema_migrations), (select count(*) from public.modules), (select count(*) from storage.buckets)'
+counts='select (select count(*) from auth.users) || chr(124) || (select count(*) from public.tenants) || chr(124) || (select count(*) from public.vehicles)'
+
 echo "backup testado: $(basename "$latest")"
-echo "migrations|usuarios|clientes|modulos|buckets"
-echo "em uso:    $live"
-echo "restaurado: $restored"
+failed=0
 
 # Depois do backup o banco pode ter ganhado linhas, mas migrations e catalogos nao podem faltar.
-IFS='|' read -r live_migrations _ _ live_modules live_buckets <<<"$live"
-IFS='|' read -r restored_migrations _ _ restored_modules restored_buckets <<<"$restored"
-if [ "$restored_migrations" -ne "$live_migrations" ] || [ "$restored_modules" -ne "$live_modules" ] \
-  || [ "$restored_buckets" -ne "$live_buckets" ]; then
-  echo "a copia nao bate com o banco em uso" >&2
-  exit 1
+if [ "$(live frotak_central "$query")" != "$(copy frotak_central "$query")" ]; then
+  echo "FALHA: copia fisica do Central nao bate" >&2
+  failed=1
+else
+  echo "copia fisica: Central confere ($(copy frotak_central "$counts"))"
 fi
+
+shopt -s nullglob
+for dump in "$latest"/clients/*.dump; do
+  slug="$(basename "$dump" .dump)"
+  database="frotak_${slug//-/_}"
+  scratch="restore_${slug//-/_}"
+  docker exec -e PGPASSWORD=restore-test frotak-restore-test psql -X -q -U supabase_admin -h 127.0.0.1 -d postgres -c "CREATE DATABASE \"$scratch\" TEMPLATE template0" >/dev/null
+  docker exec -i -e PGPASSWORD=restore-test frotak-restore-test pg_restore -U supabase_admin -h 127.0.0.1 -d "$scratch" --no-comments < "$dump" >/dev/null 2>&1 || true
+  if [ "$(live "$database" "$query")" = "$(copy "$scratch" "$query")" ]; then
+    echo "$slug: arquivo restaura e confere ($(copy "$scratch" "$counts"))"
+  else
+    echo "FALHA: arquivo de $slug nao bate" >&2
+    failed=1
+  fi
+done
+
+[ "$failed" = 0 ] || exit 1
 echo "restauracao OK"

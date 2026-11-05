@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Backup diario: copia fisica do Postgres, arquivos do Storage e os segredos da instalacao.
+# Backup diario. Tem duas camadas:
+# - copia fisica do servidor inteiro, para recuperar a VPS em caso de desastre;
+# - um arquivo por banco, para restaurar um cliente sem encostar nos outros (restore-client.sh).
 # Fica 14 dias aqui e segue pela WireGuard para a VPS de Servico, que guarda 30 dias.
-# Quando houver object storage, o destino externo troca para ele.
 set -euo pipefail
 umask 077
 
@@ -11,14 +12,24 @@ umask 077
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 root=/var/backups/frotak
 dir="$root/$stamp"
-install -d -m 700 "$root" "$dir"
+install -d -m 700 "$root" "$dir" "$dir/clients"
 trap 'rm -rf "$dir"' ERR
 
 docker exec frotak-db pg_basebackup -U supabase_admin -h /var/run/postgresql -D - -Ft -X fetch -z > "$dir/postgres.tar.gz"
-tar -C /var/lib/frotak -czf "$dir/storage.tar.gz" storage
 tar -C /var/lib/docker/volumes/frotak_db-config/_data -czf "$dir/db-config.tar.gz" .
 tar -C /etc -czf "$dir/etc-frotak.tar.gz" frotak
-(cd "$dir" && sha256sum ./*.tar.gz > SHA256SUMS)
+tar -C /var/lib/frotak -czf "$dir/central-storage.tar.gz" storage
+
+docker exec frotak-db pg_dump -U supabase_admin -h 127.0.0.1 -Fc -d frotak_central > "$dir/central.dump"
+shopt -s nullglob
+for envfile in /etc/frotak/clients/*.env; do
+  slug="$(basename "$envfile" .env)"
+  database="$(grep '^CLIENT_DB=' "$envfile" | cut -d= -f2-)"
+  storage_dir="$(grep '^CLIENT_STORAGE_DIR=' "$envfile" | cut -d= -f2-)"
+  docker exec frotak-db pg_dump -U supabase_admin -h 127.0.0.1 -Fc -d "$database" > "$dir/clients/$slug.dump"
+  tar -C "$storage_dir" -czf "$dir/clients/$slug.storage.tar.gz" .
+done
+(cd "$dir" && find . -type f ! -name SHA256SUMS -print0 | xargs -0 sha256sum > SHA256SUMS)
 trap - ERR
 
 rsync -a -e "ssh -i /root/.ssh/frotak_backup -o BatchMode=yes -o StrictHostKeyChecking=accept-new" \

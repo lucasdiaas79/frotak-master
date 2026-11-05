@@ -5,7 +5,13 @@ begin;
 
 -- Ja existem no banco pela integracao Sascar; repetidos aqui de forma idempotente.
 create extension if not exists pg_net with schema extensions;
-create extension if not exists pg_cron with schema pg_catalog;
+do $$
+begin
+  if current_database() = coalesce(current_setting('cron.database_name', true), 'postgres') then
+    create extension if not exists pg_cron with schema pg_catalog;
+  end if;
+end;
+$$;
 
 create or replace function public.touch_updated_at()
 returns trigger
@@ -109,17 +115,21 @@ revoke all on function public.invoke_frotak_push_cron() from public, anon, authe
 
 do $$
 begin
+  if to_regnamespace('cron') is null then
+    return;
+  end if;
+
   if exists (select 1 from cron.job where jobname = 'frotak-push-veiculos-parados') then
     perform cron.unschedule('frotak-push-veiculos-parados');
   end if;
+
+  -- Todo dia as 11:00 UTC = 08:00 em Brasilia.
+  perform cron.schedule(
+    'frotak-push-veiculos-parados',
+    '0 11 * * *',
+    $job$select public.invoke_frotak_push_cron();$job$
+  );
 end;
 $$;
-
--- Todo dia as 11:00 UTC = 08:00 em Brasilia.
-select cron.schedule(
-  'frotak-push-veiculos-parados',
-  '0 11 * * *',
-  $$select public.invoke_frotak_push_cron();$$
-);
 
 commit;

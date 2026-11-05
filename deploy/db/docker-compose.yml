@@ -1,4 +1,5 @@
-# Supabase minimo da VPS de banco: so o que o Master e o TMS usam (Auth, REST, Realtime, Storage).
+# Base da VPS de banco: o Postgres e o portao (Kong) compartilhados, o Realtime que atende todos os
+# bancos, e o Auth, a API e os arquivos do Central. Cada cliente tem os proprios em client.compose.yml.
 # Baseado em supabase/docker (mesmas imagens e variaveis), sem Studio, Analytics, Edge Functions e
 # Imgproxy. Nada escuta em IP publico: o Kong fica na WireGuard e o Postgres em localhost.
 #
@@ -41,7 +42,18 @@ services:
       - -c
       - log_min_messages=fatal
       - -c
-      - max_connections=200
+      - max_connections=400
+      # pg_cron e pg_net atendem um unico banco: o de agendamentos. O banco postgres fica sem
+      # conexoes para poder ser copiado.
+      - -c
+      - cron.database_name=frotak_jobs
+      - -c
+      - pg_net.database_name=frotak_jobs
+      # Cada banco com Realtime ativo usa um slot de replicacao.
+      - -c
+      - max_replication_slots=64
+      - -c
+      - max_wal_senders=64
       - -c
       - shared_buffers=2GB
       - -c
@@ -70,9 +82,9 @@ services:
       GOTRUE_API_PORT: 9999
       API_EXTERNAL_URL: https://${API_HOST}
       GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/postgres
-      GOTRUE_SITE_URL: https://${TMS_HOST}
-      GOTRUE_URI_ALLOW_LIST: https://${MASTER_HOST}/**,https://${TMS_HOST}/**
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/frotak_central
+      GOTRUE_SITE_URL: https://${MASTER_HOST}
+      GOTRUE_URI_ALLOW_LIST: https://${MASTER_HOST}/**
       # O Master cria os logins pela API de administracao; o codigo nao tem cadastro publico.
       GOTRUE_DISABLE_SIGNUP: "true"
       GOTRUE_JWT_ADMIN_ROLES: service_role
@@ -110,7 +122,7 @@ services:
       timeout: 5s
       retries: 10
     environment:
-      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/postgres
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@db:5432/frotak_central
       PGRST_DB_SCHEMAS: public,graphql_public
       PGRST_DB_MAX_ROWS: 1000
       PGRST_DB_EXTRA_SEARCH_PATH: public,extensions
@@ -143,7 +155,7 @@ services:
       DB_PORT: 5432
       DB_USER: supabase_admin
       DB_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_NAME: postgres
+      DB_NAME: frotak_central
       DB_AFTER_CONNECT_QUERY: SET search_path TO _realtime
       DB_ENC_KEY: ${REALTIME_DB_ENC_KEY}
       API_JWT_SECRET: ${JWT_SECRET}
@@ -177,7 +189,7 @@ services:
       SERVICE_KEY: ${SERVICE_ROLE_KEY}
       POSTGREST_URL: http://rest:3000
       AUTH_JWT_SECRET: ${JWT_SECRET}
-      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/frotak_central
       STORAGE_PUBLIC_URL: https://${API_HOST}
       REQUEST_ALLOW_X_FORWARDED_PATH: "true"
       FILE_SIZE_LIMIT: 52428800
@@ -201,10 +213,12 @@ services:
         condition: service_healthy
       storage:
         condition: service_healthy
+      realtime:
+        condition: service_healthy
     ports:
       - ${WG_DB}:8000:8000
     volumes:
-      - /etc/frotak/kong.yml:/home/kong/kong.yml:ro
+      - /etc/frotak/kong:/home/kong/conf:ro
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 10s
@@ -212,7 +226,7 @@ services:
       retries: 5
     environment:
       KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DECLARATIVE_CONFIG: /home/kong/conf/kong.json
       KONG_DNS_ORDER: LAST,A,CNAME
       KONG_PLUGINS: cors,key-auth,acl,request-termination
       KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k

@@ -1,0 +1,13 @@
+[Unit]
+Description=FrotaK: agente provisionador da VPS de banco
+After=docker.service wg-quick@wg0.service
+Requires=docker.service
+Wants=wg-quick@wg0.service
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/frotak/deploy/db/agent/frotak_agent.py serve
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
