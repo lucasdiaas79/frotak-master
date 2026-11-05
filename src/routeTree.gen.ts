@@ -20,6 +20,7 @@ import { Route as ConfiguracoesRouteImport } from './routes/configuracoes'
 import { Route as DevelopersRouteImport } from './routes/developers'
 import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as FuncoesRouteImport } from './routes/funcoes'
+import { Route as InfraestruturaRouteImport } from './routes/infraestrutura'
 import { Route as IntegracoesRouteImport } from './routes/integracoes'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MapaRouteImport } from './routes/mapa'
@@ -93,6 +94,11 @@ const FinanceiroRoute = FinanceiroRouteImport.update({
 const FuncoesRoute = FuncoesRouteImport.update({
   id: '/funcoes',
   path: '/funcoes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InfraestruturaRoute = InfraestruturaRouteImport.update({
+  id: '/infraestrutura',
+  path: '/infraestrutura',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IntegracoesRoute = IntegracoesRouteImport.update({
@@ -203,6 +209,7 @@ export interface FileRoutesByFullPath {
   '/developers': typeof DevelopersRouteWithChildren
   '/financeiro': typeof FinanceiroRoute
   '/funcoes': typeof FuncoesRoute
+  '/infraestrutura': typeof InfraestruturaRoute
   '/integracoes': typeof IntegracoesRoute
   '/login': typeof LoginRoute
   '/mapa': typeof MapaRoute
@@ -235,6 +242,7 @@ export interface FileRoutesByTo {
   '/developers': typeof DevelopersRouteWithChildren
   '/financeiro': typeof FinanceiroRoute
   '/funcoes': typeof FuncoesRoute
+  '/infraestrutura': typeof InfraestruturaRoute
   '/integracoes': typeof IntegracoesRoute
   '/login': typeof LoginRoute
   '/mapa': typeof MapaRoute
@@ -268,6 +276,7 @@ export interface FileRoutesById {
   '/developers': typeof DevelopersRouteWithChildren
   '/financeiro': typeof FinanceiroRoute
   '/funcoes': typeof FuncoesRoute
+  '/infraestrutura': typeof InfraestruturaRoute
   '/integracoes': typeof IntegracoesRoute
   '/login': typeof LoginRoute
   '/mapa': typeof MapaRoute
@@ -302,6 +311,7 @@ export interface FileRouteTypes {
     | '/developers'
     | '/financeiro'
     | '/funcoes'
+    | '/infraestrutura'
     | '/integracoes'
     | '/login'
     | '/mapa'
@@ -334,6 +344,7 @@ export interface FileRouteTypes {
     | '/developers'
     | '/financeiro'
     | '/funcoes'
+    | '/infraestrutura'
     | '/integracoes'
     | '/login'
     | '/mapa'
@@ -366,6 +377,7 @@ export interface FileRouteTypes {
     | '/developers'
     | '/financeiro'
     | '/funcoes'
+    | '/infraestrutura'
     | '/integracoes'
     | '/login'
     | '/mapa'
@@ -399,6 +411,7 @@ export interface RootRouteChildren {
   DevelopersRoute: typeof DevelopersRouteWithChildren
   FinanceiroRoute: typeof FinanceiroRoute
   FuncoesRoute: typeof FuncoesRoute
+  InfraestruturaRoute: typeof InfraestruturaRoute
   IntegracoesRoute: typeof IntegracoesRoute
   LoginRoute: typeof LoginRoute
   MapaRoute: typeof MapaRoute
@@ -491,6 +504,13 @@ declare module '@tanstack/react-router' {
       path: '/funcoes'
       fullPath: '/funcoes'
       preLoaderRoute: typeof FuncoesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/infraestrutura': {
+      id: '/infraestrutura'
+      path: '/infraestrutura'
+      fullPath: '/infraestrutura'
+      preLoaderRoute: typeof InfraestruturaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/integracoes': {
@@ -708,6 +728,7 @@ const rootRouteChildren: RootRouteChildren = {
   DevelopersRoute: DevelopersRouteWithChildren,
   FinanceiroRoute: FinanceiroRoute,
   FuncoesRoute: FuncoesRoute,
+  InfraestruturaRoute: InfraestruturaRoute,
   IntegracoesRoute: IntegracoesRoute,
   LoginRoute: LoginRoute,
   MapaRoute: MapaRoute,

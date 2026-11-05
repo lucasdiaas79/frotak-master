@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Map,
   Plug,
+  ServerCog,
   Settings,
   TrendingUp,
   UserCircle,
@@ -14,7 +15,7 @@ import {
   Webhook,
   type LucideIcon,
 } from "lucide-react";
-import { isHiddenPrototypeRoute, prototypesHidden } from "@/lib/prototypes";
+import { controlPanelEnabled, isHiddenPrototypeRoute, prototypesHidden } from "@/lib/prototypes";
 
 export type NavItem = {
   label: string;
@@ -36,6 +37,14 @@ export const navGroups: NavGroup[] = [
       { label: "Alertas", to: "/alertas", icon: Bell, badge: "9" },
     ],
   },
+  ...(controlPanelEnabled
+    ? [
+        {
+          label: "Infraestrutura",
+          items: [{ label: "Painel de controle", to: "/infraestrutura", icon: ServerCog }],
+        },
+      ]
+    : []),
   {
     label: "Receita",
     items: [

@@ -13,7 +13,8 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "test:control-panel": "node --experimental-strip-types --test scripts/test-control-panel-module.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
