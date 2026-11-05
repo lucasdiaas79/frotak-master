@@ -55,3 +55,4 @@ central-dias-main/build/
 central-dias-main/.env*
 !central-dias-main/.env.example
 central-dias-main/supabase/
+__pycache__/

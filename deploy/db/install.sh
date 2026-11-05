@@ -50,6 +50,7 @@ EOF
   echo "segredos gerados em /etc/frotak/db.env"
 fi
 [ -f /etc/frotak/agent.env ] || echo "FROTAK_AGENT_TOKEN=$(hex 32)" > /etc/frotak/agent.env
+grep -q '^FROTAK_SENTINEL_TOKEN=' /etc/frotak/agent.env || echo "FROTAK_SENTINEL_TOKEN=$(hex 32)" >> /etc/frotak/agent.env
 # shellcheck disable=SC1091
 . /etc/frotak/db.env
 # shellcheck disable=SC1091
@@ -62,6 +63,7 @@ SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
 FROTAK_PUSH_CRON_TOKEN=${FROTAK_PUSH_CRON_TOKEN}
 SASCAR_SYNC_TOKEN=${SASCAR_SYNC_TOKEN}
 FROTAK_AGENT_TOKEN=${FROTAK_AGENT_TOKEN}
+FROTAK_SENTINEL_TOKEN=${FROTAK_SENTINEL_TOKEN}
 EOF
 
 # Sem rotacao, log de container enche o disco. Os conteineres publicam no IP da WireGuard, entao
@@ -170,3 +172,5 @@ systemctl daemon-reload
 systemctl enable pgbouncer frotak-agent >/dev/null 2>&1
 systemctl restart pgbouncer frotak-agent
 systemctl is-active pgbouncer frotak-agent | tr '\n' ' '; echo
+
+ROLE=db FROTAK_SENTINEL_TOKEN="$FROTAK_SENTINEL_TOKEN" "$here/../common/sentinel/install.sh"

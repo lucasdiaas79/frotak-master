@@ -15,6 +15,7 @@ ufw default deny incoming >/dev/null
 ufw default allow outgoing >/dev/null
 ufw allow 22/tcp comment 'ssh' >/dev/null
 ufw allow from "$PEER_PUBLIC_IP" to any port 51820 proto udp comment 'wireguard' >/dev/null
+ufw allow in on wg0 from "$WG_PEER" to any port 9101 proto tcp comment 'sentinela' >/dev/null
 
 case "$ROLE" in
   db)

@@ -1,0 +1,20 @@
+[Unit]
+Description=FrotaK: sentinela desta VPS
+After=network-online.target wg-quick@wg0.service docker.service
+Wants=network-online.target wg-quick@wg0.service
+
+[Service]
+Type=notify
+NotifyAccess=main
+EnvironmentFile=/etc/frotak/sentinel.env
+ExecStart=/usr/bin/python3 /opt/frotak/deploy/common/sentinel/frotak_sentinel.py
+Restart=always
+RestartSec=5
+# Se as verificacoes travarem, o systemd reinicia a sentinela.
+WatchdogSec=300
+StateDirectory=frotak-sentinel
+MemoryMax=256M
+Nice=5
+
+[Install]
+WantedBy=multi-user.target

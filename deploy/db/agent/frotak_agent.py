@@ -12,6 +12,7 @@ disparos agendados e apaga. Escuta so no IP da WireGuard e exige token. Nunca re
 """
 import base64
 import concurrent.futures
+import contextlib
 import datetime
 import hashlib
 import hmac
@@ -24,6 +25,7 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -32,6 +34,8 @@ ETC = Path("/etc/frotak")
 CLIENTS_DIR = ETC / "clients"
 KONG_DIR = ETC / "kong"
 STORAGE_ROOT = Path("/var/lib/frotak/clients")
+# A sentinela nao mexe nos servicos de um cliente marcado aqui.
+MAINTENANCE_DIR = Path("/run/frotak/maintenance")
 DEPLOY_DB = Path(__file__).resolve().parent.parent
 MIGRATIONS = Path("/opt/frotak/supabase/migrations")
 
@@ -48,6 +52,18 @@ RESERVED_SLUGS = {
 MODULE_CODE_RE = re.compile(r"^[a-z_]{2,40}$")
 
 provision_lock = threading.RLock()
+
+
+@contextlib.contextmanager
+def maintenance(slug):
+    """Avisa a sentinela: os servicos deste cliente vao parar de proposito."""
+    MAINTENANCE_DIR.mkdir(parents=True, exist_ok=True)
+    marker = MAINTENANCE_DIR / slug
+    marker.touch()
+    try:
+        yield
+    finally:
+        marker.unlink(missing_ok=True)
 
 
 class AgentError(Exception):
@@ -494,7 +510,7 @@ def create_client(payload):
 
     cfg = settings()
     names = names_for(slug)
-    with provision_lock:
+    with provision_lock, maintenance(slug):
         if env_path(slug).exists():
             raise AgentError(409, "CLIENT_EXISTS", "Já existe um banco para este cliente.")
         started = time.time()
@@ -603,7 +619,7 @@ def create_client(payload):
 def remove_client(slug):
     validate_slug(slug)
     names = names_for(slug)
-    with provision_lock:
+    with provision_lock, maintenance(slug):
         log(f"apagando {slug}")
         if env_path(slug).exists():
             try:
@@ -769,7 +785,7 @@ def restore_client(slug, backup_dir):
     if check.returncode != 0:
         raise AgentError(500, "BACKUP_CORRUPT", f"Backup corrompido: {scrub(check.stderr or check.stdout)}")
 
-    with provision_lock:
+    with provision_lock, maintenance(slug):
         compose(slug, "stop")
         realtime_request("DELETE", f"/api/tenants/{slug}")
         try:
@@ -827,6 +843,359 @@ def migrate_all():
         for slug in client_slugs():
             report[names_for(slug)["db"]] = run_migrations(names_for(slug)["db"])
     return report
+
+
+# ---------------------------------------------------------------- painel do Master (leitura)
+
+
+PANEL_DB_RE = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
+PANEL_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_$]{0,62}$")
+# Mostrar linhas exige Master com papel de administrador e fica na auditoria. Mesmo assim, estas
+# colunas nunca saem do banco: credenciais e documentos pessoais aparecem mascarados.
+SENSITIVE_COLUMN_RE = re.compile(
+    r"(?i)(password|passwd|senha|secret|token|hash|salt|api_?key|_key$|^key$|private|credential|"
+    r"certificate|certificado|encrypted|cipher|otp|recovery|p256dh|^auth$|cpf|cnh)"
+)
+PANEL_ROW_SCHEMAS = {"public"}
+PANEL_MAX_ROWS = 100
+PANEL_RELATIONS = "('r', 'p', 'v', 'm', 'f')"
+
+panel_lock = threading.Lock()
+panel_cache = {}
+
+
+def panel_cached(key, ttl, compute):
+    with panel_lock:
+        entry = panel_cache.get(key)
+        if entry and time.time() - entry[0] < ttl:
+            return entry[1]
+    value = compute()
+    with panel_lock:
+        panel_cache[key] = (time.time(), value)
+    return value
+
+
+def psql_json(database, statement):
+    output = psql(database, statement)
+    return json.loads(output) if output else None
+
+
+def quote_identifier(name):
+    return '"' + name.replace('"', '""') + '"'
+
+
+def database_kind(name, slugs_by_database):
+    if name == CENTRAL_DB:
+        return "central"
+    if name == JOBS_DB:
+        return "jobs"
+    if name == TEMPLATE_DB:
+        return "template"
+    if name == "postgres":
+        return "system"
+    return "client" if name in slugs_by_database else "other"
+
+
+def database_details(name):
+    try:
+        return name, psql_json(
+            name,
+            """
+            select json_build_object(
+              'publicTables', (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                               where n.nspname = 'public' and c.relkind in ('r', 'p')),
+              'migrations', (select count(*) from supabase_migrations.schema_migrations),
+              'lastMigration', (select max(version) from supabase_migrations.schema_migrations));
+            """,
+        )
+    except (AgentError, ValueError) as error:
+        log(f"painel, banco {name}: {scrub(error)}")
+        return name, None
+
+
+def panel_databases():
+    def compute():
+        server = psql_json(
+            "postgres",
+            """
+            select json_build_object(
+              'version', current_setting('server_version'),
+              'startedAt', pg_postmaster_start_time(),
+              'maxConnections', current_setting('max_connections')::int,
+              'connections', (select count(*) from pg_stat_activity where backend_type = 'client backend'),
+              'sharedBuffers', current_setting('shared_buffers'),
+              'slots', (select coalesce(json_agg(json_build_object(
+                  'name', slot_name, 'database', database, 'active', active,
+                  'lagBytes', pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) order by slot_name), '[]')
+                from pg_replication_slots),
+              'databases', (select coalesce(json_agg(json_build_object(
+                  'name', d.datname,
+                  'sizeBytes', pg_database_size(d.oid),
+                  'connections', coalesce(s.numbackends, 0),
+                  'allowConnections', d.datallowconn,
+                  'commits', coalesce(s.xact_commit, 0),
+                  'rollbacks', coalesce(s.xact_rollback, 0),
+                  'deadlocks', coalesce(s.deadlocks, 0),
+                  'cacheHitPercent', case when coalesce(s.blks_hit + s.blks_read, 0) > 0
+                    then round(100.0 * s.blks_hit / (s.blks_hit + s.blks_read), 1) end) order by d.datname), '[]')
+                from pg_database d left join pg_stat_database s on s.datid = d.oid
+                where d.datname not in ('template0', 'template1')));
+            """,
+        )
+        slugs = {names_for(slug)["db"]: slug for slug in client_slugs()}
+        with_ledger = [row["name"] for row in server["databases"] if row["name"] == CENTRAL_DB or row["name"] in slugs]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+            details = dict(pool.map(database_details, with_ledger))
+        for row in server["databases"]:
+            row["kind"] = database_kind(row["name"], slugs)
+            row["clientSlug"] = slugs.get(row["name"])
+            row.update(details.get(row["name"]) or {})
+        return server
+
+    return panel_cached("databases", 20, compute)
+
+
+def panel_database(name):
+    if not isinstance(name, str) or not PANEL_DB_RE.match(name):
+        raise AgentError(400, "INVALID_INPUT", "Banco inválido.")
+    allowed = psql(
+        "postgres",
+        f"select datallowconn from pg_database where datname = {literal(name)} and datname not in ('template0', 'template1');",
+    )
+    if allowed == "":
+        raise AgentError(404, "NOT_FOUND", "Banco não encontrado.")
+    if allowed != "t":
+        raise AgentError(400, "NOT_READABLE", "Este banco não aceita conexão. É o modelo dos clientes.")
+    return name
+
+
+def panel_identifier(name):
+    if not isinstance(name, str) or not PANEL_IDENTIFIER_RE.match(name):
+        raise AgentError(400, "INVALID_INPUT", "Nome inválido.")
+    return name
+
+
+def panel_tables(database):
+    panel_database(database)
+    return {
+        "database": database,
+        "rowSchemas": sorted(PANEL_ROW_SCHEMAS),
+        "tables": psql_json(
+            database,
+            f"""
+            select coalesce(json_agg(t order by t."totalBytes" desc, t.schema, t.name), '[]') from (
+              select n.nspname as schema, c.relname as name, c.relkind::text as kind,
+                     greatest(c.reltuples::bigint, coalesce(s.n_live_tup, 0)) as "estimatedRows",
+                     pg_total_relation_size(c.oid) as "totalBytes",
+                     c.relrowsecurity as rls,
+                     (select count(*) from pg_policy p where p.polrelid = c.oid) as policies,
+                     (select count(*) from pg_index i where i.indrelid = c.oid) as indexes,
+                     (select count(*) from pg_attribute a where a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped) as columns,
+                     coalesce(s.n_dead_tup, 0) as "deadRows",
+                     greatest(s.last_vacuum, s.last_autovacuum) as "lastVacuum",
+                     obj_description(c.oid, 'pg_class') as comment
+              from pg_class c
+              join pg_namespace n on n.oid = c.relnamespace
+              left join pg_stat_user_tables s on s.relid = c.oid
+              where c.relkind in {PANEL_RELATIONS}
+                and n.nspname not in ('pg_catalog', 'information_schema', 'pg_toast')
+                and n.nspname not like 'pg_temp%' and n.nspname not like 'pg_toast_temp%'
+            ) t;
+            """,
+        ),
+    }
+
+
+def panel_table(database, schema, table):
+    panel_database(database)
+    panel_identifier(schema)
+    panel_identifier(table)
+    detail = psql_json(
+        database,
+        f"""
+        select json_build_object(
+          'schema', n.nspname, 'name', c.relname, 'kind', c.relkind::text,
+          'rls', c.relrowsecurity, 'rlsForced', c.relforcerowsecurity,
+          'comment', obj_description(c.oid, 'pg_class'),
+          'totalBytes', pg_total_relation_size(c.oid),
+          'columns', (select coalesce(json_agg(json_build_object(
+              'name', a.attname, 'type', format_type(a.atttypid, a.atttypmod), 'nullable', not a.attnotnull,
+              'default', pg_get_expr(d.adbin, d.adrelid), 'comment', col_description(c.oid, a.attnum))
+              order by a.attnum), '[]')
+            from pg_attribute a left join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
+            where a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped),
+          'constraints', (select coalesce(json_agg(json_build_object(
+              'name', con.conname, 'type', con.contype::text, 'definition', pg_get_constraintdef(con.oid))
+              order by con.contype, con.conname), '[]')
+            from pg_constraint con where con.conrelid = c.oid),
+          'indexes', (select coalesce(json_agg(json_build_object(
+              'name', i.relname, 'definition', pg_get_indexdef(x.indexrelid), 'unique', x.indisunique,
+              'primary', x.indisprimary, 'bytes', pg_relation_size(i.oid), 'scans', coalesce(st.idx_scan, 0))
+              order by i.relname), '[]')
+            from pg_index x join pg_class i on i.oid = x.indexrelid
+            left join pg_stat_user_indexes st on st.indexrelid = x.indexrelid
+            where x.indrelid = c.oid),
+          'policies', (select coalesce(json_agg(json_build_object(
+              'name', p.policyname, 'command', p.cmd, 'roles', p.roles, 'permissive', p.permissive,
+              'using', p.qual, 'check', p.with_check) order by p.policyname), '[]')
+            from pg_policies p where p.schemaname = n.nspname and p.tablename = c.relname),
+          'triggers', (select coalesce(json_agg(json_build_object(
+              'name', t.tgname, 'definition', pg_get_triggerdef(t.oid)) order by t.tgname), '[]')
+            from pg_trigger t where t.tgrelid = c.oid and not t.tgisinternal))
+        from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = {literal(schema)} and c.relname = {literal(table)} and c.relkind in {PANEL_RELATIONS};
+        """,
+    )
+    if not detail:
+        raise AgentError(404, "NOT_FOUND", "Tabela não encontrada.")
+    for column in detail["columns"]:
+        column["masked"] = bool(SENSITIVE_COLUMN_RE.search(column["name"]))
+    detail["rowsReadable"] = schema in PANEL_ROW_SCHEMAS
+    detail["exactRows"] = exact_row_count(database, schema, table)
+    return detail
+
+
+def exact_row_count(database, schema, table):
+    target = f"{quote_identifier(schema)}.{quote_identifier(table)}"
+    try:
+        output = psql(
+            database,
+            f"begin read only; set local statement_timeout = '3s'; select count(*) from {target}; commit;",
+        )
+        return int(output) if output.isdigit() else None
+    except AgentError:
+        return None
+
+
+def panel_rows(database, schema, table, limit, offset):
+    panel_database(database)
+    panel_identifier(schema)
+    panel_identifier(table)
+    if schema not in PANEL_ROW_SCHEMAS:
+        raise AgentError(400, "NOT_READABLE", "Dados de login, arquivos e sistema não aparecem no painel: só a estrutura.")
+    limit = max(1, min(limit, PANEL_MAX_ROWS))
+    offset = max(0, offset)
+    columns = psql_json(
+        database,
+        f"""
+        select json_build_object(
+          'columns', (select coalesce(json_agg(json_build_object('name', a.attname, 'type', format_type(a.atttypid, a.atttypmod)) order by a.attnum), '[]')
+                      from pg_attribute a where a.attrelid = c.oid and a.attnum > 0 and not a.attisdropped),
+          'primaryKey', (select coalesce(json_agg(a.attname order by k.ord), '[]')
+                         from pg_index x
+                         cross join lateral unnest(x.indkey) with ordinality as k(attnum, ord)
+                         join pg_attribute a on a.attrelid = x.indrelid and a.attnum = k.attnum
+                         where x.indrelid = c.oid and x.indisprimary))
+        from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = {literal(schema)} and c.relname = {literal(table)} and c.relkind in {PANEL_RELATIONS};
+        """,
+    )
+    if not columns or not columns["columns"]:
+        raise AgentError(404, "NOT_FOUND", "Tabela não encontrada.")
+
+    selected, described = [], []
+    for column in columns["columns"]:
+        name = quote_identifier(column["name"])
+        masked = bool(SENSITIVE_COLUMN_RE.search(column["name"]))
+        expression = f"case when {name} is null then null else '••••' end" if masked else f"left(({name})::text, 300)"
+        selected.append(f"{expression} as {name}")
+        described.append({**column, "masked": masked})
+    order = ", ".join(quote_identifier(key) for key in columns["primaryKey"]) or "1"
+    target = f"{quote_identifier(schema)}.{quote_identifier(table)}"
+    rows = psql_json(
+        database,
+        f"""
+        begin read only;
+        set local statement_timeout = '8s';
+        set local lock_timeout = '1s';
+        select coalesce(json_agg(row_to_json(t)), '[]') from (
+          select {", ".join(selected)} from {target} order by {order} limit {limit} offset {offset}
+        ) t;
+        commit;
+        """,
+    )
+    return {
+        "columns": described,
+        "rows": rows,
+        "limit": limit,
+        "offset": offset,
+        "total": exact_row_count(database, schema, table),
+    }
+
+
+def panel_jobs():
+    def compute():
+        return psql_json(
+            JOBS_DB,
+            """
+            select coalesce(json_agg(r order by r.name), '[]') from (
+              select j.jobname as name, j.schedule, j.database, j.active,
+                     last.status as "lastStatus", last.start_time as "lastRunAt",
+                     left(last.return_message, 200) as "lastMessage",
+                     (select count(*) from cron.job_run_details d
+                      where d.jobid = j.jobid and d.status = 'failed' and d.start_time > now() - interval '24 hours') as "failures24h"
+              from cron.job j
+              left join lateral (select status, start_time, return_message from cron.job_run_details d
+                                 where d.jobid = j.jobid order by d.start_time desc limit 1) last on true
+            ) r;
+            """,
+        )
+
+    return panel_cached("jobs", 30, compute)
+
+
+def panel_client(slug):
+    def probe(path):
+        started = time.time()
+        try:
+            status, _ = api(slug, "GET", path, timeout=6)
+        except (urllib.error.URLError, OSError):
+            status = None
+        return {"status": status, "ms": int((time.time() - started) * 1000)}
+
+    try:
+        realtime, _ = realtime_request("GET", f"/api/tenants/{slug}")
+    except (AgentError, subprocess.TimeoutExpired):
+        realtime = None
+    return {
+        "slug": slug,
+        "auth": probe("/auth/v1/health"),
+        "rest": probe("/rest/v1/"),
+        "storage": probe("/storage/v1/status"),
+        "realtimeRegistered": realtime == 200,
+    }
+
+
+def panel_clients():
+    def compute():
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+            return {"clients": list(pool.map(panel_client, client_slugs()))}
+
+    return panel_cached("clients", 15, compute)
+
+
+def panel_route(method, parts, query):
+    if method != "GET":
+        raise AgentError(405, "METHOD_NOT_ALLOWED", "O painel só lê.")
+    if parts == ["databases"]:
+        return 200, panel_databases()
+    if parts == ["jobs"]:
+        return 200, {"jobs": panel_jobs()}
+    if parts == ["clients"]:
+        return 200, panel_clients()
+    if len(parts) == 3 and parts[0] == "databases" and parts[2] == "tables":
+        return 200, panel_tables(parts[1])
+    if len(parts) in (5, 6) and parts[0] == "databases" and parts[2] == "tables":
+        database, schema, table = parts[1], parts[3], parts[4]
+        if len(parts) == 5:
+            return 200, panel_table(database, schema, table)
+        if parts[5] == "rows":
+            limit = query.get("limit", ["50"])[0]
+            offset = query.get("offset", ["0"])[0]
+            return 200, panel_rows(
+                database, schema, table, int(limit) if limit.isdigit() else 50, int(offset) if offset.isdigit() else 0
+            )
+    raise AgentError(404, "NOT_FOUND", "Rota inexistente.")
 
 
 # ---------------------------------------------------------------- disparos agendados
@@ -931,6 +1300,9 @@ class Handler(BaseHTTPRequestHandler):
             return 200, usage_all()
         if path == "/migrate" and method == "POST":
             return 200, migrate_all()
+        if parts and parts[0] == "panel":
+            query = urllib.parse.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            return panel_route(method, parts[1:], query)
         if len(parts) >= 2 and parts[0] == "clients":
             slug = validate_slug(parts[1])
             action = parts[2] if len(parts) > 2 else ""

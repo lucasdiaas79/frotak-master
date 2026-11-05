@@ -60,6 +60,9 @@ VITE_SUPABASE_ANON_KEY=${ANON_KEY}
 SUPABASE_SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
 FROTAK_AGENT_URL=http://${WG_DB}:9100
 FROTAK_AGENT_TOKEN=${FROTAK_AGENT_TOKEN}
+FROTAK_SENTINEL_DB_URL=http://${WG_DB}:9101
+FROTAK_SENTINEL_SERVICE_URL=http://${WG_SERVICE}:9101
+FROTAK_SENTINEL_TOKEN=${FROTAK_SENTINEL_TOKEN}
 EOF
 
 {
@@ -95,6 +98,7 @@ VITE_SUPABASE_URL=https://${API_HOST}
 VITE_SUPABASE_ANON_KEY=${ANON_KEY}
 VITE_FROTAK_HIDE_PROTOTYPES=true
 VITE_FROTAK_MULTI_DB=true
+VITE_FROTAK_CONTROL_PANEL=true
 EOF
 chown root:frotak /etc/frotak /etc/frotak/build.env
 chmod 750 /etc/frotak
@@ -102,6 +106,8 @@ chmod 640 /etc/frotak/build.env
 
 install -m 644 "$here/systemd/frotak-app@.service" /etc/systemd/system/frotak-app@.service
 systemctl daemon-reload
+
+ROLE=service FROTAK_SENTINEL_TOKEN="$FROTAK_SENTINEL_TOKEN" "$here/../common/sentinel/install.sh"
 
 sed -e "s|__MASTER_HOST__|${MASTER_HOST}|" -e "s|__CLIENT_BASE_DOMAIN__|${CLIENT_BASE_DOMAIN}|" \
   -e "s|__API_HOST__|${API_HOST}|" -e "s|__WG_DB__|${WG_DB}|" \
