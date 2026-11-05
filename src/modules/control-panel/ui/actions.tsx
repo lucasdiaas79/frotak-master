@@ -71,7 +71,7 @@ export function LogsSheet({
             VPS.
           </SheetDescription>
         </SheetHeader>
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4">
           <RangeFilter hours={lines} onChange={setLines} ranges={LOG_SIZES} />
           <Button
             variant="outline"
@@ -83,7 +83,7 @@ export function LogsSheet({
             Atualizar
           </Button>
         </div>
-        <div className="min-h-0 flex-1">
+        <div className="min-h-0 flex-1 px-4 pb-4">
           {logs.isLoading ? (
             <LoadingBlock label="Buscando logs..." />
           ) : logs.isError ? (

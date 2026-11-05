@@ -282,7 +282,7 @@ export function MetricChart({
                 minTickGap={56}
               />
               <YAxis
-                width={58}
+                width={76}
                 domain={[0, max ?? "auto"]}
                 tickFormatter={format}
                 tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}

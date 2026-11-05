@@ -76,7 +76,7 @@ function ContainerSheet({
               <SheetTitle className="break-all">{container.name}</SheetTitle>
               <SheetDescription className="break-all">{container.image}</SheetDescription>
             </SheetHeader>
-            <div className="mt-4 space-y-5">
+            <div className="space-y-5 px-4 pt-4 pb-8">
               <LevelBadge level={containerLevel(container)}>
                 {containerStateLabel(container)}
               </LevelBadge>
