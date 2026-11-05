@@ -12,7 +12,8 @@ services:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9999/health"]
       interval: 5s
       timeout: 5s
-      retries: 24
+      retries: 6
+      start_period: 90s
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: 9999
@@ -49,7 +50,8 @@ services:
       test: ["CMD", "postgrest", "--ready"]
       interval: 5s
       timeout: 5s
-      retries: 24
+      retries: 6
+      start_period: 90s
     environment:
       PGRST_DB_URI: postgres://${REST_DB_USER}:${REST_DB_PASSWORD}@frotak-db:5432/${CLIENT_DB}
       PGRST_DB_SCHEMAS: public,graphql_public
@@ -74,8 +76,8 @@ services:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:5000/status"]
       interval: 5s
       timeout: 5s
-      retries: 24
-      start_period: 10s
+      retries: 6
+      start_period: 90s
     environment:
       ANON_KEY: ${ANON_KEY}
       SERVICE_KEY: ${SERVICE_ROLE_KEY}

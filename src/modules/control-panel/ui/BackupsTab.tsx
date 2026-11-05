@@ -8,15 +8,22 @@ import {
 import { formatAgo, formatBytes, formatDateTime, toEpoch } from "@/modules/control-panel/ui/format";
 import { LevelBadge, Mono, StatTile } from "@/modules/control-panel/ui/shared";
 
+// O systemd diz "success" para o que nunca rodou: quem prova a execução é a data.
 function runLevel(run: BackupRun | undefined) {
-  if (!run?.result) return "idle" as const;
+  if (!run?.result || !toEpoch(run.finishedAt)) return "idle" as const;
   return run.result === "success" ? ("ok" as const) : ("critical" as const);
+}
+
+function runValue(run: BackupRun | undefined) {
+  const level = runLevel(run);
+  if (level === "idle") return "Ainda não rodou";
+  return level === "ok" ? "Passou" : "Falhou";
 }
 
 function runHint(run: BackupRun | undefined) {
   const finished = toEpoch(run?.finishedAt);
-  if (!run?.result || !finished) return "Ainda não rodou";
-  return `${run.result === "success" ? "Passou" : `Falhou: ${run.result}`}, ${formatAgo(finished)}`;
+  if (!run?.result || !finished) return "Roda aos domingos, às 08:00 UTC";
+  return formatAgo(finished);
 }
 
 export function BackupsTab({ hosts }: { hosts: HostResult[] }) {
@@ -30,14 +37,14 @@ export function BackupsTab({ hosts }: { hosts: HostResult[] }) {
           <StatTile
             icon={Archive}
             label="Último backup"
-            value={runLevel(snapshot.backups.lastRun) === "ok" ? "Concluído" : "Verificar"}
+            value={runValue(snapshot.backups.lastRun)}
             level={runLevel(snapshot.backups.lastRun)}
             hint={runHint(snapshot.backups.lastRun)}
           />
           <StatTile
             icon={ShieldCheck}
             label="Último teste de restauração"
-            value={runLevel(snapshot.backups.lastRestoreTest) === "ok" ? "Concluído" : "Verificar"}
+            value={runValue(snapshot.backups.lastRestoreTest)}
             level={runLevel(snapshot.backups.lastRestoreTest)}
             hint={runHint(snapshot.backups.lastRestoreTest)}
           />

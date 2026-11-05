@@ -64,6 +64,7 @@ CENTRAL_CONTAINERS = {
 CLIENT_SERVICES = {"auth": "c-auth", "rest": "c-rest", "storage": "c-storage"}
 
 NAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.@-]{0,120}$")
+ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 
 RULES = {
     "db": [
@@ -133,12 +134,13 @@ SERVICES = {
 # Reiniciar pelo painel: Docker derrubaria tudo de uma vez, e a sentinela nao se reinicia a si mesma.
 NOT_RESTARTABLE = {"docker", "frotak-sentinel"}
 DIRECTORIES = {
-    "db": ["/var/lib/docker", "/var/lib/frotak", "/var/backups/frotak", "/var/log", "/opt/frotak"],
+    "db": ["/var/lib/containerd", "/var/lib/docker", "/var/lib/frotak", "/var/backups/frotak", "/var/log", "/opt/frotak"],
     "service": ["/var/backups/frotak-db", "/opt/frotak", "/var/lib/frotak-app", "/var/log", "/var/lib/caddy"],
 }
 
 lock = threading.RLock()
 heal_states = {}
+peer_failures = {"count": 0}
 stats_cache = {"at": 0, "value": {}}
 cache = {}
 last_cycle = {"at": time.time()}
@@ -931,7 +933,11 @@ def check_backups():
 def check_peer():
     probe = peer_probe()
     other = "VPS de Serviço" if role() == "db" else "VPS de banco"
-    set_alert("peer", not probe.get("ok"), "critical", f"{other} sem resposta pela rede privada", str(probe.get("error", "")))
+    # Um pulso perdido nao e queda: so avisa depois de 3 verificacoes seguidas.
+    peer_failures["count"] = 0 if probe.get("ok") else peer_failures["count"] + 1
+    down = peer_failures["count"] >= FAILS_BEFORE_ACTION
+    if down or probe.get("ok"):
+        set_alert("peer", down, "critical", f"{other} sem resposta pela rede privada", str(probe.get("error", "")))
 
 
 def check_certificates():
@@ -1112,10 +1118,10 @@ def logs(kind, name, lines):
     elif kind == "service":
         if name not in SERVICES.get(role(), []):
             raise ApiError(404, "NOT_FOUND", "Serviço não encontrado.")
-        _, text, _ = run(["journalctl", "-u", name, "-n", str(lines), "--no-pager", "-o", "short-iso"], timeout=25)
+        _, text, _ = run(["journalctl", "-a", "-u", name, "-n", str(lines), "--no-pager", "-o", "short-iso"], timeout=25)
     else:
         raise ApiError(400, "INVALID_INPUT", "Tipo de log inválido.")
-    clean = [scrub_logs(line)[:2000] for line in text.splitlines()]
+    clean = [scrub_logs(ANSI_RE.sub("", line))[:2000] for line in text.splitlines()]
     return {"lines": clean[-lines:]}
 
 
