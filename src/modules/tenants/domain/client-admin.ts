@@ -269,9 +269,18 @@ export type ResourceCheck = {
   detail: string;
 };
 
+const BACKUP_MAX_AGE_SECONDS = 26 * 3600;
+
 /** O que foi criado para o cliente, item por item, com o que prova que está de pé. */
-export function resourceChecklist(resources: ClientResources): ResourceCheck[] {
+export function resourceChecklist(
+  resources: ClientResources,
+  nowSeconds = Date.now() / 1000,
+): ResourceCheck[] {
   const { database, containers, gateway, probes, jobs, backup, logins } = resources;
+  const createdAt = resources.createdAt ? Date.parse(resources.createdAt) / 1000 : 0;
+  // Cliente com menos de um dia ainda não passou por um backup diário: não é falha.
+  const backupDue = nowSeconds - createdAt > BACKUP_MAX_AGE_SECONDS;
+  const backupRecent = Boolean(backup) && nowSeconds - (backup?.at ?? 0) < BACKUP_MAX_AGE_SECONDS;
   const isolated =
     database.roles.length === 3 &&
     database.roles.every((role) => role.ownDatabase && role.otherDatabases.length === 0);
@@ -315,11 +324,12 @@ export function resourceChecklist(resources: ClientResources): ResourceCheck[] {
     {
       key: "realtime",
       label: "Tempo real",
-      ok: probes.realtimeRegistered && Boolean(database.slot?.active),
+      // A leitura do banco só começa quando alguém abre o TMS; sem ninguém, ela não existe.
+      ok: probes.realtimeRegistered,
       detail: probes.realtimeRegistered
         ? database.slot?.active
           ? "Registrado e lendo o banco"
-          : "Registrado, mas sem leitura ativa"
+          : "Registrado; começa a ler o banco quando alguém abre o TMS"
         : "Não registrado",
     },
     {
@@ -343,8 +353,14 @@ export function resourceChecklist(resources: ClientResources): ResourceCheck[] {
     {
       key: "backup",
       label: "Backup",
-      ok: Boolean(backup) && Date.now() / 1000 - (backup?.at ?? 0) < 26 * 3600,
-      detail: backup ? `Cópia ${backup.copy}` : "Ainda sem cópia: entra no próximo backup diário",
+      ok: backupRecent || (!backup && !backupDue),
+      detail: backup
+        ? backupRecent
+          ? `Cópia ${backup.copy}`
+          : `Última cópia ${backup.copy}, com mais de 26 h`
+        : backupDue
+          ? "Sem cópia, e o cliente já devia ter entrado no backup diário"
+          : "Ainda sem cópia: entra no próximo backup diário, às 06:30 UTC",
     },
   ];
 }

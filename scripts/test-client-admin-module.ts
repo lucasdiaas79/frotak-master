@@ -4,11 +4,13 @@ import { test } from "node:test";
 import {
   dnsRecordsFor,
   normalizeDomain,
+  resourceChecklist,
   splitDomain,
   toSubdomain,
   validateClientProfile,
   validateSubdomain,
   type ClientAddresses,
+  type ClientResources,
 } from "../src/modules/tenants/domain/client-admin.ts";
 import {
   changeSubdomain,
@@ -253,4 +255,104 @@ test("nova senha: auditoria antes da troca", async () => {
   );
   assert.equal(result.temporaryPassword, "Abc123");
   assert.deepEqual(calls, ["locate:acme", "audit:dono@acme.test", "agent.password"]);
+});
+
+const NOW = Date.parse("2026-11-05T18:00:00Z") / 1000;
+
+function resources(overrides: Partial<ClientResources> = {}): ClientResources {
+  const role = (name: string) => ({
+    name,
+    canLogin: true,
+    inherits: false,
+    sessions: 1,
+    ownDatabase: true,
+    otherDatabases: [] as string[],
+  });
+  return {
+    slug: "acme",
+    createdAt: "2026-11-05T17:00:00Z",
+    tenantId: "t",
+    workspaceId: "w",
+    addresses: addresses("acme"),
+    database: {
+      name: "frotak_acme",
+      sizeBytes: 1,
+      connections: 1,
+      publicCanConnect: false,
+      roles: [role("frotak_acme_auth"), role("frotak_acme_rest"), role("frotak_acme_storage")],
+      slot: null,
+      tenant: null,
+      publicTables: 67,
+      migrations: 76,
+      lastMigration: "202611050004",
+      storageBuckets: 2,
+      storageObjects: 0,
+    },
+    logins: [
+      {
+        id: "1",
+        email: "dono@acme.test",
+        createdAt: "",
+        lastSignInAt: null,
+        system: false,
+        owner: true,
+        member: true,
+        banned: false,
+      },
+    ],
+    containers: ["auth", "rest", "storage"].map((part) => ({
+      name: `frotak-acme-${part}`,
+      state: "running",
+      health: "healthy",
+      startedAt: null,
+      image: null,
+    })),
+    gateway: { routes: ["/c/acme/rest/v1/"], consumers: ["anon-acme", "service-acme"] },
+    probes: {
+      auth: { status: 200, ms: 1 },
+      rest: { status: 200, ms: 1 },
+      storage: { status: 200, ms: 1 },
+      realtimeRegistered: true,
+    },
+    storage: { path: "/var/lib/frotak/clients/acme/storage", bytes: 0 },
+    jobs: ["a", "b", "c"].map((name) => ({
+      name: `acme:${name}`,
+      schedule: "* * * * *",
+      active: true,
+      lastStatus: null,
+      lastRunAt: null,
+    })),
+    backup: null,
+    keys: { ownJwtSecret: true, anonKey: true, serviceRoleKey: true },
+    ...overrides,
+  };
+}
+
+test("cliente recém-criado, sem ninguém conectado e sem backup: tudo de pé", () => {
+  const pending = resourceChecklist(resources(), NOW).filter((check) => !check.ok);
+  assert.deepEqual(pending, []);
+});
+
+test("cliente com mais de um dia sem backup: pede atenção", () => {
+  const old = resources({ createdAt: "2026-11-03T10:00:00Z" });
+  const pending = resourceChecklist(old, NOW).filter((check) => !check.ok);
+  assert.deepEqual(
+    pending.map((check) => check.key),
+    ["backup"],
+  );
+});
+
+test("login do banco que entra em outro banco aparece com o nome do banco", () => {
+  const leaking = resources();
+  leaking.database.roles[0] = { ...leaking.database.roles[0], otherDatabases: ["frotak_central"] };
+  const roles = resourceChecklist(leaking, NOW).find((check) => check.key === "roles");
+  assert.equal(roles?.ok, false);
+  assert.match(roles?.detail ?? "", /frotak_central/);
+});
+
+test("tempo real sem registro pede atenção", () => {
+  const broken = resources();
+  broken.probes = { ...broken.probes, realtimeRegistered: false };
+  const realtime = resourceChecklist(broken, NOW).find((check) => check.key === "realtime");
+  assert.equal(realtime?.ok, false);
 });

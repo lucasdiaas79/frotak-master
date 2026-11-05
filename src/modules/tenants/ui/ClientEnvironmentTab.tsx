@@ -188,8 +188,8 @@ export function ClientEnvironmentTab({ resources }: { resources: ClientResources
             </LevelBadge>
           </Field>
           <Field label="Leitura do banco">
-            <LevelBadge level={database.slot?.active ? "ok" : "critical"}>
-              {database.slot?.active ? "Ativa" : "Parada"}
+            <LevelBadge level={database.slot?.active ? "ok" : "idle"}>
+              {database.slot?.active ? "Ativa" : "Em espera: ninguém conectado"}
             </LevelBadge>
           </Field>
           <Field label="Slot de replicação">
