@@ -103,7 +103,7 @@ Em cada VPS, o conteúdo de `deploy/` fica em `/opt/frotak/deploy` e `supabase/m
 
 ## Cliente novo
 
-Pela tela Clientes do Master. O Master registra o cliente no Central e pede ao agente o banco, os serviços, as rotas, o login do dono e os agendamentos. Se algo falhar no caminho, tudo é desfeito. O cliente passa a abrir em `https://<cliente>.CLIENT_BASE_DOMAIN`.
+Pela tela Clientes do Master. O Master pede ao agente o banco, os serviços, as rotas, o login do dono e os agendamentos e, por último, registra o cliente no Central. Se algo falhar no caminho, tudo é desfeito. O cliente passa a abrir em `https://<cliente>.CLIENT_BASE_DOMAIN`.
 
 Ligar ou desligar produto e módulo no Master vale na hora: o pedido vai primeiro ao banco do cliente, onde o bloqueio é cobrado. Se ele estiver fora do ar, nada muda e o operador é avisado.
 
