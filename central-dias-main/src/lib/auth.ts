@@ -8,6 +8,7 @@ const DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001";
 const CENTRAL_DEMO_EMAIL = "admin@central.com.br";
 const CENTRAL_DEMO_PASSWORD = "123456";
 const MASTER_SSO_SOURCE = "frotak-master";
+const SUPPORT_ACCESS_KEY = "frotak-support-access-client";
 const AUTH_ERROR_MARKERS = [
   "invalid refresh token",
   "refresh token not found",
@@ -109,6 +110,7 @@ function clearStoredAuthState() {
   if (!canUseStorage()) return;
   window.localStorage.removeItem(LOCAL_AUTH_KEY);
   window.localStorage.removeItem("frotak-sso-source");
+  window.localStorage.removeItem(SUPPORT_ACCESS_KEY);
   window.localStorage.removeItem(ACTIVE_WORKSPACE_KEY);
   window.localStorage.removeItem(supabaseAuthStorageKey);
 }
@@ -198,8 +200,46 @@ function createLocalSession(input: {
   };
 }
 
+/** Nome do cliente quando esta aba abriu pelo "Login como cliente" do Master. */
+export function getSupportAccessClient() {
+  return canUseStorage() ? window.localStorage.getItem(SUPPORT_ACCESS_KEY) : null;
+}
+
+let supportAccessInFlight: Promise<LocalSession | null> | null = null;
+
+/** Troca a credencial de uso único do Master por uma sessão real do dono do cliente. */
+async function acceptSupportAccess(tokenHash: string, params: URLSearchParams) {
+  try {
+    // verifyOtp substitui a sessão que houver. Sair antes dispararia SIGNED_OUT e o app iria
+    // para o login antes de a credencial ser trocada.
+    const { data, error } = await supabase.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: "magiclink",
+    });
+    if (error || !data.user) {
+      console.warn("Acesso de suporte recusado: credencial invalida ou ja usada.");
+      return null;
+    }
+
+    const clientName = params.get("client_name") || "Cliente";
+    const session = createLocalSession({
+      email: data.user.email ?? "",
+      name: clientName,
+      tenantId: params.get("tenant_id") || DEFAULT_TENANT_ID,
+      userId: data.user.id,
+    });
+    saveLocalSession(session);
+    window.localStorage.setItem("frotak-sso-source", MASTER_SSO_SOURCE);
+    window.localStorage.setItem(SUPPORT_ACCESS_KEY, clientName);
+    return session;
+  } finally {
+    supportAccessInFlight = null;
+  }
+}
+
 export async function acceptMasterSsoFromUrl(search: string) {
   if (!canUseStorage()) return null;
+  if (supportAccessInFlight) return supportAccessInFlight;
   const params = new URLSearchParams(search);
   const hash = window.location.hash.startsWith("#")
     ? window.location.hash.slice(1)
@@ -211,15 +251,26 @@ export async function acceptMasterSsoFromUrl(search: string) {
   const token = params.get("sso_token");
   const refreshToken = params.get("refresh_token");
   const source = params.get("source");
+  const supportToken = params.get("support_token");
+
+  if (supportToken && source === "frotak-master" && hasSupabaseConfig()) {
+    // A credencial é de uso único: sai da URL antes de qualquer outra coisa.
+    window.history.replaceState(null, "", window.location.pathname);
+    supportAccessInFlight = acceptSupportAccess(supportToken, params);
+    return supportAccessInFlight;
+  }
 
   if (!token || source !== "frotak-master") return readLocalSession();
 
   const tenantId = params.get("tenant_id") || DEFAULT_TENANT_ID;
-  const clientName = params.get("client_name") || "Central Transportes";
+  const clientName = params.get("client_name") || "FrotaK";
   const email = params.get("login_hint") || CENTRAL_DEMO_EMAIL;
   let userId: string | undefined;
 
-  if (hasSupabaseConfig() && refreshToken) {
+  if (hasSupabaseConfig()) {
+    window.history.replaceState(null, "", window.location.pathname);
+    // Sem sessão real no Supabase não há o que abrir: nenhum dado responderia a uma sessão local.
+    if (!refreshToken) return null;
     try {
       const { data, error } = await supabase.auth.setSession({
         access_token: token,
@@ -228,8 +279,10 @@ export async function acceptMasterSsoFromUrl(search: string) {
       if (error) throw error;
       userId = data.session?.user.id;
     } catch {
-      console.warn("Master SSO Supabase session was not persisted; using tenant session.");
+      console.warn("Master SSO Supabase session was not persisted.");
+      return null;
     }
+    window.localStorage.removeItem(SUPPORT_ACCESS_KEY);
   }
 
   const session = createLocalSession({ email, name: clientName, tenantId, userId });

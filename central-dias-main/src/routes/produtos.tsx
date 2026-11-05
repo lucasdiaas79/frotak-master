@@ -4,7 +4,7 @@ import { ProductsPage } from "@/modules/fleet-core/ui/ProductsPage";
 export const Route = createFileRoute("/produtos")({
   head: () => ({
     meta: [
-      { title: "Produtos - Central Transportes" },
+      { title: "Produtos - FrotaK" },
       {
         name: "description",
         content: "Cadastro dos produtos transportados pela frota.",

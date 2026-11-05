@@ -147,7 +147,10 @@ export async function listFinancialDocuments(
         settledAmount: Number(item.settled_amount),
         balance: Number(item.balance),
       }))
-      .sort((a, b) => a.installmentNumber - b.installmentNumber),
+      .sort(
+        (a: { installmentNumber: number }, b: { installmentNumber: number }) =>
+          a.installmentNumber - b.installmentNumber,
+      ),
     settlements: (row.financial_settlements ?? []).map(
       (item: Record<string, unknown>): FinancialSettlement => ({
         id: String(item.id),
@@ -226,7 +229,10 @@ function mapFinancialDocumentDetails(row: Record<string, any>): FinancialDocumen
         settledAmount: numberValue(item.settled_amount ?? item.settledAmount),
         balance: numberValue(item.balance),
       }))
-      .sort((a, b) => a.installmentNumber - b.installmentNumber),
+      .sort(
+        (a: { installmentNumber: number }, b: { installmentNumber: number }) =>
+          a.installmentNumber - b.installmentNumber,
+      ),
     settlements: (row.financial_settlements ?? row.settlements ?? []).map(
       (item: Record<string, unknown>): FinancialSettlement => ({
         id: String(item.id),

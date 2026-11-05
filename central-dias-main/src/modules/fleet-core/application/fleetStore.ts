@@ -313,8 +313,8 @@ export function createFleetStore(deps: FleetStoreDeps) {
           throw error;
         } finally {
           finish();
-          if (loadAllInFlight?.promise === request) {
-            const shouldRepeat = loadAllInFlight.pending;
+          const shouldRepeat = requestState.pending;
+          if (loadAllInFlight === requestState) {
             loadAllInFlight = null;
             if (shouldRepeat && session.activeTenantId() === tenantId) {
               void get().loadAll({ force: true, silent: true });
@@ -354,7 +354,10 @@ export function createFleetStore(deps: FleetStoreDeps) {
             requestState.pending = true;
             return;
           }
-          set({ [domain]: data, error: undefined } as Pick<FleetState, FleetDomain | "error">);
+          set({ [domain]: data, error: undefined } as unknown as Pick<
+            FleetState,
+            FleetDomain | "error"
+          >);
           markDomainAuthoritative(domain);
         } catch (error) {
           if (session.activeTenantId() === tenantId) {
@@ -700,7 +703,7 @@ export function createFleetStore(deps: FleetStoreDeps) {
                 freightStage: saved.freightStage,
                 city: saved.city,
                 state: saved.state,
-                source: "Operador",
+                source: "Operador" as const,
                 description: "Status atualizado manualmente",
                 timestamp,
               },

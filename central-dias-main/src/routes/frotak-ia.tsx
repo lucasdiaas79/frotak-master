@@ -4,7 +4,7 @@ import { FrotakIaPage } from "@/modules/frotak-ai/ui/FrotakIaPage";
 export const Route = createFileRoute("/frotak-ia")({
   head: () => ({
     meta: [
-      { title: "Frotak IA - Central Transportes" },
+      { title: "Frotak IA - FrotaK" },
       {
         name: "description",
         content: "Assistente inteligente operacional da Frotak.",

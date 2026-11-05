@@ -4,7 +4,7 @@ import { MotoristasPage } from "@/modules/fleet-core/ui/pages/MotoristasPage";
 export const Route = createFileRoute("/motoristas")({
   head: () => ({
     meta: [
-      { title: "Motoristas - Central Transportes" },
+      { title: "Motoristas - FrotaK" },
       { name: "description", content: "Gestão de motoristas." },
     ],
   }),

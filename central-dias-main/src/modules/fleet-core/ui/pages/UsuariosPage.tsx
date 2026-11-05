@@ -1,3 +1,4 @@
+import type { ErrorComponentProps } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, LockKeyhole, Mail, Plus, Search, ShieldCheck, UserRound } from "lucide-react";
@@ -577,7 +578,7 @@ function UsuariosStatusCard({
   );
 }
 
-export function UsuariosErrorFallback({ error }: { error: Error }) {
+export function UsuariosErrorFallback({ error }: ErrorComponentProps) {
   console.error("[USUARIOS ROUTE ERROR]", error);
 
   return (

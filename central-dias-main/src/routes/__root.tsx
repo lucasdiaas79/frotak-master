@@ -34,7 +34,7 @@ export const Route = createRootRoute({
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { name: "apple-mobile-web-app-title", content: "Frotak" },
-      { title: "Central Transportes e Serviços - TMS" },
+      { title: "FrotaK TMS" },
       { name: "description", content: "Sistema de gestão de frota rodoviária - TMS corporativo." },
     ],
     links: [

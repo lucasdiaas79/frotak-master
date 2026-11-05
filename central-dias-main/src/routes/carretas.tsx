@@ -4,7 +4,7 @@ import { CarretasPage } from "@/modules/fleet-core/ui/pages/CarretasPage";
 export const Route = createFileRoute("/carretas")({
   head: () => ({
     meta: [
-      { title: "Carretas - Central Transportes" },
+      { title: "Carretas - FrotaK" },
       { name: "description", content: "Gestão de carretas e implementos." },
     ],
   }),

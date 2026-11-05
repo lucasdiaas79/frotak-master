@@ -53,8 +53,7 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { perfRender } from "@/lib/performance";
 import { FinancialNav } from "@/modules/financial/ui/FinancialNav";
-import frotakLogo from "@/assets/logo-central.png";
-import joTransportesLogo from "@/assets/logo-jo-transportes.png";
+import { frotakIcon, tenantLogo } from "@/lib/tenantBrand";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -386,7 +385,6 @@ export function FinancialOverviewPage() {
 }
 
 type PeriodMode = "month" | "quarter" | "year" | "custom";
-const JO_TRANSPORTES_TENANT_ID = "ebfa57a2-f639-4e53-a006-3b1493c685a7";
 
 function periodBounds(mode: PeriodMode) {
   const now = new Date(`${today()}T12:00:00`);
@@ -445,8 +443,12 @@ async function imageUrlToDataUrl(src: string) {
   });
 }
 
-function tenantLogoFor(tenantId: string) {
-  return tenantId === JO_TRANSPORTES_TENANT_ID ? joTransportesLogo : frotakLogo;
+function customLogoFor(tenantId?: string) {
+  if (typeof window === "undefined") return null;
+  return tenantLogo({
+    id: tenantId ?? window.localStorage.getItem("frotak-active-tenant-id"),
+    name: window.localStorage.getItem("frotak-active-tenant-name"),
+  });
 }
 
 function imageFormatFromDataUrl(dataUrl: string) {
@@ -475,7 +477,7 @@ async function exportDrePdf({
 
   const [{ jsPDF }, logoDataUrl] = await Promise.all([
     import("jspdf"),
-    imageUrlToDataUrl(tenantLogoFor(tenantId)),
+    imageUrlToDataUrl(customLogoFor(tenantId) ?? frotakIcon),
   ]);
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const logoFormat = imageFormatFromDataUrl(logoDataUrl);
@@ -488,7 +490,7 @@ async function exportDrePdf({
   const addHeader = (subtitle?: string) => {
     doc.setFillColor(255, 255, 255);
     doc.rect(0, 0, pageWidth, 34, "F");
-    doc.addImage(logoDataUrl, logoFormat, margin, 7, 38, 17);
+    doc.addImage(logoDataUrl, logoFormat, margin, 7, customLogoFor(tenantId) ? 38 : 17, 17);
     doc.setTextColor(20, 24, 22);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
@@ -1449,7 +1451,11 @@ function DrePeriodStatement({
     <section className="rounded-lg border border-border bg-card p-4 shadow-sm">
       <div className="mb-4 flex flex-col gap-4 border-b border-border pb-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 items-center gap-4">
-          <img src={frotakLogo} alt="Frotak" className="h-12 w-24 rounded-md object-cover" />
+          <img
+            src={customLogoFor() ?? frotakIcon}
+            alt="Logomarca"
+            className="h-12 w-24 rounded-md object-contain"
+          />
           <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
               Demonstrativo gerencial do periodo

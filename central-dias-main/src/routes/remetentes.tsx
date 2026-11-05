@@ -3,7 +3,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 export const Route = createFileRoute("/remetentes")({
   head: () => ({
     meta: [
-      { title: "Remetentes — Central Transportes" },
+      { title: "Remetentes — FrotaK" },
       { name: "description", content: "Cadastro e gestão de empresas remetentes da operação." },
     ],
   }),

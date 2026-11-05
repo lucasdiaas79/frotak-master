@@ -4,7 +4,7 @@ import { FleetProfitabilityPage } from "@/modules/financial/ui/FleetProfitabilit
 export const Route = createFileRoute("/lucros-despesas")({
   head: () => ({
     meta: [
-      { title: "Rentabilidade da Frota - Central Transportes" },
+      { title: "Rentabilidade da Frota - FrotaK" },
       {
         name: "description",
         content: "Rentabilidade por caminhao, frete e cliente usando dados financeiros canonicos.",

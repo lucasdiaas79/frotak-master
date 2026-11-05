@@ -4,7 +4,7 @@ import { UsuariosErrorFallback, UsuariosPage } from "@/modules/fleet-core/ui/pag
 export const Route = createFileRoute("/usuarios")({
   head: () => ({
     meta: [
-      { title: "Usuários - Central Transportes" },
+      { title: "Usuários - FrotaK" },
       {
         name: "description",
         content: "Gestão de usuários do workspace cliente.",

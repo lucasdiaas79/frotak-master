@@ -6,7 +6,7 @@ import { Truck } from "lucide-react";
 export const Route = createFileRoute("/vinculacao")({
   head: () => ({
     meta: [
-      { title: "Despacho Operacional - Central Transportes" },
+      { title: "Despacho Operacional - FrotaK" },
       { name: "description", content: "Compatibilidade da rota antiga de despacho." },
     ],
   }),

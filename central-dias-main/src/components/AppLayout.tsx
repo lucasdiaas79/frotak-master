@@ -59,8 +59,8 @@ import {
   getWorkspaceEntitlements,
 } from "@/lib/entitlementsAccess";
 import { FrotakEmptyState, FrotakPage } from "@/components/frotak/FrotakPage";
-import logoCentral from "@/assets/logo-central.png";
-import faviconCentral from "@/assets/favicon.png";
+import { SupportAccessBanner } from "@/components/frotak/SupportAccessBanner";
+import { frotakIcon, tenantLogo } from "@/lib/tenantBrand";
 
 // Menu dos modulos vem dos manifestos em src/modules; aqui so o que e da casca do app.
 const CADASTROS: NavGroup[] = fleetCoreModule.nav?.registrations ?? [];
@@ -489,6 +489,7 @@ function SidebarBody({
   fleetUsable: boolean;
 }) {
   const initials = getInitials(profile);
+  const customLogo = tenantLogo({ id: profile?.tenantId, name: profile?.name });
   const profileLabel = profile?.name || profile?.email || "Operador Logístico";
   const financialItems = financialNavFor(financialAccess);
 
@@ -508,21 +509,32 @@ function SidebarBody({
           )}
         >
           <img
-            src={faviconCentral}
-            alt="Central logomarca"
+            src={frotakIcon}
+            alt="FrotaK"
             className={cn(
               "shrink-0 rounded-2xl bg-white/95 object-contain p-1.5 shadow-sm transition-all",
               collapsed ? "size-10" : "hidden",
             )}
           />
-          <img
-            src={logoCentral}
-            alt="Central Transportes e Serviços"
-            className={cn(
-              "h-24 w-auto max-w-[320px] min-w-0 scale-[1.35] object-contain object-center transition-all",
-              collapsed ? "hidden" : "block",
-            )}
-          />
+          {customLogo ? (
+            <img
+              src={customLogo}
+              alt={profile?.name || "Logomarca do cliente"}
+              className={cn(
+                "h-24 w-auto max-w-[320px] min-w-0 scale-[1.35] object-contain object-center transition-all",
+                collapsed ? "hidden" : "block",
+              )}
+            />
+          ) : (
+            <span className={cn("min-w-0 items-center gap-3", collapsed ? "hidden" : "flex")}>
+              <img
+                src={frotakIcon}
+                alt="FrotaK"
+                className="size-12 shrink-0 rounded-2xl object-contain"
+              />
+              <span className="truncate text-lg font-extrabold">FrotaK</span>
+            </span>
+          )}
         </Link>
 
         <button
@@ -672,7 +684,7 @@ function Topbar({
         >
           <Menu className="size-4" />
         </button>
-        <img src={faviconCentral} alt="Central" className="size-10 rounded-2xl object-contain" />
+        <img src={frotakIcon} alt="FrotaK" className="size-10 rounded-2xl object-contain" />
       </div>
 
       <div className="relative min-w-0 flex-1">
@@ -1037,6 +1049,8 @@ export function AppLayout() {
           onMobileMenu={() => setMobileMenuOpen(true)}
         />
 
+        <SupportAccessBanner userId={profile?.id} onExit={handleLogout} />
+
         <main className="flex-1 overflow-auto overscroll-contain pb-[calc(92px+env(safe-area-inset-bottom))] md:pb-0 md:pt-5">
           <div className="mx-auto w-full max-w-[1680px]">
             {accessBlock ? (
@@ -1102,12 +1116,12 @@ export function AppLayout() {
           <SheetHeader className="border-b border-border/80 px-5 py-5">
             <div className="flex items-center gap-3">
               <img
-                src={faviconCentral}
-                alt="Central"
+                src={frotakIcon}
+                alt="FrotaK"
                 className="size-10 rounded-2xl bg-white/95 object-contain p-1.5"
               />
               <div className="min-w-0">
-                <SheetTitle>Central Transportes</SheetTitle>
+                <SheetTitle>{profile?.name || "FrotaK"}</SheetTitle>
                 <SheetDescription>Menu operacional</SheetDescription>
               </div>
             </div>

@@ -4,7 +4,7 @@ import { MapaPage, type MapaSearch } from "@/modules/fleet-core/ui/pages/MapaPag
 export const Route = createFileRoute("/mapa")({
   head: () => ({
     meta: [
-      { title: "Mapa da Frota - Central Transportes" },
+      { title: "Mapa da Frota - FrotaK" },
       { name: "description", content: "Monitoramento geográfico da frota em tempo real." },
     ],
   }),

@@ -4,7 +4,7 @@ import { CustomersPage } from "@/modules/fleet-core/ui/CustomersPage";
 export const Route = createFileRoute("/clientes")({
   head: () => ({
     meta: [
-      { title: "Cadastro de Clientes - Central Transportes" },
+      { title: "Cadastro de Clientes - FrotaK" },
       {
         name: "description",
         content: "Cadastro unificado de clientes com papel de remetente, destinatário ou ambos.",

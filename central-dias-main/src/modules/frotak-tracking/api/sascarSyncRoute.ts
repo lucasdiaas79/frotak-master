@@ -137,12 +137,12 @@ export async function handleSascarSyncRequest(request: Request) {
   try {
     requireCronTokenOrSameOrigin(request);
     const body = ((await request.json().catch(() => ({}))) ?? {}) as TrackerSyncInput;
+    // Toda sincronização é de um cliente: sem isso, a checagem de módulo não teria o que conferir.
+    if (!body.workspaceId) throw new Error("WORKSPACE_REQUIRED");
     if (!hasCronToken(request)) {
       await validateWorkspaceMembership(request, body.workspaceId);
     }
-    if (body.workspaceId) {
-      await assertWorkspaceModule(getSupabaseAdmin(), body.workspaceId, "frotak_tracking");
-    }
+    await assertWorkspaceModule(getSupabaseAdmin(), body.workspaceId, "frotak_tracking");
     const result = await syncTrackerPositions(
       {
         repository: new SupabaseTrackingRepository(getSupabaseAdmin()),
