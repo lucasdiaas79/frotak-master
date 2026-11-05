@@ -32,8 +32,15 @@ begin
   perform set_config('request.jwt.claim.sub', v_platform_id::text, true);
   insert into public.platform_users (user_id, platform_role, active)
   values (v_platform_id, 'support', true);
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_platform_id, 'aal', 'aal1')::text, true);
+  if private.is_platform_user() then
+    raise exception 'Expected platform user without 2FA to fail';
+  end if;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_platform_id, 'aal', 'aal2')::text, true);
   if not private.is_platform_user() then
-    raise exception 'Expected active platform user to pass';
+    raise exception 'Expected active platform user with 2FA to pass';
   end if;
 
   update public.platform_users set active = false where user_id = v_platform_id;

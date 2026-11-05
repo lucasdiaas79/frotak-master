@@ -2,6 +2,9 @@
 -- Mantem financial_documents como fato economico canonico e usa
 -- financial_allocations como dimensao/apropriacao ate a baixa.
 
+-- Em banco novo o pg_cron precisa existir aqui, senao os jobs financeiros abaixo nao sao agendados.
+create extension if not exists pg_cron with schema pg_catalog;
+
 alter table public.financial_documents
   add column if not exists entry_date date not null default current_date;
 

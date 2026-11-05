@@ -1,5 +1,17 @@
 begin;
 
+-- Em producao esta funcao veio do projeto antigo; em banco novo ela nasce aqui.
+create or replace function public.touch_updated_at()
+returns trigger
+language plpgsql
+set search_path to 'public'
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
 create table if not exists public.workspace_integrations (
   id uuid primary key default gen_random_uuid(),
   workspace_id uuid not null references public.workspaces(id) on delete cascade,
