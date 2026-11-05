@@ -1,6 +1,6 @@
 # Checkpoint · Master modular e liberação por cliente
 
-Atualizado em 2026-11-04. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", adaptada ao Supabase compartilhado atual (decisão do usuário em 2026-10-31). Detalhes em [arquitetura-modular](arquitetura-modular.md).
+Atualizado em 2026-11-05. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", adaptada ao Supabase compartilhado atual (decisão do usuário em 2026-10-31). Detalhes em [arquitetura-modular](arquitetura-modular.md).
 
 ## Git e ambiente
 
@@ -8,11 +8,11 @@ Atualizado em 2026-11-04. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", 
 |---|---|
 | Base | `main` @ `92a7213` (igual a `origin/main` em 2026-11-02) |
 | Branch | `feat/master-modulos-por-cliente`, commits locais, **sem push** |
-| Commits | `0cc1f2a` Master modular e liberação; `1f98144` registro de módulos do TMS; `659faef` Frotak IA; `e77489b` Rastreadores; `08de70b` App Motorista; `cad1469` Financeiro; `0643e97` Gestão de Frota; `df82eec` documentação; clean architecture: `848b3ab` App Motorista e guarda de dependências, `b99e26b` Rastreadores, `e7cdebc` Financeiro, `66b3851` Gestão de Frota, `4008c4c` Frotak IA |
+| Commits | `0cc1f2a` Master modular e liberação; `1f98144` registro de módulos do TMS; `659faef` Frotak IA; `e77489b` Rastreadores; `08de70b` App Motorista; `cad1469` Financeiro; `0643e97` Gestão de Frota; `df82eec` documentação; clean architecture: `848b3ab` App Motorista e guarda de dependências, `b99e26b` Rastreadores, `e7cdebc` Financeiro, `66b3851` Gestão de Frota, `4008c4c` Frotak IA; `d04bede` documentação; `a7ad7a3` implantação nas VPS; correções de 2026-11-05: `e680637` banco, `a6a6c5d` Master, `18d5e95` TMS, `7a44c93` implantação |
 | Teste de ponta a ponta | Supabase local descartável (`project_id` `frotak-e2e`, portas 553xx) criado do zero e removido no fim |
 | Banco remoto e banco local `frota-master` | Não alterados |
-| VPS de banco e de Serviço | Instaladas em 2026-11-04 com a versão `d04bede`, sem dados de cliente. Ver [Ambiente nas VPS](#ambiente-nas-vps-2026-11-04) |
-| VPS View | Não alterada: só aceita chave SSH, e a credencial recebida não entra |
+| VPS de banco e de Serviço | Instaladas em 2026-11-04 e atualizadas em 2026-11-05 para a versão `7a44c93`, sem dados de cliente. Ver [Ambiente nas VPS](#ambiente-nas-vps) |
+| VPS View | Não alterada: só aceita chave SSH, e a senha recebida não entra |
 
 ## Concluído
 
@@ -22,6 +22,12 @@ Atualizado em 2026-11-04. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", 
 4. Cliente: menu, rotas e servidor obedecem às liberações. Sem TMS ou com o cliente suspenso, o menu fica só com Ajuda e a barra inferior do celular some; Suporte continua acessível.
 5. TMS separado em módulos (`src/modules/{fleet-core,financial,frotak-ai,frotak-tracking,driver-app,cte-issuance}`), cada um com manifesto e camadas `domain`, `application`, `infrastructure`, `api` e `ui`. Menu e bloqueio de rota vêm do registro de módulos. As rotas ficaram finas. Um commit por módulo.
 6. Clean architecture no TMS: casos de uso e portas em `application/`, adaptadores em `infrastructure/`, composição em `api/` e `container.ts`. Rastreador, modelo de IA e envio de push ficam atrás de portas, então um fornecedor novo é um adaptador novo. O lint barra import fora da regra, e `npm run test:modules` testa os casos de uso com portas falsas, sem banco e sem rede.
+7. 2FA obrigatório para a equipe, cobrado no login, no servidor e no banco. Redefinição em `deploy/db/reset-mfa.sh`.
+8. "Login como cliente" com credencial de uso único do dono do cliente, registrada em `audit_logs`, e aviso de modo suporte no TMS. O token do operador não sai mais do Master.
+9. Frota por módulo: com o TMS desligado, tabelas, RPCs e arquivos da frota deixam de responder pela API.
+10. Sequência de migrations monta um banco do zero, com os jobs financeiros, a limpeza de posições de 24 horas e o job da Sascar.
+11. Telas fictícias do Master escondidas com `VITE_FROTAK_HIDE_PROTOTYPES=true`; o nome e o logo de um cliente não aparecem mais para os outros; `/api/sascar/sync` sempre exige o cliente.
+12. `tsc` sem erros nos dois apps.
 
 ## Verificações executadas
 
@@ -62,7 +68,7 @@ Atualizado em 2026-11-04. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", 
 
 A Frotak IA foi testada com modelo e ferramentas falsos e com a checagem de módulo no servidor. Não houve chamada real ao Gemini, porque o ambiente de teste não tem a chave.
 
-## Ambiente nas VPS (2026-11-04)
+## Ambiente nas VPS
 
 Guia de operação e mapa do PDF para o que foi instalado: [deploy/README.md](../../deploy/README.md). IPs e papéis ficam fora do repositório.
 
@@ -76,8 +82,10 @@ O ambiente é **novo e vazio**: a produção atual (Lovable, Vercel e Supabase) 
 
 Evidências, rodadas contra os endereços públicos:
 
-- Banco reinstalado do zero 3 vezes depois da primeira instalação. A versão final aplica as 72 migrations mais 2 arquivos de ajuste em `deploy/db/shim`. A última reinstalação veio depois dos testes abaixo, para apagar os dados de teste, e foi conferida com login do operador, backup, restauração e reboot.
+- Banco reinstalado do zero com as 74 migrations do repositório, sem nenhum ajuste externo. Essa última reinstalação veio depois dos testes abaixo, para apagar os dados de teste, e foi conferida com login do operador até a tela de 2FA, backup, restauração e reboot.
 - Os três roteiros de navegador: 29 de 29. As 28 telas do TMS: 28 de 28. IA no servidor: aceita e recusa por módulo.
+- Roteiro de segurança: 38 de 38. Senha sem 2FA não lê clientes nem frota pela API e é recusada nas server functions; confirmar o 2FA derruba as sessões sem ele. "Login como cliente" abre como dono, audita e não abre de novo com a mesma credencial. TMS desligado ou cliente suspenso: a API não devolve a frota, não grava e a RPC recusa; religar devolve tudo, sem perda.
+- Testes SQL passam, exceto `financial_foundation_phase1`, que exige plano de contas de cliente existente, como antes.
 - Realtime: inserção com RLS chegou pelo WebSocket através de Caddy, WireGuard e Kong. Storage: enviar, baixar e apagar; anônimo não baixa.
 - API: cadastro público recusado, REST sem `apikey` recusado, anônimo não lê `platform_users`, administração do Realtime bloqueada.
 - `pg_cron` chamou o TMS pela internet com HTTP 200. Sem token, `push-dispatch` e `sascar/sync` respondem 401.
@@ -88,22 +96,19 @@ Evidências, rodadas contra os endereços públicos:
 
 Não testado: chamada real ao Gemini e à Sascar e envio real de push, porque as chaves não estão na instalação, e a restauração completa numa máquina nova.
 
-## Achados fora do escopo
+## Achados em aberto
 
-1. **A sequência de migrations não monta um banco do zero.** `20260928091642_workspace_sascar_integrations` usa `public.touch_updated_at()`, que só é criada em `202610150001`. Em produção funciona porque a função veio do projeto antigo. No teste, criei a função num arquivo só da cópia descartável.
-2. **Existe uma migration fora do Git.** O banco local `frota-master` tem `202610220001_client_onboarding` (planos TRIAL/STARTER/BUSINESS/ENTERPRISE, `tenant_contracts`, `tenant_migration_requests`), que não está em nenhum branch do GitHub. Ela não colide com a migration nova, mas indica outro fluxo de cadastro de clientes do Master em outro checkout, que pode conflitar com a nova tela Clientes. Confirmar se ela está em produção antes de aplicar.
-3. **Jobs do `pg_cron` que um banco novo não recebe.** `financial-recurring-daily` e `financial-integrations-every-5-minutes` só são agendados se o `pg_cron` já existir, mas no repositório a extensão nasce depois, e nenhum erro aparece. Corrigido nas VPS por `deploy/db/shim`. `sascar-sync-every-minute` existe em produção e em nenhuma migration; as VPS o agendam em `db/configure-cron.sh`.
-4. **Função que só existe em produção.** `purge_old_vehicle_positions` e o job `vehicle-positions-retention-hourly` estão no retrato do banco remoto e em nenhuma migration. Não instalei nas VPS, porque apaga dados e não tenho a definição nem o prazo. Sem isso, `vehicle_positions` cresce sem limite quando a Sascar for ligada.
-5. **HTTP/3.** Com ele ligado, o Chrome numa máquina com antivírus que intercepta TLS falhou com `ERR_QUIC_PROTOCOL_ERROR` e a tela não carregou; sem ele, tudo passou. A causa exata não foi isolada. O Caddy das VPS serve só HTTP/1.1 e HTTP/2.
-6. **2FA do Master.** O PDF exige e o código não tem. O Master está exposto na internet só com e-mail e senha.
-7. O cabeçalho do menu do celular do Cliente mostra "Central Transportes" fixo para qualquer cliente. Já estava assim antes.
+1. **Existe uma migration fora do Git.** O banco local `frota-master` tem `202610220001_client_onboarding` (planos TRIAL/STARTER/BUSINESS/ENTERPRISE, `tenant_contracts`, `tenant_migration_requests`), que não está em nenhum branch do GitHub. Ela não colide com as migrations novas, mas indica outro fluxo de cadastro de clientes em outro checkout. Confirmar a origem e se ela está em produção antes de aplicar as novas.
+2. **HTTP/3.** Com ele ligado, o Chrome numa máquina com antivírus que intercepta TLS falhou com `ERR_QUIC_PROTOCOL_ERROR` e a tela não carregou; sem ele, tudo passou. A causa exata não foi isolada. O Caddy das VPS serve só HTTP/1.1 e HTTP/2.
+3. **Telas fictícias do Master.** `/usuarios`, `/financeiro`, `/operacoes` e outras continuam protótipo. Escondê-las evita decisão com número inventado, mas alguém precisa decidir quais delas construir.
+4. **Duas edições em migrations já aplicadas.** `202609240001` e `20260928091642` ganharam instruções idempotentes no início para o banco novo montar. Migration aplicada não roda de novo, então a produção não muda; `supabase db push` compara só a versão.
 
 Não houve revisão independente por outro executor.
 
 ## Próxima ação
 
-1. Trocar a senha das VPS e instalar chave SSH; a senha circulou em texto e é a mesma nas três.
-2. Liberar o acesso à VPS View e decidir o papel dela.
-3. Decidir se as VPS substituem a produção atual. Se sim: apontar o DNS, preencher as chaves (Gemini, Sascar, Maps), migrar os dados e implementar 2FA antes de abrir para clientes.
-4. Trazer de produção para o repositório `purge_old_vehicle_positions` e resolver a origem de `202610220001_client_onboarding` (`select version from supabase_migrations.schema_migrations order by version desc limit 5;`).
-5. Na produção atual: aplicar `202610310001`, publicar Master e Cliente e desligar os módulos que cada cliente não contratou.
+1. Liberar o acesso à VPS View por chave SSH e decidir o papel dela.
+2. Instalar chave SSH nas VPS de banco e de Serviço e desligar o login por senha. As senhas do root foram trocadas e são diferentes em cada uma; ficam só com o usuário.
+3. Decidir se as VPS substituem a produção atual. Se sim: apontar o DNS, preencher as chaves (Gemini, Sascar, Maps) e migrar os dados.
+4. Resolver a origem de `202610220001_client_onboarding` (`select version from supabase_migrations.schema_migrations order by version desc limit 5;`).
+5. Na produção atual: aplicar as migrations e publicar Master e Cliente em seguida, porque `202611050001` passa a exigir 2FA da equipe no banco. Depois, desligar os módulos que cada cliente não contratou.
