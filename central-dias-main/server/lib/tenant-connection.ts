@@ -1,5 +1,5 @@
-// Banco por cliente: o endereço diz quem é o cliente, e o agente da VPS de banco diz como chegar
-// nele. Cada requisição roda com a conexão do seu cliente. Sem FROTAK_AGENT_URL, vale o banco único
+// Banco por cliente: o endereço diz quem é o cliente, e o agente da VPS de banco diz de quem ele é
+// e como chegar no banco. Vale o subdomínio da FrotaK e o domínio próprio do cliente. Cada requisição roda com a conexão do seu cliente. Sem FROTAK_AGENT_URL, vale o banco único
 // das variáveis de ambiente, como na produção atual.
 
 export type TenantConnection = {
@@ -11,7 +11,7 @@ export type TenantConnection = {
   serviceRoleKey: string;
 };
 
-const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
+const HOST_PATTERN = /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?.)+[a-z]{2,63}$/;
 const HIT_TTL_MS = 30_000;
 const MISS_TTL_MS = 5_000;
 
@@ -59,27 +59,27 @@ export function serverServiceRoleKey() {
   return currentConnection()?.serviceRoleKey ?? readEnv("SUPABASE_SERVICE_ROLE_KEY");
 }
 
-/** `acme.frotak.log.br` vira `acme`. Subnível e endereço de fora do domínio não são cliente. */
-export function slugFromHost(host: string | null | undefined) {
-  const base = readEnv("FROTAK_CLIENT_BASE_DOMAIN")?.toLowerCase();
-  if (!base || !host) return null;
-  const name = host.toLowerCase().split(":")[0];
-  if (!name.endsWith(`.${base}`)) return null;
-  const label = name.slice(0, -(base.length + 1));
-  return SLUG_PATTERN.test(label) ? label : null;
+/** Nome do host sem porta e sem ponto final; null quando não parece um domínio. */
+export function normalizeHost(host: string | null | undefined) {
+  if (!host) return null;
+  const name = host.trim().toLowerCase().split(":")[0].replace(/.$/, "");
+  return HOST_PATTERN.test(name) ? name : null;
 }
 
-/** null: não existe cliente com esse endereço. Lança erro: o agente está fora do ar. */
-export async function connectionForSlug(slug: string) {
-  const cached = cache.get(slug);
+/** null: nenhum cliente usa esse endereço. Lança erro: o agente está fora do ar. */
+export async function connectionForHost(host: string) {
+  const cached = cache.get(host);
   if (cached && cached.expiresAt > Date.now()) return cached.connection;
 
   let response: Response;
   try {
-    response = await fetch(`${readEnv("FROTAK_AGENT_URL")}/clients/${slug}/connection`, {
-      headers: { Authorization: `Bearer ${readEnv("FROTAK_AGENT_TOKEN")}` },
-      signal: AbortSignal.timeout(5_000),
-    });
+    response = await fetch(
+      `${readEnv("FROTAK_AGENT_URL")}/resolve?host=${encodeURIComponent(host)}`,
+      {
+        headers: { Authorization: `Bearer ${readEnv("FROTAK_AGENT_TOKEN")}` },
+        signal: AbortSignal.timeout(5_000),
+      },
+    );
   } catch (error) {
     // Agente fora do ar não derruba quem já estava conectado.
     if (cached?.connection) return cached.connection;
@@ -87,7 +87,7 @@ export async function connectionForSlug(slug: string) {
   }
 
   if (response.status === 400 || response.status === 404) {
-    cache.set(slug, { connection: null, expiresAt: Date.now() + MISS_TTL_MS });
+    cache.set(host, { connection: null, expiresAt: Date.now() + MISS_TTL_MS });
     return null;
   }
   if (!response.ok) {
@@ -96,7 +96,7 @@ export async function connectionForSlug(slug: string) {
   }
 
   const connection = (await response.json()) as TenantConnection;
-  cache.set(slug, { connection, expiresAt: Date.now() + HIT_TTL_MS });
+  cache.set(host, { connection, expiresAt: Date.now() + HIT_TTL_MS });
   return connection;
 }
 

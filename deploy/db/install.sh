@@ -121,6 +121,8 @@ REST_DB_PASSWORD=${POSTGRES_PASSWORD}
 STORAGE_DB_USER=supabase_storage_admin
 STORAGE_DB_PASSWORD=${POSTGRES_PASSWORD}
 CLIENT_STORAGE_DIR=${stage}/storage
+CLIENT_SITE_URL=https://template.${CLIENT_BASE_DOMAIN}
+CLIENT_URI_ALLOW_LIST=https://template.${CLIENT_BASE_DOMAIN}/**
 EOF
   mkdir -p "$stage/storage"
   template_compose() { docker compose -p frotak-template -f "$here/client.compose.yml" --env-file "$stage/template.env" "$@"; }

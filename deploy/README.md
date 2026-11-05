@@ -62,7 +62,7 @@ O Postgres, o Kong, o Realtime e os apps são compartilhados. Quem entrar como r
 | 80 e 443 (Caddy) | Não | Sim |
 | 51820/udp (WireGuard) | Só para o IP da outra VPS | Só para o IP da outra VPS |
 
-Postgres escuta em localhost. Kong, PgBouncer e o agente escutam só no IP da WireGuard, e o agente ainda exige token. Redis e os apps escutam só em localhost. O Docker publica portas por fora do UFW, por isso `common/firewall.sh` acrescenta uma regra `DOCKER-USER` que descarta o que chega pela interface pública.
+Postgres escuta em localhost. Kong, PgBouncer, o agente (9100) e a sentinela (9101) escutam só no IP da WireGuard; agente e sentinela ainda exigem token. Redis e os apps escutam só em localhost. O Docker publica portas por fora do UFW, por isso `common/firewall.sh` acrescenta uma regra `DOCKER-USER` que descarta o que chega pela interface pública.
 
 ## O PDF e o que foi instalado
 
@@ -83,6 +83,10 @@ Postgres escuta em localhost. Kong, PgBouncer e o agente escutam só no IP da Wi
 | Cofre de segredos | **Não feito** | Segredos em `/etc/frotak`, acessíveis só ao root, e cópia no backup sem criptografia |
 | Fila de provisionamento, ondas, mudar cliente de servidor, réplica | **Não feito** | Fases 2 e 3 do PDF |
 | Front View | Fora do escopo | Decisão de 2026-11-05 |
+| Painel de saúde por cliente e servidor (Fase 2) | Instalado | Master > Painel de controle, alimentado por uma sentinela em cada VPS. Ver [Painel de controle e auto-heal](#painel-de-controle-e-auto-heal) |
+| Convite por e-mail para o admin do cliente | **Não feito** | O Master define uma senha temporária. Não há SMTP |
+| Limites (veículos, câmeras, usuários) e fuso no cadastro | Parcial | Só o limite de veículos |
+| Catálogo com servidores, versão do schema e referências do cofre | Parcial | Um servidor só, sem tabela de servidores. A versão do schema de cada banco aparece no painel, lida do próprio banco |
 
 ## Instalar do zero
 
@@ -129,6 +133,8 @@ python3 /opt/frotak/deploy/db/agent/frotak_agent.py migrate
 /opt/frotak/deploy/service/deploy-app.sh /tmp/app.tgz NOME_DA_VERSAO
 ```
 
+Mudou algo em `deploy/` (sentinela, agente, compose)? Copie a pasta para `/opt/frotak/deploy` nas duas VPS e rode de novo `db/install.sh` e `service/install.sh`. Os dois mantêm segredos e bancos e atualizam a sentinela; o da VPS DB também recria os containers de cliente cuja configuração mudou, um cliente por vez (`frotak_agent.py refresh-clients`).
+
 Para voltar atrás, as 3 últimas versões ficam em `/opt/frotak/releases`:
 
 ```bash
@@ -168,6 +174,40 @@ Operador perdeu o celular: rode `db/reset-mfa.sh operador@empresa.com.br` na VPS
 O "Login como cliente" do Master abre o TMS como dono daquele cliente, com credencial de uso único e registro em `audit_logs` do Central (`master.client_access`). O token do operador não sai do Master, e a aba mostra um aviso de modo suporte.
 
 Com `VITE_FROTAK_HIDE_PROTOTYPES=true` (padrão nas VPS), o Master mostra só o que é real: os indicadores do Dashboard e a tela Clientes. As demais telas ainda usam dados fictícios e redirecionam para Clientes.
+
+## Painel de controle e auto-heal
+
+No Master, **Infraestrutura > Painel de controle** (`/infraestrutura`). Aparece só com `VITE_FROTAK_CONTROL_PANEL=true` no build, padrão nas VPS. A produção atual não tem a sentinela e não mostra o item.
+
+| Aba | O que mostra |
+|---|---|
+| Visão geral | O que pede atenção agora, contadores e o desenho das duas VPS com o estado de cada peça |
+| Servidores | CPU, memória, disco, swap e rede com histórico de até 7 dias; serviços com logs e reinício; portas abertas e quem alcança; disco por pasta; WireGuard; certificados HTTPS; firewall |
+| Containers | Todos os containers da VPS DB, por cliente, com CPU, memória, reinícios, logs, histórico de 2 dias e reinício |
+| Bancos de dados | Servidor Postgres, cada banco com tamanho, conexões e versão do schema; tabelas com colunas, índices, restrições, políticas RLS e gatilhos; dados das tabelas; agendamentos do `pg_cron` |
+| Clientes | Teste real a cada 20 s de login, API, arquivos e tempo real de cada cliente, pelo Kong |
+| Auto-heal | Regras, liga e pausa por VPS, histórico de consertos e alertas, e o que a equipe fez no painel |
+| Backups | Último backup e último teste de restauração, cópias nas duas VPS |
+
+**Quem pode o quê.** Toda a equipe vê. Logs, reinício e pausa do auto-heal exigem `super_admin` ou `operations`. Ver linhas de tabela e reiniciar o Postgres exigem `super_admin`. Reinício, pausa e leitura de linhas ficam em `audit_logs` do Central (`master.infra_restart`, `master.infra_autoheal`, `master.database_rows_read`) **antes** da ação. As linhas saem só do schema `public`, 100 por vez, em transação somente leitura com limite de 8 s, com valores cortados em 300 caracteres e colunas de senha, token, chave, certificado, CPF e CNH mascaradas. Os logs saem sem JWT, senhas e tokens.
+
+**Sentinela.** `common/sentinel/frotak_sentinel.py`, serviço `frotak-sentinel` em cada VPS, instalado pelo `db/install.sh` e pelo `service/install.sh`. Mede a cada minuto e guarda em `/var/lib/frotak-sentinel/sentinel.db`: 7 dias de máquina, 2 dias de container e 90 dias de eventos. Se as verificações travarem, o watchdog do systemd a reinicia. Testes das regras: `python3 -m unittest deploy/common/sentinel/test_sentinel.py`.
+
+**Regras do auto-heal**, conferidas a cada 30 s:
+
+| Alvo | Quando age | O que faz |
+|---|---|---|
+| Containers de login, API e arquivos do Central e dos clientes, Kong, Realtime | Parado, apagado ou `unhealthy` por cerca de 90 s | Reinicia ou recria só aquele container |
+| Postgres | Parado ou `unhealthy` | **Só avisa.** Reiniciar derruba todos e pode atrapalhar uma recuperação. Enquanto ele está fora, nada que depende dele é reiniciado |
+| Agente, PgBouncer, Docker, Master, TMS, Caddy, Redis, WireGuard | Inativo, sem resposta, ou interface `wg0` desligada, por cerca de 90 s | Reinicia o serviço |
+| Disco | 90% ou mais | Limpa log antigo do sistema e imagem Docker sem uso, no máximo a cada 6 h. Nunca toca em dados nem em backups |
+| Memória, CPU, backup, teste de restauração, certificados, a outra VPS | Limites de uso, backup com mais de 26 h, última execução com falha, certificado a menos de 14 dias | Só avisa |
+
+Cada alvo tem **3 tentativas em 30 minutos**. Se não resolver, a sentinela para, abre um alerta "precisa de uma pessoa" e espera; reiniciar pelo painel fecha o alerta quando o alvo volta.
+
+**Manutenção à mão.** O agente marca `/run/frotak/maintenance/CLIENTE` enquanto cria, apaga, restaura ou recria um cliente, e a sentinela não mexe nele. Para parar os serviços de um cliente de propósito, faça o mesmo (`touch /run/frotak/maintenance/CLIENTE`, vale 30 minutos) ou pause o auto-heal da VPS no painel.
+
+**Limites.** O aviso existe só no painel: não há e-mail nem WhatsApp. Se uma VPS cair inteira, a sentinela dela cai junto, e quem avisa é o painel, mostrando "sem resposta". Se as duas caírem, ninguém avisa: um monitor externo resolveria, e ainda não existe.
 
 ## Backup e restauração
 

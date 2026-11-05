@@ -52,6 +52,9 @@ RESERVED_SLUGS = {
     "master", "postgres", "realtime", "rest", "storage", "template", "www",
 }
 MODULE_CODE_RE = re.compile(r"^[a-z_]{2,40}$")
+HOST_RE = re.compile(r"^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+MAX_CUSTOM_DOMAINS = 5
 
 provision_lock = threading.RLock()
 
@@ -173,6 +176,72 @@ def client_meta(slug):
     return json.loads(path.read_text()) if path.exists() else {}
 
 
+# ---------------------------------------------------------------- enderecos
+# O identificador (slug) nomeia banco, containers e rotas e nunca muda. O endereco e outra coisa:
+# um subdominio da FrotaK, que pode mudar, e ate MAX_CUSTOM_DOMAINS dominios do proprio cliente.
+
+
+def normalize_host(value):
+    return str(value or "").strip().lower().split(":")[0].rstrip(".")
+
+
+def subdomain_of(slug, meta=None):
+    meta = client_meta(slug) if meta is None else meta
+    return meta.get("subdomain") or slug
+
+
+def client_hosts(slug, meta=None):
+    meta = client_meta(slug) if meta is None else meta
+    base = settings()["CLIENT_BASE_DOMAIN"].lower()
+    hosts = [f"{subdomain_of(slug, meta)}.{base}"]
+    hosts += [domain["host"] for domain in meta.get("domains", [])]
+    return hosts
+
+
+def primary_url(slug, meta=None):
+    return f"https://{client_hosts(slug, meta)[0]}"
+
+
+def host_index():
+    index = {}
+    for slug in client_slugs():
+        meta = client_meta(slug)
+        if meta:
+            for host in client_hosts(slug, meta):
+                index[host] = slug
+    return index
+
+
+def subdomain_taken(label, except_slug=None):
+    """Subdominio nao pode repetir outro cliente, nem o identificador de outro cliente."""
+    for slug in client_slugs():
+        if slug != except_slug and label in (slug, subdomain_of(slug)):
+            return True
+    return False
+
+
+def address_env(slug, meta):
+    hosts = client_hosts(slug, meta)
+    return {
+        "CLIENT_SITE_URL": f"https://{hosts[0]}",
+        "CLIENT_URI_ALLOW_LIST": ",".join(f"https://{host}/**" for host in hosts),
+    }
+
+
+def sync_address_env(slug):
+    """Leva os enderecos ao env do cliente. True quando mudou e o login precisa ser recriado."""
+    path = env_path(slug)
+    if not path.exists():
+        return False
+    env = read_env(path)
+    wanted = address_env(slug, client_meta(slug))
+    if all(env.get(key) == value for key, value in wanted.items()):
+        return False
+    env.update(wanted)
+    write_private(path, "".join(f"{key}={value}\n" for key, value in env.items()))
+    return True
+
+
 def write_private(path, text):
     temporary = Path(f"{path}.tmp")
     temporary.touch(mode=0o600)
@@ -181,6 +250,8 @@ def write_private(path, text):
 
 
 def compose(slug, *args, env_file=None):
+    if env_file is None:
+        sync_address_env(slug)
     cmd = [
         "docker", "compose", "-p", f"frotak-c-{slug}", "-f", str(DEPLOY_DB / "client.compose.yml"),
         "--env-file", str(env_file or env_path(slug)), *args,
@@ -411,8 +482,8 @@ def create_database(slug, env):
         f"""
         REVOKE CONNECT ON DATABASE "{names['db']}" FROM PUBLIC;
 
-        CREATE ROLE "{names['auth']}" LOGIN PASSWORD {literal(env['AUTH_DB_PASSWORD'])};
-        GRANT supabase_auth_admin TO "{names['auth']}";
+        CREATE ROLE "{names['auth']}" LOGIN NOINHERIT PASSWORD {literal(env['AUTH_DB_PASSWORD'])};
+        GRANT supabase_auth_admin TO "{names['auth']}" WITH INHERIT FALSE;
         ALTER ROLE "{names['auth']}" SET role = 'supabase_auth_admin';
         ALTER ROLE "{names['auth']}" SET search_path = 'auth';
         ALTER ROLE "{names['auth']}" SET idle_in_transaction_session_timeout = '60s';
@@ -423,13 +494,28 @@ def create_database(slug, env):
         ALTER ROLE "{names['rest']}" SET statement_timeout = '8s';
         ALTER ROLE "{names['rest']}" SET lock_timeout = '8s';
 
-        CREATE ROLE "{names['storage']}" LOGIN PASSWORD {literal(env['STORAGE_DB_PASSWORD'])};
-        GRANT supabase_storage_admin TO "{names['storage']}";
+        CREATE ROLE "{names['storage']}" LOGIN NOINHERIT PASSWORD {literal(env['STORAGE_DB_PASSWORD'])};
+        GRANT supabase_storage_admin TO "{names['storage']}" WITH INHERIT FALSE;
         ALTER ROLE "{names['storage']}" SET role = 'supabase_storage_admin';
         ALTER ROLE "{names['storage']}" SET search_path = 'storage';
         """,
     )
     grant_connect(slug)
+
+
+def isolate_roles(slug):
+    """Os papeis do cliente entram so no banco dele. Herdar supabase_auth_admin e
+    supabase_storage_admin daria CONNECT no Central; o vinculo fica so para o SET ROLE."""
+    names = names_for(slug)
+    psql(
+        "postgres",
+        f"""
+        ALTER ROLE "{names['auth']}" NOINHERIT;
+        ALTER ROLE "{names['storage']}" NOINHERIT;
+        GRANT supabase_auth_admin TO "{names['auth']}" WITH INHERIT FALSE;
+        GRANT supabase_storage_admin TO "{names['storage']}" WITH INHERIT FALSE;
+        """,
+    )
 
 
 def grant_connect(slug):
@@ -515,6 +601,8 @@ def create_client(payload):
     with provision_lock, maintenance(slug):
         if env_path(slug).exists():
             raise AgentError(409, "CLIENT_EXISTS", "Já existe um banco para este cliente.")
+        if subdomain_taken(slug):
+            raise AgentError(409, "SUBDOMAIN_TAKEN", "Este endereço já é usado por outro cliente.")
         started = time.time()
         log(f"criando {slug}")
         CLIENTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -535,6 +623,7 @@ def create_client(payload):
             "STORAGE_DB_USER": names["storage"],
             "STORAGE_DB_PASSWORD": secrets.token_hex(24),
             "CLIENT_STORAGE_DIR": str(storage_dir),
+            **address_env(slug, {}),
         }
         try:
             write_private(env_path(slug), "".join(f"{k}={v}\n" for k, v in env.items()))
@@ -594,6 +683,8 @@ def create_client(payload):
                 "systemUserId": system_user,
                 "ownerEmail": str(payload["ownerEmail"]).strip().lower(),
                 "createdAt": now.isoformat(),
+                "subdomain": slug,
+                "domains": [],
             }
             write_private(meta_path(slug), json.dumps(meta))
 
@@ -614,7 +705,7 @@ def create_client(payload):
             "tenantId": meta["tenantId"],
             "workspaceId": meta["workspaceId"],
             "databaseName": names["db"],
-            "clientUrl": f"https://{slug}.{cfg['CLIENT_BASE_DOMAIN']}",
+            "clientUrl": primary_url(slug, meta),
         }
 
 
@@ -663,7 +754,17 @@ def connection(slug):
         "publicUrl": f"https://{cfg['API_HOST']}/c/{slug}",
         "anonKey": env["ANON_KEY"],
         "serviceRoleKey": env["SERVICE_ROLE_KEY"],
+        "hosts": client_hosts(slug, meta),
+        "clientUrl": primary_url(slug, meta),
     }
+
+
+def resolve_host(host):
+    """O TMS pergunta de quem e o endereco que chegou. Desconhecido: 404, e o Caddy nao emite HTTPS."""
+    slug = host_index().get(normalize_host(host))
+    if not slug:
+        raise AgentError(404, "UNKNOWN_HOST", "Endereço não pertence a nenhum cliente.")
+    return connection(slug)
 
 
 def set_entitlement(slug, payload):
@@ -692,9 +793,308 @@ def set_status(slug, payload):
         raise AgentError(400, "INVALID_INPUT", "Situação inválida.")
     psql(
         names_for(slug)["db"],
-        f"update public.tenants set status = {literal(status)} where id = {literal(meta['tenantId'])}::uuid;",
+        f"select public.master_set_client_status({literal(meta['tenantId'])}::uuid, {literal(status)}, "
+        f"{literal(meta['systemUserId'])}::uuid);",
     )
     return {"ok": True}
+
+
+# ---------------------------------------------------------------- administracao do cliente
+
+
+def addresses_of(slug):
+    cfg = settings()
+    meta = client_meta(slug)
+    return {
+        "slug": slug,
+        "subdomain": subdomain_of(slug, meta),
+        "baseDomain": cfg["CLIENT_BASE_DOMAIN"].lower(),
+        "primaryHost": client_hosts(slug, meta)[0],
+        "clientUrl": primary_url(slug, meta),
+        "domains": meta.get("domains", []),
+        "serviceIp": cfg.get("SERVICE_PUBLIC_IP", ""),
+        "apiUrl": f"https://{cfg['API_HOST']}/c/{slug}",
+    }
+
+
+def apply_addresses(slug):
+    """O login do cliente guarda os enderecos validos; so ele precisa ser recriado."""
+    if sync_address_env(slug):
+        with maintenance(slug):
+            compose(slug, "up", "-d", "--wait", "--wait-timeout", "120", "c-auth")
+
+
+def check_subdomain(label, except_slug=None):
+    cfg = settings()
+    label = str(label or "").strip().lower()
+    base = cfg["CLIENT_BASE_DOMAIN"].lower()
+    result = {"subdomain": label, "host": f"{label}.{base}", "baseDomain": base, "serviceIp": cfg.get("SERVICE_PUBLIC_IP", "")}
+    if not SLUG_RE.match(label):
+        return {**result, "available": False, "reason": "Use de 1 a 40 letras minúsculas, números e hífen, sem hífen nas pontas."}
+    if label in RESERVED_SLUGS:
+        return {**result, "available": False, "reason": "Endereço reservado para a FrotaK."}
+    if subdomain_taken(label, except_slug):
+        return {**result, "available": False, "reason": "Já usado por outro cliente."}
+    return {**result, "available": True, "reason": ""}
+
+
+def set_subdomain(slug, payload):
+    client_env(slug)
+    with provision_lock:
+        meta = client_meta(slug)
+        check = check_subdomain(payload.get("subdomain"), except_slug=slug)
+        if not check["available"]:
+            raise AgentError(409 if "usado" in check["reason"] else 400, "SUBDOMAIN_UNAVAILABLE", check["reason"])
+        if check["subdomain"] != subdomain_of(slug, meta):
+            meta["subdomain"] = check["subdomain"]
+            write_private(meta_path(slug), json.dumps(meta))
+            apply_addresses(slug)
+            log(f"{slug}: subdominio agora {check['subdomain']}")
+    return addresses_of(slug)
+
+
+def add_domain(slug, payload):
+    client_env(slug)
+    cfg = settings()
+    host = normalize_host(payload.get("host"))
+    base = cfg["CLIENT_BASE_DOMAIN"].lower()
+    if not HOST_RE.match(host):
+        raise AgentError(400, "INVALID_DOMAIN", "Domínio inválido. Exemplo: tms.suaempresa.com.br")
+    if host == base or host.endswith("." + base):
+        raise AgentError(400, "INVALID_DOMAIN", "Endereço da FrotaK se troca pelo subdomínio.")
+    if host in (cfg.get("API_HOST", "").lower(), cfg.get("MASTER_HOST", "").lower()):
+        raise AgentError(400, "INVALID_DOMAIN", "Endereço reservado para a FrotaK.")
+    with provision_lock:
+        owner = host_index().get(host)
+        if owner and owner != slug:
+            raise AgentError(409, "DOMAIN_TAKEN", "Este domínio já está ligado a outro cliente.")
+        meta = client_meta(slug)
+        domains = meta.get("domains", [])
+        if not owner:
+            if len(domains) >= MAX_CUSTOM_DOMAINS:
+                raise AgentError(400, "TOO_MANY_DOMAINS", f"Cada cliente pode ter até {MAX_CUSTOM_DOMAINS} domínios.")
+            domains.append({"host": host, "addedAt": datetime.datetime.now(datetime.timezone.utc).isoformat()})
+            meta["domains"] = domains
+            write_private(meta_path(slug), json.dumps(meta))
+            apply_addresses(slug)
+            log(f"{slug}: dominio {host} ligado")
+    return addresses_of(slug)
+
+
+def remove_domain(slug, payload):
+    client_env(slug)
+    host = normalize_host(payload.get("host"))
+    with provision_lock:
+        meta = client_meta(slug)
+        domains = [domain for domain in meta.get("domains", []) if domain["host"] != host]
+        if len(domains) != len(meta.get("domains", [])):
+            meta["domains"] = domains
+            write_private(meta_path(slug), json.dumps(meta))
+            apply_addresses(slug)
+            log(f"{slug}: dominio {host} desligado")
+    return addresses_of(slug)
+
+
+def update_profile(slug, payload):
+    client_env(slug)
+    legal = str(payload.get("legalName") or "").strip()
+    trade = str(payload.get("tradeName") or "").strip()
+    cnpj = re.sub(r"\D", "", str(payload.get("cnpj") or ""))
+    max_vehicles = payload.get("maxVehicles")
+    if not legal or len(legal) > 200 or len(trade) > 200:
+        raise AgentError(400, "INVALID_INPUT", "Informe a razão social, com até 200 caracteres.")
+    if len(cnpj) != 14:
+        raise AgentError(400, "INVALID_INPUT", "CNPJ inválido.")
+    if not isinstance(max_vehicles, int) or isinstance(max_vehicles, bool) or not 1 <= max_vehicles <= 100000:
+        raise AgentError(400, "INVALID_INPUT", "Limite de veículos inválido.")
+    with provision_lock:
+        meta = client_meta(slug)
+        psql(
+            names_for(slug)["db"],
+            f"select public.master_update_client_profile({literal(meta['tenantId'])}::uuid, {literal(legal)}, "
+            f"{literal(trade) if trade else 'null'}, {literal(cnpj)}, {max_vehicles}, "
+            f"{literal(meta['systemUserId'])}::uuid);",
+        )
+        meta["name"] = trade or legal
+        write_private(meta_path(slug), json.dumps(meta))
+    return {"ok": True, "name": meta["name"]}
+
+
+def temporary_password():
+    """16 caracteres com maiuscula, minuscula e numero, sem os que se confundem ao ditar."""
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+    while True:
+        value = "".join(secrets.choice(alphabet) for _ in range(16))
+        if any(c.isupper() for c in value) and any(c.islower() for c in value) and any(c.isdigit() for c in value):
+            return value
+
+
+def reset_login_password(slug, payload):
+    client_env(slug)
+    user_id = str(payload.get("userId") or "").lower()
+    if not UUID_RE.match(user_id):
+        raise AgentError(400, "INVALID_INPUT", "Login inválido.")
+    raw = psql(
+        names_for(slug)["db"],
+        "select json_build_object('email', email, 'system', coalesce((raw_user_meta_data->>'system')::boolean, false)) "
+        f"from auth.users where id = {literal(user_id)}::uuid;",
+    )
+    if not raw:
+        raise AgentError(404, "NOT_FOUND", "Login não encontrado.")
+    user = json.loads(raw)
+    if user["system"]:
+        raise AgentError(400, "SYSTEM_LOGIN", "Este é o login interno do agente e não tem senha de uso.")
+    password = temporary_password()
+    status, body = api(
+        slug,
+        "PUT",
+        f"/auth/v1/admin/users/{user_id}",
+        {"password": password, "user_metadata": {"must_change_password": True}},
+    )
+    if status >= 300:
+        raise AgentError(500, "AUTH_FAILED", f"Auth de {slug} recusou a senha: HTTP {status} {scrub(body)}")
+    log(f"{slug}: senha temporaria nova para um login")
+    return {"email": user["email"], "temporaryPassword": password}
+
+
+CLIENT_RESOURCES_SQL = """
+select json_build_object(
+  'tenant', (select json_build_object('name', coalesce(trade_name, legal_name), 'legalName', legal_name,
+                                      'tradeName', trade_name, 'cnpj', cnpj, 'status', status)
+             from public.tenants where id = {tenant}::uuid),
+  'publicTables', (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                   where n.nspname = 'public' and c.relkind in ('r', 'p')),
+  'migrations', (select count(*) from supabase_migrations.schema_migrations),
+  'lastMigration', (select max(version) from supabase_migrations.schema_migrations),
+  'storageBuckets', (select count(*) from storage.buckets),
+  'storageObjects', (select count(*) from storage.objects),
+  'logins', (select coalesce(json_agg(json_build_object(
+      'id', u.id, 'email', u.email, 'createdAt', u.created_at, 'lastSignInAt', u.last_sign_in_at,
+      'system', coalesce((u.raw_user_meta_data->>'system')::boolean, false),
+      'owner', exists (select 1 from public.workspace_memberships m
+                       where m.user_id = u.id and m.is_owner and m.status = 'active'),
+      'member', exists (select 1 from public.workspace_memberships m
+                        where m.user_id = u.id and m.status = 'active'),
+      'banned', coalesce(u.banned_until > now(), false)) order by u.created_at), '[]')
+    from auth.users u)
+);
+"""
+
+SERVER_RESOURCES_SQL = """
+select json_build_object(
+  'sizeBytes', pg_database_size({db}),
+  'connections', (select count(*) from pg_stat_activity where datname = {db}),
+  'publicCanConnect', has_database_privilege('public', {db}, 'CONNECT'),
+  'roles', (select coalesce(json_agg(json_build_object(
+      'name', r.rolname,
+      'canLogin', r.rolcanlogin,
+      'inherits', r.rolinherit,
+      'sessions', (select count(*) from pg_stat_activity a where a.usename = r.rolname),
+      'ownDatabase', has_database_privilege(r.rolname, {db}, 'CONNECT'),
+      'otherDatabases', (select coalesce(json_agg(d.datname order by d.datname), '[]')
+                         from pg_database d
+                         where d.datname not in ({db}, 'template0', 'template1') and d.datallowconn
+                           and has_database_privilege(r.rolname, d.datname, 'CONNECT'))) order by r.rolname), '[]')
+    from pg_roles r where r.rolname in ({roles})),
+  'slot', (select json_build_object('name', slot_name, 'active', active,
+                                    'lagBytes', pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn))
+           from pg_replication_slots where database = {db} and slot_name like 'frotak_rt_%' limit 1)
+);
+"""
+
+CLIENT_JOBS_SQL = """
+select coalesce(json_agg(r order by r.name), '[]') from (
+  select j.jobname as name, j.schedule, j.active, last.status as "lastStatus", last.start_time as "lastRunAt"
+  from cron.job j
+  left join lateral (select status, start_time from cron.job_run_details d
+                     where d.jobid = j.jobid order by d.start_time desc limit 1) last on true
+  where j.jobname like {prefix}
+) r;
+"""
+
+
+def container_states(slug):
+    names = [f"frotak-{slug}-{part}" for part in ("auth", "rest", "storage")]
+    result = subprocess.run(["docker", "inspect", *names], text=True, capture_output=True, timeout=30)
+    found = {}
+    for item in json.loads(result.stdout or "[]"):
+        state = item.get("State") or {}
+        found[(item.get("Name") or "").lstrip("/")] = {
+            "state": state.get("Status"),
+            "health": (state.get("Health") or {}).get("Status"),
+            "startedAt": state.get("StartedAt"),
+            "image": (item.get("Config") or {}).get("Image"),
+        }
+    return [{"name": name, **found.get(name, {"state": "missing", "health": None, "startedAt": None, "image": None})} for name in names]
+
+
+def gateway_state(slug):
+    try:
+        config = json.loads((KONG_DIR / "kong.json").read_text())
+    except (OSError, ValueError):
+        return {"routes": [], "consumers": []}
+    routes = [
+        path
+        for service in config.get("services", [])
+        if service["name"].startswith(f"c-{slug}-")
+        for route in service.get("routes", [])
+        for path in route.get("paths", [])
+    ]
+    consumers = [item["username"] for item in config.get("consumers", []) if item["username"] in (f"anon-{slug}", f"service-{slug}")]
+    return {"routes": sorted(set(routes)), "consumers": consumers}
+
+
+def latest_backup(slug):
+    root = Path("/var/backups/frotak")
+    copies = sorted(root.glob(f"*/clients/{slug}.dump"), reverse=True) if root.exists() else []
+    if not copies:
+        return None
+    dump = copies[0]
+    files = dump.with_name(f"{slug}.storage.tar.gz")
+    return {
+        "copy": dump.parent.parent.name,
+        "at": int(dump.stat().st_mtime),
+        "databaseBytes": dump.stat().st_size,
+        "filesBytes": files.stat().st_size if files.exists() else 0,
+        "copies": len(copies),
+    }
+
+
+def client_resources(slug):
+    env = client_env(slug)
+    meta = client_meta(slug)
+    names = names_for(slug)
+    database = psql_json(names["db"], CLIENT_RESOURCES_SQL.format(tenant=literal(meta.get("tenantId", ""))))
+    server = psql_json(
+        "postgres",
+        SERVER_RESOURCES_SQL.format(
+            db=literal(names["db"]),
+            roles=", ".join(literal(names[key]) for key in ("auth", "rest", "storage")),
+        ),
+    )
+    jobs = psql_json(JOBS_DB, CLIENT_JOBS_SQL.format(prefix=literal(f"{slug}:%")))
+    storage_dir = env["CLIENT_STORAGE_DIR"]
+    du = subprocess.run(["du", "-sb", storage_dir], text=True, capture_output=True, timeout=60)
+    return {
+        "slug": slug,
+        "createdAt": meta.get("createdAt"),
+        "tenantId": meta.get("tenantId"),
+        "workspaceId": meta.get("workspaceId"),
+        "addresses": addresses_of(slug),
+        "database": {"name": names["db"], **server, **{k: v for k, v in database.items() if k != "logins"}},
+        "logins": database["logins"],
+        "containers": container_states(slug),
+        "gateway": gateway_state(slug),
+        "probes": panel_client(slug),
+        "storage": {"path": storage_dir, "bytes": int(du.stdout.split()[0]) if du.stdout.split() else 0},
+        "jobs": jobs,
+        "backup": latest_backup(slug),
+        "keys": {
+            "ownJwtSecret": bool(env.get("JWT_SECRET")),
+            "anonKey": bool(env.get("ANON_KEY")),
+            "serviceRoleKey": bool(env.get("SERVICE_ROLE_KEY")),
+        },
+    }
 
 
 OWNER_SQL = """
@@ -730,7 +1130,7 @@ def support_login(slug):
         "userId": owner["userId"],
         "email": owner["email"],
         "clientName": client_meta(slug).get("name"),
-        "clientUrl": f"https://{slug}.{cfg['CLIENT_BASE_DOMAIN']}",
+        "clientUrl": primary_url(slug),
     }
 
 
@@ -829,6 +1229,7 @@ def refresh_clients():
     report = {}
     with provision_lock:
         for slug in client_slugs():
+            isolate_roles(slug)
             with maintenance(slug):
                 compose(slug, "up", "-d", "--wait", "--wait-timeout", "180")
             report[slug] = "ok"
@@ -1313,6 +1714,12 @@ class Handler(BaseHTTPRequestHandler):
             return 200, usage_all()
         if path == "/migrate" and method == "POST":
             return 200, migrate_all()
+        if path == "/resolve" and method == "GET":
+            query = urllib.parse.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            return 200, resolve_host((query.get("host") or [""])[0])
+        if path == "/addresses/check" and method == "GET":
+            query = urllib.parse.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
+            return 200, check_subdomain((query.get("subdomain") or [""])[0])
         if parts and parts[0] == "panel":
             query = urllib.parse.parse_qs(self.path.split("?", 1)[1]) if "?" in self.path else {}
             return panel_route(method, parts[1:], query)
@@ -1329,6 +1736,21 @@ class Handler(BaseHTTPRequestHandler):
                 return 200, set_status(slug, self.body())
             if method == "POST" and action == "support-login":
                 return 200, support_login(slug)
+            if method == "GET" and action == "resources":
+                return 200, client_resources(slug)
+            if method == "GET" and action == "addresses":
+                client_env(slug)
+                return 200, addresses_of(slug)
+            if method == "POST" and action == "subdomain":
+                return 200, set_subdomain(slug, self.body())
+            if method == "POST" and action == "domains":
+                return 200, add_domain(slug, self.body())
+            if method == "DELETE" and action == "domains":
+                return 200, remove_domain(slug, self.body())
+            if method == "POST" and action == "profile":
+                return 200, update_profile(slug, self.body())
+            if method == "POST" and action == "login-password":
+                return 200, reset_login_password(slug, self.body())
             if method == "DELETE" and not action:
                 if self.body().get("confirm") != slug:
                     raise AgentError(400, "CONFIRM_REQUIRED", "Confirme o cliente a apagar.")

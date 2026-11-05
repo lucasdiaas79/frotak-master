@@ -1,10 +1,10 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
   browserConfigScript,
-  connectionForSlug,
+  connectionForHost,
   isClientDatabaseMode,
+  normalizeHost,
   setRequestStore,
-  slugFromHost,
   type TenantConnection,
 } from "../server/lib/tenant-connection";
 
@@ -41,15 +41,15 @@ export default {
 
     // O Caddy pergunta antes de emitir HTTPS: só endereço de cliente que existe ganha certificado.
     if (url.pathname === "/__frotak/tls-ask") {
-      const slug = slugFromHost(url.searchParams.get("domain"));
-      const known = slug ? await connectionForSlug(slug).catch(() => null) : null;
+      const host = normalizeHost(url.searchParams.get("domain"));
+      const known = host ? await connectionForHost(host).catch(() => null) : null;
       return new Response(null, { status: known ? 200 : 404 });
     }
 
-    const slug = slugFromHost(request.headers.get("host"));
+    const host = normalizeHost(request.headers.get("host"));
     let connection;
     try {
-      connection = slug ? await connectionForSlug(slug) : null;
+      connection = host ? await connectionForHost(host) : null;
     } catch (error) {
       console.error("[tenant] agente indisponivel", error);
       return page(
