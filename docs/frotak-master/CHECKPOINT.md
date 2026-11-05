@@ -8,10 +8,10 @@ Atualizado em 2026-11-05. Escopo: o PDF "FrotaK Master · Arquitetura" em dois m
 |---|---|
 | Base | `main` @ `92a7213` (igual a `origin/main` em 2026-11-02) |
 | Branch | `feat/master-modulos-por-cliente`, commits locais, **sem push** |
-| Commits | `0cc1f2a` Master modular e liberação; `1f98144` registro de módulos do TMS; `659faef` Frotak IA; `e77489b` Rastreadores; `08de70b` App Motorista; `cad1469` Financeiro; `0643e97` Gestão de Frota; `df82eec` documentação; clean architecture: `848b3ab` App Motorista e guarda de dependências, `b99e26b` Rastreadores, `e7cdebc` Financeiro, `66b3851` Gestão de Frota, `4008c4c` Frotak IA; `d04bede` documentação; `a7ad7a3` implantação nas VPS; correções de 2026-11-05: `e680637` banco, `a6a6c5d` Master, `18d5e95` TMS, `7a44c93` implantação; banco por cliente: `e92f1d9` agente e VPS de banco, `4c60c58` modelo, `631dce3` e `76f1690` portão, `d7f74ac` API, `3173f4e` Master, `86c40ad` e `5b3c8fd` TMS, `06cbc6e` sessão no TMS, `a596ddd` e `36408a9` ordem do cadastro, `6a107d4` restauração |
+| Commits | `0cc1f2a` Master modular e liberação; `1f98144` registro de módulos do TMS; `659faef` Frotak IA; `e77489b` Rastreadores; `08de70b` App Motorista; `cad1469` Financeiro; `0643e97` Gestão de Frota; `df82eec` documentação; clean architecture: `848b3ab` App Motorista e guarda de dependências, `b99e26b` Rastreadores, `e7cdebc` Financeiro, `66b3851` Gestão de Frota, `4008c4c` Frotak IA; `d04bede` documentação; `a7ad7a3` implantação nas VPS; correções de 2026-11-05: `e680637` banco, `a6a6c5d` Master, `18d5e95` TMS, `7a44c93` implantação; banco por cliente: `e92f1d9` agente e VPS de banco, `4c60c58` modelo, `631dce3` e `76f1690` portão, `d7f74ac` API, `3173f4e` Master, `86c40ad` e `5b3c8fd` TMS, `06cbc6e` sessão no TMS, `a596ddd` e `36408a9` ordem do cadastro, `6a107d4` restauração; painel e auto-heal: `4606163` sentinela, `853ff4c` painel, `bae150b`, `2e0d2ce`, `3f0ddc5` e `ac59822` correções; ficha do cliente: `507c323` endereço editável e isolamento dos logins do banco, `4df5902` ficha, `da0eb42` guia, `b83abd0` endereço no TMS, `88bc600` lista do que foi criado, `fab9205` empresa suspensa, `4ca47f3` celular |
 | Teste de ponta a ponta | Supabase local descartável (`project_id` `frotak-e2e`, portas 553xx) criado do zero e removido no fim |
 | Banco remoto e banco local `frota-master` | Não alterados |
-| VPS de banco e de Serviço | Reinstaladas em 2026-11-05 com um banco por cliente, versão `6a107d4`, com um operador e o cliente fictício "FrotaK Demonstração". Ver [Ambiente nas VPS](#ambiente-nas-vps) |
+| VPS de banco e de Serviço | Um banco por cliente, versão `4ca47f3`, com o operador, o cliente fictício "FrotaK Demonstração" e o cliente "teste" criado pelo usuário. Ver [Ambiente nas VPS](#ambiente-nas-vps) |
 | VPS View | Fora do escopo por decisão do usuário em 2026-11-05. Não alterada |
 
 ## Concluído
@@ -31,6 +31,9 @@ Atualizado em 2026-11-05. Escopo: o PDF "FrotaK Master · Arquitetura" em dois m
 13. Um banco por cliente na VPS de banco, criado pelo Master por meio de um agente. Cada cliente tem banco, login, API, chaves e arquivos próprios. Sem `FROTAK_AGENT_URL`, Master e TMS seguem em banco único, como na produção atual.
 14. TMS por endereço: `<cliente>.<domínio>` abre o banco daquele cliente, com login próprio em `/login`.
 15. Backup e restauração por cliente, sem encostar nos outros. Migrations novas chegam ao modelo, ao Central e a todos os clientes com um comando.
+16. Painel de controle no Master (`/infraestrutura`): servidores, containers, bancos com tabelas, saúde por cliente, auto-heal e backups, com dados reais de uma sentinela em cada VPS.
+17. Auto-heal: a sentinela reinicia ou recria o que ficou parado, apagado, travado ou `unhealthy`, 3 tentativas em 30 minutos, e depois avisa. Nunca reinicia o Postgres sozinho.
+18. Ficha do cliente (`/clientes/<identificador>`): o que foi criado, item por item; logins do banco e onde cada um entra; endereço editável e domínios próprios com os registros de DNS; logins do TMS com senha temporária auditada; edição do cadastro; suspender e reativar. Cliente novo escolhe o subdomínio no cadastro.
 
 ## Verificações executadas
 
@@ -99,6 +102,14 @@ Rodadas contra os endereços públicos, com dois clientes de teste. Depois disso
 
 **Código na versão `6a107d4`:** `tsc` sem erros nos dois apps; `test:modules` 30, `test:frotak-ai` 16, `test:visual` 3, `test-financial-recurring` 6; lint sem erro nos arquivos da entrada do servidor e do login; nenhuma senha ou IP de VPS em `deploy`, `docs/frotak-master`, `src` ou `supabase`.
 
+### Painel, auto-heal e ficha do cliente (versões `bae150b` a `4ca47f3`, 2026-11-05)
+
+- **Painel no navegador:** 29 de 29, rodado três vezes, inclusive as 7 abas sem rolagem lateral no celular. A leitura de linhas fica na auditoria, e colunas de senha, CPF e chave saem mascaradas: testado com uma tabela de prova, apagada depois.
+- **Falhas provocadas de verdade:** 28 de 29. A falha foi do roteiro: o mesmo container já tinha sido reiniciado duas vezes em etapas anteriores, e a sentinela, como projetado, deu a terceira tentativa, desistiu e abriu o alerta. Tempos até voltar sozinho: container parado 85 s, apagado 92 s, congelado 174 s, agente 73 s, PgBouncer 91 s, Master travado 117 s, TMS 88 s, Caddy 90 s, Redis 90 s, WireGuard derrubada 106 s, sentinela morta 7 s. Postgres parado: não foi reiniciado, abriu alerta e nada dependente foi mexido. Cliente em manutenção não foi tocado. Disco a 92%: alerta abriu e a limpeza liberou 344 MB de log antigo do sistema na VPS de Serviço.
+- **Ficha do cliente nos endereços públicos:** 31 de 32 na última rodada completa, com cliente de teste criado pela tela e apagado no fim. Cliente novo nasce com o subdomínio escolhido e HTTPS em cerca de 11 s; mudar o subdomínio mantém dados e logins, e o endereço antigo deixa de abrir; domínio próprio (com DNS de verdade, via sslip.io) passou em DNS, HTTPS e login; nova senha vale e a antiga não; nome novo aparece no TMS; suspender mostra o aviso e reativar devolve tudo. A falha restante (21 px de rolagem lateral no celular, aba Ambiente) foi corrigida em `4ca47f3` e medida de novo: 0 px.
+- **Banco único:** 13 de 13 no navegador, com ficha sem as abas do agente, edição do cadastro e o aviso de empresa suspensa; 77 migrations do zero; testes SQL como antes.
+- **Código:** `tsc` sem erros nos dois apps; `test:client-admin` 20, `test:control-panel` 11, `test:modules` 33, testes da sentinela 17 e do agente 7.
+
 ### Antes do banco por cliente (versão `7a44c93`, banco único nas VPS)
 
 Estes itens não foram repetidos por inteiro no desenho novo:
@@ -121,7 +132,10 @@ Não testado: chamada real ao Gemini e à Sascar e envio real de push, porque as
 5. **App Motorista sem interface neste repositório.** Aqui só existe a gestão do acesso (TMS > Motoristas), então não há ambiente do motorista nas VPS.
 6. **Três edições em migrations já aplicadas.** `202609240001`, `202610150001` e `20260928091642` ganharam guardas ou instruções idempotentes para o banco novo montar, inclusive fora do banco que recebe o `pg_cron`. Migration aplicada não roda de novo, então a produção não muda; `supabase db push` compara só a versão.
 7. **"Central" entendido como o Master.** O usuário não confirmou nem corrigiu essa leitura. Se Central for outro sistema, o banco `frotak_central` e o endereço `master.` precisam de revisão.
-8. **Partes do PDF não feitas no banco por cliente:** mTLS entre Master e agente (hoje WireGuard e token), cofre de segredos (hoje arquivos em `/etc/frotak`), fila de jobs repetíveis, tela para apagar cliente (só a API do agente) e armazenamento de objetos. Os arquivos de cada cliente ficam no disco da VPS.
+8. **Partes do PDF não feitas no banco por cliente:** mTLS entre Master e agente (hoje WireGuard e token), cofre de segredos (hoje arquivos em `/etc/frotak`), fila de jobs repetíveis com passos visíveis, atualização em ondas, convite por e-mail, tela para apagar cliente (só a API do agente) e armazenamento de objetos. Os arquivos de cada cliente ficam no disco da VPS.
+9. **Corrigido: logins do banco entravam no Central.** Os logins de login e de arquivos de cada cliente herdavam o acesso de `supabase_auth_admin` e `supabase_storage_admin`, que conectam no `frotak_central`. Comprovado com um papel de prova criado do jeito antigo. Corrigido em `507c323` para clientes novos e existentes; a ficha mostra onde cada login entra.
+10. **Corrigido: empresa suspensa via tela vazia.** `get_workspace_entitlements` recusava o membro de empresa suspensa, e o TMS não mostrava "Acesso da empresa suspenso". O bloqueio dos dados já funcionava. Corrigido em `202611050005`, que precisa ir também para a produção atual.
+11. **Incidente: TMS fora do ar por cerca de 35 minutos em 2026-11-05.** A versão `da0eb42` levou uma expressão sem as barras invertidas, que se perderam numa edição pelo terminal, e o TMS deixou de reconhecer qualquer cliente. Corrigido em `b83abd0`, com teste. Ambiente sem cliente real.
 
 Não houve revisão independente por outro executor.
 
@@ -131,5 +145,6 @@ Não houve revisão independente por outro executor.
 2. Instalar chave SSH nas VPS de banco e de Serviço e desligar o login por senha. As senhas do root foram trocadas e são diferentes em cada uma; ficam só com o usuário.
 3. Decidir se as VPS substituem a produção atual. Se sim: criar o DNS curinga `*.<domínio>` para os clientes, preencher as chaves (Gemini, Sascar, Maps) e migrar os dados.
 4. Fazer um teste de carga antes de passar de poucos clientes, porque a capacidade de cerca de 20 é estimativa de memória.
-5. Resolver a origem de `202610220001_client_onboarding` (`select version from supabase_migrations.schema_migrations order by version desc limit 5;`).
-6. Na produção atual: aplicar as migrations e publicar Master e Cliente em seguida, porque `202611050001` passa a exigir 2FA da equipe no banco. Depois, desligar os módulos que cada cliente não contratou.
+5. Decidir se "Apagar cliente" ganha botão e com quais regras (backup antes, prazo de retenção, exportação), e se os alertas devem sair do painel por e-mail ou WhatsApp.
+6. Resolver a origem de `202610220001_client_onboarding` (`select version from supabase_migrations.schema_migrations order by version desc limit 5;`).
+7. Na produção atual: aplicar as migrations e publicar Master e Cliente em seguida, porque `202611050001` passa a exigir 2FA da equipe no banco. Depois, desligar os módulos que cada cliente não contratou.
