@@ -117,6 +117,12 @@ class Utilitarios(unittest.TestCase):
         self.assertEqual(sentinel.parse_size("0B"), 0)
         self.assertEqual(sentinel.parse_size("--"), 0)
 
+    def test_interface_ligada(self):
+        self.assertTrue(sentinel.flags_up("0x1091"))
+        self.assertTrue(sentinel.flags_up("0x91\n"))
+        self.assertFalse(sentinel.flags_up("0x1090"))
+        self.assertFalse(sentinel.flags_up("lixo"))
+
     def test_exposicao(self):
         self.assertEqual(sentinel.exposure("127.0.0.1", "10.60.0.1"), "local")
         self.assertEqual(sentinel.exposure("::1", "10.60.0.1"), "local")

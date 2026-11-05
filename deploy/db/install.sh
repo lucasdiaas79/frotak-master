@@ -173,4 +173,7 @@ systemctl enable pgbouncer frotak-agent >/dev/null 2>&1
 systemctl restart pgbouncer frotak-agent
 systemctl is-active pgbouncer frotak-agent | tr '\n' ' '; echo
 
+# Clientes que ja existem recebem o que mudou no client.compose.yml. Sem mudanca, nada reinicia.
+python3 "$here/agent/frotak_agent.py" refresh-clients
+
 ROLE=db FROTAK_SENTINEL_TOKEN="$FROTAK_SENTINEL_TOKEN" "$here/../common/sentinel/install.sh"

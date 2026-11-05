@@ -223,6 +223,14 @@ def parse_size(text):
     return int(float(match.group(1)) * units.get(match.group(2), 1))
 
 
+def flags_up(text):
+    """Bit IFF_UP de /sys/class/net/<interface>/flags."""
+    try:
+        return bool(int(text.strip(), 16) & 1)
+    except ValueError:
+        return False
+
+
 def exposure(address, wireguard_ip):
     if address.startswith("127.") or address in ("::1", "[::1]"):
         return "local"
@@ -532,11 +540,18 @@ def service_probes():
     }
 
 
+def interface_up(name):
+    try:
+        return flags_up(Path(f"/sys/class/net/{name}/flags").read_text())
+    except OSError:
+        return False
+
+
 def wireguard_state():
     if not shutil.which("wg"):
         return None
     code, out, _ = run(["wg", "show", "wg0", "dump"], timeout=10)
-    if code != 0:
+    if code != 0 or not interface_up("wg0"):
         return {"up": False, "peers": []}
     peers = []
     for line in out.splitlines()[1:]:
@@ -866,7 +881,12 @@ def heal_services(enabled):
             probe = probes[unit]()
             if not probe.get("ok"):
                 failing, detail = True, f"sem resposta: {probe.get('status') or probe.get('error', '')}"
+        elif unit.startswith("wg-quick") and not interface_up("wg0"):
+            # O wg-quick continua "active" com a interface derrubada: quem diz e o link.
+            failing, detail = True, "interface wg0 desligada"
         elif unit.startswith("wg-quick"):
+            # So o lado de ca nao basta: a outra VPS pode estar fora. Reiniciar ajuda so com o
+            # tunel parado ha mais tempo que um ciclo de renovacao.
             peer = peer_probe()
             wg = wireguard_state() or {"peers": []}
             age = min((p["handshakeAgeSeconds"] or 10**9 for p in wg["peers"]), default=10**9)

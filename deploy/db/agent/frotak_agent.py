@@ -7,6 +7,8 @@ disparos agendados e apaga. Escuta so no IP da WireGuard e exige token. Nunca re
     frotak_agent.py serve         API para o Master e o TMS
     frotak_agent.py render-kong   regenera as rotas do portao
     frotak_agent.py migrate       aplica migrations no modelo, no Central e em cada cliente
+    frotak_agent.py refresh-clients
+                                  alinha os servicos de cada cliente ao client.compose.yml
     frotak_agent.py restore-client CLIENTE PASTA_DO_BACKUP CLIENTE
                                   restaura um cliente; repetir o nome confirma a substituicao
 """
@@ -822,6 +824,17 @@ def restore_client(slug, backup_dir):
     return {"warnings": warnings, "counts": counts}
 
 
+def refresh_clients():
+    """Recria so o que mudou no client.compose.yml, um cliente por vez e em manutencao."""
+    report = {}
+    with provision_lock:
+        for slug in client_slugs():
+            with maintenance(slug):
+                compose(slug, "up", "-d", "--wait", "--wait-timeout", "180")
+            report[slug] = "ok"
+    return report
+
+
 def run_migrations(database):
     result = subprocess.run(
         [str(DEPLOY_DB / "migrate.sh"), str(MIGRATIONS), database], text=True, capture_output=True, timeout=900
@@ -1368,6 +1381,8 @@ if __name__ == "__main__":
         render_kong()
     elif command == "migrate":
         print(json.dumps(migrate_all(), indent=2))
+    elif command == "refresh-clients":
+        print(json.dumps(refresh_clients()))
     elif command == "restore-client":
         if len(sys.argv) != 5 or sys.argv[2] != sys.argv[4]:
             print("uso: frotak_agent.py restore-client CLIENTE PASTA_DO_BACKUP CLIENTE")
