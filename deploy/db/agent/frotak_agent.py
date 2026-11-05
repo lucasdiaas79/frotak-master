@@ -368,7 +368,9 @@ def render_kong():
     temporary.chmod(0o644)
     os.replace(temporary, KONG_DIR / "kong.json")
     running = subprocess.run(
-        ["docker", "ps", "-q", "--filter", "name=^frotak-kong$"], text=True, capture_output=True
+        ["docker", "ps", "-q", "--filter", "name=^frotak-kong$", "--filter", "status=running"],
+        text=True,
+        capture_output=True,
     )
     if running.stdout.strip():
         result = subprocess.run(
