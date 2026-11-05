@@ -183,14 +183,36 @@ language plpgsql
 security definer
 set search_path = pg_catalog, public, private
 as $$
+declare
+  v_slug text;
 begin
   perform private.require_master_operator(p_actor_user_id);
 
-  delete from public.tenants t
-  using public.client_databases c
-  where t.id = p_tenant_id
-    and c.tenant_id = t.id
-    and c.status = 'provisioning';
+  select slug into v_slug
+  from public.client_databases
+  where tenant_id = p_tenant_id and status = 'provisioning';
+
+  if v_slug is null then
+    return;
+  end if;
+
+  -- Cliente em provisionamento so tem o que master_register_client gravou.
+  delete from public.workspace_modules
+  where workspace_id in (select id from public.workspaces where tenant_id = p_tenant_id);
+  delete from public.audit_logs where tenant_id = p_tenant_id;
+  delete from public.tenant_subscriptions where tenant_id = p_tenant_id;
+  delete from public.tenant_platform_products where tenant_id = p_tenant_id;
+  delete from public.client_databases where tenant_id = p_tenant_id;
+  delete from public.workspaces where tenant_id = p_tenant_id;
+  delete from public.tenants where id = p_tenant_id;
+
+  insert into public.audit_logs (actor_user_id, action, entity_type, metadata)
+  values (
+    p_actor_user_id,
+    'client_database.discarded',
+    'tenant',
+    jsonb_build_object('slug', v_slug, 'source', 'master.discard_client')
+  );
 end;
 $$;
 
