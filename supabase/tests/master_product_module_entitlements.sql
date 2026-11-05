@@ -132,6 +132,29 @@ begin
     when insufficient_privilege then null;
   end;
 
+  -- Empresa suspensa: o membro le a situacao (o app explica o bloqueio), sem nenhum modulo
+  perform set_config('request.jwt.claim.sub', v_owner_id::text, true);
+  update public.tenants set status = 'suspended' where id = v_tenant_id;
+  v_entitlements := public.get_workspace_entitlements(v_workspace_id);
+  if v_entitlements ->> 'tenantStatus' <> 'suspended' then
+    raise exception 'Expected suspended member to read tenantStatus, got %', v_entitlements;
+  end if;
+  if jsonb_array_length(v_entitlements -> 'modules') <> 0 then
+    raise exception 'Expected no modules while suspended, got %', v_entitlements;
+  end if;
+  if private.is_workspace_member(v_workspace_id) then
+    raise exception 'Expected suspended tenant to stay out of workspace data';
+  end if;
+  update public.tenants set status = 'active' where id = v_tenant_id;
+
+  perform set_config('request.jwt.claim.sub', v_outsider_id::text, true);
+  begin
+    perform public.get_workspace_entitlements(v_workspace_id);
+    raise exception 'Expected outsider to stay rejected';
+  exception
+    when insufficient_privilege then null;
+  end;
+
   -- Auditoria registrada no catalogo
   select count(*) into v_count
   from public.audit_logs
