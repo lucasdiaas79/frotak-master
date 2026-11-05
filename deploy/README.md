@@ -39,7 +39,7 @@ Postgres escuta em localhost. Kong e PgBouncer escutam só no IP da WireGuard. R
 | Painel e API Master | Instalado | Com 2FA obrigatório para a equipe, cobrado também no servidor e no banco |
 | Catálogo de produtos e módulos | Instalado | No mesmo banco do TMS, não em Postgres próprio |
 | TMS | Instalado | Um endereço para todos os clientes; o cliente vem do login, não do subdomínio |
-| Front View | Não instalado | A VPS View só aceita chave SSH e a credencial recebida não entra |
+| Front View | Fora do escopo | Decisão de 2026-11-05: esta instalação cobre só o Master (Central) e o TMS |
 | Redis | Instalado | O código ainda não usa; `REDIS_URL` já está no ambiente do TMS |
 | Workers e filas | Parcial | Jobs do `pg_cron` chamam o TMS; não há worker separado |
 | Object storage | Parcial | Supabase Storage em disco na VPS de banco, com pasta por bucket |

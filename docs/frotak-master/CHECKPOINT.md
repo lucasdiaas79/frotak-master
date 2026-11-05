@@ -12,7 +12,7 @@ Atualizado em 2026-11-05. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", 
 | Teste de ponta a ponta | Supabase local descartável (`project_id` `frotak-e2e`, portas 553xx) criado do zero e removido no fim |
 | Banco remoto e banco local `frota-master` | Não alterados |
 | VPS de banco e de Serviço | Instaladas em 2026-11-04 e atualizadas em 2026-11-05 para a versão `7a44c93`, com um operador e o cliente fictício "FrotaK Demonstração". Ver [Ambiente nas VPS](#ambiente-nas-vps) |
-| VPS View | Não alterada: só aceita chave SSH, e a senha recebida não entra |
+| VPS View | Fora do escopo por decisão do usuário em 2026-11-05. Não alterada |
 
 ## Concluído
 
@@ -109,7 +109,7 @@ Não houve revisão independente por outro executor.
 
 ## Próxima ação
 
-1. Liberar o acesso à VPS View por chave SSH e decidir o papel dela.
+1. Decidir entre manter o banco único ou criar um banco por cliente na VPS de banco, provisionado remotamente pelo Master. O usuário descreveu a VPS de banco como o lugar de todos os bancos (Central, TMS e novos clientes) em 2026-11-05.
 2. Instalar chave SSH nas VPS de banco e de Serviço e desligar o login por senha. As senhas do root foram trocadas e são diferentes em cada uma; ficam só com o usuário.
 3. Decidir se as VPS substituem a produção atual. Se sim: apontar o DNS, preencher as chaves (Gemini, Sascar, Maps) e migrar os dados.
 4. Resolver a origem de `202610220001_client_onboarding` (`select version from supabase_migrations.schema_migrations order by version desc limit 5;`).
