@@ -47,6 +47,8 @@ src/
     entitlements/  liberar e bloquear produtos e módulos por cliente
     tenants/       lista de clientes, uso e resumo do dashboard
     provisioning/  cliente novo: em banco único, login do admin, provision_tenant e produtos; em banco por cliente, agente e cadastro no Central
+    control-panel/ painel de infraestrutura: lê as sentinelas e o agente; ações auditadas antes de acontecer
+    tenants/       lista, ficha e administração do cliente: cadastro, situação, endereço, domínios, ambiente e logins
   routes/          telas finas que chamam module/server.ts e module/ui
 ```
 
@@ -181,6 +183,6 @@ Antes da migration, o código novo continua funcionando: o Master mostra todos o
 | Roteamento por subdomínio | Feito no modo banco por cliente. Em banco único, o cliente é descoberto pela membership do usuário. Em domínio definitivo, exige DNS curinga. |
 | Produto View | Gravado no catálogo; nenhum sistema consome ainda. O backend do View deve ler `get_workspace_entitlements` ou o catálogo. |
 | CT-e | Módulo existe no catálogo; não há funcionalidade de CT-e para bloquear. |
-| Suspender e encerrar cliente pelo Master | Sem tela (Fase 2 do PDF). O bloqueio por status já funciona, e o agente tem `POST /clients/<slug>/status` e `DELETE /clients/<slug>`, ainda só pela API. |
-| Troca de senha nos apps | Sem tela no Master e no TMS. O login é marcado com `must_change_password`, mas nada pede a troca. |
+| Suspender e encerrar cliente pelo Master | Suspender e reativar na ficha do cliente. Encerrar (exportar, guardar e apagar) continua sem tela: o agente tem `DELETE /clients/<slug>`, e o cadastro no Central sai à parte. |
+| Troca de senha nos apps | O Master gera senha temporária para um login do cliente, na ficha. O próprio usuário ainda não troca a senha no TMS, e `must_change_password` não é cobrado. |
 | Telas do Master com dados fictícios (`/usuarios`, `/financeiro`, `/operacoes` e outras) | Continuam no protótipo. Ficam escondidas com `VITE_FROTAK_HIDE_PROTOTYPES=true`, padrão nas VPS. |

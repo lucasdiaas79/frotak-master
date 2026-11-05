@@ -33,7 +33,7 @@ flowchart LR
 | Endereço | O que abre |
 |---|---|
 | `MASTER_HOST` | Central, para a equipe FrotaK, com 2FA |
-| `<cliente>.CLIENT_BASE_DOMAIN` | TMS daquele cliente, com login próprio |
+| `<subdomínio>.CLIENT_BASE_DOMAIN` e domínios próprios do cliente | TMS daquele cliente, com login próprio |
 | `API_HOST/c/<cliente>` | API daquele cliente, usada pelo navegador |
 | `API_HOST` | API do Central |
 
@@ -47,7 +47,7 @@ flowchart LR
 
 ### O que separa um cliente do outro
 
-- **Banco próprio**, com papéis e senhas que não conectam em nenhum outro banco.
+- **Banco próprio**, com papéis e senhas que não conectam em nenhum outro banco, nem no Central. Os papéis de login e de arquivos usam `supabase_auth_admin` e `supabase_storage_admin` só por `SET ROLE`, sem herdar o acesso deles; a ficha do cliente mostra onde cada papel entra.
 - **Chave de assinatura própria.** Token e chaves de um cliente não valem na API de outro nem no Central.
 - **Rotas próprias** no Kong, com grupo de acesso por cliente.
 - **Arquivos** em pasta própria e **backup** em arquivo próprio.
@@ -107,11 +107,36 @@ Em cada VPS, o conteúdo de `deploy/` fica em `/opt/frotak/deploy` e `supabase/m
 
 ## Cliente novo
 
-Pela tela Clientes do Master. O Master pede ao agente o banco, os serviços, as rotas, o login do dono e os agendamentos e, por último, registra o cliente no Central. Se algo falhar no caminho, tudo é desfeito. O cliente passa a abrir em `https://<cliente>.CLIENT_BASE_DOMAIN`.
+Pela tela Clientes do Master. O formulário sugere o subdomínio a partir do nome e confere se está livre. O Master pede ao agente o banco, os serviços, as rotas, o login do dono e os agendamentos e, por último, registra o cliente no Central. Se algo falhar no caminho, tudo é desfeito. O cliente abre na hora em `https://<subdomínio>.CLIENT_BASE_DOMAIN`, sem DNS novo, por causa do registro curinga.
+
+O subdomínio escolhido também vira o **identificador** do cliente, que nomeia banco (`frotak_<identificador>`), containers, rotas `/c/<identificador>` e backups e **nunca muda**. O endereço pode mudar depois sem tocar em nada disso.
+
+### Ficha do cliente
+
+Clientes > nome do cliente (`/clientes/<identificador>`):
+
+| Aba | O que faz |
+|---|---|
+| Resumo | Uso, cadastro e a lista do que foi criado, conferida na hora: banco, logins do banco, serviços, rotas, tempo real, arquivos, agendamentos, login do dono e backup |
+| Ambiente criado | Detalhe de cada item: nome e tamanho do banco, versão do schema, os 3 logins do banco e em quais bancos cada um entra, containers, rotas e chaves no Kong, slot do tempo real, pasta de arquivos, agendamentos, último backup |
+| Endereço e domínios | Muda o subdomínio, liga até 5 domínios do cliente, mostra os registros de DNS a criar e confere DNS, HTTPS e TMS de cada endereço |
+| Logins | Quem entra no TMS deste cliente e quando entrou; gera senha temporária, com auditoria antes da troca |
+| Produtos e módulos | O mesmo controle da lista |
+| Cadastro | Razão social, nome fantasia, CNPJ e limite de veículos, no banco do cliente e no Central; suspender e reativar |
+
+As senhas dos logins do banco nunca aparecem: ficam só em `/etc/frotak/clients/<identificador>.env`. Editar, suspender, mudar endereço e gerar senha ficam em `audit_logs`.
+
+### Endereço e domínio próprio
+
+- **Mudar o subdomínio:** o endereço antigo para de abrir em até 30 s (cache do TMS). O login do cliente é recriado com o endereço novo, alguns segundos fora do ar. Dados e logins não mudam.
+- **Domínio do cliente** (ex.: `tms.empresa.com.br`): ligue na ficha e peça ao cliente o registro que ela mostra. Subdomínio: `CNAME tms -> <subdomínio>.CLIENT_BASE_DOMAIN.`; domínio principal, que não aceita CNAME: `A @ -> IP da VPS de Serviço`. Depois que o DNS propagar, "Verificar agora" faz a primeira visita, e o Caddy emite o HTTPS. O Caddy só emite certificado para endereço que o agente conhece.
+- O TMS descobre o cliente perguntando ao agente de quem é o endereço (`GET /resolve?host=`). Endereço desconhecido mostra "Empresa não encontrada" e não ganha HTTPS.
+- **Apagar cliente** ainda não tem botão, porque apaga banco e arquivos sem volta.
+
 
 Ligar ou desligar produto e módulo no Master vale na hora: o pedido vai primeiro ao banco do cliente, onde o bloqueio é cobrado. Se ele estiver fora do ar, nada muda e o operador é avisado.
 
-Apagar cliente ainda não tem tela. Pelo agente, de dentro da VPS DB, com a confirmação do endereço. Isso apaga o banco e os arquivos dele, mas não o cadastro no Central, que precisa sair à parte:
+Apagar cliente ainda não tem tela. Pelo agente, de dentro da VPS DB, com a confirmação do identificador. Isso apaga o banco e os arquivos dele, mas não o cadastro no Central, que precisa sair à parte:
 
 ```bash
 . /etc/frotak/hosts.env; . /etc/frotak/agent.env

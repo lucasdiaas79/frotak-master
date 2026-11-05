@@ -784,8 +784,9 @@ function CreatedClientDialog({
         <DialogHeader>
           <DialogTitle>{created?.name} está no ar</DialogTitle>
           <DialogDescription>
-            Banco, logins, serviços, rotas, tempo real, arquivos e agendamentos foram criados. A
-            ficha do cliente mostra cada item e o estado do endereço.
+            {created?.clientUrl
+              ? "Banco, logins, serviços, rotas, tempo real, arquivos e agendamentos foram criados. A ficha do cliente mostra cada item e o estado do endereço."
+              : "O cliente foi criado no banco compartilhado, com o login do administrador. A ficha mostra o cadastro e os módulos."}
           </DialogDescription>
         </DialogHeader>
         {created ? (
