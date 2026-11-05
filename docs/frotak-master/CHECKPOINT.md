@@ -11,7 +11,7 @@ Atualizado em 2026-11-05. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", 
 | Commits | `0cc1f2a` Master modular e liberação; `1f98144` registro de módulos do TMS; `659faef` Frotak IA; `e77489b` Rastreadores; `08de70b` App Motorista; `cad1469` Financeiro; `0643e97` Gestão de Frota; `df82eec` documentação; clean architecture: `848b3ab` App Motorista e guarda de dependências, `b99e26b` Rastreadores, `e7cdebc` Financeiro, `66b3851` Gestão de Frota, `4008c4c` Frotak IA; `d04bede` documentação; `a7ad7a3` implantação nas VPS; correções de 2026-11-05: `e680637` banco, `a6a6c5d` Master, `18d5e95` TMS, `7a44c93` implantação |
 | Teste de ponta a ponta | Supabase local descartável (`project_id` `frotak-e2e`, portas 553xx) criado do zero e removido no fim |
 | Banco remoto e banco local `frota-master` | Não alterados |
-| VPS de banco e de Serviço | Instaladas em 2026-11-04 e atualizadas em 2026-11-05 para a versão `7a44c93`, sem dados de cliente. Ver [Ambiente nas VPS](#ambiente-nas-vps) |
+| VPS de banco e de Serviço | Instaladas em 2026-11-04 e atualizadas em 2026-11-05 para a versão `7a44c93`, com um operador e o cliente fictício "FrotaK Demonstração". Ver [Ambiente nas VPS](#ambiente-nas-vps) |
 | VPS View | Não alterada: só aceita chave SSH, e a senha recebida não entra |
 
 ## Concluído
@@ -78,7 +78,7 @@ Guia de operação e mapa do PDF para o que foi instalado: [deploy/README.md](..
 | Serviço | Master e TMS em Node 24 sob systemd, Caddy com HTTPS, Redis, cópia dos backups |
 | Rede | WireGuard entre as duas. O banco expõe só SSH; o Serviço, só SSH, 80 e 443 |
 
-O ambiente é **novo e vazio**: a produção atual (Lovable, Vercel e Supabase) continua sendo a que atende os clientes, e nenhum dado foi migrado. Os endereços são temporários, em `*.sslip.io`, até o DNS ser apontado.
+O ambiente é **novo e sem dados de cliente real**: tem só o operador `admin@frotak.log.br` e o cliente fictício "FrotaK Demonstração" (`tms@frotak.log.br`, CNPJ só de zeros), criado para testar o TMS. A produção atual (Lovable, Vercel e Supabase) continua sendo a que atende os clientes, e nenhum dado foi migrado. Os endereços são temporários, em `*.sslip.io`, até o DNS ser apontado.
 
 Evidências, rodadas contra os endereços públicos:
 
@@ -101,7 +101,9 @@ Não testado: chamada real ao Gemini e à Sascar e envio real de push, porque as
 1. **Existe uma migration fora do Git.** O banco local `frota-master` tem `202610220001_client_onboarding` (planos TRIAL/STARTER/BUSINESS/ENTERPRISE, `tenant_contracts`, `tenant_migration_requests`), que não está em nenhum branch do GitHub. Ela não colide com as migrations novas, mas indica outro fluxo de cadastro de clientes em outro checkout. Confirmar a origem e se ela está em produção antes de aplicar as novas.
 2. **HTTP/3.** Com ele ligado, o Chrome numa máquina com antivírus que intercepta TLS falhou com `ERR_QUIC_PROTOCOL_ERROR` e a tela não carregou; sem ele, tudo passou. A causa exata não foi isolada. O Caddy das VPS serve só HTTP/1.1 e HTTP/2.
 3. **Telas fictícias do Master.** `/usuarios`, `/financeiro`, `/operacoes` e outras continuam protótipo. Escondê-las evita decisão com número inventado, mas alguém precisa decidir quais delas construir.
-4. **Duas edições em migrations já aplicadas.** `202609240001` e `20260928091642` ganharam instruções idempotentes no início para o banco novo montar. Migration aplicada não roda de novo, então a produção não muda; `supabase db push` compara só a versão.
+4. **Sem troca de senha nos apps.** O login é marcado com `must_change_password`, mas nenhuma tela pede ou permite a troca, no Master nem no TMS. Hoje a senha só muda pela API de administração.
+5. **App Motorista sem interface neste repositório.** Aqui só existe a gestão do acesso (TMS > Motoristas), então não há ambiente do motorista nas VPS.
+6. **Duas edições em migrations já aplicadas.** `202609240001` e `20260928091642` ganharam instruções idempotentes no início para o banco novo montar. Migration aplicada não roda de novo, então a produção não muda; `supabase db push` compara só a versão.
 
 Não houve revisão independente por outro executor.
 
