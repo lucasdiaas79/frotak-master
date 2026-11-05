@@ -68,6 +68,7 @@ import {
   type MasterDashboardSnapshot,
 } from "@/modules/tenants/domain/tenant";
 import { getDashboardSnapshotFn } from "@/modules/tenants/server";
+import { prototypesHidden } from "@/lib/prototypes";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -238,6 +239,25 @@ function Dashboard() {
     ],
     [snapshot],
   );
+
+  // Abaixo dos indicadores, o painel ainda usa dados de demonstração.
+  if (prototypesHidden) {
+    return (
+      <AppShell>
+        <PageHeader
+          eyebrow="Visão consolidada da frota"
+          title="Dashboard Operacional"
+          description="Números reais de todas as transportadoras conectadas à plataforma FrotaK."
+          crumbs={[{ label: "Dashboard" }]}
+        />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          {liveKpis.map((k, i) => (
+            <KpiCard key={k.label} {...k} icon={kpiIcons[i]} index={i} />
+          ))}
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>

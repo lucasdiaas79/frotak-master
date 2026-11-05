@@ -27,7 +27,7 @@ export const Route = createFileRoute("/funcoes")({
         { label: "Funções privilegiadas", value: "2", delta: "auditadas", trend: "flat" },
       ]}
       columns={["Função", "Membros", "Escopo", "Permissões"]}
-      rows={roles.map((r) => [r.name, r.members, r.scope, r.perms])}
+      rows={roles.map((r) => [r.name, String(r.members), r.scope, String(r.perms)])}
     />
   ),
 });

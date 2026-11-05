@@ -50,7 +50,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { buildClientAccessUrl, getSession } from "@/lib/auth";
+import { buildClientSupportUrl, getSession } from "@/lib/auth";
 import {
   findModule,
   modulesOf,
@@ -63,7 +63,7 @@ import { TenantEntitlementsPanel } from "@/modules/entitlements/ui/TenantEntitle
 import { subscriptionPeriods, slugify } from "@/modules/provisioning/domain/provisioning-request";
 import { provisionTenantFn } from "@/modules/provisioning/server";
 import { isTenantOperational, type Tenant } from "@/modules/tenants/domain/tenant";
-import { listTenantsFn } from "@/modules/tenants/server";
+import { startClientAccessFn, listTenantsFn } from "@/modules/tenants/server";
 
 export const Route = createFileRoute("/clientes")({
   head: () => ({
@@ -255,25 +255,28 @@ function Clientes() {
     );
   }
 
-  function accessClient(client: Tenant) {
-    const session = getSession();
-    if (!session?.accessToken) {
-      toast.error("Sessão do Master expirada. Entre novamente.");
+  async function accessClient(client: Tenant) {
+    // A aba abre agora: depois da resposta do servidor, o navegador a bloquearia como pop-up.
+    const tab = window.open("", "_blank");
+    if (!tab) {
+      toast.error("O navegador bloqueou a nova aba. Permita pop-ups do Master e tente de novo.");
       return;
     }
 
-    window.open(
-      buildClientAccessUrl({
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
-        clientId: client.id,
+    try {
+      const access = await startClientAccessFn({ data: { tenantId: client.id } });
+      tab.opener = null;
+      tab.location.href = buildClientSupportUrl({
+        tokenHash: access.tokenHash,
         tenantId: client.id,
-        clientName: client.name,
-        email: client.ownerEmail || session.email,
-      }),
-      "_blank",
-      "noopener,noreferrer",
-    );
+        clientName: access.clientName,
+      });
+    } catch (error) {
+      tab.close();
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível acessar este cliente.",
+      );
+    }
   }
 
   return (

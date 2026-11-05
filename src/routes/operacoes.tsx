@@ -163,9 +163,8 @@ function Operacoes() {
               { title: "OEP-4660 iniciou retorno", meta: "14:26 · Laranjeiras/SE" },
               {
                 title: "QMG-1611 reportou quebra",
-                meta: "14:04 · Caruaru/PE",
+                meta: "14:04 · Caruaru/PE · Resgate acionado pela torre",
                 tone: "danger",
-                body: "Resgate acionado pela torre",
               },
               { title: "Excesso de velocidade", meta: "13:48 · Rodoserra", tone: "warning" },
               { title: "Carregamento concluído", meta: "13:12 · Atlas Bulk", tone: "info" },

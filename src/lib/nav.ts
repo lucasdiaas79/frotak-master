@@ -14,6 +14,7 @@ import {
   Webhook,
   type LucideIcon,
 } from "lucide-react";
+import { isHiddenPrototypeRoute, prototypesHidden } from "@/lib/prototypes";
 
 export type NavItem = {
   label: string;
@@ -59,5 +60,17 @@ export const navGroups: NavGroup[] = [
     ],
   },
 ];
+
+/** O menu sem as telas fictícias nem os contadores inventados, quando elas estão escondidas. */
+export const visibleNavGroups: NavGroup[] = prototypesHidden
+  ? navGroups
+      .map((group) => ({
+        ...group,
+        items: group.items
+          .filter((item) => !isHiddenPrototypeRoute(item.to))
+          .map(({ badge: _badge, ...item }) => item),
+      }))
+      .filter((group) => group.items.length > 0)
+  : navGroups;
 
 export const flatNav = navGroups.flatMap((group) => group.items);

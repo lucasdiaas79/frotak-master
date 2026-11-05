@@ -28,7 +28,13 @@ export const Route = createFileRoute("/webhooks")({
       ]}
       columns={["Endpoint", "Eventos", "Sucesso", "Última entrega", "Status"]}
       statusIndex={4}
-      rows={webhookEndpoints.map((w) => [w.url, w.events, `${w.success}%`, w.last, w.status])}
+      rows={webhookEndpoints.map((w) => [
+        w.url,
+        String(w.events),
+        `${w.success}%`,
+        w.last,
+        w.status,
+      ])}
     />
   ),
 });

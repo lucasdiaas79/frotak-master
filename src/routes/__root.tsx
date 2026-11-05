@@ -16,11 +16,8 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { ThemeProvider } from "@/lib/theme";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
-import {
-  getPlatformAuthState,
-  subscribeToAuth,
-  type AuthGateState,
-} from "@/lib/auth";
+import { getPlatformAuthState, subscribeToAuth, type AuthGateState } from "@/lib/auth";
+import { isHiddenPrototypeRoute } from "@/lib/prototypes";
 
 function NotFoundComponent() {
   return (
@@ -157,6 +154,7 @@ function AuthGate({ children }: { children: ReactNode }) {
   });
 
   const isLoginRoute = location.pathname === "/login";
+  const hiddenPrototype = isHiddenPrototypeRoute(location.pathname);
   const redirectTarget = (() => {
     const search = typeof window !== "undefined" ? window.location.search : "";
     const params = new URLSearchParams(search);
@@ -192,7 +190,9 @@ function AuthGate({ children }: { children: ReactNode }) {
     if (authState.status === "LOADING") return;
 
     if (
-      (authState.status === "UNAUTHENTICATED" || authState.status === "UNAUTHORIZED") &&
+      (authState.status === "UNAUTHENTICATED" ||
+        authState.status === "UNAUTHORIZED" ||
+        authState.status === "MFA_REQUIRED") &&
       !isLoginRoute
     ) {
       const next = `${location.pathname}${typeof window !== "undefined" ? window.location.search : ""}`;
@@ -209,7 +209,18 @@ function AuthGate({ children }: { children: ReactNode }) {
     if (authState.status === "AUTHENTICATED_PLATFORM_USER" && isLoginRoute) {
       navigate({ to: redirectTarget, replace: true });
     }
-  }, [authState.status, isLoginRoute, location.pathname, navigate, redirectTarget]);
+
+    if (authState.status === "AUTHENTICATED_PLATFORM_USER" && hiddenPrototype) {
+      navigate({ to: "/clientes", replace: true });
+    }
+  }, [
+    authState.status,
+    hiddenPrototype,
+    isLoginRoute,
+    location.pathname,
+    navigate,
+    redirectTarget,
+  ]);
 
   if (authState.status === "LOADING") {
     return (
@@ -222,9 +233,11 @@ function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (
-    ((authState.status === "UNAUTHENTICATED" || authState.status === "UNAUTHORIZED") &&
+    ((authState.status === "UNAUTHENTICATED" ||
+      authState.status === "UNAUTHORIZED" ||
+      authState.status === "MFA_REQUIRED") &&
       !isLoginRoute) ||
-    (authState.status === "AUTHENTICATED_PLATFORM_USER" && isLoginRoute)
+    (authState.status === "AUTHENTICATED_PLATFORM_USER" && (isLoginRoute || hiddenPrototype))
   ) {
     return null;
   }

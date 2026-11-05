@@ -1,5 +1,16 @@
+import type { ReactNode } from "react";
 import { AppShell } from "@/components/layout/AppShell";
-import { KpiCard, PageHeader, Panel, TableWrap, Td, Th, Tr } from "@/components/kit/ui-kit";
+import {
+  KpiCard,
+  PageHeader,
+  Panel,
+  StatusPill,
+  TableWrap,
+  Td,
+  Th,
+  toneFor,
+  Tr,
+} from "@/components/kit/ui-kit";
 
 type ModulePageProps = {
   eyebrow: string;
@@ -9,6 +20,12 @@ type ModulePageProps = {
   kpis: { label: string; value: string; delta: string; trend: "up" | "down" | "flat" }[];
   columns: string[];
   rows: string[][];
+  /** Coluna mostrada como selo de status. */
+  statusIndex?: number;
+  /** Bloco opcional entre os indicadores e a tabela. */
+  extra?: ReactNode;
+  /** Bloco opcional depois da tabela. */
+  aside?: ReactNode;
 };
 
 export function ModulePage({
@@ -19,6 +36,9 @@ export function ModulePage({
   kpis,
   columns,
   rows,
+  statusIndex,
+  extra,
+  aside,
 }: ModulePageProps) {
   return (
     <AppShell>
@@ -34,6 +54,8 @@ export function ModulePage({
           <KpiCard key={kpi.label} {...kpi} />
         ))}
       </div>
+
+      {extra ? <div className="mt-3">{extra}</div> : null}
 
       <Panel
         className="mt-3"
@@ -53,7 +75,13 @@ export function ModulePage({
               {rows.map((row, rowIndex) => (
                 <Tr key={`${title}-${rowIndex}`}>
                   {row.map((value, cellIndex) => (
-                    <Td key={`${rowIndex}-${cellIndex}`}>{value}</Td>
+                    <Td key={`${rowIndex}-${cellIndex}`}>
+                      {cellIndex === statusIndex ? (
+                        <StatusPill tone={toneFor(value)}>{value}</StatusPill>
+                      ) : (
+                        value
+                      )}
+                    </Td>
                   ))}
                 </Tr>
               ))}
@@ -61,6 +89,8 @@ export function ModulePage({
           </table>
         </TableWrap>
       </Panel>
+
+      {aside ? <div className="mt-3">{aside}</div> : null}
     </AppShell>
   );
 }

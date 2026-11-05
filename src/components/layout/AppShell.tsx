@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Bell, LogOut, Search, Sparkles } from "lucide-react";
-import { navGroups } from "@/lib/nav";
+import { visibleNavGroups } from "@/lib/nav";
+import { prototypesHidden } from "@/lib/prototypes";
 import { getWorkspaceNavGroups } from "@/lib/workspaces";
 import { cn } from "@/lib/utils";
 import { getSession, logout } from "@/lib/auth";
@@ -14,7 +15,7 @@ type AppShellProps = {
 export function AppShell({ children }: AppShellProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const groups = getWorkspaceNavGroups(location.pathname, navGroups);
+  const groups = getWorkspaceNavGroups(location.pathname, visibleNavGroups);
   const session = getSession();
 
   return (
@@ -88,7 +89,7 @@ export function AppShell({ children }: AppShellProps) {
               className="w-full justify-center rounded-xl border-sidebar-border bg-transparent text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               onClick={() => {
                 void logout();
-                navigate({ to: "/login", replace: true });
+                navigate({ to: "/login", search: { redirect: "/", reason: "" }, replace: true });
               }}
             >
               <LogOut className="size-4" />
@@ -98,17 +99,19 @@ export function AppShell({ children }: AppShellProps) {
         </aside>
 
         <main className="min-w-0">
-          <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
-            <div className="flex items-center justify-between gap-4 px-4 py-3 lg:px-8">
-              <div className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
-                <Search className="size-4 shrink-0" />
-                <span className="truncate">Buscar clientes, módulos e eventos</span>
+          {prototypesHidden ? null : (
+            <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
+              <div className="flex items-center justify-between gap-4 px-4 py-3 lg:px-8">
+                <div className="flex min-w-0 items-center gap-3 rounded-xl border border-border bg-card px-3 py-2 text-sm text-muted-foreground">
+                  <Search className="size-4 shrink-0" />
+                  <span className="truncate">Buscar clientes, módulos e eventos</span>
+                </div>
+                <button className="grid size-10 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition hover:text-foreground">
+                  <Bell className="size-4" />
+                </button>
               </div>
-              <button className="grid size-10 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition hover:text-foreground">
-                <Bell className="size-4" />
-              </button>
-            </div>
-          </header>
+            </header>
+          )}
 
           <div className="px-4 py-4 lg:px-8 lg:py-6">{children}</div>
         </main>
