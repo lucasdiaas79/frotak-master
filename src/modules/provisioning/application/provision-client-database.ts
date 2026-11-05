@@ -114,5 +114,7 @@ export async function provisionClientDatabase(
     ownerRoleId: "",
     ownerEmail: input.ownerEmail,
     pendingProducts,
+    slug: input.tenantSlug,
+    clientUrl: database.clientUrl,
   };
 }

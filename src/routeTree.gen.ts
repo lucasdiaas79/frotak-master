@@ -36,6 +36,7 @@ import { Route as UsuariosRouteImport } from './routes/usuarios'
 import { Route as WebhooksRouteImport } from './routes/webhooks'
 import { Route as AcademyModuleRouteImport } from './routes/academy.$module'
 import { Route as BiModuleRouteImport } from './routes/bi.$module'
+import { Route as ClientesSlugRouteImport } from './routes/clientes_.$slug'
 import { Route as DevelopersModuleRouteImport } from './routes/developers.$module'
 import { Route as PartnersModuleRouteImport } from './routes/partners.$module'
 import { Route as SandboxModuleRouteImport } from './routes/sandbox.$module'
@@ -176,6 +177,11 @@ const BiModuleRoute = BiModuleRouteImport.update({
   path: '/$module',
   getParentRoute: () => BiRoute,
 } as any)
+const ClientesSlugRoute = ClientesSlugRouteImport.update({
+  id: '/clientes_/$slug',
+  path: '/clientes/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DevelopersModuleRoute = DevelopersModuleRouteImport.update({
   id: '/$module',
   path: '/$module',
@@ -225,6 +231,7 @@ export interface FileRoutesByFullPath {
   '/webhooks': typeof WebhooksRoute
   '/academy/$module': typeof AcademyModuleRoute
   '/bi/$module': typeof BiModuleRoute
+  '/clientes/$slug': typeof ClientesSlugRoute
   '/developers/$module': typeof DevelopersModuleRoute
   '/partners/$module': typeof PartnersModuleRoute
   '/sandbox/$module': typeof SandboxModuleRoute
@@ -258,6 +265,7 @@ export interface FileRoutesByTo {
   '/webhooks': typeof WebhooksRoute
   '/academy/$module': typeof AcademyModuleRoute
   '/bi/$module': typeof BiModuleRoute
+  '/clientes/$slug': typeof ClientesSlugRoute
   '/developers/$module': typeof DevelopersModuleRoute
   '/partners/$module': typeof PartnersModuleRoute
   '/sandbox/$module': typeof SandboxModuleRoute
@@ -292,6 +300,7 @@ export interface FileRoutesById {
   '/webhooks': typeof WebhooksRoute
   '/academy/$module': typeof AcademyModuleRoute
   '/bi/$module': typeof BiModuleRoute
+  '/clientes_/$slug': typeof ClientesSlugRoute
   '/developers/$module': typeof DevelopersModuleRoute
   '/partners/$module': typeof PartnersModuleRoute
   '/sandbox/$module': typeof SandboxModuleRoute
@@ -327,6 +336,7 @@ export interface FileRouteTypes {
     | '/webhooks'
     | '/academy/$module'
     | '/bi/$module'
+    | '/clientes/$slug'
     | '/developers/$module'
     | '/partners/$module'
     | '/sandbox/$module'
@@ -360,6 +370,7 @@ export interface FileRouteTypes {
     | '/webhooks'
     | '/academy/$module'
     | '/bi/$module'
+    | '/clientes/$slug'
     | '/developers/$module'
     | '/partners/$module'
     | '/sandbox/$module'
@@ -393,6 +404,7 @@ export interface FileRouteTypes {
     | '/webhooks'
     | '/academy/$module'
     | '/bi/$module'
+    | '/clientes_/$slug'
     | '/developers/$module'
     | '/partners/$module'
     | '/sandbox/$module'
@@ -425,6 +437,7 @@ export interface RootRouteChildren {
   SuporteRoute: typeof SuporteRoute
   UsuariosRoute: typeof UsuariosRoute
   WebhooksRoute: typeof WebhooksRoute
+  ClientesSlugRoute: typeof ClientesSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -618,6 +631,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BiModuleRouteImport
       parentRoute: typeof BiRoute
     }
+    '/clientes_/$slug': {
+      id: '/clientes_/$slug'
+      path: '/clientes/$slug'
+      fullPath: '/clientes/$slug'
+      preLoaderRoute: typeof ClientesSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/developers/$module': {
       id: '/developers/$module'
       path: '/$module'
@@ -742,6 +762,7 @@ const rootRouteChildren: RootRouteChildren = {
   SuporteRoute: SuporteRoute,
   UsuariosRoute: UsuariosRoute,
   WebhooksRoute: WebhooksRoute,
+  ClientesSlugRoute: ClientesSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

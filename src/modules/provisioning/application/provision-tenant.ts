@@ -25,6 +25,10 @@ export type ProvisionTenantResult = ProvisionedTenant & {
   ownerEmail: string;
   /** Produtos que nao puderam ser ajustados depois da criacao; o operador revisa no painel. */
   pendingProducts: string[];
+  /** Identificador do cliente no catalogo; abre a ficha dele. */
+  slug?: string;
+  /** Banco por cliente: endereco do TMS deste cliente, ja roteado. */
+  clientUrl?: string;
 };
 
 /**
@@ -93,5 +97,5 @@ export async function provisionTenant(
     }
   }
 
-  return { ...provisioned, ownerEmail: input.ownerEmail, pendingProducts };
+  return { ...provisioned, ownerEmail: input.ownerEmail, pendingProducts, slug: input.tenantSlug };
 }

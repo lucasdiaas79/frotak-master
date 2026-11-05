@@ -20,6 +20,8 @@ export type ProvisionTenantRequest = {
   maxVehicles: number;
   products: string[];
   modules: string[];
+  /** Banco por cliente: subdomínio escolhido. Vazio: sai do nome. Vira também o identificador. */
+  subdomain?: string;
 };
 
 export type ValidatedProvisioning = {
@@ -85,10 +87,21 @@ export function validateProvisioning(request: ProvisionTenantRequest): Validated
   const temporaryPassword = normalizeText(request.temporaryPassword);
   const cnpj = normalizeText(request.cnpj).replace(/\D/g, "");
   const maxVehicles = Number(request.maxVehicles);
-  const tenantSlug = slugify(tradeName || legalName);
+  const requestedSubdomain = normalizeText(request.subdomain).toLowerCase();
+  // Até 40 caracteres: o identificador nomeia o banco e os containers do cliente.
+  const tenantSlug =
+    requestedSubdomain ||
+    slugify(tradeName || legalName)
+      .slice(0, 40)
+      .replace(/-+$/, "");
 
   if (!legalName) invalid("Informe o nome da empresa.");
   if (!tenantSlug) invalid("Não foi possível gerar o endereço do cliente a partir do nome.");
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/.test(tenantSlug)) {
+    invalid(
+      "Endereço inválido: use até 40 letras minúsculas, números e hífen, sem hífen nas pontas.",
+    );
+  }
   if (cnpj.length !== 14) invalid("CNPJ inválido.");
   if (!ownerName) invalid("Informe o nome do administrador inicial.");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) {

@@ -8,7 +8,11 @@ export const prototypesHidden = import.meta.env.VITE_FROTAK_HIDE_PROTOTYPES === 
 // O painel de controle depende das sentinelas, que só existem nas VPS.
 export const controlPanelEnabled = import.meta.env.VITE_FROTAK_CONTROL_PANEL === "true";
 
+// Ficha de cada cliente: /clientes/<identificador>.
+const realPrefixes = ["/clientes/"];
+
 export function isHiddenPrototypeRoute(pathname: string) {
   if (!prototypesHidden) return false;
-  return !realRoutes.includes(pathname.replace(/\/+$/, "") || "/");
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return !realRoutes.includes(path) && !realPrefixes.some((prefix) => path.startsWith(prefix));
 }

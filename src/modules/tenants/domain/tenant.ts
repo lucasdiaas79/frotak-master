@@ -21,6 +21,7 @@ export type Tenant = {
   slug: string;
   name: string;
   legalName: string;
+  tradeName: string;
   cnpj: string;
   domain: string;
   status: TenantStatus;

@@ -1,10 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   Boxes,
   Building2,
-  Eye,
+  ExternalLink,
+  FileText,
   Grid2x2,
   KeyRound,
   LayoutList,
@@ -62,6 +63,9 @@ import type { TenantEntitlements } from "@/modules/entitlements/domain/entitleme
 import { TenantEntitlementsPanel } from "@/modules/entitlements/ui/TenantEntitlementsPanel";
 import { subscriptionPeriods, slugify } from "@/modules/provisioning/domain/provisioning-request";
 import { provisionTenantFn } from "@/modules/provisioning/server";
+import { checkSubdomainFn, getAddressSettingsFn } from "@/modules/tenants/admin-server";
+import { toSubdomain, type AddressSettings } from "@/modules/tenants/domain/client-admin";
+import { CopyButton } from "@/modules/tenants/ui/client-ui";
 import { isTenantOperational, type Tenant } from "@/modules/tenants/domain/tenant";
 import { startClientAccessFn, listTenantsFn } from "@/modules/tenants/server";
 
@@ -89,7 +93,11 @@ type ClientFormState = {
   ownerName: string;
   ownerEmail: string;
   temporaryPassword: string;
+  /** Vazio: segue o nome. Preenchido à mão: fica como o operador escreveu. */
+  subdomain: string;
 };
+
+type CreatedClient = { name: string; slug: string; clientUrl?: string; ownerEmail: string };
 
 const emptyForm = (): ClientFormState => ({
   legalName: "",
@@ -102,6 +110,7 @@ const emptyForm = (): ClientFormState => ({
   ownerName: "",
   ownerEmail: "",
   temporaryPassword: "",
+  subdomain: "",
 });
 
 function canOperateMaster() {
@@ -117,12 +126,13 @@ function Clientes() {
   const [search, setSearch] = useState("");
   const [clients, setClients] = useState<Tenant[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
-  const [detailsId, setDetailsId] = useState<string | null>(null);
   const [managingId, setManagingId] = useState<string | null>(null);
   const [createForm, setCreateForm] = useState<ClientFormState>(emptyForm);
+  const [created, setCreated] = useState<CreatedClient | null>(null);
+  const [addressSettings, setAddressSettings] = useState<AddressSettings | null>(null);
+  const navigate = useNavigate();
   const canOperate = canOperateMaster();
 
-  const details = clients.find((client) => client.id === detailsId) ?? null;
   const managing = clients.find((client) => client.id === managingId) ?? null;
 
   async function loadClients() {
@@ -140,6 +150,10 @@ function Clientes() {
 
   useEffect(() => {
     void loadClients();
+    // Com banco único não há subdomínio por cliente: o formulário não pede endereço.
+    getAddressSettingsFn()
+      .then(setAddressSettings)
+      .catch(() => setAddressSettings(null));
   }, []);
 
   const filteredClients = useMemo(() => {
@@ -147,9 +161,14 @@ function Clientes() {
     if (!query) return clients;
 
     return clients.filter((client) =>
-      [client.name, client.legalName, client.cnpj, client.ownerEmail ?? "", client.slug].some(
-        (value) => value.toLowerCase().includes(query),
-      ),
+      [
+        client.name,
+        client.legalName,
+        client.cnpj,
+        client.ownerEmail ?? "",
+        client.slug,
+        client.domain,
+      ].some((value) => value.toLowerCase().includes(query)),
     );
   }, [clients, search]);
 
@@ -229,11 +248,20 @@ function Clientes() {
           maxVehicles: Number(createForm.maxVehicles || 0),
           products: createForm.products,
           modules: createForm.modules,
+          subdomain: addressSettings
+            ? createForm.subdomain || suggestedSubdomain(createForm)
+            : undefined,
         },
       });
 
       setCreateForm(emptyForm());
       setCreateOpen(false);
+      setCreated({
+        name: createForm.tradeName || createForm.legalName,
+        slug: result.slug ?? "",
+        clientUrl: result.clientUrl,
+        ownerEmail: result.ownerEmail,
+      });
       await loadClients();
       if (result.pendingProducts.length) {
         toast.warning(
@@ -315,6 +343,7 @@ function Clientes() {
               <DialogContent className="max-h-[88vh] max-w-4xl overflow-y-auto">
                 <CreateClientForm
                   form={createForm}
+                  addressSettings={addressSettings}
                   onChange={updateCreateForm}
                   onToggleProduct={toggleCreateProduct}
                   onToggleModule={toggleCreateModule}
@@ -403,47 +432,25 @@ function Clientes() {
         ) : view === "tabela" ? (
           <ClientTable
             clients={filteredClients}
-            onDetails={(client) => setDetailsId(client.id)}
+            onDetails={(client) =>
+              void navigate({ to: "/clientes/$slug", params: { slug: client.slug } })
+            }
             onAccess={accessClient}
             onManage={(client) => setManagingId(client.id)}
           />
         ) : (
           <ClientCards
             clients={filteredClients}
+            onDetails={(client) =>
+              void navigate({ to: "/clientes/$slug", params: { slug: client.slug } })
+            }
             onAccess={accessClient}
             onManage={(client) => setManagingId(client.id)}
           />
         )}
       </Panel>
 
-      <Sheet open={!!details} onOpenChange={(open) => !open && setDetailsId(null)}>
-        <SheetContent className="w-full overflow-y-auto scroll-slim sm:max-w-xl">
-          {details ? (
-            <>
-              <SheetHeader>
-                <SheetTitle>{details.name}</SheetTitle>
-                <SheetDescription>{details.cnpj || details.slug}</SheetDescription>
-              </SheetHeader>
-              <div className="grid gap-3 px-4 pb-8 sm:grid-cols-2">
-                <DataItem label="Assinatura" value={details.subscriptionPeriod} />
-                <DataItem label="Status" value={details.status} />
-                <DataItem label="Tenant" value={details.id} />
-                <DataItem label="Login" value={details.ownerEmail ?? "-"} />
-                <DataItem
-                  label="Caminhões"
-                  value={`${details.usage.vehicles} cadastrados / ${details.vehicleLimit} limite`}
-                />
-                <DataItem label="Motoristas" value={String(details.usage.drivers)} />
-                <DataItem label="Caçambas" value={String(details.usage.trailers)} />
-                <DataItem label="Usuários" value={String(details.usage.users)} />
-                <div className="sm:col-span-2">
-                  <EntitlementSummary entitlements={details.entitlements} />
-                </div>
-              </div>
-            </>
-          ) : null}
-        </SheetContent>
-      </Sheet>
+      <CreatedClientDialog created={created} onClose={() => setCreated(null)} />
 
       <Sheet open={!!managing} onOpenChange={(open) => !open && setManagingId(null)}>
         <SheetContent className="w-full overflow-y-auto scroll-slim sm:max-w-2xl">
@@ -544,6 +551,7 @@ function ClientTable({
         <thead>
           <tr>
             <Th>Empresa</Th>
+            <Th>Endereço</Th>
             <Th>CNPJ</Th>
             <Th>Assinatura</Th>
             <Th>Login</Th>
@@ -560,10 +568,30 @@ function ClientTable({
                 <div className="flex min-w-0 items-center gap-3">
                   <Avatar name={client.name} />
                   <div className="min-w-0">
-                    <p className="truncate font-bold">{client.name}</p>
+                    <Link
+                      to="/clientes/$slug"
+                      params={{ slug: client.slug }}
+                      className="block truncate font-bold underline-offset-2 hover:underline"
+                    >
+                      {client.name}
+                    </Link>
                     <p className="text-[11px] text-muted-foreground">{client.slug}</p>
                   </div>
                 </div>
+              </Td>
+              <Td>
+                <span className="inline-flex max-w-64 items-center gap-1">
+                  <a
+                    href={`https://${client.domain}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex min-w-0 items-center gap-1 text-xs underline-offset-2 hover:underline"
+                  >
+                    <span className="truncate">{client.domain}</span>
+                    <ExternalLink className="size-3 shrink-0" />
+                  </a>
+                  <CopyButton value={`https://${client.domain}`} label="Copiar endereço" />
+                </span>
               </Td>
               <Td>{client.cnpj || "-"}</Td>
               <Td>{client.subscriptionPeriod}</Td>
@@ -584,9 +612,9 @@ function ClientTable({
               <Td>
                 <div className="flex items-center justify-end gap-1">
                   <IconButton
-                    label="Visualizar"
+                    label="Abrir ficha: editar, endereço, ambiente e logins"
                     onClick={() => onDetails(client)}
-                    icon={<Eye className="size-4" />}
+                    icon={<FileText className="size-4" />}
                   />
                   <IconButton
                     label="Gerenciar produtos e módulos"
@@ -610,10 +638,12 @@ function ClientTable({
 
 function ClientCards({
   clients,
+  onDetails,
   onAccess,
   onManage,
 }: {
   clients: Tenant[];
+  onDetails: (client: Tenant) => void;
   onAccess: (client: Tenant) => void;
   onManage: (client: Tenant) => void;
 }) {
@@ -645,7 +675,17 @@ function ClientCards({
               <ModulePill key={`${client.id}-${module}`} label={findModule(module).name} />
             ))}
           </div>
+          <p className="mt-3 truncate text-xs text-muted-foreground">{client.domain}</p>
           <div className="mt-4 flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 gap-2 rounded-xl"
+              onClick={() => onDetails(client)}
+            >
+              <FileText className="size-4" />
+              Ficha
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -669,8 +709,129 @@ function ClientCards({
   );
 }
 
+function suggestedSubdomain(form: ClientFormState) {
+  return toSubdomain(form.tradeName || form.legalName);
+}
+
+function SubdomainField({
+  form,
+  settings,
+  onChange,
+}: {
+  form: ClientFormState;
+  settings: AddressSettings;
+  onChange: (field: keyof ClientFormState, value: string) => void;
+}) {
+  const value = form.subdomain || suggestedSubdomain(form);
+  const [check, setCheck] = useState<{ value: string; available: boolean; reason: string } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!value) return;
+    const timer = window.setTimeout(() => {
+      checkSubdomainFn({ data: { subdomain: value } })
+        .then((result) =>
+          setCheck(result ? { value, available: result.available, reason: result.reason } : null),
+        )
+        .catch(() => setCheck(null));
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [value]);
+
+  const current = check?.value === value ? check : null;
+  return (
+    <div className="sm:col-span-2">
+      <Label className="text-xs" htmlFor="new-client-subdomain">
+        Endereço de acesso (criado junto com o cliente)
+      </Label>
+      <div className="mt-1.5 flex items-center gap-2">
+        <Input
+          id="new-client-subdomain"
+          value={value}
+          onChange={(event) => onChange("subdomain", event.target.value.toLowerCase())}
+          placeholder="transportes-silva"
+          autoComplete="off"
+          className="min-w-0 flex-1 rounded-xl"
+        />
+        <span className="max-w-[50%] truncate text-sm text-muted-foreground">
+          .{settings.baseDomain}
+        </span>
+      </div>
+      <p className="mt-1 min-h-4 text-xs text-muted-foreground">
+        {!value
+          ? "Escreva o nome da empresa ou um endereço."
+          : current
+            ? current.available
+              ? `Livre: https://${value}.${settings.baseDomain}. Dá para mudar depois na ficha do cliente.`
+              : current.reason
+            : "Conferindo..."}
+      </p>
+    </div>
+  );
+}
+
+function CreatedClientDialog({
+  created,
+  onClose,
+}: {
+  created: CreatedClient | null;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={Boolean(created)} onOpenChange={(open) => (open ? undefined : onClose())}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{created?.name} está no ar</DialogTitle>
+          <DialogDescription>
+            Banco, logins, serviços, rotas, tempo real, arquivos e agendamentos foram criados. A
+            ficha do cliente mostra cada item e o estado do endereço.
+          </DialogDescription>
+        </DialogHeader>
+        {created ? (
+          <dl className="space-y-3 text-sm">
+            {created.clientUrl ? (
+              <div>
+                <dt className="text-xs text-muted-foreground">Endereço do TMS</dt>
+                <dd className="inline-flex flex-wrap items-center gap-1 font-semibold">
+                  <a
+                    href={created.clientUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="break-all underline-offset-2 hover:underline"
+                  >
+                    {created.clientUrl}
+                  </a>
+                  <CopyButton value={created.clientUrl} />
+                </dd>
+              </div>
+            ) : null}
+            <div>
+              <dt className="text-xs text-muted-foreground">Login do administrador</dt>
+              <dd className="font-semibold break-all">{created.ownerEmail}</dd>
+            </div>
+          </dl>
+        ) : null}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Fechar
+          </Button>
+          {created?.slug ? (
+            <Button asChild>
+              <Link to="/clientes/$slug" params={{ slug: created.slug }}>
+                Abrir ficha
+              </Link>
+            </Button>
+          ) : null}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CreateClientForm({
   form,
+  addressSettings,
   onChange,
   onToggleProduct,
   onToggleModule,
@@ -679,6 +840,7 @@ function CreateClientForm({
   saving,
 }: {
   form: ClientFormState;
+  addressSettings: AddressSettings | null;
   onChange: (field: keyof ClientFormState, value: string) => void;
   onToggleProduct: (product: ProductCode, checked: boolean) => void;
   onToggleModule: (module: ModuleCode, checked: boolean) => void;
@@ -719,6 +881,9 @@ function CreateClientForm({
               className="mt-1.5 rounded-xl"
             />
           </div>
+          {addressSettings ? (
+            <SubdomainField form={form} settings={addressSettings} onChange={onChange} />
+          ) : null}
           <div>
             <Label className="text-xs">CNPJ</Label>
             <Input

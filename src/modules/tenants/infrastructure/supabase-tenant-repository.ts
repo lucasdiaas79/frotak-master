@@ -128,6 +128,7 @@ export class SupabaseTenantRepository implements TenantRepository {
         slug: tenant.slug,
         name: tenant.trade_name || tenant.legal_name,
         legalName: tenant.legal_name,
+        tradeName: tenant.trade_name ?? "",
         cnpj: tenant.cnpj ?? "",
         domain: client?.clientUrl
           ? new URL(client.clientUrl).host
