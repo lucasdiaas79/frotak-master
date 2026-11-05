@@ -1,10 +1,15 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
   browserConfigScript,
   connectionForSlug,
   isClientDatabaseMode,
-  runWithConnection,
+  setRequestStore,
   slugFromHost,
+  type TenantConnection,
 } from "../server/lib/tenant-connection";
+
+const requestStore = new AsyncLocalStorage<TenantConnection>();
+setRequestStore(requestStore);
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -71,6 +76,6 @@ export default {
     }
 
     const resolved = connection;
-    return runWithConnection(resolved, () => entry.fetch(request, env, ctx));
+    return requestStore.run(resolved, () => entry.fetch(request, env, ctx));
   },
 };

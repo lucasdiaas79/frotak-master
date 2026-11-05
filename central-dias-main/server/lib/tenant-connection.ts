@@ -1,5 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-
 // Banco por cliente: o endereço diz quem é o cliente, e o agente da VPS de banco diz como chegar
 // nele. Cada requisição roda com a conexão do seu cliente. Sem FROTAK_AGENT_URL, vale o banco único
 // das variáveis de ambiente, como na produção atual.
@@ -17,7 +15,21 @@ const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 const HIT_TTL_MS = 30_000;
 const MISS_TTL_MS = 5_000;
 
-const currentRequest = new AsyncLocalStorage<TenantConnection>();
+// O armazenamento por requisição nasce em src/server.ts, a entrada do servidor. Este arquivo chega
+// ao pacote do navegador por tabela e não pode importar nada de Node.
+type RequestStore = { getStore(): TenantConnection | undefined };
+const STORE_KEY = "__FROTAK_TENANT_STORE__";
+
+export function setRequestStore(store: RequestStore) {
+  (globalThis as Record<string, unknown>)[STORE_KEY] = store;
+}
+
+function currentConnection() {
+  return (
+    (globalThis as Record<string, unknown>)[STORE_KEY] as RequestStore | undefined
+  )?.getStore();
+}
+
 const cache = new Map<string, { connection: TenantConnection | null; expiresAt: number }>();
 
 function readEnv(name: string) {
@@ -29,28 +41,22 @@ export function isClientDatabaseMode() {
   return Boolean(readEnv("FROTAK_AGENT_URL"));
 }
 
-export function runWithConnection<T>(connection: TenantConnection, work: () => T) {
-  return currentRequest.run(connection, work);
-}
-
 export function serverSupabaseUrl() {
   return (
-    currentRequest.getStore()?.internalUrl ??
-    readEnv("SUPABASE_URL") ??
-    readEnv("VITE_SUPABASE_URL")
+    currentConnection()?.internalUrl ?? readEnv("SUPABASE_URL") ?? readEnv("VITE_SUPABASE_URL")
   );
 }
 
 export function serverAnonKey() {
   return (
-    currentRequest.getStore()?.anonKey ??
+    currentConnection()?.anonKey ??
     readEnv("SUPABASE_ANON_KEY") ??
     readEnv("VITE_SUPABASE_ANON_KEY")
   );
 }
 
 export function serverServiceRoleKey() {
-  return currentRequest.getStore()?.serviceRoleKey ?? readEnv("SUPABASE_SERVICE_ROLE_KEY");
+  return currentConnection()?.serviceRoleKey ?? readEnv("SUPABASE_SERVICE_ROLE_KEY");
 }
 
 /** `acme.frotak.log.br` vira `acme`. Subnível e endereço de fora do domínio não são cliente. */
