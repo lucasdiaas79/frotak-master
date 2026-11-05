@@ -104,8 +104,11 @@ export function isAuthSessionError(error: unknown) {
   const message = String(candidate?.message ?? error ?? "").toLowerCase();
   const name = String(candidate?.name ?? "").toLowerCase();
 
+  // Erro do servidor (5xx) não diz nada sobre a sessão: ela continua valendo quando ele voltar.
+  const serverFailure = typeof candidate?.status === "number" && candidate.status >= 500;
+
   return (
-    name.includes("authapierror") ||
+    (name.includes("authapierror") && !serverFailure) ||
     candidate?.status === 401 ||
     AUTH_ERROR_MARKERS.some((marker) => message.includes(marker))
   );
@@ -446,6 +449,10 @@ export async function getCurrentUser(): Promise<User | null> {
   if (hasSupabaseConfig()) {
     const { data, error } = await supabase.auth.getUser();
     if (!error && data.user) return data.user;
+
+    // Rede fora do ar ou chamada cancelada (recarregar a página cancela) não é fim de sessão. Tratar
+    // como "sem usuário" apagaria o login, que a aba recarregada está prestes a usar.
+    if (error && !isAuthSessionError(error) && !readLocalSession()) throw error;
   }
 
   const local = readLocalSession();
