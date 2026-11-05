@@ -95,6 +95,7 @@ VITE_SUPABASE_URL=https://${API_HOST}
 VITE_SUPABASE_ANON_KEY=${ANON_KEY}
 VITE_FROTAK_CLIENT_APP_URL=https://${TMS_HOST}
 VITE_FROTAK_MASTER_LOGIN_URL=https://${MASTER_HOST}/login
+VITE_FROTAK_HIDE_PROTOTYPES=true
 EOF
 chown root:frotak /etc/frotak /etc/frotak/build.env
 chmod 750 /etc/frotak

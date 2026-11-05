@@ -5,7 +5,6 @@
 set -euo pipefail
 
 migrations_dir="${1:?informe o diretorio das migrations}"
-here="$(cd "$(dirname "$0")" && pwd)"
 
 # Cada chamada recebe a entrada de forma explicita: "docker exec -i" consome o stdin que herdar.
 run_psql() { docker exec -i -e PGOPTIONS='-c client_min_messages=warning' frotak-db psql -v ON_ERROR_STOP=1 -q -X -U postgres -h 127.0.0.1 -d postgres "$@"; }
@@ -20,7 +19,7 @@ create table if not exists supabase_migrations.schema_migrations (
 SQL
 
 applied="$(run_psql -At -c 'select version from supabase_migrations.schema_migrations' </dev/null)"
-mapfile -t files < <(printf '%s\n' "$migrations_dir"/*.sql "$here"/shim/*.sql | awk -F/ '{print $NF "\t" $0}' | LC_ALL=C sort | cut -f2-)
+mapfile -t files < <(printf '%s\n' "$migrations_dir"/*.sql | LC_ALL=C sort)
 count=0
 for file in "${files[@]}"; do
   base="$(basename "$file" .sql)"

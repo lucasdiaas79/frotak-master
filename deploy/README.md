@@ -36,7 +36,7 @@ Postgres escuta em localhost. Kong e PgBouncer escutam só no IP da WireGuard. R
 
 | Item do PDF | Situação | Observação |
 |---|---|---|
-| Painel e API Master | Instalado | **Sem 2FA**: o código ainda não tem essa tela |
+| Painel e API Master | Instalado | Com 2FA obrigatório para a equipe, cobrado também no servidor e no banco |
 | Catálogo de produtos e módulos | Instalado | No mesmo banco do TMS, não em Postgres próprio |
 | TMS | Instalado | Um endereço para todos os clientes; o cliente vem do login, não do subdomínio |
 | Front View | Não instalado | A VPS View só aceita chave SSH e a credencial recebida não entra |
@@ -70,7 +70,15 @@ Em cada VPS, o conteúdo de `deploy/` fica em `/opt/frotak/deploy` e `supabase/m
 | 10 | Banco | `OPERATOR_EMAIL=... db/bootstrap-operator.sh`. A senha fica em `/root/frotak-acesso-inicial.txt`; apague o arquivo depois do primeiro login |
 | 11 | Banco, depois Serviço | `db/setup-backup.sh` imprime a chave; passe-a para `service/backup-target.sh "CHAVE"` |
 
-`db/shim/` existe porque as migrations do repositório não montam um banco do zero: `touch_updated_at` é usada antes de ser criada, e o `pg_cron` nasce depois das migrations que agendam os jobs financeiros. Em produção isso não importa, então os arquivos ficam fora de `supabase/migrations`.
+## Acesso da equipe e 2FA
+
+O Master exige um autenticador (Google Authenticator, Microsoft Authenticator ou outro TOTP). No primeiro login, a tela mostra o QR Code para cadastrar; depois pede o código a cada entrada. Quem é só cliente entra sem 2FA.
+
+Operador perdeu o celular: rode `db/reset-mfa.sh operador@empresa.com.br` na VPS de banco. O 2FA dele é apagado, as sessões são encerradas e ele cadastra outro no próximo login.
+
+O "Login como cliente" do Master abre o TMS como dono do cliente, com credencial de uso único e registro em `audit_logs` (`master.client_access`). O token do operador não sai do Master, e a aba mostra um aviso de modo suporte.
+
+Com `VITE_FROTAK_HIDE_PROTOTYPES=true` (padrão nas VPS), o Master mostra só o que é real: os indicadores do Dashboard e a tela Clientes. As demais telas ainda usam dados fictícios e redirecionam para Clientes.
 
 ## Publicar uma nova versão
 
@@ -135,4 +143,4 @@ O destino do backup na VPS de Serviço aceita a chave só pela WireGuard, só pa
 
 - `common/base.sh` não desliga o login por senha, porque isso trancaria quem ainda não tem chave instalada. Depois de instalar uma chave, ajuste o `sshd` para `PasswordAuthentication no`.
 - Ubuntu 26.10 não é LTS, com suporte de cerca de 9 meses. Para produção longa, prefira reinstalar em LTS.
-- O job `vehicle-positions-retention-hourly` e a função `purge_old_vehicle_positions` existem na produção atual, mas em nenhuma migration. Sem eles, `vehicle_positions` cresce sem limite quando a Sascar estiver ligada.
+- `vehicle_positions` guarda só as últimas 24 horas: o job `vehicle-positions-retention-hourly` apaga o resto, mesmo prazo da produção atual.

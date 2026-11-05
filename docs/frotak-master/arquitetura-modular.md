@@ -23,11 +23,11 @@ Desligar não apaga dados, só bloqueia o acesso. Religar devolve o estado anter
 
 | Módulo (código) | Onde o bloqueio é garantido | O que some na interface |
 |---|---|---|
-| Gestão de Frota (`fleet_core`) | Módulo base: não desliga enquanto o TMS estiver liberado | — |
+| Gestão de Frota (`fleet_core`) | Módulo base: não desliga enquanto o TMS estiver liberado. Tabelas, RPCs e arquivos da frota exigem o módulo (`private.can_access_tenant` e `private.fleet_enabled_tenants`) | — |
 | Financeiro (`financial`) | `can_read/manage/configure_financial_workspace`, `require_financial_permission`, `get_financial_access` | Menu Financeiro e rotas `/financeiro/*`, `/lucros-despesas` |
 | Frotak IA (`frotak_ai`) | `resolveFrotakAiContext` (chat, voz, ferramentas, ações, push) e o disparo agendado de push | Menu e rota `/frotak-ia` |
 | App Motorista (`driver_app`) | `private.current_driver()` (toda RPC do app) e `createDriverAppAccess` | — |
-| Rastreadores (`frotak_tracking`) | `/api/sascar/sync` com `workspaceId` (manual e agendado) | — |
+| Rastreadores (`frotak_tracking`) | `/api/sascar/sync`, que agora sempre exige `workspaceId` | — |
 | Emissão de CT-e (`cte_issuance`) | Ainda não há tela nem API de CT-e no TMS | — |
 | Produto TMS (`tms`) | Desligado, nenhum módulo do TMS vale | O app mostra "TMS FrotaK não liberado" |
 | Cliente suspenso ou cancelado | `workspace_has_module` só libera tenants `active` e `trial` | O app mostra "Acesso da empresa suspenso" |
@@ -64,6 +64,7 @@ Regras que o build garante:
 
 - Pasta chamada `server/` não pode ser importada pelo navegador (proteção de import do TanStack Start). Por isso o middleware fica em `core/auth`.
 - Toda server function do Master usa `.middleware([platformAuth])`. Leitura vale para qualquer papel; escrita exige `super_admin` ou `operations` (`assertCanOperate` no caso de uso e `private.require_master_operator` no banco).
+- A equipe FrotaK precisa de sessão com 2FA (`aal2`) em três pontos: login (`src/lib/auth.ts`), servidor (`resolvePlatformActor`) e banco (`private.is_platform_user`).
 - Erros saem pelo `runUseCase`: um `DomainError` chega à tela com a mensagem; falha de infraestrutura vai para o log e o operador vê uma mensagem genérica.
 
 ## Estrutura do código do TMS (`central-dias-main`)
@@ -133,14 +134,14 @@ Ordem obrigatória: **migration primeiro, deploy depois**.
    ```sql
    select slug, status from public.tenants where status not in ('active', 'trial');
    ```
-2. Aplicar `supabase/migrations/202610310001_master_product_module_entitlements.sql`. Ela:
+2. Aplicar as migrations pendentes, começando por `supabase/migrations/202610310001_master_product_module_entitlements.sql`. Ela:
    - cria `platform_products` (`tms`, `view`) e `tenant_platform_products`, e dá o TMS a todos os clientes existentes e aos novos (trigger);
    - adiciona o módulo `driver_app` e vincula os módulos do TMS ao produto;
    - **liga** `fleet_core`, `frotak_ai`, `frotak_tracking` e `driver_app` em todo workspace ativo que ainda não tinha registro, preservando o acesso de hoje;
    - passa a exigir o módulo no financeiro (inclusive para o dono) e no app motorista;
    - cria `get_workspace_entitlements`, `master_set_tenant_product`, `master_set_tenant_module` e `master_tenant_usage`.
-3. Rodar `supabase/tests/master_product_module_entitlements.sql` num banco de teste. Para montar um banco do zero, veja o achado sobre `touch_updated_at` no [checkpoint](CHECKPOINT.md).
-4. Publicar o Master e o Cliente.
+3. Rodar `supabase/tests/master_product_module_entitlements.sql` num banco de teste.
+4. Conferir que o TOTP está ligado em Auth > MFA no Supabase e publicar o Master e o Cliente **logo depois** de aplicar `202611050001`: ela passa a exigir 2FA da equipe no banco, e um Master antigo não pede o código.
 5. No Master, desligar os módulos que cada cliente **não** contratou. O backfill liga tudo para não causar corte surpresa.
 
 Antes da migration, o código novo continua funcionando: o Master mostra todos os clientes com TMS e recusa alterações com a instrução de aplicar a migration; o Cliente trata a função ausente como "tudo liberado", como hoje.
@@ -150,13 +151,8 @@ Antes da migration, o código novo continua funcionando: o Master mostra todos o
 | Item | Situação |
 |---|---|
 | Banco por cliente, agente provisionador na VPS, cofre e jobs repetíveis (PDF, Fases 1 a 3) | Não iniciado. Exige reescrever o acesso a dados do TMS, que hoje fala direto com o Supabase. A porta `TenantProvisioner` é o ponto de troca no Master. As VPS já têm WireGuard, PgBouncer e Redis: ver [deploy/README.md](../../deploy/README.md). |
-| 2FA no Master | O PDF exige; o código não tem. |
 | Roteamento por subdomínio | Não feito; o cliente é descoberto pela membership do usuário. |
-| Tabelas de frota (veículos, fretes etc.) | RLS por tenant, sem checagem de módulo. Só importa se o TMS for desligado: o app bloqueia as telas, mas a API do Supabase ainda responde a esse usuário. |
 | Produto View | Gravado no catálogo; nenhum sistema consome ainda. O backend do View deve ler `get_workspace_entitlements` ou o catálogo. |
 | CT-e | Módulo existe no catálogo; não há funcionalidade de CT-e para bloquear. |
 | Suspender e encerrar cliente pelo Master | Não feito (Fase 2 do PDF). O bloqueio por status já funciona. |
-| Sincronização Sascar global (sem `workspaceId`) | Modo legado sem checagem de módulo. |
-| "Login como cliente" | Ainda envia o token do próprio usuário Master ao app cliente. Precisa de um fluxo de personificação próprio. |
-| Usuários do Master (tela `/usuarios`) e demais telas com dados fictícios | Fora deste escopo; continuam no protótipo. |
-| `central-dias-main/server/api/sascar/sync.post.ts` | Handler antigo do Nitro para `/api/sascar/sync`. Não entra no build (o endereço é atendido pela rota do TanStack); pode ser apagado. |
+| Telas do Master com dados fictícios (`/usuarios`, `/financeiro`, `/operacoes` e outras) | Continuam no protótipo. Ficam escondidas com `VITE_FROTAK_HIDE_PROTOTYPES=true`, padrão nas VPS. |
