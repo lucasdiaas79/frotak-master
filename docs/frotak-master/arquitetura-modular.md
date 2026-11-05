@@ -1,6 +1,6 @@
 # FrotaK Master · arquitetura modular
 
-Referência de produto: `FrotaK Master · Arquitetura.pdf` (2026-10-29). Esta é a **Fase 1 adaptada ao banco único atual**: o Master liga e desliga produtos e módulos por cliente, e o app cliente obedece. O banco por cliente, o agente provisionador na VPS e o cofre de segredos ficam para depois (ver [Pendências](#pendências)).
+Referência de produto: `FrotaK Master · Arquitetura.pdf` (2026-10-29). O Master liga e desliga produtos e módulos por cliente, e o app cliente obedece. O sistema roda em dois modos: **banco único**, na produção atual, e **um banco por cliente**, nas VPS (ver [Um banco por cliente](#um-banco-por-cliente)). O cofre de segredos fica para depois (ver [Pendências](#pendências)).
 
 ## Como a liberação chega ao cliente
 
@@ -46,7 +46,7 @@ src/
     catalog/       domínio: produtos e módulos (códigos são contrato com banco e cliente)
     entitlements/  liberar e bloquear produtos e módulos por cliente
     tenants/       lista de clientes, uso e resumo do dashboard
-    provisioning/  cliente novo: login do admin, provision_tenant, produtos
+    provisioning/  cliente novo: em banco único, login do admin, provision_tenant e produtos; em banco por cliente, agente e cadastro no Central
   routes/          telas finas que chamam module/server.ts e module/ui
 ```
 
@@ -116,6 +116,33 @@ Passos: escreva o adaptador em `infrastructure/` implementando a porta, troque a
 
 `cte-issuance` ainda é só manifesto, porque não há funcionalidade de CT-e.
 
+## Um banco por cliente
+
+O modo vem da configuração: com `FROTAK_AGENT_URL` no servidor do Master e do TMS e `VITE_FROTAK_MULTI_DB=true` no build do TMS, cada cliente tem banco próprio. Sem elas, tudo funciona em banco único. A operação está em [deploy/README.md](../../deploy/README.md).
+
+```mermaid
+flowchart LR
+  Op[Equipe FrotaK] --> M[Master]
+  M -->|token, pela WireGuard| Ag[Agente na VPS de banco]
+  M --> Central[(frotak_central:<br/>cadastro dos clientes)]
+  Ag -->|CREATE DATABASE ... TEMPLATE| Modelo[(frotak_template)]
+  Ag --> A[(frotak_cliente_a)]
+  Ag --> B[(frotak_cliente_b)]
+  Ag --> K[Kong: rotas /c/cliente]
+  U[Usuário do cliente] -->|cliente-a.dominio| T[TMS]
+  T -->|conexão pelo endereço| Ag
+  T --> K
+  K --> A
+  K --> B
+```
+
+- **Criar:** o Master valida, pede o banco ao agente e só então cadastra no Central. Se o cadastro falhar, o banco é removido. Essa ordem evita cliente fantasma, porque os gatilhos do cadastro criam dados no banco onde rodam.
+- **Liberar módulo:** `client-synced-entitlement-repository` aplica no banco do cliente primeiro e depois no Central. Quem obedece é o banco do cliente, com as mesmas regras do banco único.
+- **TMS:** `src/server.ts` resolve a conexão pelo endereço da requisição e a guarda só durante a requisição. O navegador recebe as chaves do próprio cliente em `/frotak-client.js`.
+- **Isolamento:** cada cliente tem JWT secret, chave anônima, chave de serviço e papéis de banco próprios, sem `CONNECT` para os outros. O Realtime é único, mas multi-tenant, com um slot por cliente.
+- **Jobs:** ficam em `frotak_jobs`, com `cron.schedule_in_database` apontando para o banco de cada cliente. O `pg_cron` e o `pg_net` atendem um banco só e, em `postgres`, impediriam copiar o modelo.
+- **Migration nova:** continua em `supabase/migrations`. O agente aplica no modelo, no Central e em todos os clientes. Guarde com `current_database()` o que depender de `pg_cron`, como em `202610150001`.
+
 ## Adicionar um módulo novo
 
 1. **Banco**: uma migration nova insere o módulo em `public.modules` com `platform_product_id` e `sort_order`. Se o módulo já existe em uso, faça o backfill de `workspace_modules` para não cortar ninguém.
@@ -150,9 +177,10 @@ Antes da migration, o código novo continua funcionando: o Master mostra todos o
 
 | Item | Situação |
 |---|---|
-| Banco por cliente, agente provisionador na VPS, cofre e jobs repetíveis (PDF, Fases 1 a 3) | Não iniciado. Exige reescrever o acesso a dados do TMS, que hoje fala direto com o Supabase. A porta `TenantProvisioner` é o ponto de troca no Master. As VPS já têm WireGuard, PgBouncer e Redis: ver [deploy/README.md](../../deploy/README.md). |
-| Roteamento por subdomínio | Não feito; o cliente é descoberto pela membership do usuário. |
+| Cofre de segredos, mTLS com o agente, fila de jobs repetíveis e armazenamento de objetos (PDF) | Não feitos. Hoje: arquivos em `/etc/frotak`, WireGuard com token, `pg_cron` e uma thread do agente, disco da VPS. Ver [deploy/README.md](../../deploy/README.md). |
+| Roteamento por subdomínio | Feito no modo banco por cliente. Em banco único, o cliente é descoberto pela membership do usuário. Em domínio definitivo, exige DNS curinga. |
 | Produto View | Gravado no catálogo; nenhum sistema consome ainda. O backend do View deve ler `get_workspace_entitlements` ou o catálogo. |
 | CT-e | Módulo existe no catálogo; não há funcionalidade de CT-e para bloquear. |
-| Suspender e encerrar cliente pelo Master | Não feito (Fase 2 do PDF). O bloqueio por status já funciona. |
+| Suspender e encerrar cliente pelo Master | Sem tela (Fase 2 do PDF). O bloqueio por status já funciona, e o agente tem `POST /clients/<slug>/status` e `DELETE /clients/<slug>`, ainda só pela API. |
+| Troca de senha nos apps | Sem tela no Master e no TMS. O login é marcado com `must_change_password`, mas nada pede a troca. |
 | Telas do Master com dados fictícios (`/usuarios`, `/financeiro`, `/operacoes` e outras) | Continuam no protótipo. Ficam escondidas com `VITE_FROTAK_HIDE_PROTOTYPES=true`, padrão nas VPS. |

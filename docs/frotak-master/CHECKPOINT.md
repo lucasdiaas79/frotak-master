@@ -1,6 +1,6 @@
 # Checkpoint · Master modular e liberação por cliente
 
-Atualizado em 2026-11-05. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", adaptada ao Supabase compartilhado atual (decisão do usuário em 2026-10-31). Detalhes em [arquitetura-modular](arquitetura-modular.md).
+Atualizado em 2026-11-05. Escopo: o PDF "FrotaK Master · Arquitetura" em dois modos: **banco único**, na produção atual (decisão de 2026-10-31), e **um banco por cliente**, nas VPS (pedido do usuário em 2026-11-05). Detalhes em [arquitetura-modular](arquitetura-modular.md).
 
 ## Git e ambiente
 
@@ -8,10 +8,10 @@ Atualizado em 2026-11-05. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", 
 |---|---|
 | Base | `main` @ `92a7213` (igual a `origin/main` em 2026-11-02) |
 | Branch | `feat/master-modulos-por-cliente`, commits locais, **sem push** |
-| Commits | `0cc1f2a` Master modular e liberação; `1f98144` registro de módulos do TMS; `659faef` Frotak IA; `e77489b` Rastreadores; `08de70b` App Motorista; `cad1469` Financeiro; `0643e97` Gestão de Frota; `df82eec` documentação; clean architecture: `848b3ab` App Motorista e guarda de dependências, `b99e26b` Rastreadores, `e7cdebc` Financeiro, `66b3851` Gestão de Frota, `4008c4c` Frotak IA; `d04bede` documentação; `a7ad7a3` implantação nas VPS; correções de 2026-11-05: `e680637` banco, `a6a6c5d` Master, `18d5e95` TMS, `7a44c93` implantação |
+| Commits | `0cc1f2a` Master modular e liberação; `1f98144` registro de módulos do TMS; `659faef` Frotak IA; `e77489b` Rastreadores; `08de70b` App Motorista; `cad1469` Financeiro; `0643e97` Gestão de Frota; `df82eec` documentação; clean architecture: `848b3ab` App Motorista e guarda de dependências, `b99e26b` Rastreadores, `e7cdebc` Financeiro, `66b3851` Gestão de Frota, `4008c4c` Frotak IA; `d04bede` documentação; `a7ad7a3` implantação nas VPS; correções de 2026-11-05: `e680637` banco, `a6a6c5d` Master, `18d5e95` TMS, `7a44c93` implantação; banco por cliente: `e92f1d9` agente e VPS de banco, `4c60c58` modelo, `631dce3` e `76f1690` portão, `d7f74ac` API, `3173f4e` Master, `86c40ad` e `5b3c8fd` TMS, `06cbc6e` sessão no TMS, `a596ddd` e `36408a9` ordem do cadastro, `6a107d4` restauração |
 | Teste de ponta a ponta | Supabase local descartável (`project_id` `frotak-e2e`, portas 553xx) criado do zero e removido no fim |
 | Banco remoto e banco local `frota-master` | Não alterados |
-| VPS de banco e de Serviço | Instaladas em 2026-11-04 e atualizadas em 2026-11-05 para a versão `7a44c93`, com um operador e o cliente fictício "FrotaK Demonstração". Ver [Ambiente nas VPS](#ambiente-nas-vps) |
+| VPS de banco e de Serviço | Reinstaladas em 2026-11-05 com um banco por cliente, versão `6a107d4`, com um operador e o cliente fictício "FrotaK Demonstração". Ver [Ambiente nas VPS](#ambiente-nas-vps) |
 | VPS View | Fora do escopo por decisão do usuário em 2026-11-05. Não alterada |
 
 ## Concluído
@@ -28,6 +28,9 @@ Atualizado em 2026-11-05. Escopo: Fase 1 do PDF "FrotaK Master · Arquitetura", 
 10. Sequência de migrations monta um banco do zero, com os jobs financeiros, a limpeza de posições de 24 horas e o job da Sascar.
 11. Telas fictícias do Master escondidas com `VITE_FROTAK_HIDE_PROTOTYPES=true`; o nome e o logo de um cliente não aparecem mais para os outros; `/api/sascar/sync` sempre exige o cliente.
 12. `tsc` sem erros nos dois apps.
+13. Um banco por cliente na VPS de banco, criado pelo Master por meio de um agente. Cada cliente tem banco, login, API, chaves e arquivos próprios. Sem `FROTAK_AGENT_URL`, Master e TMS seguem em banco único, como na produção atual.
+14. TMS por endereço: `<cliente>.<domínio>` abre o banco daquele cliente, com login próprio em `/login`.
+15. Backup e restauração por cliente, sem encostar nos outros. Migrations novas chegam ao modelo, ao Central e a todos os clientes com um comando.
 
 ## Verificações executadas
 
@@ -74,27 +77,40 @@ Guia de operação e mapa do PDF para o que foi instalado: [deploy/README.md](..
 
 | VPS | O que roda |
 |---|---|
-| Banco | Supabase em Docker (Postgres 17, Auth, REST, Realtime, Storage, Kong), PgBouncer nativo, backup diário e teste semanal de restauração |
+| Banco | Um Postgres 17 com os bancos `frotak_central` (Master), `frotak_jobs` (agendamentos), `frotak_template` (modelo) e um `frotak_<cliente>` por cliente. Login, API e arquivos em contêineres por cliente; Realtime e Kong únicos; PgBouncer nativo; agente provisionador; backup diário e teste semanal de restauração |
 | Serviço | Master e TMS em Node 24 sob systemd, Caddy com HTTPS, Redis, cópia dos backups |
 | Rede | WireGuard entre as duas. O banco expõe só SSH; o Serviço, só SSH, 80 e 443 |
 
-O ambiente é **novo e sem dados de cliente real**: tem só o operador `admin@frotak.log.br` e o cliente fictício "FrotaK Demonstração" (`tms@frotak.log.br`, CNPJ só de zeros), criado para testar o TMS. A produção atual (Lovable, Vercel e Supabase) continua sendo a que atende os clientes, e nenhum dado foi migrado. Os endereços são temporários, em `*.sslip.io`, até o DNS ser apontado.
+O ambiente é **novo e sem dados de cliente real**: tem só o operador `admin@frotak.log.br` no Central e o cliente fictício "FrotaK Demonstração" (`tms@frotak.log.br`, CNPJ só de zeros), no endereço `frotak-demonstracao.`. O endereço antigo `app.` não existe mais. A produção atual (Lovable, Vercel e Supabase) continua sendo a que atende os clientes, e nenhum dado foi migrado. Os endereços são temporários, em `*.sslip.io`, até o DNS ser apontado.
 
-Evidências, rodadas contra os endereços públicos:
+### Banco por cliente (versão `6a107d4`, 2026-11-05)
 
-- Banco reinstalado do zero com as 74 migrations do repositório, sem nenhum ajuste externo. Essa última reinstalação veio depois dos testes abaixo, para apagar os dados de teste, e foi conferida com login do operador até a tela de 2FA, backup, restauração e reboot.
-- Os três roteiros de navegador: 29 de 29. As 28 telas do TMS: 28 de 28. IA no servidor: aceita e recusa por módulo.
-- Roteiro de segurança: 38 de 38. Senha sem 2FA não lê clientes nem frota pela API e é recusada nas server functions; confirmar o 2FA derruba as sessões sem ele. "Login como cliente" abre como dono, audita e não abre de novo com a mesma credencial. TMS desligado ou cliente suspenso: a API não devolve a frota, não grava e a RPC recusa; religar devolve tudo, sem perda.
-- Testes SQL passam, exceto `financial_foundation_phase1`, que exige plano de contas de cliente existente, como antes.
-- Realtime: inserção com RLS chegou pelo WebSocket através de Caddy, WireGuard e Kong. Storage: enviar, baixar e apagar; anônimo não baixa.
+Rodadas contra os endereços públicos, com dois clientes de teste. Depois disso a VPS de banco foi reinstalada para apagar os dados de teste, e a reinstalação foi conferida com login nos dois apps, seis telas do TMS abertas, backup e restauração.
+
+- Fluxo principal: 20 de 20. Roteiros complementares: 6 de 6 e 4 de 4. As 28 telas do TMS: 28 de 28.
+- Isolamento: 47 de 47. Logins separados; token, chave anônima e chave de serviço do cliente A recusados no B e no Central; papéis de banco de um cliente sem `CONNECT` no banco do outro; Realtime simultâneo sem vazamento; módulo desligado muda só um cliente; "Login como cliente" abre o cliente certo e não repete; endereço inexistente não recebe certificado.
+- Falha ao criar o banco não deixa cliente fantasma no Central.
+- Restauração: o cliente A perdeu dados e voltou do backup, com o Realtime ativo e arquivo incluído; o cliente B manteve o que tinha gravado depois do backup. `restore-test.sh` passou.
+- `migrate` aplicou uma migration nova no modelo, no Central e nos clientes; a segunda rodada aplicou 0.
+- Reboot simultâneo das duas VPS com clientes: 12 de 12 saudáveis; login, Realtime e TMS OK.
+- Consumo medido: cerca de 175 MB por cliente parado, o que dá cerca de 20 clientes nesta VPS. É estimativa, **sem teste de carga**.
+
+**Banco único, depois das mudanças (Supabase local descartável; `frota-master` intacto):** as 75 migrations montam do zero, com os 5 jobs; testes SQL passam, exceto `financial_foundation_phase1` ("DRE account groups are incomplete"), que já falhava em banco vazio; navegador 7 de 7, sem carregar o script de cliente.
+
+**Código na versão `6a107d4`:** `tsc` sem erros nos dois apps; `test:modules` 30, `test:frotak-ai` 16, `test:visual` 3, `test-financial-recurring` 6; lint sem erro nos arquivos da entrada do servidor e do login; nenhuma senha ou IP de VPS em `deploy`, `docs/frotak-master`, `src` ou `supabase`.
+
+### Antes do banco por cliente (versão `7a44c93`, banco único nas VPS)
+
+Estes itens não foram repetidos por inteiro no desenho novo:
+
+- Roteiro de segurança: 38 de 38. Senha sem 2FA não lê clientes nem frota pela API e é recusada nas server functions; confirmar o 2FA derruba as sessões sem ele. TMS desligado ou cliente suspenso: a API não devolve a frota, não grava e a RPC recusa; religar devolve tudo, sem perda.
+- Storage: enviar, baixar e apagar; anônimo não baixa.
 - API: cadastro público recusado, REST sem `apikey` recusado, anônimo não lê `platform_users`, administração do Realtime bloqueada.
-- `pg_cron` chamou o TMS pela internet com HTTP 200. Sem token, `push-dispatch` e `sascar/sync` respondem 401.
-- Varredura externa de portas em IPv4 confirmou a tabela acima. O IPv6 foi conferido só pelo firewall e pelas portas em escuta no servidor.
-- PgBouncer pela WireGuard aceita e recusa senha errada; Postgres fechado mesmo dentro da WireGuard.
-- Backup restaurado em contêiner descartável e conferido com o banco em uso. A chave de backup não abre shell, não baixa e não usa `--delete`.
-- Reboot simultâneo das duas VPS: tudo voltou sozinho.
+- PgBouncer pela WireGuard aceita e recusa senha errada; Postgres fechado mesmo dentro da WireGuard. A chave de backup não abre shell, não baixa e não usa `--delete`.
 
-Não testado: chamada real ao Gemini e à Sascar e envio real de push, porque as chaves não estão na instalação, e a restauração completa numa máquina nova.
+A varredura externa de portas em IPv4 foi repetida na instalação final e confirmou a tabela acima. O IPv6 foi conferido só pelo firewall e pelas portas em escuta no servidor.
+
+Não testado: chamada real ao Gemini e à Sascar e envio real de push, porque as chaves não estão na instalação; a restauração completa numa máquina nova; e carga com vários clientes em uso.
 
 ## Achados em aberto
 
@@ -103,14 +119,17 @@ Não testado: chamada real ao Gemini e à Sascar e envio real de push, porque as
 3. **Telas fictícias do Master.** `/usuarios`, `/financeiro`, `/operacoes` e outras continuam protótipo. Escondê-las evita decisão com número inventado, mas alguém precisa decidir quais delas construir.
 4. **Sem troca de senha nos apps.** O login é marcado com `must_change_password`, mas nenhuma tela pede ou permite a troca, no Master nem no TMS. Hoje a senha só muda pela API de administração.
 5. **App Motorista sem interface neste repositório.** Aqui só existe a gestão do acesso (TMS > Motoristas), então não há ambiente do motorista nas VPS.
-6. **Duas edições em migrations já aplicadas.** `202609240001` e `20260928091642` ganharam instruções idempotentes no início para o banco novo montar. Migration aplicada não roda de novo, então a produção não muda; `supabase db push` compara só a versão.
+6. **Três edições em migrations já aplicadas.** `202609240001`, `202610150001` e `20260928091642` ganharam guardas ou instruções idempotentes para o banco novo montar, inclusive fora do banco que recebe o `pg_cron`. Migration aplicada não roda de novo, então a produção não muda; `supabase db push` compara só a versão.
+7. **"Central" entendido como o Master.** O usuário não confirmou nem corrigiu essa leitura. Se Central for outro sistema, o banco `frotak_central` e o endereço `master.` precisam de revisão.
+8. **Partes do PDF não feitas no banco por cliente:** mTLS entre Master e agente (hoje WireGuard e token), cofre de segredos (hoje arquivos em `/etc/frotak`), fila de jobs repetíveis, tela para apagar cliente (só a API do agente) e armazenamento de objetos. Os arquivos de cada cliente ficam no disco da VPS.
 
 Não houve revisão independente por outro executor.
 
 ## Próxima ação
 
-1. Decidir entre manter o banco único ou criar um banco por cliente na VPS de banco, provisionado remotamente pelo Master. O usuário descreveu a VPS de banco como o lugar de todos os bancos (Central, TMS e novos clientes) em 2026-11-05.
+1. Confirmar que "Central" é o Master (achado 7).
 2. Instalar chave SSH nas VPS de banco e de Serviço e desligar o login por senha. As senhas do root foram trocadas e são diferentes em cada uma; ficam só com o usuário.
-3. Decidir se as VPS substituem a produção atual. Se sim: apontar o DNS, preencher as chaves (Gemini, Sascar, Maps) e migrar os dados.
-4. Resolver a origem de `202610220001_client_onboarding` (`select version from supabase_migrations.schema_migrations order by version desc limit 5;`).
-5. Na produção atual: aplicar as migrations e publicar Master e Cliente em seguida, porque `202611050001` passa a exigir 2FA da equipe no banco. Depois, desligar os módulos que cada cliente não contratou.
+3. Decidir se as VPS substituem a produção atual. Se sim: criar o DNS curinga `*.<domínio>` para os clientes, preencher as chaves (Gemini, Sascar, Maps) e migrar os dados.
+4. Fazer um teste de carga antes de passar de poucos clientes, porque a capacidade de cerca de 20 é estimativa de memória.
+5. Resolver a origem de `202610220001_client_onboarding` (`select version from supabase_migrations.schema_migrations order by version desc limit 5;`).
+6. Na produção atual: aplicar as migrations e publicar Master e Cliente em seguida, porque `202611050001` passa a exigir 2FA da equipe no banco. Depois, desligar os módulos que cada cliente não contratou.
