@@ -8,12 +8,10 @@ create table if not exists public.client_databases (
   tenant_id uuid primary key references public.tenants(id) on delete cascade,
   slug text not null unique,
   database_name text not null unique,
-  status text not null default 'provisioning',
   owner_email text,
-  client_url text,
+  client_url text not null,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint client_databases_status_chk check (status in ('provisioning', 'active'))
+  updated_at timestamptz not null default now()
 );
 
 comment on table public.client_databases is
@@ -23,11 +21,12 @@ alter table public.client_databases enable row level security;
 revoke all on table public.client_databases from public, anon, authenticated;
 grant select on table public.client_databases to service_role;
 
--- Registra o cliente antes de criar o banco dele. Mesmas regras de provision_tenant, sem login:
--- o dono do cliente so existe no banco do cliente.
+-- Registra o cliente depois que o banco dele ja existe: uma falha ao criar o banco nao deixa nada
+-- aqui. Mesmas regras de provision_tenant, sem login: o dono so existe no banco do cliente.
 create or replace function public.master_register_client(
   p_slug text,
   p_database_name text,
+  p_client_url text,
   p_legal_name text,
   p_trade_name text,
   p_cnpj text,
@@ -81,7 +80,7 @@ begin
     p_legal_name,
     nullif(btrim(coalesce(p_trade_name, '')), ''),
     p_cnpj,
-    'provisioning',
+    'active',
     jsonb_build_object('subscriptionPeriod', p_subscription_period, 'maxVehicles', p_max_vehicles),
     p_actor_user_id
   )
@@ -129,8 +128,8 @@ begin
   from public.modules m
   where m.code = any(v_modules) and m.active = true;
 
-  insert into public.client_databases (tenant_id, slug, database_name, owner_email)
-  values (v_tenant_id, p_slug, p_database_name, p_owner_email);
+  insert into public.client_databases (tenant_id, slug, database_name, owner_email, client_url)
+  values (v_tenant_id, p_slug, p_database_name, p_owner_email, p_client_url);
 
   insert into public.audit_logs (
     actor_user_id, tenant_id, workspace_id, action, entity_type, entity_id, new_data, metadata
@@ -150,81 +149,11 @@ begin
 end;
 $$;
 
-create or replace function public.master_activate_client(
-  p_tenant_id uuid,
-  p_client_url text,
-  p_actor_user_id uuid
-)
-returns void
-language plpgsql
-security definer
-set search_path = pg_catalog, public, private
-as $$
-begin
-  perform private.require_master_operator(p_actor_user_id);
-
-  update public.client_databases
-  set status = 'active', client_url = p_client_url, updated_at = now()
-  where tenant_id = p_tenant_id;
-
-  update public.tenants
-  set status = 'active'
-  where id = p_tenant_id and status = 'provisioning';
-end;
-$$;
-
--- Desfaz o cadastro quando a criacao do banco falha. So apaga quem ainda esta em provisionamento.
-create or replace function public.master_discard_client(
-  p_tenant_id uuid,
-  p_actor_user_id uuid
-)
-returns void
-language plpgsql
-security definer
-set search_path = pg_catalog, public, private
-as $$
-declare
-  v_slug text;
-begin
-  perform private.require_master_operator(p_actor_user_id);
-
-  select slug into v_slug
-  from public.client_databases
-  where tenant_id = p_tenant_id and status = 'provisioning';
-
-  if v_slug is null then
-    return;
-  end if;
-
-  -- Cliente em provisionamento so tem o que master_register_client gravou.
-  delete from public.workspace_modules
-  where workspace_id in (select id from public.workspaces where tenant_id = p_tenant_id);
-  delete from public.audit_logs where tenant_id = p_tenant_id;
-  delete from public.tenant_subscriptions where tenant_id = p_tenant_id;
-  delete from public.tenant_platform_products where tenant_id = p_tenant_id;
-  delete from public.client_databases where tenant_id = p_tenant_id;
-  delete from public.workspaces where tenant_id = p_tenant_id;
-  delete from public.tenants where id = p_tenant_id;
-
-  insert into public.audit_logs (actor_user_id, action, entity_type, metadata)
-  values (
-    p_actor_user_id,
-    'client_database.discarded',
-    'tenant',
-    jsonb_build_object('slug', v_slug, 'source', 'master.discard_client')
-  );
-end;
-$$;
-
 revoke all on function public.master_register_client(
-  text, text, text, text, text, text, text, timestamptz, timestamptz, text, integer, text[], text, uuid
+  text, text, text, text, text, text, text, text, timestamptz, timestamptz, text, integer, text[], text, uuid
 ) from public, anon, authenticated;
-revoke all on function public.master_activate_client(uuid, text, uuid) from public, anon, authenticated;
-revoke all on function public.master_discard_client(uuid, uuid) from public, anon, authenticated;
 grant execute on function public.master_register_client(
-  text, text, text, text, text, text, text, timestamptz, timestamptz, text, integer, text[], text, uuid
+  text, text, text, text, text, text, text, text, timestamptz, timestamptz, text, integer, text[], text, uuid
 ) to service_role;
-grant execute on function public.master_activate_client(uuid, text, uuid) to service_role;
-grant execute on function public.master_discard_client(uuid, uuid) to service_role;
 
 commit;

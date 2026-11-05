@@ -1,3 +1,4 @@
+import { DomainError } from "@/core/domain/domain-error";
 import { assertCanOperate, type PlatformActor } from "@/core/domain/platform-actor";
 import { products as productCatalog } from "@/modules/catalog/domain/catalog";
 import type { EntitlementRepository } from "@/modules/entitlements/application/entitlement-repository";
@@ -11,22 +12,22 @@ import {
 } from "@/modules/provisioning/domain/provisioning-request";
 
 export type ClientDatabase = {
-  tenantId: string;
   workspaceId: string;
+  databaseName: string;
   clientUrl: string;
 };
 
 /** O cadastro do cliente no Central: contrato e liberações, sem dados da operação. */
 export interface ClientRegistry {
+  slugExists(slug: string): Promise<boolean>;
   register(input: {
     request: ValidatedProvisioning;
     databaseName: string;
+    clientUrl: string;
     actorUserId: string;
     startsAt: Date;
     endsAt: Date;
   }): Promise<string>;
-  activate(tenantId: string, clientUrl: string, actorUserId: string): Promise<void>;
-  discard(tenantId: string, actorUserId: string): Promise<void>;
 }
 
 /** O banco do cliente, criado remotamente na VPS de banco, junto com o login do dono. */
@@ -46,13 +47,10 @@ export type ProvisionClientDatabaseDeps = {
   log: ProvisioningLogger;
 };
 
-export function databaseNameFor(slug: string) {
-  return `frotak_${slug.replace(/-/g, "_")}`;
-}
-
 /**
- * Cliente novo com banco próprio: registra no Central, cria o banco e só então ativa. Se algo
- * falhar, desfaz o que já foi feito para não sobrar cliente pela metade.
+ * Cliente novo com banco próprio. O banco nasce primeiro e o cadastro no Central vem por último:
+ * assim, criar o banco que falhe não deixa nada no Central, e o agente já desfaz o que fez. Só falta
+ * desfazer o banco se o cadastro falhar.
  */
 export async function provisionClientDatabase(
   deps: ProvisionClientDatabaseDeps,
@@ -63,39 +61,33 @@ export async function provisionClientDatabase(
   const input = validateProvisioning(request);
   deps.log("validated", { tenantSlug: input.tenantSlug, modules: input.modules });
 
+  if (await deps.registry.slugExists(input.tenantSlug)) {
+    throw new DomainError("CONFLICT", "Já existe um cliente com esse nome ou endereço.");
+  }
+
   const startsAt = new Date();
   const endsAt = subscriptionEndDate(input.subscriptionPeriod, startsAt);
-  const tenantId = await deps.registry.register({
-    request: input,
-    databaseName: databaseNameFor(input.tenantSlug),
-    actorUserId: actor.userId,
-    startsAt,
-    endsAt,
-  });
-  deps.log("registered");
-
-  let database: ClientDatabase;
-  try {
-    database = await deps.databases.create({ request: input, startsAt, endsAt });
-  } catch (error) {
-    deps.log("rollback-registry");
-    await deps.registry.discard(tenantId, actor.userId).catch((cleanupError) => {
-      deps.log("rollback-registry-failed", { error: String(cleanupError) });
-    });
-    throw error;
-  }
+  const database = await deps.databases.create({ request: input, startsAt, endsAt });
   deps.log("database-created");
 
+  let tenantId: string;
   try {
-    await deps.registry.activate(tenantId, database.clientUrl, actor.userId);
+    tenantId = await deps.registry.register({
+      request: input,
+      databaseName: database.databaseName,
+      clientUrl: database.clientUrl,
+      actorUserId: actor.userId,
+      startsAt,
+      endsAt,
+    });
   } catch (error) {
     deps.log("rollback-database");
     await deps.databases.remove(input.tenantSlug).catch((cleanupError) => {
       deps.log("rollback-database-failed", { error: String(cleanupError) });
     });
-    await deps.registry.discard(tenantId, actor.userId).catch(() => undefined);
     throw error;
   }
+  deps.log("registered");
 
   // O banco do cliente já recebeu os produtos pedidos; aqui alinha o catálogo do Central.
   const pendingProducts: string[] = [];
