@@ -11,7 +11,7 @@ export type TenantConnection = {
   serviceRoleKey: string;
 };
 
-const HOST_PATTERN = /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?.)+[a-z]{2,63}$/;
+const HOST_PATTERN = /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const HIT_TTL_MS = 30_000;
 const MISS_TTL_MS = 5_000;
 
@@ -62,7 +62,7 @@ export function serverServiceRoleKey() {
 /** Nome do host sem porta e sem ponto final; null quando não parece um domínio. */
 export function normalizeHost(host: string | null | undefined) {
   if (!host) return null;
-  const name = host.trim().toLowerCase().split(":")[0].replace(/.$/, "");
+  const name = host.trim().toLowerCase().split(":")[0].replace(/\.$/, "");
   return HOST_PATTERN.test(name) ? name : null;
 }
 
