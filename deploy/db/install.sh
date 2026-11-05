@@ -139,6 +139,7 @@ if ! db_exists frotak_central; then
   as_admin -d postgres <<'SQL'
 REVOKE CONNECT ON DATABASE frotak_central FROM PUBLIC;
 GRANT CONNECT ON DATABASE frotak_central TO authenticator, supabase_auth_admin, supabase_storage_admin, postgres, pgbouncer;
+GRANT CREATE ON DATABASE frotak_central TO supabase_storage_admin;
 REVOKE CONNECT ON DATABASE frotak_jobs FROM PUBLIC;
 REVOKE CONNECT ON DATABASE postgres FROM PUBLIC;
 GRANT CONNECT ON DATABASE postgres TO postgres, pgbouncer;

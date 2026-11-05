@@ -292,7 +292,8 @@ def api_services(label, prefix, hosts, groups):
         {"name": f"{label}-auth-authorize", "url": f"{auth}/authorize", "routes": route("auth-authorize", "/auth/v1/authorize"), "plugins": [cors]},
         {"name": f"{label}-auth", "url": f"{auth}/", "routes": route("auth", "/auth/v1/"), "plugins": [cors, key_auth(False), acl]},
         {"name": f"{label}-rest", "url": f"http://{hosts['rest']}:3000/", "routes": route("rest", "/rest/v1/"), "plugins": [cors, key_auth(True), acl]},
-        {"name": f"{label}-realtime-ws", "protocol": "ws", **realtime, "path": "/socket", "routes": route("realtime-ws", "/realtime/v1/"), "plugins": [cors, key_auth(False), acl]},
+        # O Kong 2.8 nao tem protocolo "ws": servico http repassa o upgrade do WebSocket.
+        {"name": f"{label}-realtime-ws", "protocol": "http", **realtime, "path": "/socket", "routes": route("realtime-ws", "/realtime/v1/"), "plugins": [cors, key_auth(False), acl]},
         # Administracao interna do Realtime nunca sai pelo portao.
         {
             "name": f"{label}-realtime-internal",
@@ -414,7 +415,8 @@ def grant_connect(slug):
     psql(
         "postgres",
         f"""GRANT CONNECT ON DATABASE "{names['db']}" TO "{names['auth']}", "{names['rest']}",
-        "{names['storage']}", postgres, pgbouncer, supabase_admin;""",
+        "{names['storage']}", postgres, pgbouncer, supabase_admin;
+        GRANT CREATE ON DATABASE "{names['db']}" TO supabase_storage_admin;""",
     )
 
 
