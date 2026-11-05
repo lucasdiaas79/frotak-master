@@ -5,6 +5,9 @@ export type ClientOwner = {
   userId: string;
   email: string;
   clientName: string;
+  /** Banco por cliente: onde este cliente mora. */
+  slug?: string;
+  clientUrl?: string;
 };
 
 export type ClientAccessRecord = {
@@ -16,7 +19,7 @@ export type ClientAccessRecord = {
 export interface ClientAccessGateway {
   findOwner(tenantId: string): Promise<ClientOwner | null>;
   /** Credencial de uso único, válida só para entrar como o dono do cliente. */
-  issueOneTimeLogin(email: string): Promise<string>;
+  issueOneTimeLogin(owner: ClientOwner): Promise<string>;
   record(access: ClientAccessRecord): Promise<void>;
 }
 
@@ -36,9 +39,9 @@ export async function startClientAccess(
     throw new DomainError("NOT_FOUND", "Este cliente não tem um administrador ativo para acessar.");
   }
 
-  const tokenHash = await gateway.issueOneTimeLogin(owner.email);
+  const tokenHash = await gateway.issueOneTimeLogin(owner);
   // Sem registro na auditoria, a credencial não sai do servidor.
   await gateway.record({ actor, tenantId, targetUserId: owner.userId });
 
-  return { tokenHash, clientName: owner.clientName };
+  return { tokenHash, clientName: owner.clientName, clientUrl: owner.clientUrl };
 }

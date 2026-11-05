@@ -4,6 +4,7 @@ import {
   loadTenantEntitlements,
 } from "@/modules/entitlements/infrastructure/supabase-entitlement-repository";
 import type { TenantRepository } from "@/modules/tenants/application/tenant-repository";
+import type { ClientData } from "@/modules/tenants/infrastructure/agent-client-data";
 import {
   emptyUsage,
   tenantStatusFromDb,
@@ -63,7 +64,11 @@ function text(value: unknown) {
 }
 
 export class SupabaseTenantRepository implements TenantRepository {
-  constructor(private readonly supabase: SupabaseClient) {}
+  constructor(
+    private readonly supabase: SupabaseClient,
+    /** Banco por cliente: dono e uso vêm do banco de cada um, não do Central. */
+    private readonly clientData?: () => Promise<Map<string, ClientData>>,
+  ) {}
 
   async list(): Promise<Tenant[]> {
     const { data: tenantData, error: tenantsError } = await this.supabase
@@ -89,13 +94,15 @@ export class SupabaseTenantRepository implements TenantRepository {
     }
     const workspaceIds = [...workspaceByTenant.values()].map((workspace) => workspace.id);
 
-    const [subscriptions, memberships, fleetLimits, usage, entitlements] = await Promise.all([
-      this.subscriptions(tenantIds),
-      this.memberships(workspaceIds),
-      this.fleetLimits(workspaceIds),
-      this.usage(),
-      loadTenantEntitlements(this.supabase, tenantIds),
-    ]);
+    const [subscriptions, memberships, fleetLimits, usage, entitlements, clients] =
+      await Promise.all([
+        this.subscriptions(tenantIds),
+        this.memberships(workspaceIds),
+        this.fleetLimits(workspaceIds),
+        this.clientData ? new Map<string, TenantUsage>() : this.usage(),
+        loadTenantEntitlements(this.supabase, tenantIds),
+        this.clientData?.(),
+      ]);
     const ownerEmails = await this.ownerEmails(memberships);
 
     return tenants.map((tenant) => {
@@ -105,6 +112,7 @@ export class SupabaseTenantRepository implements TenantRepository {
         ? memberships.filter((membership) => membership.workspace_id === workspace.id)
         : [];
       const owner = workspaceMembers.find((membership) => membership.is_owner);
+      const client = clients?.get(tenant.slug);
       const billing = subscriptions.get(tenant.id) ?? {};
       const fleetLimit = workspace ? fleetLimits.get(workspace.id) : undefined;
       const vehicleLimit =
@@ -121,16 +129,24 @@ export class SupabaseTenantRepository implements TenantRepository {
         name: tenant.trade_name || tenant.legal_name,
         legalName: tenant.legal_name,
         cnpj: tenant.cnpj ?? "",
-        domain: text(tenantSettings.domain) ?? `${tenant.slug}.frotak.app`,
+        domain: client?.clientUrl
+          ? new URL(client.clientUrl).host
+          : (text(tenantSettings.domain) ?? `${tenant.slug}.frotak.app`),
         status: tenantStatusFromDb(tenant.status),
         subscriptionPeriod:
           text(billing.period) ?? text(tenantSettings.subscriptionPeriod) ?? "Mensal",
-        ownerEmail: owner ? (ownerEmails.get(owner.user_id) ?? null) : null,
+        ownerEmail: client
+          ? client.ownerEmail
+          : owner
+            ? (ownerEmails.get(owner.user_id) ?? null)
+            : null,
         vehicleLimit,
-        usage: {
-          ...(usage.get(tenant.id) ?? emptyUsage()),
-          users: workspaceMembers.filter((membership) => membership.status === "active").length,
-        },
+        usage: client
+          ? client.usage
+          : {
+              ...(usage.get(tenant.id) ?? emptyUsage()),
+              users: workspaceMembers.filter((membership) => membership.status === "active").length,
+            },
         entitlements: entitlements.get(tenant.id) ?? { products: [], modules: [] },
       };
     });

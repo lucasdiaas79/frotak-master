@@ -13,7 +13,7 @@ type ProvisionRpcRow = {
   owner_role_id: string;
 };
 
-function translate(error: PostgrestError): never {
+export function translateProvisioningError(error: PostgrestError): never {
   const message = error.message;
   if (/duplicate key|already exists/i.test(message)) {
     throw new DomainError("CONFLICT", "Já existe um cliente com esse nome ou endereço.");
@@ -63,7 +63,7 @@ export class SupabaseTenantProvisioner implements TenantProvisioner {
       p_actor_user_id: input.actorUserId,
     });
 
-    if (error) translate(error);
+    if (error) translateProvisioningError(error);
 
     const row = (Array.isArray(data) ? data[0] : data) as ProvisionRpcRow | undefined;
     if (!row?.tenant_id || !row.workspace_id || !row.membership_id || !row.owner_role_id) {

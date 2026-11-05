@@ -270,6 +270,7 @@ function Clientes() {
         tokenHash: access.tokenHash,
         tenantId: client.id,
         clientName: access.clientName,
+        clientUrl: access.clientUrl,
       });
     } catch (error) {
       tab.close();

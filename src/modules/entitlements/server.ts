@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { DomainError } from "@/core/domain/domain-error";
 import { platformAuth } from "@/core/auth/platform-auth";
+import { isClientDatabaseMode } from "@/core/server/agent-client";
 import { runUseCase } from "@/core/server/run-use-case";
 import { getSupabaseAdmin } from "@/core/server/supabase-admin";
 import { isModuleCode, isProductCode } from "@/modules/catalog/domain/catalog";
@@ -8,6 +9,7 @@ import {
   changeTenantEntitlement,
   type ChangeTenantEntitlementCommand,
 } from "@/modules/entitlements/application/change-tenant-entitlement";
+import { ClientSyncedEntitlementRepository } from "@/modules/entitlements/infrastructure/client-synced-entitlement-repository";
 import { SupabaseEntitlementRepository } from "@/modules/entitlements/infrastructure/supabase-entitlement-repository";
 
 type ChangeEntitlementInput = {
@@ -34,11 +36,13 @@ export const changeTenantEntitlementFn = createServerFn({ method: "POST" })
   .middleware([platformAuth])
   .validator((input: ChangeEntitlementInput) => toCommand(input))
   .handler(async ({ data, context }) =>
-    runUseCase("entitlements.change", () =>
-      changeTenantEntitlement(
-        new SupabaseEntitlementRepository(getSupabaseAdmin()),
+    runUseCase("entitlements.change", () => {
+      const supabase = getSupabaseAdmin();
+      const central = new SupabaseEntitlementRepository(supabase);
+      return changeTenantEntitlement(
+        isClientDatabaseMode() ? new ClientSyncedEntitlementRepository(central, supabase) : central,
         context.actor,
         data,
-      ),
-    ),
+      );
+    }),
   );

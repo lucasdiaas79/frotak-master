@@ -1,10 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { platformAuth } from "@/core/auth/platform-auth";
 import { runUseCase } from "@/core/server/run-use-case";
+import { isClientDatabaseMode } from "@/core/server/agent-client";
 import { getSupabaseAdmin } from "@/core/server/supabase-admin";
 import { SupabaseEntitlementRepository } from "@/modules/entitlements/infrastructure/supabase-entitlement-repository";
+import { provisionClientDatabase } from "@/modules/provisioning/application/provision-client-database";
 import { provisionTenant } from "@/modules/provisioning/application/provision-tenant";
 import type { ProvisionTenantRequest } from "@/modules/provisioning/domain/provisioning-request";
+import { AgentClientDatabaseGateway } from "@/modules/provisioning/infrastructure/agent-client-database-gateway";
+import { SupabaseClientRegistry } from "@/modules/provisioning/infrastructure/supabase-client-registry";
 import { SupabaseIdentityGateway } from "@/modules/provisioning/infrastructure/supabase-identity-gateway";
 import { SupabaseTenantProvisioner } from "@/modules/provisioning/infrastructure/supabase-tenant-provisioner";
 
@@ -14,14 +18,29 @@ export const provisionTenantFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) =>
     runUseCase("provisioning.create", () => {
       const supabase = getSupabaseAdmin();
+      // Sem e-mail, senha ou CNPJ no log: so etapa e codigos.
+      const log = (stage: string, details?: Record<string, unknown>) =>
+        console.info("[provisionTenant]", JSON.stringify({ stage, ...details }));
+
+      if (isClientDatabaseMode()) {
+        return provisionClientDatabase(
+          {
+            registry: new SupabaseClientRegistry(supabase),
+            databases: new AgentClientDatabaseGateway(),
+            entitlements: new SupabaseEntitlementRepository(supabase),
+            log,
+          },
+          context.actor,
+          data,
+        );
+      }
+
       return provisionTenant(
         {
           identity: new SupabaseIdentityGateway(supabase),
           provisioner: new SupabaseTenantProvisioner(supabase),
           entitlements: new SupabaseEntitlementRepository(supabase),
-          // Sem e-mail, senha ou CNPJ no log: so etapa e codigos.
-          log: (stage, details) =>
-            console.info("[provisionTenant]", JSON.stringify({ stage, ...details })),
+          log,
         },
         context.actor,
         data,

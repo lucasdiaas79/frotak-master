@@ -615,8 +615,9 @@ export function buildClientSupportUrl(access: {
   tokenHash: string;
   tenantId: string;
   clientName: string;
+  clientUrl?: string;
 }) {
-  const url = new URL(getClientAppUrl());
+  const url = new URL(access.clientUrl || getClientAppUrl());
   url.pathname = "/";
   url.search = "";
 

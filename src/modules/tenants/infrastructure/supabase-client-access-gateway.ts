@@ -50,11 +50,11 @@ export class SupabaseClientAccessGateway implements ClientAccessGateway {
     };
   }
 
-  async issueOneTimeLogin(email: string) {
+  async issueOneTimeLogin(owner: ClientOwner) {
     // Só gera o link; nenhum e-mail é enviado.
     const { data, error } = await this.supabase.auth.admin.generateLink({
       type: "magiclink",
-      email,
+      email: owner.email,
     });
     if (error) throw new Error(error.message);
 
