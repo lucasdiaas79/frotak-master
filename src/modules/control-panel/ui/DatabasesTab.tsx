@@ -354,7 +354,11 @@ function TableSheet({
                 {relationLabels[table.kind] ?? "Tabela"} em {database}
               </SheetDescription>
             </SheetHeader>
-            <Tabs key={`${table.schema}.${table.name}`} defaultValue="estrutura" className="px-4 pt-4 pb-8">
+            <Tabs
+              key={`${table.schema}.${table.name}`}
+              defaultValue="estrutura"
+              className="px-4 pt-4 pb-8"
+            >
               <TabsList>
                 <TabsTrigger value="estrutura">Estrutura</TabsTrigger>
                 <TabsTrigger value="dados">Dados</TabsTrigger>
