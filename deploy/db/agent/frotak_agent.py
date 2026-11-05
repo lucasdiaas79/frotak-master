@@ -399,7 +399,7 @@ def create_database(slug, env):
 
         CREATE ROLE "{names['rest']}" LOGIN NOINHERIT PASSWORD {literal(env['REST_DB_PASSWORD'])};
         GRANT anon, authenticated, service_role TO "{names['rest']}";
-        ALTER ROLE "{names['rest']}" SET session_preload_libraries = 'supautils, safeupdate';
+        ALTER ROLE "{names['rest']}" SET session_preload_libraries = supautils, safeupdate;
         ALTER ROLE "{names['rest']}" SET statement_timeout = '8s';
         ALTER ROLE "{names['rest']}" SET lock_timeout = '8s';
 
