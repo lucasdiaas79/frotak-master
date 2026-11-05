@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Backup diario. Tem duas camadas:
 # - copia fisica do servidor inteiro, para recuperar a VPS em caso de desastre;
-# - um arquivo por banco, para restaurar um cliente sem encostar nos outros (restore-client.sh).
+# - um arquivo por banco, para restaurar um cliente sem encostar nos outros (agente: restore-client).
 # Fica 14 dias aqui e segue pela WireGuard para a VPS de Servico, que guarda 30 dias.
 set -euo pipefail
 umask 077

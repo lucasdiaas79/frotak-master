@@ -7,6 +7,8 @@ disparos agendados e apaga. Escuta so no IP da WireGuard e exige token. Nunca re
     frotak_agent.py serve         API para o Master e o TMS
     frotak_agent.py render-kong   regenera as rotas do portao
     frotak_agent.py migrate       aplica migrations no modelo, no Central e em cada cliente
+    frotak_agent.py restore-client CLIENTE PASTA_DO_BACKUP CLIENTE
+                                  restaura um cliente; repetir o nome confirma a substituicao
 """
 import base64
 import concurrent.futures
@@ -444,6 +446,30 @@ def unschedule_jobs(slug):
     )
 
 
+def drop_client_database(database):
+    # O Realtime mantem slots de replicacao ativos, e banco com slot ativo nao pode ser apagado.
+    # Quem chama ja tirou o cliente do Realtime; ele so pode demorar um pouco a soltar.
+    for attempt in range(10):
+        psql(
+            "postgres",
+            "select pg_terminate_backend(active_pid) from pg_replication_slots "
+            f"where database = {literal(database)} and active_pid is not null;",
+        )
+        time.sleep(1)
+        try:
+            psql(
+                "postgres",
+                "select pg_drop_replication_slot(slot_name) from pg_replication_slots "
+                f"where database = {literal(database)};",
+            )
+            psql("postgres", f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE);')
+            return
+        except AgentError:
+            if attempt == 9:
+                raise
+            time.sleep(2)
+
+
 def create_auth_user(slug, email, password, metadata):
     status, user = api(
         slug,
@@ -592,7 +618,7 @@ def remove_client(slug):
             unschedule_jobs(slug)
         except AgentError as error:
             log(f"agendamentos de {slug}: {scrub(error)}")
-        psql("postgres", f'DROP DATABASE IF EXISTS "{names["db"]}" WITH (FORCE);')
+        drop_client_database(names["db"])
         for key in ("auth", "rest", "storage"):
             psql("postgres", f'DROP ROLE IF EXISTS "{names[key]}";')
         env_path(slug).unlink(missing_ok=True)
@@ -726,6 +752,58 @@ def usage_all():
     with usage_lock:
         usage_cache.update(at=time.time(), value=value)
     return value
+
+
+def restore_client(slug, backup_dir):
+    """Substitui so este cliente pelo backup. Os outros bancos nao sao tocados."""
+    env = client_env(slug)
+    names = names_for(slug)
+    backup = Path(backup_dir)
+    dump = backup / "clients" / f"{slug}.dump"
+    files = backup / "clients" / f"{slug}.storage.tar.gz"
+    if not dump.exists():
+        raise AgentError(404, "BACKUP_NOT_FOUND", f"Backup de {slug} nao encontrado em {backup}.")
+    check = subprocess.run(
+        ["sha256sum", "-c", "--quiet", "--ignore-missing", "SHA256SUMS"], cwd=backup, text=True, capture_output=True
+    )
+    if check.returncode != 0:
+        raise AgentError(500, "BACKUP_CORRUPT", f"Backup corrompido: {scrub(check.stderr or check.stdout)}")
+
+    with provision_lock:
+        compose(slug, "stop")
+        realtime_request("DELETE", f"/api/tenants/{slug}")
+        try:
+            drop_client_database(names["db"])
+            psql("postgres", f'CREATE DATABASE "{names["db"]}" TEMPLATE template0 OWNER postgres;')
+            with open(dump, "rb") as source:
+                # Avisos sobre objetos do proprio Supabase sao esperados; quem decide e a conferencia.
+                restored = subprocess.run(
+                    ["docker", "exec", "-i", "frotak-db", "pg_restore", "-U", "supabase_admin", "-h", "127.0.0.1",
+                     "-d", names["db"], "--no-comments"],
+                    stdin=source,
+                    capture_output=True,
+                    text=True,
+                    timeout=1800,
+                )
+            warnings = restored.stderr.count("pg_restore: error")
+            psql("postgres", f'REVOKE CONNECT ON DATABASE "{names["db"]}" FROM PUBLIC;')
+            grant_connect(slug)
+            if files.exists():
+                storage_dir = Path(env["CLIENT_STORAGE_DIR"])
+                subprocess.run(["rm", "-rf", "--", str(storage_dir)], check=True)
+                storage_dir.mkdir(parents=True, mode=0o700)
+                subprocess.run(["tar", "-xzf", str(files), "-C", str(storage_dir)], check=True)
+        finally:
+            # Falhe o que falhar, o cliente nao fica sem os servicos.
+            compose(slug, "up", "-d", "--wait", "--wait-timeout", "180")
+            register_realtime(slug)
+        wait_for_api(slug)
+    counts = psql(
+        names["db"],
+        "select (select count(*) from auth.users) || ' usuarios, ' || "
+        "(select count(*) from public.vehicles) || ' veiculos';",
+    )
+    return {"warnings": warnings, "counts": counts}
 
 
 def run_migrations(database):
@@ -918,6 +996,11 @@ if __name__ == "__main__":
         render_kong()
     elif command == "migrate":
         print(json.dumps(migrate_all(), indent=2))
+    elif command == "restore-client":
+        if len(sys.argv) != 5 or sys.argv[2] != sys.argv[4]:
+            print("uso: frotak_agent.py restore-client CLIENTE PASTA_DO_BACKUP CLIENTE")
+            sys.exit(2)
+        print(json.dumps(restore_client(sys.argv[2], sys.argv[3])))
     else:
         print(__doc__)
         sys.exit(2)
