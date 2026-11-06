@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { normalizeHost } from "../server/lib/tenant-connection.ts";
 
 test("endereço de cliente passa inteiro", () => {
-  assert.equal(normalizeHost("teste.179-66-128-106.sslip.io"), "teste.179-66-128-106.sslip.io");
+  assert.equal(normalizeHost("teste.203-0-113-20.sslip.io"), "teste.203-0-113-20.sslip.io");
   assert.equal(normalizeHost("tms.empresa.com.br"), "tms.empresa.com.br");
   assert.equal(normalizeHost("acme.frotak.log.br"), "acme.frotak.log.br");
 });
