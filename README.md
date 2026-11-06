@@ -1,5 +1,7 @@
 # FrotaK Admin Suite
 
+> **Para entender o sistema como está hoje, leia [ARQUITETURA-ATUAL-E-MUDANCAS.md](ARQUITETURA-ATUAL-E-MUDANCAS.md).** O texto abaixo é o briefing original do protótipo visual do Master e ficou como histórico.
+
 Quero que você atue como uma equipe formada pelos melhores especialistas do mundo em:
 
 UX Design Enterprise
