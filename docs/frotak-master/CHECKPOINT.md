@@ -6,8 +6,8 @@ Atualizado em 2026-11-05. Escopo: o PDF "FrotaK Master · Arquitetura" em dois m
 
 | Item | Estado |
 |---|---|
-| Base | `main` @ `92a7213` (igual a `origin/main` em 2026-11-02) |
-| Branch | `feat/master-modulos-por-cliente`, commits locais, **sem push** |
+| Base | `main` @ `92a7213` até 2026-11-05 |
+| Branch | `feat/master-modulos-por-cliente`, levada para a `main` por avanço direto e **enviada ao GitHub em 2026-11-06** (`origin/main` @ `2c05c9c`), a pedido do usuário. A `main` sincroniza com o Lovable |
 | Commits | `0cc1f2a` Master modular e liberação; `1f98144` registro de módulos do TMS; `659faef` Frotak IA; `e77489b` Rastreadores; `08de70b` App Motorista; `cad1469` Financeiro; `0643e97` Gestão de Frota; `df82eec` documentação; clean architecture: `848b3ab` App Motorista e guarda de dependências, `b99e26b` Rastreadores, `e7cdebc` Financeiro, `66b3851` Gestão de Frota, `4008c4c` Frotak IA; `d04bede` documentação; `a7ad7a3` implantação nas VPS; correções de 2026-11-05: `e680637` banco, `a6a6c5d` Master, `18d5e95` TMS, `7a44c93` implantação; banco por cliente: `e92f1d9` agente e VPS de banco, `4c60c58` modelo, `631dce3` e `76f1690` portão, `d7f74ac` API, `3173f4e` Master, `86c40ad` e `5b3c8fd` TMS, `06cbc6e` sessão no TMS, `a596ddd` e `36408a9` ordem do cadastro, `6a107d4` restauração; painel e auto-heal: `4606163` sentinela, `853ff4c` painel, `bae150b`, `2e0d2ce`, `3f0ddc5` e `ac59822` correções; ficha do cliente: `507c323` endereço editável e isolamento dos logins do banco, `4df5902` ficha, `da0eb42` guia, `b83abd0` endereço no TMS, `88bc600` lista do que foi criado, `fab9205` empresa suspensa, `4ca47f3` celular |
 | Teste de ponta a ponta | Supabase local descartável (`project_id` `frotak-e2e`, portas 553xx) criado do zero e removido no fim |
 | Banco remoto e banco local `frota-master` | Não alterados |
