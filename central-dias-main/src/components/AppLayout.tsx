@@ -869,7 +869,15 @@ export function AppLayout() {
   const loc = useLocation();
   const loadAll = useFleet((s) => s.loadAll);
   const subscribeRealtime = useFleet((s) => s.subscribeRealtime);
-  const isLoginRoute = loc.pathname === "/login";
+  // Rotas que abrem sem login: a tela de login, o link de acompanhamento do frete,
+  // o portal do embarcador (login proprio) e o link do motorista.
+  const isPublicRoute =
+    loc.pathname === "/login" ||
+    loc.pathname.startsWith("/acompanhar/") ||
+    loc.pathname === "/embarcador" ||
+    loc.pathname.startsWith("/embarcador/") ||
+    loc.pathname.startsWith("/motorista/");
+  const hasOwnSession = isPublicRoute && loc.pathname !== "/login";
   const [checkingAuth, setCheckingAuth] = React.useState(true);
   const [initializationError, setInitializationError] = React.useState<string | null>(null);
   const [profile, setProfile] = React.useState<Profile | null>(null);
@@ -884,6 +892,12 @@ export function AppLayout() {
   React.useEffect(() => {
     let cancelled = false;
     let unsubscribeRealtime: (() => void) | undefined;
+    // Rotas publicas (login, acompanhamento e portal do embarcador) tem sessao propria:
+    // nao carregam a frota nem redirecionam para o login da transportadora ao sair.
+    if (hasOwnSession) {
+      setCheckingAuth(false);
+      return;
+    }
     const authSubscription = hasSupabaseConfig()
       ? supabase.auth.onAuthStateChange((event) => {
           if (event === "SIGNED_OUT" && !cancelled) {
@@ -896,7 +910,7 @@ export function AppLayout() {
       : null;
 
     async function checkAuth() {
-      if (isLoginRoute) {
+      if (isPublicRoute) {
         setCheckingAuth(false);
         return;
       }
@@ -932,7 +946,7 @@ export function AppLayout() {
       unsubscribeRealtime?.();
       authSubscription?.unsubscribe();
     };
-  }, [isLoginRoute, loadAll, subscribeRealtime]);
+  }, [isPublicRoute, hasOwnSession, loadAll, subscribeRealtime]);
 
   // O Master liga e desliga modulos sem deploy: revalida a cada minuto e na volta do foco.
   const workspaceId = profile?.workspaceId;
@@ -972,7 +986,7 @@ export function AppLayout() {
     }
   }, [collapsed]);
 
-  if (isLoginRoute) {
+  if (isPublicRoute) {
     return <Outlet />;
   }
 

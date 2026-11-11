@@ -14,6 +14,8 @@ import { Route as AbastecimentosRouteImport } from './routes/abastecimentos'
 import { Route as CarretasRouteImport } from './routes/carretas'
 import { Route as ClientesRouteImport } from './routes/clientes'
 import { Route as DestinatariosRouteImport } from './routes/destinatarios'
+import { Route as EmbarcadorRouteImport } from './routes/embarcador'
+import { Route as EmbarcadoresRouteImport } from './routes/embarcadores'
 import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as FrotakIaRouteImport } from './routes/frotak-ia'
 import { Route as GestaoFrotaRouteImport } from './routes/gestao-frota'
@@ -28,6 +30,17 @@ import { Route as RemetentesRouteImport } from './routes/remetentes'
 import { Route as UsuariosRouteImport } from './routes/usuarios'
 import { Route as VeiculosRouteImport } from './routes/veiculos'
 import { Route as VinculacaoRouteImport } from './routes/vinculacao'
+import { Route as AcompanharTokenRouteImport } from './routes/acompanhar.$token'
+import { Route as EmbarcadorIndexRouteImport } from './routes/embarcador.index'
+import { Route as EmbarcadorCadastroRouteImport } from './routes/embarcador.cadastro'
+import { Route as EmbarcadorCargasRouteImport } from './routes/embarcador.cargas'
+import { Route as EmbarcadorDemoRouteImport } from './routes/embarcador.demo'
+import { Route as EmbarcadorDocumentosRouteImport } from './routes/embarcador.documentos'
+import { Route as EmbarcadorIaRouteImport } from './routes/embarcador.ia'
+import { Route as EmbarcadorIndicadoresRouteImport } from './routes/embarcador.indicadores'
+import { Route as EmbarcadorLoginRouteImport } from './routes/embarcador.login'
+import { Route as EmbarcadorRedeRouteImport } from './routes/embarcador.rede'
+import { Route as EmbarcadorTransportadorasRouteImport } from './routes/embarcador.transportadoras'
 import { Route as FinanceiroIndexRouteImport } from './routes/financeiro.index'
 import { Route as FinanceiroCentrosCustoRouteImport } from './routes/financeiro.centros-custo'
 import { Route as FinanceiroContasRouteImport } from './routes/financeiro.contas'
@@ -41,8 +54,13 @@ import { Route as FinanceiroReceberRouteImport } from './routes/financeiro.receb
 import { Route as FinanceiroRecorrenciasRouteImport } from './routes/financeiro.recorrencias'
 import { Route as FinanceiroRentabilidadeRouteImport } from './routes/financeiro.rentabilidade'
 import { Route as FinanceiroSalariosRouteImport } from './routes/financeiro.salarios'
+import { Route as MotoristaTokenRouteImport } from './routes/motorista.$token'
+import { Route as ApiAcompanharTokenRouteImport } from './routes/api/acompanhar/$token'
 import { Route as ApiFrotakIaPushDispatchRouteImport } from './routes/api/frotak-ia/push-dispatch'
 import { Route as ApiSascarSyncRouteImport } from './routes/api/sascar/sync'
+import { Route as EmbarcadorConviteTokenRouteImport } from './routes/embarcador.convite.$token'
+import { Route as EmbarcadorTerceirosIndexRouteImport } from './routes/embarcador.terceiros.index'
+import { Route as EmbarcadorTerceirosProfileIdRouteImport } from './routes/embarcador.terceiros.$profileId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -67,6 +85,16 @@ const ClientesRoute = ClientesRouteImport.update({
 const DestinatariosRoute = DestinatariosRouteImport.update({
   id: '/destinatarios',
   path: '/destinatarios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbarcadorRoute = EmbarcadorRouteImport.update({
+  id: '/embarcador',
+  path: '/embarcador',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbarcadoresRoute = EmbarcadoresRouteImport.update({
+  id: '/embarcadores',
+  path: '/embarcadores',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FinanceiroRoute = FinanceiroRouteImport.update({
@@ -139,6 +167,62 @@ const VinculacaoRoute = VinculacaoRouteImport.update({
   path: '/vinculacao',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AcompanharTokenRoute = AcompanharTokenRouteImport.update({
+  id: '/acompanhar/$token',
+  path: '/acompanhar/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmbarcadorIndexRoute = EmbarcadorIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => EmbarcadorRoute,
+} as any)
+const EmbarcadorCadastroRoute = EmbarcadorCadastroRouteImport.update({
+  id: '/cadastro',
+  path: '/cadastro',
+  getParentRoute: () => EmbarcadorRoute,
+} as any)
+const EmbarcadorCargasRoute = EmbarcadorCargasRouteImport.update({
+  id: '/cargas',
+  path: '/cargas',
+  getParentRoute: () => EmbarcadorRoute,
+} as any)
+const EmbarcadorDemoRoute = EmbarcadorDemoRouteImport.update({
+  id: '/demo',
+  path: '/demo',
+  getParentRoute: () => EmbarcadorRoute,
+} as any)
+const EmbarcadorDocumentosRoute = EmbarcadorDocumentosRouteImport.update({
+  id: '/documentos',
+  path: '/documentos',
+  getParentRoute: () => EmbarcadorRoute,
+} as any)
+const EmbarcadorIaRoute = EmbarcadorIaRouteImport.update({
+  id: '/ia',
+  path: '/ia',
+  getParentRoute: () => EmbarcadorRoute,
+} as any)
+const EmbarcadorIndicadoresRoute = EmbarcadorIndicadoresRouteImport.update({
+  id: '/indicadores',
+  path: '/indicadores',
+  getParentRoute: () => EmbarcadorRoute,
+} as any)
+const EmbarcadorLoginRoute = EmbarcadorLoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => EmbarcadorRoute,
+} as any)
+const EmbarcadorRedeRoute = EmbarcadorRedeRouteImport.update({
+  id: '/rede',
+  path: '/rede',
+  getParentRoute: () => EmbarcadorRoute,
+} as any)
+const EmbarcadorTransportadorasRoute =
+  EmbarcadorTransportadorasRouteImport.update({
+    id: '/transportadoras',
+    path: '/transportadoras',
+    getParentRoute: () => EmbarcadorRoute,
+  } as any)
 const FinanceiroIndexRoute = FinanceiroIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -204,6 +288,16 @@ const FinanceiroSalariosRoute = FinanceiroSalariosRouteImport.update({
   path: '/salarios',
   getParentRoute: () => FinanceiroRoute,
 } as any)
+const MotoristaTokenRoute = MotoristaTokenRouteImport.update({
+  id: '/motorista/$token',
+  path: '/motorista/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAcompanharTokenRoute = ApiAcompanharTokenRouteImport.update({
+  id: '/api/acompanhar/$token',
+  path: '/api/acompanhar/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiFrotakIaPushDispatchRoute = ApiFrotakIaPushDispatchRouteImport.update({
   id: '/api/frotak-ia/push-dispatch',
   path: '/api/frotak-ia/push-dispatch',
@@ -214,6 +308,23 @@ const ApiSascarSyncRoute = ApiSascarSyncRouteImport.update({
   path: '/api/sascar/sync',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EmbarcadorConviteTokenRoute = EmbarcadorConviteTokenRouteImport.update({
+  id: '/convite/$token',
+  path: '/convite/$token',
+  getParentRoute: () => EmbarcadorRoute,
+} as any)
+const EmbarcadorTerceirosIndexRoute =
+  EmbarcadorTerceirosIndexRouteImport.update({
+    id: '/terceiros/',
+    path: '/terceiros/',
+    getParentRoute: () => EmbarcadorRoute,
+  } as any)
+const EmbarcadorTerceirosProfileIdRoute =
+  EmbarcadorTerceirosProfileIdRouteImport.update({
+    id: '/terceiros/$profileId',
+    path: '/terceiros/$profileId',
+    getParentRoute: () => EmbarcadorRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -221,6 +332,8 @@ export interface FileRoutesByFullPath {
   '/carretas': typeof CarretasRoute
   '/clientes': typeof ClientesRoute
   '/destinatarios': typeof DestinatariosRoute
+  '/embarcador': typeof EmbarcadorRouteWithChildren
+  '/embarcadores': typeof EmbarcadoresRoute
   '/financeiro': typeof FinanceiroRouteWithChildren
   '/frotak-ia': typeof FrotakIaRoute
   '/gestao-frota': typeof GestaoFrotaRoute
@@ -235,6 +348,16 @@ export interface FileRoutesByFullPath {
   '/usuarios': typeof UsuariosRoute
   '/veiculos': typeof VeiculosRoute
   '/vinculacao': typeof VinculacaoRoute
+  '/acompanhar/$token': typeof AcompanharTokenRoute
+  '/embarcador/cadastro': typeof EmbarcadorCadastroRoute
+  '/embarcador/cargas': typeof EmbarcadorCargasRoute
+  '/embarcador/demo': typeof EmbarcadorDemoRoute
+  '/embarcador/documentos': typeof EmbarcadorDocumentosRoute
+  '/embarcador/ia': typeof EmbarcadorIaRoute
+  '/embarcador/indicadores': typeof EmbarcadorIndicadoresRoute
+  '/embarcador/login': typeof EmbarcadorLoginRoute
+  '/embarcador/rede': typeof EmbarcadorRedeRoute
+  '/embarcador/transportadoras': typeof EmbarcadorTransportadorasRoute
   '/financeiro/centros-custo': typeof FinanceiroCentrosCustoRoute
   '/financeiro/contas': typeof FinanceiroContasRoute
   '/financeiro/contas-pagar': typeof FinanceiroContasPagarRoute
@@ -247,9 +370,15 @@ export interface FileRoutesByFullPath {
   '/financeiro/recorrencias': typeof FinanceiroRecorrenciasRoute
   '/financeiro/rentabilidade': typeof FinanceiroRentabilidadeRoute
   '/financeiro/salarios': typeof FinanceiroSalariosRoute
+  '/motorista/$token': typeof MotoristaTokenRoute
+  '/embarcador/': typeof EmbarcadorIndexRoute
   '/financeiro/': typeof FinanceiroIndexRoute
+  '/api/acompanhar/$token': typeof ApiAcompanharTokenRoute
   '/api/frotak-ia/push-dispatch': typeof ApiFrotakIaPushDispatchRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
+  '/embarcador/convite/$token': typeof EmbarcadorConviteTokenRoute
+  '/embarcador/terceiros/$profileId': typeof EmbarcadorTerceirosProfileIdRoute
+  '/embarcador/terceiros/': typeof EmbarcadorTerceirosIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -257,6 +386,7 @@ export interface FileRoutesByTo {
   '/carretas': typeof CarretasRoute
   '/clientes': typeof ClientesRoute
   '/destinatarios': typeof DestinatariosRoute
+  '/embarcadores': typeof EmbarcadoresRoute
   '/frotak-ia': typeof FrotakIaRoute
   '/gestao-frota': typeof GestaoFrotaRoute
   '/historicos': typeof HistoricosRoute
@@ -270,6 +400,16 @@ export interface FileRoutesByTo {
   '/usuarios': typeof UsuariosRoute
   '/veiculos': typeof VeiculosRoute
   '/vinculacao': typeof VinculacaoRoute
+  '/acompanhar/$token': typeof AcompanharTokenRoute
+  '/embarcador/cadastro': typeof EmbarcadorCadastroRoute
+  '/embarcador/cargas': typeof EmbarcadorCargasRoute
+  '/embarcador/demo': typeof EmbarcadorDemoRoute
+  '/embarcador/documentos': typeof EmbarcadorDocumentosRoute
+  '/embarcador/ia': typeof EmbarcadorIaRoute
+  '/embarcador/indicadores': typeof EmbarcadorIndicadoresRoute
+  '/embarcador/login': typeof EmbarcadorLoginRoute
+  '/embarcador/rede': typeof EmbarcadorRedeRoute
+  '/embarcador/transportadoras': typeof EmbarcadorTransportadorasRoute
   '/financeiro/centros-custo': typeof FinanceiroCentrosCustoRoute
   '/financeiro/contas': typeof FinanceiroContasRoute
   '/financeiro/contas-pagar': typeof FinanceiroContasPagarRoute
@@ -282,9 +422,15 @@ export interface FileRoutesByTo {
   '/financeiro/recorrencias': typeof FinanceiroRecorrenciasRoute
   '/financeiro/rentabilidade': typeof FinanceiroRentabilidadeRoute
   '/financeiro/salarios': typeof FinanceiroSalariosRoute
+  '/motorista/$token': typeof MotoristaTokenRoute
+  '/embarcador': typeof EmbarcadorIndexRoute
   '/financeiro': typeof FinanceiroIndexRoute
+  '/api/acompanhar/$token': typeof ApiAcompanharTokenRoute
   '/api/frotak-ia/push-dispatch': typeof ApiFrotakIaPushDispatchRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
+  '/embarcador/convite/$token': typeof EmbarcadorConviteTokenRoute
+  '/embarcador/terceiros/$profileId': typeof EmbarcadorTerceirosProfileIdRoute
+  '/embarcador/terceiros': typeof EmbarcadorTerceirosIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -293,6 +439,8 @@ export interface FileRoutesById {
   '/carretas': typeof CarretasRoute
   '/clientes': typeof ClientesRoute
   '/destinatarios': typeof DestinatariosRoute
+  '/embarcador': typeof EmbarcadorRouteWithChildren
+  '/embarcadores': typeof EmbarcadoresRoute
   '/financeiro': typeof FinanceiroRouteWithChildren
   '/frotak-ia': typeof FrotakIaRoute
   '/gestao-frota': typeof GestaoFrotaRoute
@@ -307,6 +455,16 @@ export interface FileRoutesById {
   '/usuarios': typeof UsuariosRoute
   '/veiculos': typeof VeiculosRoute
   '/vinculacao': typeof VinculacaoRoute
+  '/acompanhar/$token': typeof AcompanharTokenRoute
+  '/embarcador/cadastro': typeof EmbarcadorCadastroRoute
+  '/embarcador/cargas': typeof EmbarcadorCargasRoute
+  '/embarcador/demo': typeof EmbarcadorDemoRoute
+  '/embarcador/documentos': typeof EmbarcadorDocumentosRoute
+  '/embarcador/ia': typeof EmbarcadorIaRoute
+  '/embarcador/indicadores': typeof EmbarcadorIndicadoresRoute
+  '/embarcador/login': typeof EmbarcadorLoginRoute
+  '/embarcador/rede': typeof EmbarcadorRedeRoute
+  '/embarcador/transportadoras': typeof EmbarcadorTransportadorasRoute
   '/financeiro/centros-custo': typeof FinanceiroCentrosCustoRoute
   '/financeiro/contas': typeof FinanceiroContasRoute
   '/financeiro/contas-pagar': typeof FinanceiroContasPagarRoute
@@ -319,9 +477,15 @@ export interface FileRoutesById {
   '/financeiro/recorrencias': typeof FinanceiroRecorrenciasRoute
   '/financeiro/rentabilidade': typeof FinanceiroRentabilidadeRoute
   '/financeiro/salarios': typeof FinanceiroSalariosRoute
+  '/motorista/$token': typeof MotoristaTokenRoute
+  '/embarcador/': typeof EmbarcadorIndexRoute
   '/financeiro/': typeof FinanceiroIndexRoute
+  '/api/acompanhar/$token': typeof ApiAcompanharTokenRoute
   '/api/frotak-ia/push-dispatch': typeof ApiFrotakIaPushDispatchRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
+  '/embarcador/convite/$token': typeof EmbarcadorConviteTokenRoute
+  '/embarcador/terceiros/$profileId': typeof EmbarcadorTerceirosProfileIdRoute
+  '/embarcador/terceiros/': typeof EmbarcadorTerceirosIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -331,6 +495,8 @@ export interface FileRouteTypes {
     | '/carretas'
     | '/clientes'
     | '/destinatarios'
+    | '/embarcador'
+    | '/embarcadores'
     | '/financeiro'
     | '/frotak-ia'
     | '/gestao-frota'
@@ -345,6 +511,16 @@ export interface FileRouteTypes {
     | '/usuarios'
     | '/veiculos'
     | '/vinculacao'
+    | '/acompanhar/$token'
+    | '/embarcador/cadastro'
+    | '/embarcador/cargas'
+    | '/embarcador/demo'
+    | '/embarcador/documentos'
+    | '/embarcador/ia'
+    | '/embarcador/indicadores'
+    | '/embarcador/login'
+    | '/embarcador/rede'
+    | '/embarcador/transportadoras'
     | '/financeiro/centros-custo'
     | '/financeiro/contas'
     | '/financeiro/contas-pagar'
@@ -357,9 +533,15 @@ export interface FileRouteTypes {
     | '/financeiro/recorrencias'
     | '/financeiro/rentabilidade'
     | '/financeiro/salarios'
+    | '/motorista/$token'
+    | '/embarcador/'
     | '/financeiro/'
+    | '/api/acompanhar/$token'
     | '/api/frotak-ia/push-dispatch'
     | '/api/sascar/sync'
+    | '/embarcador/convite/$token'
+    | '/embarcador/terceiros/$profileId'
+    | '/embarcador/terceiros/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -367,6 +549,7 @@ export interface FileRouteTypes {
     | '/carretas'
     | '/clientes'
     | '/destinatarios'
+    | '/embarcadores'
     | '/frotak-ia'
     | '/gestao-frota'
     | '/historicos'
@@ -380,6 +563,16 @@ export interface FileRouteTypes {
     | '/usuarios'
     | '/veiculos'
     | '/vinculacao'
+    | '/acompanhar/$token'
+    | '/embarcador/cadastro'
+    | '/embarcador/cargas'
+    | '/embarcador/demo'
+    | '/embarcador/documentos'
+    | '/embarcador/ia'
+    | '/embarcador/indicadores'
+    | '/embarcador/login'
+    | '/embarcador/rede'
+    | '/embarcador/transportadoras'
     | '/financeiro/centros-custo'
     | '/financeiro/contas'
     | '/financeiro/contas-pagar'
@@ -392,9 +585,15 @@ export interface FileRouteTypes {
     | '/financeiro/recorrencias'
     | '/financeiro/rentabilidade'
     | '/financeiro/salarios'
+    | '/motorista/$token'
+    | '/embarcador'
     | '/financeiro'
+    | '/api/acompanhar/$token'
     | '/api/frotak-ia/push-dispatch'
     | '/api/sascar/sync'
+    | '/embarcador/convite/$token'
+    | '/embarcador/terceiros/$profileId'
+    | '/embarcador/terceiros'
   id:
     | '__root__'
     | '/'
@@ -402,6 +601,8 @@ export interface FileRouteTypes {
     | '/carretas'
     | '/clientes'
     | '/destinatarios'
+    | '/embarcador'
+    | '/embarcadores'
     | '/financeiro'
     | '/frotak-ia'
     | '/gestao-frota'
@@ -416,6 +617,16 @@ export interface FileRouteTypes {
     | '/usuarios'
     | '/veiculos'
     | '/vinculacao'
+    | '/acompanhar/$token'
+    | '/embarcador/cadastro'
+    | '/embarcador/cargas'
+    | '/embarcador/demo'
+    | '/embarcador/documentos'
+    | '/embarcador/ia'
+    | '/embarcador/indicadores'
+    | '/embarcador/login'
+    | '/embarcador/rede'
+    | '/embarcador/transportadoras'
     | '/financeiro/centros-custo'
     | '/financeiro/contas'
     | '/financeiro/contas-pagar'
@@ -428,9 +639,15 @@ export interface FileRouteTypes {
     | '/financeiro/recorrencias'
     | '/financeiro/rentabilidade'
     | '/financeiro/salarios'
+    | '/motorista/$token'
+    | '/embarcador/'
     | '/financeiro/'
+    | '/api/acompanhar/$token'
     | '/api/frotak-ia/push-dispatch'
     | '/api/sascar/sync'
+    | '/embarcador/convite/$token'
+    | '/embarcador/terceiros/$profileId'
+    | '/embarcador/terceiros/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -439,6 +656,8 @@ export interface RootRouteChildren {
   CarretasRoute: typeof CarretasRoute
   ClientesRoute: typeof ClientesRoute
   DestinatariosRoute: typeof DestinatariosRoute
+  EmbarcadorRoute: typeof EmbarcadorRouteWithChildren
+  EmbarcadoresRoute: typeof EmbarcadoresRoute
   FinanceiroRoute: typeof FinanceiroRouteWithChildren
   FrotakIaRoute: typeof FrotakIaRoute
   GestaoFrotaRoute: typeof GestaoFrotaRoute
@@ -453,6 +672,9 @@ export interface RootRouteChildren {
   UsuariosRoute: typeof UsuariosRoute
   VeiculosRoute: typeof VeiculosRoute
   VinculacaoRoute: typeof VinculacaoRoute
+  AcompanharTokenRoute: typeof AcompanharTokenRoute
+  MotoristaTokenRoute: typeof MotoristaTokenRoute
+  ApiAcompanharTokenRoute: typeof ApiAcompanharTokenRoute
   ApiFrotakIaPushDispatchRoute: typeof ApiFrotakIaPushDispatchRoute
   ApiSascarSyncRoute: typeof ApiSascarSyncRoute
 }
@@ -492,6 +714,20 @@ declare module '@tanstack/react-router' {
       path: '/destinatarios'
       fullPath: '/destinatarios'
       preLoaderRoute: typeof DestinatariosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/embarcador': {
+      id: '/embarcador'
+      path: '/embarcador'
+      fullPath: '/embarcador'
+      preLoaderRoute: typeof EmbarcadorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/embarcadores': {
+      id: '/embarcadores'
+      path: '/embarcadores'
+      fullPath: '/embarcadores'
+      preLoaderRoute: typeof EmbarcadoresRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/financeiro': {
@@ -592,6 +828,83 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VinculacaoRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/acompanhar/$token': {
+      id: '/acompanhar/$token'
+      path: '/acompanhar/$token'
+      fullPath: '/acompanhar/$token'
+      preLoaderRoute: typeof AcompanharTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/embarcador/': {
+      id: '/embarcador/'
+      path: '/'
+      fullPath: '/embarcador/'
+      preLoaderRoute: typeof EmbarcadorIndexRouteImport
+      parentRoute: typeof EmbarcadorRoute
+    }
+    '/embarcador/cadastro': {
+      id: '/embarcador/cadastro'
+      path: '/cadastro'
+      fullPath: '/embarcador/cadastro'
+      preLoaderRoute: typeof EmbarcadorCadastroRouteImport
+      parentRoute: typeof EmbarcadorRoute
+    }
+    '/embarcador/cargas': {
+      id: '/embarcador/cargas'
+      path: '/cargas'
+      fullPath: '/embarcador/cargas'
+      preLoaderRoute: typeof EmbarcadorCargasRouteImport
+      parentRoute: typeof EmbarcadorRoute
+    }
+    '/embarcador/demo': {
+      id: '/embarcador/demo'
+      path: '/demo'
+      fullPath: '/embarcador/demo'
+      preLoaderRoute: typeof EmbarcadorDemoRouteImport
+      parentRoute: typeof EmbarcadorRoute
+    }
+    '/embarcador/documentos': {
+      id: '/embarcador/documentos'
+      path: '/documentos'
+      fullPath: '/embarcador/documentos'
+      preLoaderRoute: typeof EmbarcadorDocumentosRouteImport
+      parentRoute: typeof EmbarcadorRoute
+    }
+    '/embarcador/ia': {
+      id: '/embarcador/ia'
+      path: '/ia'
+      fullPath: '/embarcador/ia'
+      preLoaderRoute: typeof EmbarcadorIaRouteImport
+      parentRoute: typeof EmbarcadorRoute
+    }
+    '/embarcador/indicadores': {
+      id: '/embarcador/indicadores'
+      path: '/indicadores'
+      fullPath: '/embarcador/indicadores'
+      preLoaderRoute: typeof EmbarcadorIndicadoresRouteImport
+      parentRoute: typeof EmbarcadorRoute
+    }
+    '/embarcador/login': {
+      id: '/embarcador/login'
+      path: '/login'
+      fullPath: '/embarcador/login'
+      preLoaderRoute: typeof EmbarcadorLoginRouteImport
+      parentRoute: typeof EmbarcadorRoute
+    }
+    '/embarcador/rede': {
+      id: '/embarcador/rede'
+      path: '/rede'
+      fullPath: '/embarcador/rede'
+      preLoaderRoute: typeof EmbarcadorRedeRouteImport
+      parentRoute: typeof EmbarcadorRoute
+    }
+    '/embarcador/transportadoras': {
+      id: '/embarcador/transportadoras'
+      path: '/transportadoras'
+      fullPath: '/embarcador/transportadoras'
+      preLoaderRoute: typeof EmbarcadorTransportadorasRouteImport
+      parentRoute: typeof EmbarcadorRoute
+    }
     '/financeiro/': {
       id: '/financeiro/'
       path: '/'
@@ -683,6 +996,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceiroSalariosRouteImport
       parentRoute: typeof FinanceiroRoute
     }
+    '/motorista/$token': {
+      id: '/motorista/$token'
+      path: '/motorista/$token'
+      fullPath: '/motorista/$token'
+      preLoaderRoute: typeof MotoristaTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/acompanhar/$token': {
+      id: '/api/acompanhar/$token'
+      path: '/api/acompanhar/$token'
+      fullPath: '/api/acompanhar/$token'
+      preLoaderRoute: typeof ApiAcompanharTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/frotak-ia/push-dispatch': {
       id: '/api/frotak-ia/push-dispatch'
       path: '/api/frotak-ia/push-dispatch'
@@ -697,8 +1024,65 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSascarSyncRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/embarcador/convite/$token': {
+      id: '/embarcador/convite/$token'
+      path: '/convite/$token'
+      fullPath: '/embarcador/convite/$token'
+      preLoaderRoute: typeof EmbarcadorConviteTokenRouteImport
+      parentRoute: typeof EmbarcadorRoute
+    }
+    '/embarcador/terceiros/': {
+      id: '/embarcador/terceiros/'
+      path: '/terceiros'
+      fullPath: '/embarcador/terceiros/'
+      preLoaderRoute: typeof EmbarcadorTerceirosIndexRouteImport
+      parentRoute: typeof EmbarcadorRoute
+    }
+    '/embarcador/terceiros/$profileId': {
+      id: '/embarcador/terceiros/$profileId'
+      path: '/terceiros/$profileId'
+      fullPath: '/embarcador/terceiros/$profileId'
+      preLoaderRoute: typeof EmbarcadorTerceirosProfileIdRouteImport
+      parentRoute: typeof EmbarcadorRoute
+    }
   }
 }
+
+interface EmbarcadorRouteChildren {
+  EmbarcadorCadastroRoute: typeof EmbarcadorCadastroRoute
+  EmbarcadorCargasRoute: typeof EmbarcadorCargasRoute
+  EmbarcadorDemoRoute: typeof EmbarcadorDemoRoute
+  EmbarcadorDocumentosRoute: typeof EmbarcadorDocumentosRoute
+  EmbarcadorIaRoute: typeof EmbarcadorIaRoute
+  EmbarcadorIndicadoresRoute: typeof EmbarcadorIndicadoresRoute
+  EmbarcadorLoginRoute: typeof EmbarcadorLoginRoute
+  EmbarcadorRedeRoute: typeof EmbarcadorRedeRoute
+  EmbarcadorTransportadorasRoute: typeof EmbarcadorTransportadorasRoute
+  EmbarcadorIndexRoute: typeof EmbarcadorIndexRoute
+  EmbarcadorConviteTokenRoute: typeof EmbarcadorConviteTokenRoute
+  EmbarcadorTerceirosProfileIdRoute: typeof EmbarcadorTerceirosProfileIdRoute
+  EmbarcadorTerceirosIndexRoute: typeof EmbarcadorTerceirosIndexRoute
+}
+
+const EmbarcadorRouteChildren: EmbarcadorRouteChildren = {
+  EmbarcadorCadastroRoute: EmbarcadorCadastroRoute,
+  EmbarcadorCargasRoute: EmbarcadorCargasRoute,
+  EmbarcadorDemoRoute: EmbarcadorDemoRoute,
+  EmbarcadorDocumentosRoute: EmbarcadorDocumentosRoute,
+  EmbarcadorIaRoute: EmbarcadorIaRoute,
+  EmbarcadorIndicadoresRoute: EmbarcadorIndicadoresRoute,
+  EmbarcadorLoginRoute: EmbarcadorLoginRoute,
+  EmbarcadorRedeRoute: EmbarcadorRedeRoute,
+  EmbarcadorTransportadorasRoute: EmbarcadorTransportadorasRoute,
+  EmbarcadorIndexRoute: EmbarcadorIndexRoute,
+  EmbarcadorConviteTokenRoute: EmbarcadorConviteTokenRoute,
+  EmbarcadorTerceirosProfileIdRoute: EmbarcadorTerceirosProfileIdRoute,
+  EmbarcadorTerceirosIndexRoute: EmbarcadorTerceirosIndexRoute,
+}
+
+const EmbarcadorRouteWithChildren = EmbarcadorRoute._addFileChildren(
+  EmbarcadorRouteChildren,
+)
 
 interface FinanceiroRouteChildren {
   FinanceiroCentrosCustoRoute: typeof FinanceiroCentrosCustoRoute
@@ -742,6 +1126,8 @@ const rootRouteChildren: RootRouteChildren = {
   CarretasRoute: CarretasRoute,
   ClientesRoute: ClientesRoute,
   DestinatariosRoute: DestinatariosRoute,
+  EmbarcadorRoute: EmbarcadorRouteWithChildren,
+  EmbarcadoresRoute: EmbarcadoresRoute,
   FinanceiroRoute: FinanceiroRouteWithChildren,
   FrotakIaRoute: FrotakIaRoute,
   GestaoFrotaRoute: GestaoFrotaRoute,
@@ -756,6 +1142,9 @@ const rootRouteChildren: RootRouteChildren = {
   UsuariosRoute: UsuariosRoute,
   VeiculosRoute: VeiculosRoute,
   VinculacaoRoute: VinculacaoRoute,
+  AcompanharTokenRoute: AcompanharTokenRoute,
+  MotoristaTokenRoute: MotoristaTokenRoute,
+  ApiAcompanharTokenRoute: ApiAcompanharTokenRoute,
   ApiFrotakIaPushDispatchRoute: ApiFrotakIaPushDispatchRoute,
   ApiSascarSyncRoute: ApiSascarSyncRoute,
 }
