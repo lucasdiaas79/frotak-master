@@ -212,6 +212,7 @@ interface FreightFormState {
   paymentTermDays: string;
   paymentTermTouched: boolean;
   observations: string;
+  attachments?: File[];
 }
 
 interface GroupFreightFormState {
@@ -1264,14 +1265,18 @@ export function GestaoFrotaPage() {
     });
   };
 
-  const uploadCreateAttachments = async (vehicleIds: string[], files: File[]) => {
-    if (files.length === 0) return;
+  const uploadCreateAttachments = async (
+    targets: Array<{ vehicleId: string; freightId?: string; files: File[] }>,
+  ) => {
+    const total = targets.reduce((sum, target) => sum + target.files.length, 0);
+    if (total === 0) return;
     let failed = 0;
-    for (const vehicleId of vehicleIds) {
+    for (const { vehicleId, freightId, files } of targets) {
       for (const file of files) {
         try {
           await uploadFreightDocument({
             vehicleId,
+            freightId,
             kind: "anexo_frete",
             file,
             source: "gestao_central",
@@ -1287,14 +1292,13 @@ export function GestaoFrotaPage() {
         }
       }
     }
-    const total = vehicleIds.length * files.length;
     if (failed > 0) {
       toast.error("Alguns anexos não foram enviados", {
         description: `${total - failed} de ${total} arquivo(s) foram para os documentos do motorista.`,
       });
     } else {
       toast.success("Anexos enviados ao motorista", {
-        description: `${files.length} arquivo(s) disponível(is) em Docs no app motorista.`,
+        description: `${total} arquivo(s) disponível(is) em Docs no app motorista.`,
       });
     }
   };
@@ -1370,7 +1374,7 @@ export function GestaoFrotaPage() {
     const intendedStage = intendedStageAfterCreation;
     closeDemandPanel(true);
     setIntendedStageAfterCreation(null);
-    await uploadCreateAttachments([vehicle.id], attachments);
+    await uploadCreateAttachments([{ vehicleId: vehicle.id, files: attachments }]);
 
     if (intendedStage && intendedStage !== "INDO_CARREGAR") {
       await loadAll({ force: true, silent: true });
@@ -1461,8 +1465,7 @@ export function GestaoFrotaPage() {
     const attachments = createAttachments;
     closeDemandPanel();
     await uploadCreateAttachments(
-      selectedResources.map((resource) => resource.vehicle.id),
-      attachments,
+      selectedResources.map((resource) => ({ vehicleId: resource.vehicle.id, files: attachments })),
     );
   };
 
@@ -1527,6 +1530,23 @@ export function GestaoFrotaPage() {
         description: `${result.segmentCount ?? segments.length} frete(s) na rota de ${driver.name}.`,
       });
       closeDemandPanel();
+      const createdFreightIds = result.createdFreightIds ?? [];
+      const segmentsWithFiles = segments.filter((segment) => segment.attachments?.length);
+      if (segmentsWithFiles.length > 0) {
+        if (createdFreightIds.length === segments.length) {
+          await uploadCreateAttachments(
+            segments.map((segment, index) => ({
+              vehicleId: vehicle.id,
+              freightId: createdFreightIds[index],
+              files: segment.attachments ?? [],
+            })),
+          );
+        } else {
+          toast.error("Anexos do tiro longo não enviados", {
+            description: "Não foi possível identificar os fretes criados. Anexe pelo detalhe.",
+          });
+        }
+      }
       await loadAll({ force: true, silent: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível criar o tiro longo.");
@@ -3349,6 +3369,12 @@ function LongTripWorkspace({
                       placeholder="Observações deste trecho..."
                     />
                   </Field>
+                  <div className="md:col-span-2">
+                    <FreightAttachmentPicker
+                      files={segment.attachments ?? []}
+                      onChange={(files) => setSegment(index, { attachments: files })}
+                    />
+                  </div>
                 </div>
               </div>
             );
