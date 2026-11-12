@@ -42,9 +42,11 @@ import {
   SearchCheck,
   Send,
   ShieldCheck,
+  Paperclip,
   Truck,
   Upload,
   User,
+  X,
   XCircle,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -560,6 +562,7 @@ export function GestaoFrotaPage() {
     {},
   );
   const [freightDocuments, setFreightDocuments] = useState<FreightDocument[]>([]);
+  const [createAttachments, setCreateAttachments] = useState<File[]>([]);
   const [finalCommandByVehicle, setFinalCommandByVehicle] = useState<Record<string, FinalCommand>>(
     {},
   );
@@ -1078,6 +1081,7 @@ export function GestaoFrotaPage() {
 
   const closeDemandPanel = (preserveIntendedStage = false) => {
     setDemandPanel(null);
+    setCreateAttachments([]);
     setCreateMode("individual");
     setForm(EMPTY_FORM);
     setGroupForm(EMPTY_GROUP_FORM);
@@ -1260,6 +1264,41 @@ export function GestaoFrotaPage() {
     });
   };
 
+  const uploadCreateAttachments = async (vehicleIds: string[], files: File[]) => {
+    if (files.length === 0) return;
+    let failed = 0;
+    for (const vehicleId of vehicleIds) {
+      for (const file of files) {
+        try {
+          await uploadFreightDocument({
+            vehicleId,
+            kind: "anexo_frete",
+            file,
+            source: "gestao_central",
+            status: "anexado",
+          });
+        } catch (error) {
+          failed += 1;
+          console.error("[gestao-frota] falha ao anexar arquivo do frete", {
+            vehicleId,
+            fileName: file.name,
+            error,
+          });
+        }
+      }
+    }
+    const total = vehicleIds.length * files.length;
+    if (failed > 0) {
+      toast.error("Alguns anexos não foram enviados", {
+        description: `${total - failed} de ${total} arquivo(s) foram para os documentos do motorista.`,
+      });
+    } else {
+      toast.success("Anexos enviados ao motorista", {
+        description: `${files.length} arquivo(s) disponível(is) em Docs no app motorista.`,
+      });
+    }
+  };
+
   const createFreight = async () => {
     const vehicle = vehicles.find((item) => item.id === form.vehicleId);
     const driver = drivers.find((item) => item.id === form.driverId);
@@ -1327,9 +1366,11 @@ export function GestaoFrotaPage() {
       return;
     }
     toast.success("Frete criado", { description: `${vehicle.plate} · ${driver.name}` });
+    const attachments = createAttachments;
     const intendedStage = intendedStageAfterCreation;
     closeDemandPanel(true);
     setIntendedStageAfterCreation(null);
+    await uploadCreateAttachments([vehicle.id], attachments);
 
     if (intendedStage && intendedStage !== "INDO_CARREGAR") {
       await loadAll({ force: true, silent: true });
@@ -1417,7 +1458,12 @@ export function GestaoFrotaPage() {
     toast.success("Frete em grupo criado", {
       description: `${selectedResources.length} caminhões atribuídos ao mesmo frete.`,
     });
+    const attachments = createAttachments;
     closeDemandPanel();
+    await uploadCreateAttachments(
+      selectedResources.map((resource) => resource.vehicle.id),
+      attachments,
+    );
   };
 
   const createLongTripFreights = async () => {
@@ -1760,6 +1806,8 @@ export function GestaoFrotaPage() {
             assetAssignmentMode={assetAssignmentMode}
             suggestedIndividualPaymentTerm={suggestedIndividualPaymentTerm}
             suggestedGroupPaymentTerm={suggestedGroupPaymentTerm}
+            attachments={createAttachments}
+            setAttachments={setCreateAttachments}
             onCreateIndividual={createFreight}
             onCreateGroup={createGroupFreight}
             onCreateLongTrip={createLongTripFreights}
@@ -2506,6 +2554,8 @@ function CreateFreightWorkspace({
   assetAssignmentMode,
   suggestedIndividualPaymentTerm,
   suggestedGroupPaymentTerm,
+  attachments,
+  setAttachments,
   onCreateIndividual,
   onCreateGroup,
   onCreateLongTrip,
@@ -2530,6 +2580,8 @@ function CreateFreightWorkspace({
   assetAssignmentMode: AssetAssignmentMode;
   suggestedIndividualPaymentTerm: number | null;
   suggestedGroupPaymentTerm: number | null;
+  attachments: File[];
+  setAttachments: (files: File[]) => void;
   onCreateIndividual: () => void;
   onCreateGroup: () => void;
   onCreateLongTrip: () => void;
@@ -2596,6 +2648,9 @@ function CreateFreightWorkspace({
           activeTrailerIds={activeTrailerIds}
           assetAssignmentMode={assetAssignmentMode}
           suggestedPaymentTerm={suggestedIndividualPaymentTerm}
+          attachmentsSlot={
+            <FreightAttachmentPicker files={attachments} onChange={setAttachments} />
+          }
           onCreate={onCreateIndividual}
         />
       ) : (
@@ -2607,8 +2662,104 @@ function CreateFreightWorkspace({
           products={products}
           availableResources={availableResources}
           suggestedPaymentTerm={suggestedGroupPaymentTerm}
+          attachmentsSlot={
+            <FreightAttachmentPicker files={attachments} onChange={setAttachments} />
+          }
           onCreate={onCreateGroup}
         />
+      )}
+    </div>
+  );
+}
+
+const FREIGHT_ATTACHMENT_ACCEPT =
+  "image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,application/xml,text/xml,text/plain,.pdf,.xml,.txt,.jpg,.jpeg,.png,.webp,.heic,.heif";
+const FREIGHT_ATTACHMENT_MAX_BYTES = 20 * 1024 * 1024;
+
+function formatAttachmentSize(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
+}
+
+function FreightAttachmentPicker({
+  files,
+  onChange,
+}: {
+  files: File[];
+  onChange: (files: File[]) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const addFiles = (list: FileList | null) => {
+    if (!list || list.length === 0) return;
+    const accepted: File[] = [];
+    for (const file of Array.from(list)) {
+      if (file.size > FREIGHT_ATTACHMENT_MAX_BYTES) {
+        toast.error("Arquivo muito grande", {
+          description: `${file.name} passa de 20 MB.`,
+        });
+        continue;
+      }
+      const duplicate = files.some(
+        (current) => current.name === file.name && current.size === file.size,
+      );
+      if (!duplicate) accepted.push(file);
+    }
+    if (accepted.length) onChange([...files, ...accepted]);
+  };
+
+  return (
+    <div className="space-y-2 rounded-2xl border border-dashed border-border bg-surface-2/40 p-3">
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept={FREIGHT_ATTACHMENT_ACCEPT}
+        className="hidden"
+        onChange={(event) => {
+          addFiles(event.target.files);
+          event.target.value = "";
+        }}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        className="h-10 w-full gap-2"
+        onClick={() => inputRef.current?.click()}
+      >
+        <Paperclip className="size-4" />
+        Anexar Arquivo
+      </Button>
+      <p className="text-[11.5px] font-semibold text-muted-foreground">
+        {files.length
+          ? "Os arquivos vão para Docs no app do motorista ao criar o frete."
+          : "Opcional. PDF, foto ou XML vão direto para Docs no app do motorista."}
+      </p>
+      {files.length > 0 && (
+        <ul className="space-y-1.5">
+          {files.map((file, index) => (
+            <li
+              key={`${file.name}-${file.size}-${index}`}
+              className="flex items-center gap-2 rounded-xl bg-background/60 px-2.5 py-2"
+            >
+              <FileText className="size-4 shrink-0 text-primary" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12.5px] font-bold">{file.name}</span>
+                <span className="block text-[11px] text-muted-foreground">
+                  {formatAttachmentSize(file.size)}
+                </span>
+              </span>
+              <button
+                type="button"
+                aria-label={`Remover ${file.name}`}
+                onClick={() => onChange(files.filter((_, current) => current !== index))}
+                className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
@@ -2622,6 +2773,7 @@ function GroupFreightWorkspace({
   products,
   availableResources,
   suggestedPaymentTerm,
+  attachmentsSlot,
   onCreate,
 }: {
   form: GroupFreightFormState;
@@ -2631,6 +2783,7 @@ function GroupFreightWorkspace({
   products: Product[];
   availableResources: AvailableDriverResource[];
   suggestedPaymentTerm: number | null;
+  attachmentsSlot?: ReactNode;
   onCreate: () => void;
 }) {
   const [plateFilter, setPlateFilter] = useState("");
@@ -2919,6 +3072,7 @@ function GroupFreightWorkspace({
           <CheckLine ok={!!sender} label="Remetente ativo" />
           <CheckLine ok={!!recipient} label="Destinatário ativo" />
           <CheckLine ok={!!product} label="Produto informado" />
+          {attachmentsSlot}
           <Button className="mt-2 h-12 w-full" disabled={!validCreate} onClick={onCreate}>
             Criar frete em grupo <ArrowRight className="size-4" />
           </Button>
@@ -3229,6 +3383,7 @@ function DemandWorkspace({
   activeTrailerIds,
   assetAssignmentMode,
   suggestedPaymentTerm,
+  attachmentsSlot,
   onCreate,
   onAdvance,
   onFinalCommand,
@@ -3251,6 +3406,7 @@ function DemandWorkspace({
   activeTrailerIds: Set<string>;
   assetAssignmentMode: AssetAssignmentMode;
   suggestedPaymentTerm?: number | null;
+  attachmentsSlot?: ReactNode;
   onCreate?: () => void;
   onAdvance?: (demand: FreightDemand, explicitNext?: FreightStageId) => Promise<void>;
   onFinalCommand?: (demand: FreightDemand, command: FinalCommand) => Promise<void>;
@@ -3609,6 +3765,7 @@ function DemandWorkspace({
         recipients={recipients}
         products={products}
         validCreate={validCreate}
+        attachmentsSlot={attachmentsSlot}
         onCreate={onCreate}
         onAdvance={onAdvance}
         onFinalCommand={onFinalCommand}
@@ -3813,6 +3970,7 @@ function FreightSummaryPanel({
   recipients,
   products,
   validCreate,
+  attachmentsSlot,
   onCreate,
   onAdvance,
   onFinalCommand,
@@ -3826,6 +3984,7 @@ function FreightSummaryPanel({
   recipients: Recipient[];
   products: Product[];
   validCreate: boolean;
+  attachmentsSlot?: ReactNode;
   onCreate?: () => void;
   onAdvance?: (demand: FreightDemand, explicitNext?: FreightStageId) => Promise<void>;
   onFinalCommand?: (demand: FreightDemand, command: FinalCommand) => Promise<void>;
@@ -3869,6 +4028,7 @@ function FreightSummaryPanel({
             <CheckLine ok={!!sender} label="Remetente ativo" />
             <CheckLine ok={!!recipient} label="Destinatário ativo" />
             <CheckLine ok={!!product} label="Produto informado" />
+            {attachmentsSlot}
             <Button className="mt-2 h-12 w-full" disabled={!validCreate} onClick={onCreate}>
               Criar frete <ArrowRight className="size-4" />
             </Button>

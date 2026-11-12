@@ -328,7 +328,8 @@ export type FreightDocumentKind =
   | "balanca"
   | "recibo"
   | "canhoto"
-  | "comprovante_entrega";
+  | "comprovante_entrega"
+  | "anexo_frete";
 
 export interface FreightDocument {
   id: string;
