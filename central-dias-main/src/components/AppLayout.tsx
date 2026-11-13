@@ -60,7 +60,8 @@ import {
 } from "@/lib/entitlementsAccess";
 import { FrotakEmptyState, FrotakPage } from "@/components/frotak/FrotakPage";
 import { SupportAccessBanner } from "@/components/frotak/SupportAccessBanner";
-import { frotakIcon, tenantLogo } from "@/lib/tenantBrand";
+import { frotakIcon } from "@/lib/tenantBrand";
+import frotakLogoBranca from "@/assets/frotak-logo-branca.png";
 
 // Menu dos modulos vem dos manifestos em src/modules; aqui so o que e da casca do app.
 const CADASTROS: NavGroup[] = fleetCoreModule.nav?.registrations ?? [];
@@ -489,7 +490,6 @@ function SidebarBody({
   fleetUsable: boolean;
 }) {
   const initials = getInitials(profile);
-  const customLogo = tenantLogo({ id: profile?.tenantId, name: profile?.name });
   const profileLabel = profile?.name || profile?.email || "Operador Logístico";
   const financialItems = financialNavFor(financialAccess);
 
@@ -516,25 +516,14 @@ function SidebarBody({
               collapsed ? "size-10" : "hidden",
             )}
           />
-          {customLogo ? (
-            <img
-              src={customLogo}
-              alt={profile?.name || "Logomarca do cliente"}
-              className={cn(
-                "h-24 w-auto max-w-[320px] min-w-0 scale-[1.35] object-contain object-center transition-all",
-                collapsed ? "hidden" : "block",
-              )}
-            />
-          ) : (
-            <span className={cn("min-w-0 items-center gap-3", collapsed ? "hidden" : "flex")}>
-              <img
-                src={frotakIcon}
-                alt="FrotaK"
-                className="size-12 shrink-0 rounded-2xl object-contain"
-              />
-              <span className="truncate text-lg font-extrabold">FrotaK</span>
-            </span>
-          )}
+          <img
+            src={frotakLogoBranca}
+            alt="FrotaK"
+            className={cn(
+              "h-11 w-auto max-w-[220px] min-w-0 object-contain object-center transition-all",
+              collapsed ? "hidden" : "block",
+            )}
+          />
         </Link>
 
         <button
