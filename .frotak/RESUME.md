@@ -28,3 +28,6 @@ Identificado na raiz do checkout Cliente importado. Confirmar limites de tenant,
 
 ## Limitações
 - Nenhum checkpoint atual registrado. As fontes importadas são referências históricas.
+
+## Migrations aplicadas manualmente
+- 2026-11-13: `supabase/migrations/202611120001_driver_app_long_trip_attachments.sql` (commit c461609) aplicada no projeto Supabase de produção "Frotak" (ref ujssyufhyvxfpfkwxdux) via `supabase db query --linked -f`, somente este arquivo. Verificação: `pg_get_functiondef('public.get_driver_app_context()'::regprocedure) ilike '%anexo_frete%'` = true. Não registrada em `supabase_migrations.schema_migrations` (sem insert manual); outras migrations pendentes continuam não aplicadas — não usar `db push` sem revisar a lista.
