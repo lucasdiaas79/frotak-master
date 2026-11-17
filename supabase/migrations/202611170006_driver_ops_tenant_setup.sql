@@ -38,9 +38,14 @@ begin
     raise exception 'DEFAULT_WORKSPACE_NOT_FOUND' using errcode = 'P0002';
   end if;
 
-  insert into public.tenant_platform_products (tenant_id, platform_product_id, enabled, created_by)
-  select p_tenant_id, p.id, true, auth.uid() from public.platform_products p where p.code = 'tms'
-  on conflict (tenant_id, platform_product_id) do update set enabled = true, ends_at = null;
+  -- Produto TMS da plataforma, so onde existe o esquema novo de produtos.
+  if to_regclass('public.tenant_platform_products') is not null then
+    execute $q$
+      insert into public.tenant_platform_products (tenant_id, platform_product_id, enabled, created_by)
+      select $1, p.id, true, auth.uid() from public.platform_products p where p.code = 'tms'
+      on conflict (tenant_id, platform_product_id) do update set enabled = true, ends_at = null
+    $q$ using p_tenant_id;
+  end if;
 
   insert into public.workspace_modules (workspace_id, module_id, enabled, source, created_by)
   select v_workspace_id, m.id, true, 'manual', auth.uid()

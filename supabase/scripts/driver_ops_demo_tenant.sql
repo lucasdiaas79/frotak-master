@@ -40,27 +40,34 @@ begin
   select id into v_tenant from public.tenants where slug = v_slug;
   if v_tenant is null then
     select code into v_plan from public.plans where active order by created_at limit 1;
-    select coalesce(
-      (select replace(client_url, slug, v_slug) from public.client_databases order by created_at limit 1),
-      'https://' || v_slug || '.frotak.log.br'
-    ) into v_url;
-    v_tenant := public.master_register_client(
-      v_slug,
-      replace(v_slug, '-', '_'),
-      v_url,
-      'Transportes Demonstração Operação Ltda',
-      'Operação Embarcador (demonstração)',
-      '11444777000161',
-      'Matriz',
-      v_plan,
-      now(),
-      now() + interval '1 year',
-      'mensal',
-      20,
-      array['driver_app'],
-      null,
-      v_actor
-    );
+    if to_regprocedure('public.master_register_client(text,text,text,text,text,text,text,text,timestamptz,timestamptz,text,integer,text[],text,uuid)') is not null then
+      select coalesce(
+        (select replace(client_url, slug, v_slug) from public.client_databases order by created_at limit 1),
+        'https://' || v_slug || '.frotak.log.br'
+      ) into v_url;
+      execute 'select public.master_register_client($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)'
+      into v_tenant
+      using v_slug, replace(v_slug, '-', '_'), v_url, 'Transportes Demonstração Operação Ltda',
+        'Operação Embarcador (demonstração)', '11444777000161', 'Matriz', v_plan, now(),
+        now() + interval '1 year', 'mensal', 20, array['driver_app'], null::text, v_actor;
+    else
+      -- Esquema antigo (sem cadastro master): tenant, workspace padrao, assinatura e fleet_core.
+      insert into public.tenants (slug, legal_name, trade_name, cnpj, status, settings, created_by)
+      values (v_slug, 'Transportes Demonstração Operação Ltda', 'Operação Embarcador (demonstração)',
+        '11444777000161', 'active', jsonb_build_object('subscriptionPeriod', 'mensal', 'maxVehicles', 20), v_actor)
+      returning id into v_tenant;
+      insert into public.workspaces (tenant_id, name, slug, status, is_default, settings)
+      values (v_tenant, 'Matriz', v_slug, 'active', true, jsonb_build_object('maxVehicles', 20))
+      returning id into v_workspace;
+      if v_plan is not null then
+        insert into public.tenant_subscriptions (tenant_id, plan_id, status, starts_at, ends_at)
+        select v_tenant, p.id, 'active', now(), now() + interval '1 year' from public.plans p where p.code = v_plan;
+      end if;
+      insert into public.workspace_modules (workspace_id, module_id, enabled, source, limits, created_by)
+      select v_workspace, m.id, true, 'plan', jsonb_build_object('max_vehicles', 20), v_actor
+      from public.modules m where m.code = 'fleet_core'
+      on conflict (workspace_id, module_id) do update set enabled = true;
+    end if;
     raise notice 'tenant criado: %', v_tenant;
   else
     raise notice 'tenant ja existia: %', v_tenant;

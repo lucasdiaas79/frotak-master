@@ -17,25 +17,66 @@ begin;
 
 -- 1. Modulos -------------------------------------------------------------------------
 
-insert into public.modules (code, name, description, active, platform_product_id, is_core, sort_order)
-select v.code, v.name, v.description, true, p.id, false, v.sort_order
-from (
-  values
-    ('driver_journey', 'Jornada do motorista', 'Ponto e jornada pelo app, ligados às etapas, com alertas da Lei 13.103 e espelho de ponto.', 70),
-    ('driver_safety', 'Segurança do motorista', 'Checklist do veículo, ocorrências, emergência, documentos com vencimento e avisos com ciência.', 80),
-    ('fuel_control', 'Controle de combustível', 'Postos com preço combinado, tanque cheio, conferências de odômetro, tanque, preço e rastreador.', 90),
-    ('delivery_routes', 'Rotas de entrega', 'Rotas com várias paradas, janelas, canhoto, assinatura, recusa, vasilhame e recebimento.', 100),
-    ('driver_performance', 'Desempenho do motorista', 'Nota do motorista, ranking e premiação com dados de abastecimento, rastreador e etapas.', 110)
-) as v(code, name, description, sort_order)
-cross join public.platform_products p
-where p.code = 'tms'
+-- Funciona nos dois esquemas de modulos: o antigo (code, name, description, active) e o
+-- novo, com produto da plataforma e ordem (202610310001). Producao ainda esta no antigo.
+insert into public.modules (code, name, description, active)
+values
+  ('driver_journey', 'Jornada do motorista', 'Ponto e jornada pelo app, ligados às etapas, com alertas da Lei 13.103 e espelho de ponto.', true),
+  ('driver_safety', 'Segurança do motorista', 'Checklist do veículo, ocorrências, emergência, documentos com vencimento e avisos com ciência.', true),
+  ('fuel_control', 'Controle de combustível', 'Postos com preço combinado, tanque cheio, conferências de odômetro, tanque, preço e rastreador.', true),
+  ('delivery_routes', 'Rotas de entrega', 'Rotas com várias paradas, janelas, canhoto, assinatura, recusa, vasilhame e recebimento.', true),
+  ('driver_performance', 'Desempenho do motorista', 'Nota do motorista, ranking e premiação com dados de abastecimento, rastreador e etapas.', true)
 on conflict (code) do update
-set
-  name = excluded.name,
-  description = excluded.description,
-  platform_product_id = excluded.platform_product_id,
-  sort_order = excluded.sort_order,
-  updated_at = now();
+set name = excluded.name, description = excluded.description, active = true, updated_at = now();
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'modules' and column_name = 'platform_product_id'
+  ) and to_regclass('public.platform_products') is not null then
+    execute $q$
+      update public.modules m
+      set platform_product_id = p.id,
+          is_core = false,
+          sort_order = case m.code
+            when 'driver_journey' then 70 when 'driver_safety' then 80 when 'fuel_control' then 90
+            when 'delivery_routes' then 100 else 110 end
+      from public.platform_products p
+      where p.code = 'tms'
+        and m.code in ('driver_journey', 'driver_safety', 'fuel_control', 'delivery_routes', 'driver_performance')
+    $q$;
+  end if;
+
+  -- Esquema antigo nao tem private.tenant_has_module: cria uma versao equivalente, que so
+  -- olha workspace_modules ligado e dentro da validade. Nao substitui a versao nova.
+  if to_regprocedure('private.tenant_has_module(uuid,text)') is null then
+    execute $f$
+      create function private.tenant_has_module(p_tenant_id uuid, p_module_code text)
+      returns boolean
+      language sql
+      stable
+      security definer
+      set search_path = pg_catalog, public, private
+      as $b$
+        select exists (
+          select 1
+          from public.workspaces w
+          join public.workspace_modules wm on wm.workspace_id = w.id
+          join public.modules m on m.id = wm.module_id
+          where w.tenant_id = p_tenant_id
+            and m.code = p_module_code
+            and m.active
+            and wm.enabled
+            and (wm.starts_at is null or wm.starts_at <= now())
+            and (wm.expires_at is null or wm.expires_at > now())
+        );
+      $b$
+    $f$;
+    execute 'revoke all on function private.tenant_has_module(uuid, text) from public, anon, authenticated';
+  end if;
+end;
+$$;
 
 -- Motorista atual com o modulo exigido ligado no tenant dele.
 create or replace function private.current_driver_with_module(p_module_code text)
