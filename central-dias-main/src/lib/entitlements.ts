@@ -29,8 +29,18 @@ export type WorkspaceEntitlements = {
 
 // Rotas, menu e rotulos de cada modulo ficam nos manifestos (src/modules/registry.ts).
 
+/** Modulos da operacao com embarcador: so aparecem onde foram ligados, mesmo no banco legado. */
+export const OPT_IN_MODULES: readonly ModuleCode[] = [
+  "driver_journey",
+  "driver_safety",
+  "fuel_control",
+  "delivery_routes",
+  "driver_performance",
+];
+
 /** Sem informacao (falha de rede, modo local) o app nao bloqueia; o servidor decide. */
 export function isModuleEnabled(entitlements: WorkspaceEntitlements | null, module: ModuleCode) {
+  if (OPT_IN_MODULES.includes(module)) return !!entitlements?.modules.includes(module);
   if (!entitlements || entitlements.legacy) return true;
   return entitlements.modules.includes(module);
 }
@@ -69,7 +79,15 @@ export async function fetchWorkspaceEntitlements(
 
   if (error) {
     if (isMissingCatalog(error)) {
-      return { workspaceId, tenantStatus: null, products: [], modules: [], legacy: true };
+      // Banco legado: pergunta so pelos modulos opt-in da operacao com embarcador.
+      const ops = await client.rpc("get_driver_ops_modules", { p_workspace_id: workspaceId });
+      return {
+        workspaceId,
+        tenantStatus: null,
+        products: [],
+        modules: ops.error ? [] : stringList(ops.data),
+        legacy: true,
+      };
     }
     throw new Error(`entitlements: ${error.message}`);
   }
