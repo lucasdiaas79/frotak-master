@@ -37,6 +37,7 @@ import { Route as EmbarcadorCadastroRouteImport } from './routes/embarcador.cada
 import { Route as EmbarcadorCargasRouteImport } from './routes/embarcador.cargas'
 import { Route as EmbarcadorDemoRouteImport } from './routes/embarcador.demo'
 import { Route as EmbarcadorDocumentosRouteImport } from './routes/embarcador.documentos'
+import { Route as EmbarcadorEntregasRouteImport } from './routes/embarcador.entregas'
 import { Route as EmbarcadorIaRouteImport } from './routes/embarcador.ia'
 import { Route as EmbarcadorIndicadoresRouteImport } from './routes/embarcador.indicadores'
 import { Route as EmbarcadorLoginRouteImport } from './routes/embarcador.login'
@@ -203,6 +204,11 @@ const EmbarcadorDocumentosRoute = EmbarcadorDocumentosRouteImport.update({
   path: '/documentos',
   getParentRoute: () => EmbarcadorRoute,
 } as any)
+const EmbarcadorEntregasRoute = EmbarcadorEntregasRouteImport.update({
+  id: '/entregas',
+  path: '/entregas',
+  getParentRoute: () => EmbarcadorRoute,
+} as any)
 const EmbarcadorIaRoute = EmbarcadorIaRouteImport.update({
   id: '/ia',
   path: '/ia',
@@ -360,6 +366,7 @@ export interface FileRoutesByFullPath {
   '/embarcador/cargas': typeof EmbarcadorCargasRoute
   '/embarcador/demo': typeof EmbarcadorDemoRoute
   '/embarcador/documentos': typeof EmbarcadorDocumentosRoute
+  '/embarcador/entregas': typeof EmbarcadorEntregasRoute
   '/embarcador/ia': typeof EmbarcadorIaRoute
   '/embarcador/indicadores': typeof EmbarcadorIndicadoresRoute
   '/embarcador/login': typeof EmbarcadorLoginRoute
@@ -413,6 +420,7 @@ export interface FileRoutesByTo {
   '/embarcador/cargas': typeof EmbarcadorCargasRoute
   '/embarcador/demo': typeof EmbarcadorDemoRoute
   '/embarcador/documentos': typeof EmbarcadorDocumentosRoute
+  '/embarcador/entregas': typeof EmbarcadorEntregasRoute
   '/embarcador/ia': typeof EmbarcadorIaRoute
   '/embarcador/indicadores': typeof EmbarcadorIndicadoresRoute
   '/embarcador/login': typeof EmbarcadorLoginRoute
@@ -469,6 +477,7 @@ export interface FileRoutesById {
   '/embarcador/cargas': typeof EmbarcadorCargasRoute
   '/embarcador/demo': typeof EmbarcadorDemoRoute
   '/embarcador/documentos': typeof EmbarcadorDocumentosRoute
+  '/embarcador/entregas': typeof EmbarcadorEntregasRoute
   '/embarcador/ia': typeof EmbarcadorIaRoute
   '/embarcador/indicadores': typeof EmbarcadorIndicadoresRoute
   '/embarcador/login': typeof EmbarcadorLoginRoute
@@ -526,6 +535,7 @@ export interface FileRouteTypes {
     | '/embarcador/cargas'
     | '/embarcador/demo'
     | '/embarcador/documentos'
+    | '/embarcador/entregas'
     | '/embarcador/ia'
     | '/embarcador/indicadores'
     | '/embarcador/login'
@@ -579,6 +589,7 @@ export interface FileRouteTypes {
     | '/embarcador/cargas'
     | '/embarcador/demo'
     | '/embarcador/documentos'
+    | '/embarcador/entregas'
     | '/embarcador/ia'
     | '/embarcador/indicadores'
     | '/embarcador/login'
@@ -634,6 +645,7 @@ export interface FileRouteTypes {
     | '/embarcador/cargas'
     | '/embarcador/demo'
     | '/embarcador/documentos'
+    | '/embarcador/entregas'
     | '/embarcador/ia'
     | '/embarcador/indicadores'
     | '/embarcador/login'
@@ -890,6 +902,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmbarcadorDocumentosRouteImport
       parentRoute: typeof EmbarcadorRoute
     }
+    '/embarcador/entregas': {
+      id: '/embarcador/entregas'
+      path: '/entregas'
+      fullPath: '/embarcador/entregas'
+      preLoaderRoute: typeof EmbarcadorEntregasRouteImport
+      parentRoute: typeof EmbarcadorRoute
+    }
     '/embarcador/ia': {
       id: '/embarcador/ia'
       path: '/ia'
@@ -1073,6 +1092,7 @@ interface EmbarcadorRouteChildren {
   EmbarcadorCargasRoute: typeof EmbarcadorCargasRoute
   EmbarcadorDemoRoute: typeof EmbarcadorDemoRoute
   EmbarcadorDocumentosRoute: typeof EmbarcadorDocumentosRoute
+  EmbarcadorEntregasRoute: typeof EmbarcadorEntregasRoute
   EmbarcadorIaRoute: typeof EmbarcadorIaRoute
   EmbarcadorIndicadoresRoute: typeof EmbarcadorIndicadoresRoute
   EmbarcadorLoginRoute: typeof EmbarcadorLoginRoute
@@ -1089,6 +1109,7 @@ const EmbarcadorRouteChildren: EmbarcadorRouteChildren = {
   EmbarcadorCargasRoute: EmbarcadorCargasRoute,
   EmbarcadorDemoRoute: EmbarcadorDemoRoute,
   EmbarcadorDocumentosRoute: EmbarcadorDocumentosRoute,
+  EmbarcadorEntregasRoute: EmbarcadorEntregasRoute,
   EmbarcadorIaRoute: EmbarcadorIaRoute,
   EmbarcadorIndicadoresRoute: EmbarcadorIndicadoresRoute,
   EmbarcadorLoginRoute: EmbarcadorLoginRoute,

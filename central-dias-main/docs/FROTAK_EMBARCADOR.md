@@ -27,6 +27,12 @@ lançar abastecimento e despesa no link do motorista).
 **Portal do embarcador** (`/embarcador`)
 - Painel: cargas em andamento, mapa, alertas (ocorrência, canhoto, motorista com documento irregular).
 - Cargas, Frotak IA, Transportadoras (convite e conexão), Documentos e Indicadores.
+- **Entregas** (`/embarcador/entregas`): rotas da operação com embarcador feitas pelo app do
+  motorista. Entregas no prazo (OTD), canhoto digital (assinatura e foto), recusas e parciais por
+  motivo, vasilhame recolhido contra o previsto, recebimento nas entregas, tempo no cliente,
+  chegada pela cerca, CO₂ estimado e relatório em planilha (uma linha por parada).
+  A rota entra no portal quando tem o CNPJ do embarcador (`delivery_routes.shipper_cnpj`) e a
+  transportadora está conectada. Ponto, abastecimento e custos da transportadora não aparecem.
 - **Terceiros**: os motoristas que já levaram carga dele, com nota, viagens, documentos,
   por qual transportadora vieram, aprovar, bloquear e ranking de pontualidade.
 - **Perfil do motorista**: documentos, histórico com as cargas dele, nota por viagem e observação interna.
@@ -51,12 +57,16 @@ lançar abastecimento e despesa no link do motorista).
 
 ## Colocar no ar (Supabase atual, sem banco novo)
 
-Aplique as 3 migrations **nesta ordem**, no SQL Editor do Supabase ou com `supabase db push`:
+Aplique as migrations **nesta ordem**, uma por vez, no SQL Editor do Supabase ou com `supabase db query --linked -f <arquivo>` (nunca `db push`):
 
 1. `supabase/migrations/202611110001_freight_share_links.sql`: links de acompanhamento.
 2. `supabase/migrations/202611110002_shipper_portal.sql`: embarcadores, membros e conexões.
 3. `supabase/migrations/202611110003_shipper_third_party_network.sql`: motoristas da rede,
    documentos, avaliações, decisões, configurações da rede e o link do motorista.
+4. `202611170001` a `202611170006`: operação com embarcador (jornada, segurança, combustível,
+   rotas, contexto do app do motorista e preparo do tenant).
+5. `202611170007_shipper_delivery_routes.sql`: liga as rotas ao portal. Depois, para cada operação:
+   `select public.master_link_driver_ops_shipper('<tenant_id>', '<cnpj do embarcador>');`
 
 Todas as tabelas novas ficam com RLS ligado e sem acesso para `anon`/`authenticated`; só o servidor
 (service role) lê e grava. Nada nas tabelas existentes é alterado.

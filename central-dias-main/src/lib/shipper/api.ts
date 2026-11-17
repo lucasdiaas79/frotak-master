@@ -7,6 +7,7 @@ import {
 import { resolveFrotakAiContext } from "@/modules/frotak-ai/infrastructure/frotakAiContext";
 import { answerLocally, buildAiContext } from "./analytics";
 import { demoPortalData } from "./demo";
+import type { ShipperDeliveriesData } from "./deliveries";
 import type {
   DriverDecision,
   NetworkDriver,
@@ -38,6 +39,10 @@ import {
   signUpShipper,
   type TenantShipperLink,
 } from "../../../server/lib/shipper-portal.ts";
+import {
+  loadShipperDeliveries,
+  shipperPodPhotoUrl,
+} from "../../../server/lib/shipper-deliveries.ts";
 
 // Funcoes de servidor do portal do embarcador e da tela "Embarcadores" da Frotak.
 // Toda resposta segue { ok: true, ... } ou { ok: false, error } para a tela mostrar.
@@ -449,5 +454,38 @@ export const shipperSaveNetworkSettings = createServerFn({ method: "POST" })
       return { ok: true };
     } catch (error) {
       return fail(error, "network-settings");
+    }
+  });
+
+// ------------------------------------------------------------ Entregas (rotas)
+
+export const shipperLoadDeliveries = createServerFn({ method: "POST" })
+  .inputValidator((input: Record<string, unknown> | undefined) => ({
+    accessToken: clean(input?.accessToken, 5000),
+    from: clean(input?.from, 40),
+    to: clean(input?.to, 40),
+  }))
+  .handler(async ({ data }): Promise<{ ok: true; data: ShipperDeliveriesData } | Fail> => {
+    try {
+      assertSingleDatabase();
+      const session = await resolveShipperSession(data.accessToken);
+      return { ok: true, data: await loadShipperDeliveries(session, data) };
+    } catch (error) {
+      return fail(error, "deliveries");
+    }
+  });
+
+export const shipperPodUrl = createServerFn({ method: "POST" })
+  .inputValidator((input: Record<string, unknown> | undefined) => ({
+    accessToken: clean(input?.accessToken, 5000),
+    stopId: clean(input?.stopId, 64),
+    index: Math.max(0, Math.min(20, Number(input?.index) || 0)),
+  }))
+  .handler(async ({ data }): Promise<{ ok: true; url: string } | Fail> => {
+    try {
+      const session = await resolveShipperSession(data.accessToken);
+      return { ok: true, url: await shipperPodPhotoUrl(session, data.stopId, data.index) };
+    } catch (error) {
+      return fail(error, "pod");
     }
   });

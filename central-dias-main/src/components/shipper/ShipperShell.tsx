@@ -10,6 +10,7 @@ import {
   Menu,
   Network,
   Package,
+  PackageCheck,
   Sparkles,
   X,
 } from "lucide-react";
@@ -36,6 +37,13 @@ const GROUPS: Array<{ title: string; items: Item[] }> = [
     items: [
       { to: "/embarcador", label: "Painel", short: "Painel", icon: LayoutDashboard },
       { to: "/embarcador/cargas", label: "Cargas", short: "Cargas", icon: Package },
+      {
+        to: "/embarcador/entregas",
+        label: "Entregas",
+        short: "Entregas",
+        icon: PackageCheck,
+        isNew: true,
+      },
       { to: "/embarcador/ia", label: "Frotak IA", short: "IA", icon: Sparkles },
     ],
   },
