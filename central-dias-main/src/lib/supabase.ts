@@ -19,10 +19,10 @@ const client = runtimeClient();
 // Sem as chaves do cliente, não há banco nenhum para conectar. Nunca cai no banco de outro.
 const supabaseUrl = isClientDatabaseBuild
   ? (client?.supabaseUrl ?? "http://127.0.0.1:9")
-  : (import.meta.env.VITE_SUPABASE_URL as string | undefined);
+  : (import.meta.env.VITE_SUPABASE_URL as string | undefined) || undefined;
 const supabaseAnonKey = isClientDatabaseBuild
   ? (client?.anonKey ?? "sem-cliente")
-  : (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined);
+  : (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || undefined;
 const fallbackSupabaseUrl = "http://127.0.0.1:54321";
 const fallbackSupabaseAnonKey = "local-dev-anon-key";
 

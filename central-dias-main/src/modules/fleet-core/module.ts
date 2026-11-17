@@ -3,6 +3,7 @@ import {
   Container,
   FolderKanban,
   Fuel,
+  Handshake,
   History,
   LayoutDashboard,
   ListChecks,
@@ -24,6 +25,7 @@ export const fleetCoreModule: TmsModule = {
       { to: "/historicos", label: "Históricos", icon: History, order: 40 },
       { to: "/abastecimentos", label: "Abastecimentos", icon: Fuel, order: 50 },
       { to: "/mapa", label: "Mapa da Frota", icon: MapIcon, order: 60 },
+      { to: "/embarcadores", label: "Embarcadores", icon: Handshake, order: 70 },
     ],
     registrations: [
       {

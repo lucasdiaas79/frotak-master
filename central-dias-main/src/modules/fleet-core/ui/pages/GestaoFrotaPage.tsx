@@ -51,6 +51,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ManualMoveDialog } from "@/modules/fleet-core/ui/ManualMoveDialog";
+import { ShareFreightPanel } from "@/components/fleet/ShareFreightPanel";
+import { DriverLinkPanel } from "@/components/fleet/DriverLinkPanel";
 import { Modal } from "@/components/Modal";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -3838,6 +3840,16 @@ function DemandDetailWorkspace({
           </div>
         </div>
       )}
+      <ShareFreightPanel
+        vehicleId={demand.id}
+        freightId={demand.currentFreightId}
+        freightCode={demand.code}
+      />
+      <DriverLinkPanel
+        vehicleId={demand.id}
+        freightId={demand.currentFreightId}
+        freightCode={demand.code}
+      />
       <DemandStageSection
         demand={demand}
         onAdvance={onAdvance}
