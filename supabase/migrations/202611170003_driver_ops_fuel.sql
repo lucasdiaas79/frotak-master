@@ -353,18 +353,18 @@ begin
     v_hours := greatest(extract(epoch from v_at - v_prev.recorded_at) / 3600.0, 0.01);
     if v_km / v_hours > v_profile.max_avg_speed_kmh then
       v_checks := v_checks || jsonb_build_object('code', 'odometro_impossivel', 'level', 'alerta',
-        'detail', format('%s km em %s h desde o ultimo abastecimento', round(v_km), round(v_hours, 1)));
+        'detail', format('%s km em %s h desde o último abastecimento', round(v_km), round(v_hours, 1)));
     end if;
     if v_hours < v_profile.min_hours_between then
       v_checks := v_checks || jsonb_build_object('code', 'abastecimento_proximo', 'level', 'alerta',
-        'detail', format('Ultimo abastecimento ha %s h', round(v_hours, 1)));
+        'detail', format('Último abastecimento há %s h', round(v_hours, 1)));
     end if;
     v_tracker := private.tracker_km(v_vehicle.id, v_prev.recorded_at, v_at);
     if v_tracker is not null and v_tracker > 0
       and abs(v_km - v_tracker) > v_profile.tracker_divergence_km
       and abs(v_km - v_tracker) / v_tracker * 100 > v_profile.tracker_divergence_pct then
       v_checks := v_checks || jsonb_build_object('code', 'rastreador_diverge', 'level', 'alerta',
-        'detail', format('Odometro %s km, rastreador %s km', round(v_km), round(v_tracker)));
+        'detail', format('Odômetro %s km, rastreador %s km', round(v_km), round(v_tracker)));
     end if;
   end if;
 
@@ -372,7 +372,9 @@ begin
     v_price := round(v_d_a / v_d_l, 3);
     if v_price > v_station.diesel_price + v_station.price_tolerance then
       v_checks := v_checks || jsonb_build_object('code', 'preco_acima', 'level', 'alerta',
-        'detail', format('Pago R$ %s/l, combinado R$ %s/l', v_price, v_station.diesel_price));
+        'detail', format('Pago R$ %s/l, combinado R$ %s/l',
+          replace(to_char(v_price, 'FM9990.00'), '.', ','),
+          replace(to_char(v_station.diesel_price, 'FM9990.00'), '.', ',')));
     end if;
   end if;
 

@@ -122,6 +122,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/": "Dashboard Operacional",
   "/gestao-frota": "Gestão de Frota",
   "/frotak-ia": "Frotak IA",
+  "/operacao": "Operação do dia",
   "/manual": "Suporte",
   "/historicos": "Históricos",
   "/abastecimentos": "Abastecimentos",

@@ -91,11 +91,11 @@ begin
     v_ratio := least(1.1, v_kml / v_target);
     v_pts := round(v_max * greatest(0, least(1, (v_ratio - 0.85) / 0.2)));
     v_lines := v_lines || jsonb_build_object('key', 'consumo', 'label', 'Consumo (km/l)', 'points', v_pts, 'max', v_max,
-      'available', true, 'why', format('Media %s km/l, meta %s km/l (%s%% da meta).', v_kml, v_target, round(v_ratio * 100)));
+      'available', true, 'why', format('Média %s km/l, meta %s km/l (%s%% da meta).', v_kml, v_target, round(v_ratio * 100)));
     v_sum := v_sum + v_pts; v_sum_max := v_sum_max + v_max;
   else
     v_lines := v_lines || jsonb_build_object('key', 'consumo', 'label', 'Consumo (km/l)', 'points', 0, 'max', v_max,
-      'available', false, 'why', 'Faltam dois abastecimentos de tanque cheio ou a meta do veiculo.');
+      'available', false, 'why', 'Faltam dois abastecimentos de tanque cheio ou a meta do veículo.');
   end if;
 
   -- Velocidade: episodios acima do limite (blocos de 10 min com alguma leitura acima).
@@ -109,17 +109,17 @@ begin
       and speed > coalesce(v_settings.speed_limit_kmh, 80);
     v_pts := greatest(0, v_max - v_n * 4);
     v_lines := v_lines || jsonb_build_object('key', 'velocidade', 'label', 'Velocidade', 'points', v_pts, 'max', v_max,
-      'available', true, 'why', format('%s excesso(s) acima de %s km/h no periodo (-4 cada).', v_n, coalesce(v_settings.speed_limit_kmh, 80)));
+      'available', true, 'why', format('%s excesso(s) acima de %s km/h no período (-4 cada).', v_n, coalesce(v_settings.speed_limit_kmh, 80)));
     v_sum := v_sum + v_pts; v_sum_max := v_sum_max + v_max;
   else
     v_lines := v_lines || jsonb_build_object('key', 'velocidade', 'label', 'Velocidade', 'points', 0, 'max', v_max,
-      'available', false, 'why', 'Sem posicoes do rastreador no periodo.');
+      'available', false, 'why', 'Sem posições do rastreador no período.');
   end if;
 
   -- Motor ocioso: depende da leitura de ignicao do rastreador (ainda nao mapeada).
   v_max := coalesce((v_w->>'ociosidade')::int, 15);
   v_lines := v_lines || jsonb_build_object('key', 'ociosidade', 'label', 'Motor ligado parado', 'points', 0, 'max', v_max,
-    'available', false, 'why', 'Aguardando a leitura de ignicao do rastreador.');
+    'available', false, 'why', 'Aguardando a leitura de ignição do rastreador.');
 
   -- Pontualidade nas janelas.
   v_max := coalesce((v_w->>'pontualidade')::int, 15);
@@ -136,7 +136,7 @@ begin
     v_sum := v_sum + v_pts; v_sum_max := v_sum_max + v_max;
   else
     v_lines := v_lines || jsonb_build_object('key', 'pontualidade', 'label', 'Pontualidade nas janelas', 'points', 0, 'max', v_max,
-      'available', false, 'why', 'Nenhuma entrega com janela no periodo.');
+      'available', false, 'why', 'Nenhuma entrega com janela no período.');
   end if;
 
   -- Checklist: dias trabalhados com checklist de saida.
@@ -151,12 +151,12 @@ begin
   where d.driver_id = v_driver.id and d.started_at between p_from and p_to;
   if v_n > 0 then
     v_pts := round(v_max * v_m::numeric / v_n);
-    v_lines := v_lines || jsonb_build_object('key', 'checklist', 'label', 'Checklist do veiculo', 'points', v_pts, 'max', v_max,
-      'available', true, 'why', format('Checklist de saida em %s de %s dias.', v_m, v_n));
+    v_lines := v_lines || jsonb_build_object('key', 'checklist', 'label', 'Checklist do veículo', 'points', v_pts, 'max', v_max,
+      'available', true, 'why', format('Checklist de saída em %s de %s dias.', v_m, v_n));
     v_sum := v_sum + v_pts; v_sum_max := v_sum_max + v_max;
   else
-    v_lines := v_lines || jsonb_build_object('key', 'checklist', 'label', 'Checklist do veiculo', 'points', 0, 'max', v_max,
-      'available', false, 'why', 'Nenhum dia de trabalho no periodo.');
+    v_lines := v_lines || jsonb_build_object('key', 'checklist', 'label', 'Checklist do veículo', 'points', 0, 'max', v_max,
+      'available', false, 'why', 'Nenhum dia de trabalho no período.');
   end if;
 
   -- Documentos vencidos e canhotos sem assinatura nem foto.

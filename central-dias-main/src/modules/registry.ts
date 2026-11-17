@@ -1,6 +1,7 @@
 import { isModuleEnabled, type ModuleCode, type WorkspaceEntitlements } from "@/lib/entitlements";
 import { cteIssuanceModule } from "@/modules/cte-issuance/module";
 import { driverAppModule } from "@/modules/driver-app/module";
+import { driverOpsModule } from "@/modules/driver-ops/module";
 import { financialModule } from "@/modules/financial/module";
 import { fleetCoreModule } from "@/modules/fleet-core/module";
 import { frotakAiModule } from "@/modules/frotak-ai/module";
@@ -15,6 +16,7 @@ export const tmsModules: TmsModule[] = [
   frotakAiModule,
   driverAppModule,
   frotakTrackingModule,
+  driverOpsModule,
 ];
 
 export { fleetCoreModule };

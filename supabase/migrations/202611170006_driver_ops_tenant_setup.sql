@@ -16,7 +16,7 @@ begin;
 
 create or replace function public.master_enable_driver_ops(
   p_tenant_id uuid,
-  p_operation_label text default 'Operacao',
+  p_operation_label text default 'Operação',
   p_shipper_name text default null,
   p_base_city text default null
 )
@@ -48,26 +48,26 @@ begin
   on conflict (workspace_id, module_id) do update set enabled = true, expires_at = null;
 
   insert into public.driver_ops_settings (tenant_id, operation_label, shipper_name, base_city)
-  values (p_tenant_id, coalesce(nullif(btrim(p_operation_label), ''), 'Operacao'), p_shipper_name, p_base_city)
+  values (p_tenant_id, coalesce(nullif(btrim(p_operation_label), ''), 'Operação'), p_shipper_name, p_base_city)
   on conflict (tenant_id) do update
   set operation_label = excluded.operation_label, shipper_name = excluded.shipper_name, base_city = excluded.base_city;
 
   if not exists (select 1 from public.vehicle_checklist_templates where tenant_id = p_tenant_id and active) then
     insert into public.vehicle_checklist_templates (tenant_id, name, items)
-    values (p_tenant_id, 'Checklist de saida', '[
+    values (p_tenant_id, 'Checklist de saída', '[
       {"id":"pneus","group":"Pneus e rodas","label":"Pneus calibrados, sem corte ou bolha","critical":true},
       {"id":"estepe","group":"Pneus e rodas","label":"Estepe e porcas das rodas","critical":false},
-      {"id":"freios","group":"Freios e direcao","label":"Freio de servico e de estacionamento","critical":true},
-      {"id":"direcao","group":"Freios e direcao","label":"Direcao sem folga","critical":true},
-      {"id":"luzes","group":"Luzes","label":"Farois, setas, luz de freio e re","critical":true},
+      {"id":"freios","group":"Freios e direção","label":"Freio de serviço e de estacionamento","critical":true},
+      {"id":"direcao","group":"Freios e direção","label":"Direção sem folga","critical":true},
+      {"id":"luzes","group":"Luzes","label":"Faróis, setas, luz de freio e ré","critical":true},
       {"id":"painel","group":"Painel","label":"Sem luz de falha acesa no painel","critical":false},
-      {"id":"vazamento","group":"Motor","label":"Sem vazamento de oleo, agua ou ar","critical":true},
-      {"id":"oleo","group":"Motor","label":"Nivel de oleo e agua","critical":false},
-      {"id":"extintor","group":"Seguranca","label":"Extintor na validade, triangulo e macaco","critical":true},
-      {"id":"cinto","group":"Seguranca","label":"Cinto de seguranca e retrovisores","critical":true},
-      {"id":"tacografo","group":"Documentos","label":"Tacografo funcionando e documento do veiculo","critical":true},
-      {"id":"bau","group":"Carroceria","label":"Bau ou sider sem avaria, lona e travas","critical":false},
-      {"id":"epi","group":"Seguranca","label":"EPI: colete, bota e luva","critical":false},
+      {"id":"vazamento","group":"Motor","label":"Sem vazamento de óleo, água ou ar","critical":true},
+      {"id":"oleo","group":"Motor","label":"Nível de óleo e água","critical":false},
+      {"id":"extintor","group":"Segurança","label":"Extintor na validade, triângulo e macaco","critical":true},
+      {"id":"cinto","group":"Segurança","label":"Cinto de segurança e retrovisores","critical":true},
+      {"id":"tacografo","group":"Documentos","label":"Tacógrafo funcionando e documento do veículo","critical":true},
+      {"id":"bau","group":"Carroceria","label":"Baú ou sider sem avaria, lona e travas","critical":false},
+      {"id":"epi","group":"Segurança","label":"EPI: colete, bota e luva","critical":false},
       {"id":"limpeza","group":"Cabine","label":"Cabine limpa e sem objeto solto","critical":false}
     ]'::jsonb);
   end if;
@@ -78,7 +78,7 @@ begin
       (p_tenant_id, 'Posto Rota 101 (exemplo)', 'Bandeira branca', 'Nossa Senhora do Socorro', 'SE', -10.8711, -37.1188, 5.89, 3.79, array['a_prazo_posto']),
       (p_tenant_id, 'Auto Posto Siqueira (exemplo)', 'Bandeira A', 'Aracaju', 'SE', -10.9551, -37.0712, 5.94, 3.89, array['cartao_frota']),
       (p_tenant_id, 'Posto Caminhoneiro Itaporanga (exemplo)', 'Bandeira B', 'Itaporanga d''Ajuda', 'SE', -11.0081, -37.3109, 5.86, 3.75, array['a_prazo_posto']),
-      (p_tenant_id, 'Posto Estancia Sul (exemplo)', 'Bandeira branca', 'Estancia', 'SE', -11.2657, -37.4384, 5.91, 3.82, array['cartao_frota']);
+      (p_tenant_id, 'Posto Estância Sul (exemplo)', 'Bandeira branca', 'Estância', 'SE', -11.2657, -37.4384, 5.91, 3.82, array['cartao_frota']);
   end if;
 
   return jsonb_build_object('tenant_id', p_tenant_id, 'workspace_id', v_workspace_id, 'modules', to_jsonb(v_codes));
@@ -132,21 +132,21 @@ begin
     insert into public.driver_compliance_documents (tenant_id, driver_id, kind, label, number, expires_at, blocking)
     values
       (p_tenant_id, v_driver.id, 'cnh', 'CNH categoria E', '00000000000', v_day + 23, true),
-      (p_tenant_id, v_driver.id, 'toxicologico', 'Exame toxicologico', null, v_day + 410, true),
-      (p_tenant_id, v_driver.id, 'aso', 'ASO (saude ocupacional)', null, v_day + 180, true),
-      (p_tenant_id, v_driver.id, 'direcao_defensiva', 'Curso de direcao defensiva', null, v_day - 4, false),
-      (p_tenant_id, v_driver.id, 'integracao_cliente', 'Integracao de seguranca do embarcador', null, v_day + 95, true);
+      (p_tenant_id, v_driver.id, 'toxicologico', 'Exame toxicológico', null, v_day + 410, true),
+      (p_tenant_id, v_driver.id, 'aso', 'ASO (saúde ocupacional)', null, v_day + 180, true),
+      (p_tenant_id, v_driver.id, 'direcao_defensiva', 'Curso de direção defensiva', null, v_day - 4, false),
+      (p_tenant_id, v_driver.id, 'integracao_cliente', 'Integração de segurança do embarcador', null, v_day + 95, true);
   end if;
 
   if not exists (select 1 from public.driver_notices where tenant_id = p_tenant_id) then
     insert into public.driver_notices (tenant_id, title, body, tag, author_label, requires_ack)
     values
-      (p_tenant_id, 'Uso obrigatorio de EPI no CDD',
-       'A partir de hoje, colete, bota e luva sao obrigatorios na area de carga e descarga do CDD. Quem estiver sem EPI nao entra na doca.',
-       'seguranca', 'Seguranca do trabalho', true),
+      (p_tenant_id, 'Uso obrigatório de EPI no CDD',
+       'A partir de hoje, colete, bota e luva são obrigatórios na área de carga e descarga do CDD. Quem estiver sem EPI não entra na doca.',
+       'seguranca', 'Segurança do trabalho', true),
       (p_tenant_id, 'Janela do Supermercado Sergipano mudou',
-       'O recebimento agora fecha as 10h. Priorize esse cliente na rota.', 'cliente', 'Central de operacoes', true),
-      (p_tenant_id, 'Premiacao do mes',
+       'O recebimento agora fecha às 10h. Priorize esse cliente na rota.', 'cliente', 'Central de operações', true),
+      (p_tenant_id, 'Premiação do mês',
        'Nota acima de 90 recebe R$ 400, acima de 80 recebe R$ 250 e acima de 70 recebe R$ 120. Confira sua nota no app.',
        'rh', 'RH', false);
   end if;
@@ -154,12 +154,12 @@ begin
   if p_kind = 'transferencia' then
     v_payload := jsonb_build_object(
       'code', 'TR-' || to_char(v_day, 'YYMMDD'), 'kind', 'transferencia',
-      'title', 'Transferencia fabrica para CDD Itabaiana', 'shipper_name', coalesce(v_settings.shipper_name, 'Embarcador'),
+      'title', 'Transferência fábrica para CDD Itabaiana', 'shipper_name', coalesce(v_settings.shipper_name, 'Embarcador'),
       'driver_id', v_driver.id, 'vehicle_id', v_vehicle.id,
       'scheduled_at', (v_day + time '06:30') at time zone v_tz,
       'total_boxes', 1680, 'total_weight_kg', 27400, 'distance_km', 142,
       'stops', jsonb_build_array(
-        jsonb_build_object('kind', 'origem', 'name', 'Fabrica de bebidas (exemplo)', 'address', 'Rod. BR-101, km 92',
+        jsonb_build_object('kind', 'origem', 'name', 'Fábrica de bebidas (exemplo)', 'address', 'Rod. BR-101, km 92',
           'city', 'Nossa Senhora do Socorro/SE', 'lat', -10.8553, 'lng', -37.1262, 'radius_m', 500,
           'window_from', '06:30', 'window_to', '07:30', 'dock', 'Doca 12',
           'invoices', jsonb_build_array(jsonb_build_object('number', 'NF 552.910', 'boxes', 1680, 'amount', 98450.0))),
@@ -168,20 +168,20 @@ begin
           'window_from', '09:00', 'window_to', '11:00', 'dock', 'Doca 3',
           'invoices', jsonb_build_array(jsonb_build_object('number', 'NF 552.910', 'boxes', 1680, 'amount', 98450.0)),
           'returnables_expected', jsonb_build_object('palete', 28)),
-        jsonb_build_object('kind', 'retorno', 'name', 'Fabrica de bebidas (exemplo) - retorno com paletes',
+        jsonb_build_object('kind', 'retorno', 'name', 'Fábrica de bebidas (exemplo) - retorno com paletes',
           'address', 'Rod. BR-101, km 92', 'city', 'Nossa Senhora do Socorro/SE', 'lat', -10.8553, 'lng', -37.1262, 'radius_m', 500)
       ));
   else
     v_payload := jsonb_build_object(
       'code', '7731-' || to_char(v_day, 'YYMMDD'), 'kind', 'distribuicao',
-      'title', 'Rota de distribuicao Aracaju Sul', 'shipper_name', coalesce(v_settings.shipper_name, 'Embarcador'),
+      'title', 'Rota de distribuição Aracaju Sul', 'shipper_name', coalesce(v_settings.shipper_name, 'Embarcador'),
       'driver_id', v_driver.id, 'vehicle_id', v_vehicle.id,
       'scheduled_at', (v_day + time '06:00') at time zone v_tz,
       'total_boxes', 300, 'total_weight_kg', 6900, 'distance_km', 58,
       'stops', jsonb_build_array(
         jsonb_build_object('kind', 'origem', 'name', 'CDD Aracaju (exemplo)', 'address', 'Av. Industrial, 1500 - Distrito Industrial',
           'city', 'Aracaju/SE', 'lat', -10.9622, 'lng', -37.0941, 'radius_m', 300, 'dock', 'Doca 7'),
-        jsonb_build_object('kind', 'entrega', 'name', 'Mercadinho Bom Preco (exemplo)', 'document', '12.345.678/0001-01',
+        jsonb_build_object('kind', 'entrega', 'name', 'Mercadinho Bom Preço (exemplo)', 'document', '12.345.678/0001-01',
           'address', 'Rua Itabaiana, 410 - Centro', 'city', 'Aracaju/SE', 'lat', -10.9139, 'lng', -37.0565,
           'window_from', '07:00', 'window_to', '11:00',
           'invoices', jsonb_build_array(jsonb_build_object('number', 'NF 184.221', 'boxes', 48, 'amount', 3912.4)),
@@ -208,18 +208,18 @@ begin
           'returnables_expected', jsonb_build_object('garrafeira', 30),
           'payment_expected', jsonb_build_object('method', 'dinheiro', 'amount', 2610.0)),
         jsonb_build_object('kind', 'entrega', 'name', 'Restaurante Orla Sul (exemplo)', 'document', '56.789.012/0001-05',
-          'address', 'Av. Inacio Barbosa, 2200 - Farolandia', 'city', 'Aracaju/SE', 'lat', -10.9711, 'lng', -37.0598,
+          'address', 'Av. Inácio Barbosa, 2200 - Farolândia', 'city', 'Aracaju/SE', 'lat', -10.9711, 'lng', -37.0598,
           'window_from', '10:00', 'window_to', '14:00',
           'invoices', jsonb_build_array(jsonb_build_object('number', 'NF 184.226', 'boxes', 18, 'amount', 1494.0)),
           'returnables_expected', jsonb_build_object('garrafeira', 18, 'barril', 1),
           'payment_expected', jsonb_build_object('method', 'pix', 'amount', 1494.0)),
-        jsonb_build_object('kind', 'entrega', 'name', 'Conveniencia Jardins (exemplo)', 'document', '67.890.123/0001-06',
-          'address', 'Rua Proj. Joao Ribeiro, 15 - Jardins', 'city', 'Aracaju/SE', 'lat', -10.9442, 'lng', -37.0514,
+        jsonb_build_object('kind', 'entrega', 'name', 'Conveniência Jardins (exemplo)', 'document', '67.890.123/0001-06',
+          'address', 'Rua Proj. João Ribeiro, 15 - Jardins', 'city', 'Aracaju/SE', 'lat', -10.9442, 'lng', -37.0514,
           'window_from', '10:00', 'window_to', '16:00',
           'invoices', jsonb_build_array(jsonb_build_object('number', 'NF 184.227', 'boxes', 26, 'amount', 2236.0)),
           'returnables_expected', jsonb_build_object('garrafeira', 24),
           'payment_expected', jsonb_build_object('method', 'boleto', 'amount', 2236.0)),
-        jsonb_build_object('kind', 'retorno', 'name', 'CDD Aracaju (exemplo) - retorno e prestacao de contas',
+        jsonb_build_object('kind', 'retorno', 'name', 'CDD Aracaju (exemplo) - retorno e prestação de contas',
           'address', 'Av. Industrial, 1500 - Distrito Industrial', 'city', 'Aracaju/SE', 'lat', -10.9622, 'lng', -37.0941, 'radius_m', 300)
       ));
   end if;

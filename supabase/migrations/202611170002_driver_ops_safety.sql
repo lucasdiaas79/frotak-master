@@ -315,7 +315,7 @@ begin
   if private.tenant_has_module(v_driver.tenant_id, 'driver_journey') and exists (
     select 1 from public.driver_work_days where driver_id = v_driver.id and ended_at is null
   ) then
-    perform private.journey_set_activity(v_driver, 'trabalho', 'etapa', 'Checklist de ' || p_moment, v_at, p_geo, p_route_id, null, null);
+    perform private.journey_set_activity(v_driver, 'trabalho', 'etapa', 'Checklist de ' || case p_moment when 'saida' then 'saída' else p_moment end, v_at, p_geo, p_route_id, null, null);
   end if;
 
   return public.get_driver_ops_context();
@@ -374,7 +374,7 @@ begin
   returning id into v_id;
 
   insert into public.driver_occurrence_messages (tenant_id, occurrence_id, author_kind, body)
-  values (v_driver.tenant_id, v_id, 'motorista', coalesce(nullif(btrim(coalesce(p_note, '')), ''), 'Ocorrencia registrada: ' || p_kind));
+  values (v_driver.tenant_id, v_id, 'motorista', coalesce(nullif(btrim(coalesce(p_note, '')), ''), 'Ocorrência registrada: ' || p_kind));
 
   return public.get_driver_ops_context();
 end;

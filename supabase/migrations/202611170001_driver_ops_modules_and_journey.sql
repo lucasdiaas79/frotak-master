@@ -21,11 +21,11 @@ insert into public.modules (code, name, description, active, platform_product_id
 select v.code, v.name, v.description, true, p.id, false, v.sort_order
 from (
   values
-    ('driver_journey', 'Jornada do motorista', 'Ponto e jornada pelo app, ligados as etapas, com alertas da Lei 13.103 e espelho de ponto.', 70),
-    ('driver_safety', 'Seguranca do motorista', 'Checklist do veiculo, ocorrencias, emergencia, documentos com vencimento e avisos com ciencia.', 80),
-    ('fuel_control', 'Controle de combustivel', 'Postos com preco combinado, tanque cheio, conferencias de odometro, tanque, preco e rastreador.', 90),
-    ('delivery_routes', 'Rotas de entrega', 'Rotas com varias paradas, janelas, canhoto, assinatura, recusa, vasilhame e recebimento.', 100),
-    ('driver_performance', 'Desempenho do motorista', 'Nota do motorista, ranking e premiacao com dados de abastecimento, rastreador e etapas.', 110)
+    ('driver_journey', 'Jornada do motorista', 'Ponto e jornada pelo app, ligados às etapas, com alertas da Lei 13.103 e espelho de ponto.', 70),
+    ('driver_safety', 'Segurança do motorista', 'Checklist do veículo, ocorrências, emergência, documentos com vencimento e avisos com ciência.', 80),
+    ('fuel_control', 'Controle de combustível', 'Postos com preço combinado, tanque cheio, conferências de odômetro, tanque, preço e rastreador.', 90),
+    ('delivery_routes', 'Rotas de entrega', 'Rotas com várias paradas, janelas, canhoto, assinatura, recusa, vasilhame e recebimento.', 100),
+    ('driver_performance', 'Desempenho do motorista', 'Nota do motorista, ranking e premiação com dados de abastecimento, rastreador e etapas.', 110)
 ) as v(code, name, description, sort_order)
 cross join public.platform_products p
 where p.code = 'tms'

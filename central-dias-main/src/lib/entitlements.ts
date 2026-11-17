@@ -6,7 +6,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 // garante o bloqueio sao o banco e as server functions.
 
 export type ModuleCode =
-  "fleet_core" | "financial" | "cte_issuance" | "frotak_ai" | "driver_app" | "frotak_tracking";
+  | "fleet_core"
+  | "financial"
+  | "cte_issuance"
+  | "frotak_ai"
+  | "driver_app"
+  | "frotak_tracking"
+  | "driver_journey"
+  | "driver_safety"
+  | "fuel_control"
+  | "delivery_routes"
+  | "driver_performance";
 
 export type WorkspaceEntitlements = {
   workspaceId: string;

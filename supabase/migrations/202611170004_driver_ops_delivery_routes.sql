@@ -151,6 +151,24 @@ begin
 end;
 $$;
 
+create or replace function private.refusal_label(p_reason text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select case p_reason
+    when 'cliente_fechado' then 'cliente fechado'
+    when 'sem_pagamento' then 'sem pagamento'
+    when 'avaria' then 'avaria'
+    when 'pedido_errado' then 'pedido errado'
+    when 'sem_espaco' then 'sem espaco'
+    when 'falta_produto' then 'falta de produto'
+    when 'outro' then 'outro motivo'
+    else p_reason
+  end;
+$$;
+
 create or replace function private.route_event(
   p_route public.delivery_routes, p_stop_id uuid, p_driver_id uuid, p_kind text, p_detail text,
   p_geo jsonb, p_at timestamptz, p_client_event_id text
@@ -368,7 +386,7 @@ begin
   perform private.route_punch(v_driver,
     case when v_stop.kind = 'retorno' then 'trabalho' else 'carga_descarga' end,
     case v_stop.kind when 'origem' then 'Carregamento: ' || v_stop.name
-      when 'retorno' then 'Prestacao de contas' else 'Descarga: ' || v_stop.name end,
+      when 'retorno' then 'Prestação de contas' else 'Descarga: ' || v_stop.name end,
     v_at, p_geo, v_route.id, v_stop.id);
   perform private.route_event(v_route, v_stop.id, v_driver.id,
     case when v_stop.kind = 'origem' then 'inicio_carga' else 'inicio_descarga' end, v_stop.name, p_geo, v_at, p_client_event_id);
@@ -461,15 +479,16 @@ begin
   perform private.route_event(v_route, v_stop.id, v_driver.id,
     case p_result when 'recusada' then 'recusa' when 'parcial' then 'entrega_parcial' else
       case when v_stop.kind = 'origem' then 'fim_carga' else 'entrega' end end,
-    v_stop.name || coalesce(' - ' || nullif(v_pod->>'refusal_reason', ''), ''), p_geo, v_at, p_client_event_id);
+    v_stop.name || coalesce(' - ' || private.refusal_label(nullif(v_pod->>'refusal_reason', '')), ''), p_geo, v_at, p_client_event_id);
 
   -- Recusa ou parcial avisa a central como ocorrencia.
   if p_result in ('parcial', 'recusada') and private.tenant_has_module(v_driver.tenant_id, 'driver_safety') then
     insert into public.driver_occurrences (tenant_id, driver_id, vehicle_id, route_id, stop_id, kind, severity, note, geo, occurred_at)
     values (v_driver.tenant_id, v_driver.id, v_route.vehicle_id, v_route.id, v_stop.id,
-      case when v_pod->>'refusal_reason' = 'cliente_fechado' then 'cliente_fechado' else 'outro' end,
+      case v_pod->>'refusal_reason' when 'cliente_fechado' then 'cliente_fechado' when 'avaria' then 'avaria_carga' else 'outro' end,
       'media',
-      initcap(p_result) || ' em ' || v_stop.name || ': ' || coalesce(v_pod->>'refusal_reason', '') ||
+      case p_result when 'parcial' then 'Entrega parcial' else 'Recusa' end || ' em ' || v_stop.name || ': ' ||
+        coalesce(private.refusal_label(nullif(v_pod->>'refusal_reason', '')), '') ||
         coalesce(' - ' || nullif(btrim(coalesce(v_pod->>'refusal_note', '')), ''), ''),
       private.ops_clean_geo(p_geo), v_at);
   end if;

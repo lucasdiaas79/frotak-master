@@ -23,6 +23,7 @@ import { Route as LucrosDespesasRouteImport } from './routes/lucros-despesas'
 import { Route as ManualRouteImport } from './routes/manual'
 import { Route as MapaRouteImport } from './routes/mapa'
 import { Route as MotoristasRouteImport } from './routes/motoristas'
+import { Route as OperacaoRouteImport } from './routes/operacao'
 import { Route as ProdutosRouteImport } from './routes/produtos'
 import { Route as RemetentesRouteImport } from './routes/remetentes'
 import { Route as UsuariosRouteImport } from './routes/usuarios'
@@ -112,6 +113,11 @@ const MapaRoute = MapaRouteImport.update({
 const MotoristasRoute = MotoristasRouteImport.update({
   id: '/motoristas',
   path: '/motoristas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperacaoRoute = OperacaoRouteImport.update({
+  id: '/operacao',
+  path: '/operacao',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProdutosRoute = ProdutosRouteImport.update({
@@ -230,6 +236,7 @@ export interface FileRoutesByFullPath {
   '/manual': typeof ManualRoute
   '/mapa': typeof MapaRoute
   '/motoristas': typeof MotoristasRoute
+  '/operacao': typeof OperacaoRoute
   '/produtos': typeof ProdutosRoute
   '/remetentes': typeof RemetentesRoute
   '/usuarios': typeof UsuariosRoute
@@ -265,6 +272,7 @@ export interface FileRoutesByTo {
   '/manual': typeof ManualRoute
   '/mapa': typeof MapaRoute
   '/motoristas': typeof MotoristasRoute
+  '/operacao': typeof OperacaoRoute
   '/produtos': typeof ProdutosRoute
   '/remetentes': typeof RemetentesRoute
   '/usuarios': typeof UsuariosRoute
@@ -302,6 +310,7 @@ export interface FileRoutesById {
   '/manual': typeof ManualRoute
   '/mapa': typeof MapaRoute
   '/motoristas': typeof MotoristasRoute
+  '/operacao': typeof OperacaoRoute
   '/produtos': typeof ProdutosRoute
   '/remetentes': typeof RemetentesRoute
   '/usuarios': typeof UsuariosRoute
@@ -340,6 +349,7 @@ export interface FileRouteTypes {
     | '/manual'
     | '/mapa'
     | '/motoristas'
+    | '/operacao'
     | '/produtos'
     | '/remetentes'
     | '/usuarios'
@@ -375,6 +385,7 @@ export interface FileRouteTypes {
     | '/manual'
     | '/mapa'
     | '/motoristas'
+    | '/operacao'
     | '/produtos'
     | '/remetentes'
     | '/usuarios'
@@ -411,6 +422,7 @@ export interface FileRouteTypes {
     | '/manual'
     | '/mapa'
     | '/motoristas'
+    | '/operacao'
     | '/produtos'
     | '/remetentes'
     | '/usuarios'
@@ -448,6 +460,7 @@ export interface RootRouteChildren {
   ManualRoute: typeof ManualRoute
   MapaRoute: typeof MapaRoute
   MotoristasRoute: typeof MotoristasRoute
+  OperacaoRoute: typeof OperacaoRoute
   ProdutosRoute: typeof ProdutosRoute
   RemetentesRoute: typeof RemetentesRoute
   UsuariosRoute: typeof UsuariosRoute
@@ -555,6 +568,13 @@ declare module '@tanstack/react-router' {
       path: '/motoristas'
       fullPath: '/motoristas'
       preLoaderRoute: typeof MotoristasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operacao': {
+      id: '/operacao'
+      path: '/operacao'
+      fullPath: '/operacao'
+      preLoaderRoute: typeof OperacaoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/produtos': {
@@ -751,6 +771,7 @@ const rootRouteChildren: RootRouteChildren = {
   ManualRoute: ManualRoute,
   MapaRoute: MapaRoute,
   MotoristasRoute: MotoristasRoute,
+  OperacaoRoute: OperacaoRoute,
   ProdutosRoute: ProdutosRoute,
   RemetentesRoute: RemetentesRoute,
   UsuariosRoute: UsuariosRoute,
