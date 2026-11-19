@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "test:visual": "node --experimental-strip-types --test scripts/test-frotak-visual-contract.ts",
     "test:frotak-ai": "node --experimental-strip-types --test scripts/test-frotak-ai-intents.ts",
+    "eval:frotak-ai": "node --env-file=.env scripts/frotak-ai-eval.mjs",
     "format": "prettier --write .",
     "check:production": "powershell -ExecutionPolicy Bypass -File .\\scripts\\check-production-alignment.ps1",
     "supabase:link:prod": "echo Supabase antigo desativado neste monorepo. Use somente o projeto novo pelo root.",
