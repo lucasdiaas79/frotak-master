@@ -313,11 +313,11 @@ function vehicleStatusFilter(status: string) {
   if (!token) return undefined;
   const underscore = token.replace(/ /g, "_");
   const dash = token.replace(/ /g, "-");
-  return [
-    `status.ilike.%${underscore}%`,
-    `vehicle_situation.ilike.%${dash}%`,
-    `freight_stage.ilike.%${dash}%`,
-  ].join(",");
+  // Cada coluna grava num formato (etapa: EM_ROTA_ENTREGA; status: rota-carregar), entao as duas
+  // grafias sao testadas em todas.
+  return ["status", "vehicle_situation", "freight_stage"]
+    .flatMap((column) => [`${column}.ilike.%${underscore}%`, `${column}.ilike.%${dash}%`])
+    .join(",");
 }
 
 function dateArg(args: Record<string, unknown> | undefined, key: string) {

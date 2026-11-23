@@ -92,7 +92,8 @@ ${list(rows(data.items), (item) =>
 }
 
 function formatPositions(data: RecordValue) {
-  return list(rows(data.items), (item) => {
+  const fallback = data.source === "cadastro_do_veiculo";
+  const body = list(rows(data.items), (item) => {
     const speed =
       item.speed === null || item.speed === undefined
         ? ""
@@ -100,6 +101,9 @@ function formatPositions(data: RecordValue) {
     const details = [location(item), speed, text(item.recorded_at, "")].filter(Boolean);
     return `${text(item.plate)}: ${details.join("; ")}`;
   });
+  return fallback
+    ? `Sem leitura recente do rastreador. Ultima cidade registrada no cadastro de cada veiculo, com a data:\n${body}`
+    : body;
 }
 
 function formatActiveFreights(data: RecordValue) {
