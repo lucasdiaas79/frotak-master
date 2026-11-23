@@ -6,7 +6,7 @@
 // Uso (Node 22+, com o pacote playwright disponivel, por exemplo via `npm i -D playwright`
 // ou `npx -y -p playwright@1.49.1 node ...`):
 //   set FROTAK_AI_EVAL_EMAIL=... & set FROTAK_AI_EVAL_PASSWORD=...
-//   node --experimental-strip-types scripts/frotak-ai-eval-ui.mjs [--url https://frotak.log.br]
+//   node --experimental-strip-types scripts/frotak-ai-eval-ui.mjs [--login https://login.frotak.log.br/login] [--url endereco-do-sistema]
 //        [--categoria frota] [--limite 10] [--saida pasta] [--sem-continuacao] [--ver] [--chrome]
 
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -65,7 +65,8 @@ const arg = (flag) => {
   const index = process.argv.indexOf(flag);
   return index >= 0 ? process.argv[index + 1] : undefined;
 };
-const baseUrl = (arg("--url") ?? "https://frotak.log.br").replace(/\/$/, "");
+let baseUrl = (arg("--url") ?? "https://central-dias.vercel.app").replace(/\/$/, "");
+const loginUrl = arg("--login") ?? "https://login.frotak.log.br/login";
 const only = arg("--categoria");
 const limit = Number(arg("--limite") ?? 0) || undefined;
 const outDir = resolve(
@@ -89,34 +90,32 @@ function toolsFromBody(body) {
   return found;
 }
 
+// O login fica em login.frotak.log.br; depois o sistema volta para o endereco do cliente, que
+// passa a ser usado no resto da avaliacao (a menos que --url seja passado).
+const CHAT = '[placeholder="Pergunte a Frotak IA..."]:visible';
+
 async function login(page) {
-  await page.goto(`${baseUrl}/frotak-ia`, { waitUntil: "domcontentloaded" });
-  const emailInput = page.locator('input[type="email"]');
-  const chatInput = page.getByPlaceholder("Pergunte a Frotak IA...").first();
-  await Promise.race([
-    emailInput.waitFor({ timeout: 30_000 }),
-    chatInput.waitFor({ timeout: 30_000 }),
-  ]).catch(() => {});
-  if (await emailInput.isVisible().catch(() => false)) {
-    await emailInput.fill(email);
-    await page.locator('input[type="password"]').fill(password);
-    await page.locator('button[type="submit"]').click();
-    await page.waitForURL((url) => !/login/.test(url.href), { timeout: 60_000 }).catch(() => {});
-    await page.waitForLoadState("networkidle").catch(() => {});
-    if (!page.url().includes("/frotak-ia")) {
-      await page.goto(`${baseUrl}/frotak-ia`, { waitUntil: "domcontentloaded" });
-    }
-  }
-  await chatInput.waitFor({ timeout: 60_000 });
+  await page.goto(loginUrl, { waitUntil: "domcontentloaded" });
+  await page.getByPlaceholder("E-mail").fill(email);
+  await page.getByPlaceholder("Senha").fill(password);
+  await page.locator('button[type="submit"]').click();
+  await page
+    .waitForURL((url) => !url.href.startsWith(loginUrl.replace(/\/login$/, "")), {
+      timeout: 60_000,
+    })
+    .catch(() => {});
+  await page.waitForLoadState("networkidle").catch(() => {});
+  if (!arg("--url")) baseUrl = new URL(page.url()).origin;
+  await openFreshChat(page);
 }
 
 async function openFreshChat(page) {
   await page.goto(`${baseUrl}/frotak-ia`, { waitUntil: "domcontentloaded" });
-  await page.getByPlaceholder("Pergunte a Frotak IA...").first().waitFor({ timeout: 60_000 });
+  await page.locator(CHAT).first().waitFor({ timeout: 60_000 });
 }
 
 async function ask(page, question) {
-  const input = page.locator('input[placeholder="Pergunte a Frotak IA..."]:visible').first();
+  const input = page.locator(CHAT).first();
   const started = Date.now();
   const responsePromise = page
     .waitForResponse(
@@ -153,6 +152,14 @@ function verdict(result, expectedTool, expectedDomain) {
   if (/nao foi possivel|não foi possível|instavel|limite temporario/i.test(result.answer)) {
     return "erro";
   }
+  if (/\{"error"|RESOURCE_EXHAUSTED/.test(result.answer)) return "erro";
+  if (
+    /exclusivos para o owner|somente o owner|nao tenho permissao|não tenho permissão/i.test(
+      result.answer,
+    )
+  ) {
+    return "sem_permissao";
+  }
   if (!expectedTool) return "ok";
   if (result.tools.length === 0) return "sem_ferramenta";
   if (!result.tools.includes(expectedTool)) return "ferramenta_errada";
@@ -176,6 +183,7 @@ function report(results) {
     `| Certo | ${count("ok")} |`,
     `| Ferramenta errada | ${count("ferramenta_errada")} |`,
     `| Respondeu sem consultar | ${count("sem_ferramenta")} |`,
+    `| Sem permissao (login nao e dono) | ${count("sem_permissao")} |`,
     `| Erro | ${count("erro")} |`,
     `| Total | ${results.length} |`,
     "",
