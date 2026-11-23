@@ -4,6 +4,7 @@ import {
   GoogleGenAI,
   Modality,
   StartSensitivity,
+  ThinkingLevel,
   type Content,
   type FunctionDeclaration,
   type GenerateContentResponse,
@@ -18,7 +19,11 @@ import type {
 
 export const FROTAK_AI_TEXT_MODEL = "gemini-3.8-flash";
 export const FROTAK_AI_TEXT_FALLBACK_MODEL = "gemini-3.6-flash";
+// Reservas para quando os modelos principais estao sem capacidade (HTTP 503 "high demand").
+const FROTAK_AI_TEXT_EXTRA_FALLBACKS = ["gemini-3.5-flash", "gemini-2.5-flash"];
 export const FROTAK_AI_LIVE_MODEL = "gemini-3.8-live";
+// Modelo sem capacidade fica fora da fila por um tempo, para a proxima mensagem nao esperar por ele.
+const OVERLOADED_COOLDOWN_MS = 60_000;
 
 function geminiApiKey() {
   const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
@@ -26,21 +31,62 @@ function geminiApiKey() {
   return key;
 }
 
-function modelList() {
-  return Array.from(
-    new Set(
-      [process.env.GEMINI_TEXT_MODEL, FROTAK_AI_TEXT_MODEL, FROTAK_AI_TEXT_FALLBACK_MODEL].filter(
-        (item): item is string => Boolean(item && item.trim()),
-      ),
-    ),
+const overloadedUntil = new Map<string, number>();
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Sem capacidade agora ou fora do ar: vale tentar outro modelo, nao o mesmo de novo. */
+function isOverloadedGeminiError(error: unknown) {
+  return /unavailable|overloaded|503|high demand|resource.?exhausted|429/i.test(
+    errorMessage(error),
   );
 }
 
+/** Falha passageira de rede: vale uma nova tentativa no mesmo modelo. */
+function isTransientGeminiError(error: unknown) {
+  return /500|internal|deadline|timeout|fetch failed|ECONNRESET|socket/i.test(errorMessage(error));
+}
+
 function isRetryableGeminiError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error);
-  return /not found|unavailable|overloaded|503|500|internal|high demand|deadline|timeout|fetch failed/i.test(
-    message,
+  return (
+    /not found/i.test(errorMessage(error)) ||
+    isOverloadedGeminiError(error) ||
+    isTransientGeminiError(error)
   );
+}
+
+/** O modelo nao aceita o nivel de raciocinio pedido: refaz sem ele. */
+function isThinkingConfigError(error: unknown) {
+  return (
+    /thinking/i.test(errorMessage(error)) &&
+    /not supported|invalid|unsupported/i.test(errorMessage(error))
+  );
+}
+
+function markOverloaded(model: string, error: unknown) {
+  if (isOverloadedGeminiError(error))
+    overloadedUntil.set(model, Date.now() + OVERLOADED_COOLDOWN_MS);
+}
+
+function modelList() {
+  const all = Array.from(
+    new Set(
+      [
+        process.env.GEMINI_TEXT_MODEL,
+        FROTAK_AI_TEXT_MODEL,
+        FROTAK_AI_TEXT_FALLBACK_MODEL,
+        ...FROTAK_AI_TEXT_EXTRA_FALLBACKS,
+      ].filter((item): item is string => Boolean(item && item.trim())),
+    ),
+  );
+  // Os sobrecarregados vao para o fim da fila enquanto durar a pausa; nunca somem de vez.
+  const now = Date.now();
+  return [
+    ...all.filter((model) => (overloadedUntil.get(model) ?? 0) <= now),
+    ...all.filter((model) => (overloadedUntil.get(model) ?? 0) > now),
+  ];
 }
 
 function toContents(turns: AiConversationTurn[]): Content[] {
@@ -70,12 +116,15 @@ function toFunctionDeclarations(tools: AiGenerateRequest["tools"]) {
   return tools.map((tool) => tool) as unknown as FunctionDeclaration[];
 }
 
-function toGeminiRequest(request: AiGenerateRequest) {
+// Raciocinio baixo: no chat ele cortou o tempo de resposta de dezenas de segundos para poucos
+// segundos, sem piorar a escolha da ferramenta. Modelo que nao aceita o nivel e refeito sem ele.
+function toGeminiRequest(request: AiGenerateRequest, withThinkingLevel = true) {
   return {
     contents: toContents(request.turns),
     config: {
       temperature: request.temperature,
       maxOutputTokens: request.maxOutputTokens,
+      ...(withThinkingLevel ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
       systemInstruction: request.systemInstruction,
       tools: [{ functionDeclarations: toFunctionDeclarations(request.tools) }],
       toolConfig: {
@@ -114,18 +163,24 @@ export class GeminiAiModel implements AiModel {
     this.onError = onError;
   }
 
+  private async generate(model: string, request: AiGenerateRequest) {
+    try {
+      return await this.ai.models.generateContent({ ...toGeminiRequest(request), model });
+    } catch (error) {
+      if (!isThinkingConfigError(error)) throw error;
+      return this.ai.models.generateContent({ ...toGeminiRequest(request, false), model });
+    }
+  }
+
   async start(request: AiGenerateRequest) {
     let lastError: unknown;
     for (const model of modelList()) {
       try {
-        const response = await this.ai.models.generateContent({
-          ...toGeminiRequest(request),
-          model,
-        });
-        return toReply(model, response);
+        return toReply(model, await this.generate(model, request));
       } catch (error) {
         lastError = error;
         this.onError(error, `${model}#select`);
+        markOverloaded(model, error);
         if (!isRetryableGeminiError(error)) break;
       }
     }
@@ -136,18 +191,17 @@ export class GeminiAiModel implements AiModel {
     const models = Array.from(new Set([preferredModel, ...modelList()]));
     let lastError: unknown;
     for (const model of models) {
+      // Sem capacidade: passa direto para o proximo modelo. Falha de rede: uma nova tentativa.
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-          const response = await this.ai.models.generateContent({
-            ...toGeminiRequest(request),
-            model,
-          });
-          return toReply(model, response);
+          return toReply(model, await this.generate(model, request));
         } catch (error) {
           lastError = error;
           this.onError(error, `${model}#${attempt + 1}`);
+          markOverloaded(model, error);
           if (!isRetryableGeminiError(error)) throw error;
-          await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
+          if (!isTransientGeminiError(error) || isOverloadedGeminiError(error)) break;
+          await new Promise((resolve) => setTimeout(resolve, 400));
         }
       }
     }

@@ -9,6 +9,7 @@ import { createDeterministicFrotakAnswer } from "@/modules/frotak-ai/domain/frot
 import { isFrotakAiActionName } from "@/modules/frotak-ai/domain/frotakAiActionCatalog";
 import { prepareFrotakAiAction } from "@/modules/frotak-ai/infrastructure/frotakAiActions";
 import { listFrotakAiAlerts } from "@/modules/frotak-ai/infrastructure/frotakAiAlerts";
+import { createSnapshotCache } from "@/modules/frotak-ai/infrastructure/frotakAiSnapshotCache";
 import {
   computeFleetUtilization,
   listIdleVehicles,
@@ -1025,5 +1026,5 @@ export async function createFrotakAiTenantSnapshot(context: FrotakAiContext) {
 /** Adaptador da porta FrotakAiToolRunner: ferramentas sobre o Supabase com o token do usuario. */
 export const supabaseFrotakAiToolRunner: FrotakAiToolRunner = {
   execute: executeFrotakAiTool,
-  tenantSnapshot: createFrotakAiTenantSnapshot,
+  tenantSnapshot: createSnapshotCache(createFrotakAiTenantSnapshot),
 };
