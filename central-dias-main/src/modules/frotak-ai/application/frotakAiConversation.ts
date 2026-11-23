@@ -9,6 +9,7 @@ import {
   type FrotakAiContext,
 } from "@/modules/frotak-ai/domain/frotakAiContext";
 import { deterministicAnswerFromToolResult } from "@/modules/frotak-ai/domain/frotakAiDeterministic";
+import { withFollowUpQuestion } from "@/modules/frotak-ai/domain/frotakAiFollowUp";
 import {
   cleanModelText,
   frotakAiSystemInstruction,
@@ -72,10 +73,15 @@ export async function sendFrotakAiChat(
 ) {
   const { context, message } = input;
 
+  // Toda resposta do chat termina com uma pergunta de continuacao, menos quando a tela pede para
+  // confirmar uma acao: ai a proxima coisa a fazer e tocar em Confirmar.
+  const finish = (text: string, tools: string[], actions: FrotakAiPendingAction[]) =>
+    actions.length > 0 ? text : withFollowUpQuestion(text, { message, tools });
+
   const conversationAnswer = simpleConversationAnswer(message);
   if (conversationAnswer) {
     return {
-      text: conversationAnswer,
+      text: finish(conversationAnswer, [], []),
       model: "frotak-server",
       tools: [] as string[],
       pendingActions: [] as FrotakAiPendingAction[],
@@ -132,7 +138,7 @@ export async function sendFrotakAiChat(
       .filter((answer): answer is string => Boolean(answer));
     if (deterministicAnswers.length > 0 && deterministicAnswers.length === executions.length) {
       return {
-        text: deterministicAnswers.join("\n\n"),
+        text: finish(deterministicAnswers.join("\n\n"), usedTools, pendingActions),
         model: "frotak-server",
         tools: usedTools,
         pendingActions,
@@ -162,7 +168,12 @@ export async function sendFrotakAiChat(
 
   const text = cleanModelText(reply.text());
   if (!text) throw new Error("Resposta vazia da IA");
-  return { text, model: selectedModel, tools: usedTools, pendingActions };
+  return {
+    text: finish(text, usedTools, pendingActions),
+    model: selectedModel,
+    tools: usedTools,
+    pendingActions,
+  };
 }
 
 /** Sessao de voz: as mesmas instrucoes e ferramentas, com credencial efemera para o navegador. */

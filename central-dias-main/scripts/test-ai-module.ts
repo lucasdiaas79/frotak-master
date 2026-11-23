@@ -11,6 +11,11 @@ import type {
   PushSubscriptionStore,
 } from "@/modules/frotak-ai/application/ports";
 import type { FrotakAiContext } from "@/modules/frotak-ai/domain/frotakAiContext";
+import {
+  detectFrotakAiTopic,
+  endsWithQuestion,
+  withFollowUpQuestion,
+} from "@/modules/frotak-ai/domain/frotakAiFollowUp";
 import { publicFrotakAiError } from "@/modules/frotak-ai/domain/frotakAiPrompt";
 
 const context = {
@@ -116,17 +121,17 @@ test("unknown tools are ignored and end the conversation with the model text", a
     { context, message: "faca algo", history: [] },
   );
   assert.deepEqual(executed, []);
-  assert.equal(result.text, "Sem ferramenta.");
+  assert.equal(result.text, "Sem ferramenta. Quer que eu veja mais alguma coisa para você?");
 });
 
-test("a server-ready answer is returned as is, without going through the model", async () => {
+test("a server-ready answer keeps its text, without going through the model, and ends with a question", async () => {
   const { model, requests } = fakeModel([reply("", [{ name: "alertas", args: {} }])]);
   const { tools } = fakeTools({ alertas: { deterministicAnswer: "3 veiculos parados." } });
   const result = await sendFrotakAiChat(
     { model, tools },
     { context, message: "alertas", history: [] },
   );
-  assert.equal(result.text, "3 veiculos parados.");
+  assert.equal(result.text, "3 veiculos parados. Quer que eu detalhe algum desses pontos?");
   assert.equal(result.model, "frotak-server");
   assert.equal(requests.length, 1);
 });
@@ -146,7 +151,68 @@ test("the last round forces a text answer, so the tool loop always ends", async 
   assert.equal(requests.length, 4);
   assert.equal(requests.at(-1)?.toolMode, "none");
   assert.equal(requests.at(-2)?.toolMode, "auto");
-  assert.equal(result.text, "Fim.");
+  assert.equal(result.text, "Fim. Quer que eu detalhe algum desses pontos?");
+});
+
+test("a reply that already ends with a question is kept as is", async () => {
+  const { model } = fakeModel([reply("O caixa fechou positivo. Quer ver por categoria?")]);
+  const result = await sendFrotakAiChat(
+    { model, tools: fakeTools({}).tools },
+    { context, message: "como esta o caixa", history: [] },
+  );
+  assert.equal(result.text, "O caixa fechou positivo. Quer ver por categoria?");
+});
+
+test("a pending action asks for Confirmar and gets no follow-up question", async () => {
+  const { model } = fakeModel([
+    reply("", [{ name: "lancar_despesa_frete", args: { valor: 100 } }]),
+    reply("Confira o resumo e toque em Confirmar."),
+  ]);
+  const { tools } = fakeTools({
+    lancar_despesa_frete: {
+      ok: true,
+      data: { confirmacao: { token: "t", resumo: "Despesa de R$ 100" } },
+    },
+  });
+  const result = await sendFrotakAiChat(
+    { model, tools },
+    { context, message: "lanca 100 de pedagio no frete", history: [] },
+  );
+  assert.equal(result.pendingActions.length, 1);
+  assert.equal(result.text, "Confira o resumo e toque em Confirmar.");
+});
+
+test("follow-up: detects a reply that already ends with a question", () => {
+  assert.equal(endsWithQuestion("Faturou R$ 10 mil. Quer ver o mes?"), true);
+  assert.equal(endsWithQuestion("Quer ver o mes? "), true);
+  assert.equal(endsWithQuestion('Ele disse "e agora?"'), true);
+  assert.equal(endsWithQuestion("Quer ver o mes? 🙂"), true);
+  assert.equal(endsWithQuestion("Faturou R$ 10 mil."), false);
+});
+
+test("follow-up: a finance answer offers yesterday's revenue", () => {
+  assert.equal(
+    withFollowUpQuestion("O caixa de hoje esta em R$ 12.400,00.", {
+      message: "Como esta o caixa?",
+      tools: ["consultar_financeiro"],
+    }),
+    "O caixa de hoje esta em R$ 12.400,00. Quer saber quanto a empresa faturou ontem?",
+  );
+});
+
+test("follow-up: a list gets the question on its own line", () => {
+  assert.equal(
+    withFollowUpQuestion("- ABC1D23: R$ 500\n- XYZ9K87: R$ 300", { message: "diesel por placa" }),
+    "- ABC1D23: R$ 500\n- XYZ9K87: R$ 300\n\nQuer comparar o diesel desta semana com o da semana passada?",
+  );
+});
+
+test("follow-up: the tool used weighs more than the words of the question", () => {
+  assert.equal(detectFrotakAiTopic("me fala do caminhao", ["consultar_dre"]), "financeiro");
+  assert.equal(detectFrotakAiTopic("quais fretes estao abertos?"), "fretes");
+  assert.equal(detectFrotakAiTopic("Qual a capital do Parana?"), "geral");
+  assert.equal(detectFrotakAiTopic("Faturamento de ontem"), "financeiro");
+  assert.equal(withFollowUpQuestion("   ", { message: "oi" }), "");
 });
 
 test("internal errors become safe messages", () => {
