@@ -1,3 +1,7 @@
+import { isFrotakAiTechnicalFailure } from "@/modules/frotak-ai/domain/frotakAiToolCatalog";
+import { createBargeInGuard, frameLevel } from "@/modules/frotak-ai/domain/frotakLiveBargeInGuard";
+import { createStallWatch } from "@/modules/frotak-ai/domain/frotakLiveStallWatch";
+
 export type FrotakLiveStatus =
   | "idle"
   | "connecting"
@@ -37,15 +41,13 @@ const GEMINI_LIVE_WS =
   "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained";
 const INPUT_RATE = 16_000;
 const OUTPUT_RATE = 24_000;
-const CAPTURE_CHUNK_SIZE = 4096;
-// Portao de ruido: so manda audio real para o Gemini quando ha voz sustentada. Ruido curto
-// (batida, porta, carro passando) vira silencio e nao interrompe nem faz a IA "ouvir".
-const GATE_MIN_RMS = 0.035;
-const GATE_NOISE_RATIO = 5;
-const GATE_SPEAKING_BOOST = 2.5;
-const GATE_ONSET_FRAMES = 10; // ~200 ms de voz seguida para abrir
-const GATE_HANGOVER_FRAMES = 35; // ~700 ms aberto depois da ultima fala
-const GATE_PREROLL_FRAMES = 15; // ~300 ms de atraso para nao cortar o inicio da palavra
+// Pedacos de 40 ms: a API pede de 20 a 100 ms, e pedaco menor deixa a deteccao de fala mais rapida.
+const CAPTURE_CHUNK_SECONDS = 0.04;
+// O eco da caixa de som continua um pouco depois do fim do audio da IA.
+const ECHO_TAIL_MS = 300;
+// Se o usuario parou de falar e nada chegou do modelo (ex.: ruido que o modelo decidiu ignorar),
+// a tela volta para "Pode falar" em vez de ficar presa em "Pensando".
+const THINKING_WATCHDOG_MS = 7_000;
 const FACTUAL_FAIL_CLOSED_MESSAGE =
   "Nao foi possivel consultar os dados da Frotak neste momento. Tente novamente em instantes.";
 // Enviado uma vez quando a IA tenta responder um dado do tenant sem consultar as ferramentas.
@@ -98,6 +100,10 @@ type GeminiLiveMessage = {
   };
   goAway?: {
     timeLeft?: string;
+  };
+  // Inicio e fim da fala do usuario, detectados pelo proprio modelo.
+  voiceActivity?: {
+    type?: "ACTIVITY_START" | "ACTIVITY_END" | string;
   };
   sessionResumptionUpdate?: {
     newHandle?: string;
@@ -223,7 +229,7 @@ export class FrotakLiveSession {
   private inputTranscriptBuffer = "";
   private captureBuffer: number[] = [];
   private setupTimeout: number | null = null;
-  private silenceTimer: number | null = null;
+  private thinkingTimer: number | null = null;
   private reconnectTimer: number | null = null;
   private reconnectStableTimer: number | null = null;
   private reconnectAttempts = 0;
@@ -238,12 +244,9 @@ export class FrotakLiveSession {
   private deterministicTurnText = "";
   private groundingRetried = false;
   private preToolAudioMs = 0;
-  private gateQueue: Float32Array[] = [];
-  private gateFrame = 0;
-  private gateOpenFrom = Number.POSITIVE_INFINITY;
-  private gateOpenUntil = -1;
-  private gateVoicedRun = 0;
-  private noiseFloor = 0.005;
+  private bargeInGuard = createBargeInGuard();
+  private stallWatch = createStallWatch();
+  private speakingTailUntil = 0;
   private cancelledToolCallIds = new Set<string>();
   private resolveReady: (() => void) | null = null;
   private rejectReady: ((error: Error) => void) | null = null;
@@ -258,6 +261,7 @@ export class FrotakLiveSession {
       },
       onStop: () => {
         this.speaking = false;
+        this.speakingTailUntil = performance.now() + ECHO_TAIL_MS;
         if (!this.closed && !this.reconnecting) {
           this.options.onStatus?.(this.microphoneEnabled ? "ready" : "muted");
         }
@@ -292,15 +296,14 @@ export class FrotakLiveSession {
     if (this.closed || this.microphoneEnabled === enabled) return;
     this.microphoneEnabled = enabled;
     this.captureBuffer = [];
-    this.gateQueue = [];
-    this.gateVoicedRun = 0;
+    this.bargeInGuard.reset();
+    this.stallWatch.ended();
     this.stream?.getAudioTracks().forEach((track) => {
       track.enabled = enabled;
     });
 
     if (!enabled) {
-      if (this.silenceTimer) window.clearTimeout(this.silenceTimer);
-      this.silenceTimer = null;
+      this.clearThinkingWatchdog();
       this.sendRealtimeInput({ audioStreamEnd: true });
       if (!this.speaking) this.options.onStatus?.("muted");
       return;
@@ -316,11 +319,10 @@ export class FrotakLiveSession {
     this.closed = true;
     this.rejectReady?.(new Error("Conexao de voz cancelada."));
     if (this.setupTimeout) window.clearTimeout(this.setupTimeout);
-    if (this.silenceTimer) window.clearTimeout(this.silenceTimer);
+    this.clearThinkingWatchdog();
     if (this.reconnectTimer) window.clearTimeout(this.reconnectTimer);
     if (this.reconnectStableTimer) window.clearTimeout(this.reconnectStableTimer);
     this.setupTimeout = null;
-    this.silenceTimer = null;
     this.reconnectTimer = null;
     this.reconnectStableTimer = null;
     this.captureBuffer = [];
@@ -436,19 +438,26 @@ export class FrotakLiveSession {
       ) {
         return;
       }
-      const input = this.applyNoiseGate(event.data);
-      if (!input) return;
-      this.captureBuffer.push(...input);
-      if (this.captureBuffer.length < CAPTURE_CHUNK_SIZE) return;
+      // O servidor abriu a fala do usuario e nao fechou, com o microfone ja quieto: destrava.
+      if (this.stallWatch.frame(frameLevel(event.data), this.bargeInGuard.state().userLevel)) {
+        console.info("[frotakLive] fala sem fim do servidor: audioStreamEnd para destravar");
+        this.sendRealtimeInput({ audioStreamEnd: true });
+      }
+      const frames = this.bargeInGuard.process(event.data, this.isAssistantAudible());
+      for (const frame of frames) this.captureBuffer.push(...frame);
 
-      const chunk = new Float32Array(this.captureBuffer.splice(0, CAPTURE_CHUNK_SIZE));
-      const pcm = resampleToPcm16(chunk, this.context?.sampleRate ?? 48_000, INPUT_RATE);
-      this.sendRealtimeInput({
-        audio: {
-          data: int16ToBase64(pcm),
-          mimeType: `audio/pcm;rate=${INPUT_RATE}`,
-        },
-      });
+      const sampleRate = this.context?.sampleRate ?? 48_000;
+      const chunkSize = Math.round(sampleRate * CAPTURE_CHUNK_SECONDS);
+      while (this.captureBuffer.length >= chunkSize) {
+        const chunk = new Float32Array(this.captureBuffer.splice(0, chunkSize));
+        const pcm = resampleToPcm16(chunk, sampleRate, INPUT_RATE);
+        this.sendRealtimeInput({
+          audio: {
+            data: int16ToBase64(pcm),
+            mimeType: `audio/pcm;rate=${INPUT_RATE}`,
+          },
+        });
+      }
     };
 
     this.source.connect(this.captureNode);
@@ -468,49 +477,37 @@ export class FrotakLiveSession {
     this.websocket = null;
   }
 
-  // Recebe um quadro de ~20 ms e devolve o quadro atrasado: audio real se faz parte de uma fala,
-  // silencio se for ruido.
-  private applyNoiseGate(frame: Float32Array) {
-    const rms = calculateRms(frame);
-    const threshold =
-      Math.max(GATE_MIN_RMS, this.noiseFloor * GATE_NOISE_RATIO) *
-      (this.speaking ? GATE_SPEAKING_BOOST : 1);
-    const index = this.gateFrame;
-    this.gateFrame += 1;
+  // A IA esta tocando audio, ou acabou de tocar e o eco ainda pode estar no microfone.
+  private isAssistantAudible() {
+    return this.speaking || performance.now() < this.speakingTailUntil;
+  }
 
-    if (rms > threshold) {
-      this.gateVoicedRun += 1;
-      if (this.gateVoicedRun >= GATE_ONSET_FRAMES) {
-        if (index > this.gateOpenUntil) {
-          this.gateOpenFrom = index - GATE_ONSET_FRAMES - GATE_PREROLL_FRAMES + 1;
-        }
-        this.gateOpenUntil = index + GATE_HANGOVER_FRAMES;
-      }
-    } else {
-      this.gateVoicedRun = 0;
-      this.noiseFloor = this.noiseFloor * 0.97 + rms * 0.03;
-    }
+  private clearThinkingWatchdog() {
+    if (this.thinkingTimer) window.clearTimeout(this.thinkingTimer);
+    this.thinkingTimer = null;
+  }
 
-    const open = index <= this.gateOpenUntil && index >= this.gateOpenFrom;
-    if (open && !this.speaking) {
+  private startThinkingWatchdog() {
+    this.clearThinkingWatchdog();
+    this.thinkingTimer = window.setTimeout(() => {
+      this.thinkingTimer = null;
+      if (this.closed || this.speaking || this.reconnecting || this.toolCallsPending > 0) return;
+      this.options.onStatus?.(this.microphoneEnabled ? "ready" : "muted");
+    }, THINKING_WATCHDOG_MS);
+  }
+
+  // Estado da tela a partir do que o proprio modelo detectou, e nao do volume do microfone.
+  private handleVoiceActivity(type: string | undefined) {
+    if (type === "ACTIVITY_START") this.stallWatch.started();
+    else if (type === "ACTIVITY_END") this.stallWatch.ended();
+    if (this.speaking || !this.microphoneEnabled) return;
+    if (type === "ACTIVITY_START") {
+      this.clearThinkingWatchdog();
       this.options.onStatus?.("listening");
-      if (this.silenceTimer) window.clearTimeout(this.silenceTimer);
-      this.silenceTimer = window.setTimeout(
-        () => {
-          if (!this.closed && !this.speaking && this.microphoneEnabled) {
-            this.options.onStatus?.("thinking");
-          }
-        },
-        (GATE_HANGOVER_FRAMES + GATE_PREROLL_FRAMES) * 20 + 300,
-      );
+    } else if (type === "ACTIVITY_END") {
+      this.options.onStatus?.("thinking");
+      this.startThinkingWatchdog();
     }
-
-    this.gateQueue.push(frame);
-    if (this.gateQueue.length <= GATE_PREROLL_FRAMES) return null;
-    const delayed = this.gateQueue.shift()!;
-    const delayedIndex = index - GATE_PREROLL_FRAMES;
-    const delayedOpen = delayedIndex >= this.gateOpenFrom && delayedIndex <= this.gateOpenUntil;
-    return delayedOpen ? delayed : new Float32Array(delayed.length);
   }
 
   private canPlayWaitingPhrase() {
@@ -603,6 +600,8 @@ export class FrotakLiveSession {
       return;
     }
 
+    if (message.voiceActivity) this.handleVoiceActivity(message.voiceActivity.type);
+
     if (message.serverContent?.interrupted) {
       this.player.stopNow();
       this.options.onStatus?.("interrupted");
@@ -637,6 +636,10 @@ export class FrotakLiveSession {
     }
 
     const parts = message.serverContent?.modelTurn?.parts ?? [];
+    if (parts.length > 0) {
+      this.clearThinkingWatchdog();
+      this.stallWatch.ended();
+    }
     parts.forEach((part) => {
       const audio = part.inlineData?.data;
       const canPlayModelOutput = this.canReleaseModelOutput() && !this.deterministicTurnText;
@@ -675,6 +678,11 @@ export class FrotakLiveSession {
         this.groundingRequired = false;
         this.resetToolState();
         if (text) this.options.onText?.(sanitizeLiveText(text));
+        // Turno sem audio (ex.: o modelo decidiu nao responder a um ruido): volta a ouvir.
+        if (!this.speaking && !this.closed && !this.reconnecting) {
+          this.clearThinkingWatchdog();
+          this.options.onStatus?.(this.microphoneEnabled ? "ready" : "muted");
+        }
       }
     }
 
@@ -837,12 +845,6 @@ function appendTranscript(current: string, fragment: string) {
   return `${current} ${fragment}`;
 }
 
-function calculateRms(input: Float32Array) {
-  let sum = 0;
-  for (let index = 0; index < input.length; index += 1) sum += input[index] * input[index];
-  return Math.sqrt(sum / input.length);
-}
-
 function resampleToPcm16(input: Float32Array, sourceRate: number, targetRate: number) {
   if (sourceRate === targetRate) return floatToPcm16(input);
   const ratio = sourceRate / targetRate;
@@ -894,4 +896,3 @@ function sanitizeLiveText(text: string) {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
-import { isFrotakAiTechnicalFailure } from "@/modules/frotak-ai/domain/frotakAiToolCatalog";
