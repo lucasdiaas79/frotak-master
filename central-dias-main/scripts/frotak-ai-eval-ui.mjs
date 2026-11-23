@@ -7,12 +7,15 @@
 // ou `npx -y -p playwright@1.49.1 node ...`):
 //   set FROTAK_AI_EVAL_EMAIL=... & set FROTAK_AI_EVAL_PASSWORD=...
 //   node --experimental-strip-types scripts/frotak-ai-eval-ui.mjs [--url https://frotak.log.br]
-//        [--categoria frota] [--limite 10] [--saida pasta] [--sem-continuacao] [--ver]
+//        [--categoria frota] [--limite 10] [--saida pasta] [--sem-continuacao] [--ver] [--chrome]
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { chromium } from "playwright";
+import { createRequire } from "node:module";
 import { FROTAK_AI_V2_EVALUATION_CASES } from "./frotak-ai-v2-cases.ts";
+
+// require acha o playwright tambem quando ele esta instalado fora do projeto (NODE_PATH).
+const { chromium } = createRequire(import.meta.url)("playwright");
 
 const TOOL_NAMES = [
   "consultar_tenant",
@@ -194,7 +197,11 @@ function report(results) {
   return lines.join("\n");
 }
 
-const browser = await chromium.launch({ headless: !process.argv.includes("--ver") });
+// --chrome usa o Google Chrome ja instalado, sem baixar navegador do Playwright.
+const browser = await chromium.launch({
+  headless: !process.argv.includes("--ver"),
+  ...(process.argv.includes("--chrome") ? { channel: "chrome" } : {}),
+});
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, locale: "pt-BR" });
 const results = [];
 const save = () => {
