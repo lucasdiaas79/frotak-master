@@ -1,7 +1,8 @@
 // Guarda de interrupcao da voz da Frotak IA.
 //
 // Com a IA calada, todo o audio do microfone segue para o Gemini Live: a deteccao de fala e o
-// filtro de ruido do proprio modelo (proactive audio do gemini-3.8-live) decidem o que e fala.
+// filtro de ruido do proprio modelo decidem o que e fala (o gemini-3.8-live tambem ignora conversa
+// ao fundo; o gemini-3.1-flash-live-preview ignora ruido, mas responde a conversa audivel por perto).
 // Assim a voz baixa do usuario e ouvida e o inicio das palavras nao e cortado.
 //
 // Enquanto a IA fala (e um pouco depois, por causa do eco), o microfone vai como silencio, a
@@ -11,7 +12,8 @@
 // reconhece fala limpa mesmo em volume muito baixo. Quando a voz e confirmada, os ultimos
 // quadros guardados seguem juntos, para a primeira silaba nao se perder.
 //
-// Validado com sessoes reais do gemini-3.8-live, fala sintetica, ruidos e eco simulados.
+// Validado com sessoes reais do gemini-3.8-live e do gemini-3.1-flash-live-preview, fala
+// sintetica, ruidos e eco simulados.
 
 export type BargeInGuardOptions = {
   /** Quadros acima do limite, dentro da janela, para liberar a interrupcao (quadros de ~20 ms). */

@@ -21,7 +21,11 @@ export const FROTAK_AI_TEXT_MODEL = "gemini-3.8-flash";
 export const FROTAK_AI_TEXT_FALLBACK_MODEL = "gemini-3.6-flash";
 // Reservas para quando os modelos principais estao sem capacidade (HTTP 503 "high demand").
 const FROTAK_AI_TEXT_EXTRA_FALLBACKS = ["gemini-3.5-flash", "gemini-2.5-flash"];
-export const FROTAK_AI_LIVE_MODEL = "gemini-3.8-live";
+// Voz: gemini-3.1-flash-live-preview. Laboratorio de 2026-11-24 com a chave atual: 8 de 8 sessoes
+// com audio em todas as respostas e ~1,2 s de resposta; o gemini-3.8-live falhou em 4 de 8 (audio
+// vazio, resposta da consulta que nao vem, fala que nao fecha). O 3.8 ignora melhor conversa ao
+// fundo (proactive audio); para voltar a ele, GEMINI_LIVE_MODEL=gemini-3.8-live no ambiente.
+export const FROTAK_AI_LIVE_MODEL = "gemini-3.1-flash-live-preview";
 // Modelo sem capacidade fica fora da fila por um tempo, para a proxima mensagem nao esperar por ele.
 const OVERLOADED_COOLDOWN_MS = 60_000;
 
