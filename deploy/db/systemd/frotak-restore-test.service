@@ -5,3 +5,4 @@ After=docker.service
 [Service]
 Type=oneshot
 ExecStart=/opt/frotak/deploy/db/restore-test.sh
+TimeoutStartSec=3h

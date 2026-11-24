@@ -5,3 +5,5 @@ After=docker.service wg-quick@wg0.service
 [Service]
 Type=oneshot
 ExecStart=/opt/frotak/deploy/db/backup.sh
+# Oneshot nao tem limite por padrao: um passo preso segurou o backup de 13/11 por 11 dias.
+TimeoutStartSec=4h
