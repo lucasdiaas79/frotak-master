@@ -7,6 +7,12 @@ import {
   frameLevel,
 } from "../src/modules/frotak-ai/domain/frotakLiveBargeInGuard.ts";
 import { createStallWatch } from "../src/modules/frotak-ai/domain/frotakLiveStallWatch.ts";
+import {
+  createLiveTurn,
+  isSilentModelSpeech,
+} from "../src/modules/frotak-ai/domain/frotakLiveTurn.ts";
+
+const FAIL = "Nao foi possivel consultar os dados da Frotak neste momento.";
 
 const FRAME = 960; // 20 ms a 48 kHz
 
@@ -158,4 +164,219 @@ test("destravar: conversa ao fundo bem abaixo do usuario conta como quieto", () 
   let fired = false;
   for (let index = 0; index < 130; index += 1) fired = watch.frame(0.012, 0.1) || fired;
   assert.ok(fired);
+});
+
+// Turno da conversa: sequencias de mensagens vistas em sessoes reais do Gemini Live.
+
+test("turno: com consulta, fica em Pensando entre a frase de espera e a resposta", () => {
+  const turn = createLiveTurn();
+  turn.userStarted();
+  assert.equal(turn.status(), "listening");
+  turn.userEnded();
+  assert.equal(turn.status(), "thinking");
+  assert.equal(turn.modelAudio(3900), true, "frase de espera antes da consulta toca");
+  assert.equal(
+    turn.modelText("Certo, deixa so eu dar uma olhada."),
+    "Certo, deixa so eu dar uma olhada.",
+  );
+  turn.toolCalls(["t1"]);
+  assert.equal(turn.status(), "thinking");
+  assert.equal(turn.toolSettled("t1", { ok: true, answer: "Ha 2 veiculos sem viagem." }), true);
+  assert.equal(turn.status(), "thinking", "consulta respondida, resposta ainda nao veio");
+  assert.deepEqual(turn.turnComplete(FAIL), { kind: "continue" }, "turno da frase de espera");
+  assert.equal(turn.status(), "thinking");
+  assert.equal(turn.modelAudio(15000), true, "resposta toca");
+  assert.equal(
+    turn.modelText("Temos dois veiculos sem viagem."),
+    "Temos dois veiculos sem viagem.",
+  );
+  assert.equal(turn.status(), "ready");
+  assert.deepEqual(turn.turnComplete(FAIL), {
+    kind: "done",
+    text: "Temos dois veiculos sem viagem.",
+    speak: null,
+    failed: false,
+  });
+});
+
+test("turno: usuario fala durante a consulta do briefing e a resposta dele toca", () => {
+  const turn = createLiveTurn();
+  turn.textSent();
+  turn.modelAudio(1000);
+  turn.modelText("Ja vou ver como esta a operacao.");
+  turn.toolCalls(["b1"]);
+  turn.userStarted();
+  turn.toolCancelled(["b1"]);
+  turn.interrupted();
+  assert.deepEqual(turn.turnComplete(FAIL), { kind: "done", text: "", speak: null, failed: false });
+  assert.equal(turn.status(), "listening");
+  assert.equal(
+    turn.toolSettled("b1", { ok: true }),
+    false,
+    "consulta cancelada nao volta ao modelo",
+  );
+  turn.userEnded();
+  assert.equal(turn.status(), "thinking");
+  assert.equal(turn.modelAudio(2000), true, "a resposta da pergunta nao pode ser descartada");
+  assert.equal(
+    turn.modelText("A capital do Parana e Curitiba."),
+    "A capital do Parana e Curitiba.",
+  );
+  assert.deepEqual(turn.turnComplete(FAIL), {
+    kind: "done",
+    text: "A capital do Parana e Curitiba.",
+    speak: null,
+    failed: false,
+  });
+  assert.equal(turn.status(), "ready");
+});
+
+test("turno: resposta com audio vazio vira fala de reserva com o texto", () => {
+  const turn = createLiveTurn();
+  turn.userStarted();
+  turn.userEnded();
+  for (let index = 0; index < 96; index += 1) turn.modelAudio(0.04);
+  assert.equal(turn.status(), "thinking", "pedacos de 2 bytes nao contam como fala");
+  turn.modelText("A capital do Parana");
+  turn.modelText(" e Curitiba.");
+  assert.deepEqual(turn.turnComplete(FAIL), {
+    kind: "done",
+    text: "A capital do Parana e Curitiba.",
+    speak: "A capital do Parana e Curitiba.",
+    failed: false,
+  });
+});
+
+test("turno: audio vazio sai no generationComplete, sem esperar o turnComplete que nao vem", () => {
+  const turn = createLiveTurn();
+  turn.userStarted();
+  turn.userEnded();
+  turn.modelAudio(0.04);
+  turn.modelText("A capital do ");
+  turn.modelText("Parana e Curitiba.");
+  for (let index = 0; index < 16; index += 1) turn.modelAudio(0.04);
+  assert.equal(turn.generationComplete(), "A capital do Parana e Curitiba.");
+  assert.equal(turn.status(), "ready");
+  assert.deepEqual(turn.turnComplete(FAIL), { kind: "done", text: "", speak: null, failed: false });
+});
+
+test("turno: generationComplete com audio normal, ou com consulta pendente, nao fala nada", () => {
+  const spoken = createLiveTurn();
+  spoken.userEnded();
+  spoken.modelAudio(2300);
+  spoken.modelText("A capital do Parana e Curitiba.");
+  assert.equal(spoken.generationComplete(), null);
+
+  const waiting = createLiveTurn();
+  waiting.userEnded();
+  waiting.modelText("Certo, deixa so eu dar uma olhada.");
+  waiting.toolCalls(["t1"]);
+  assert.equal(waiting.generationComplete(), null);
+  assert.equal(waiting.status(), "thinking");
+});
+
+test("turno: texto sem audio e sem fim do servidor sai quando o relogio de resposta estoura", () => {
+  const turn = createLiveTurn();
+  turn.userEnded();
+  turn.modelAudio(0.04);
+  turn.modelText("Bom dia.");
+  assert.deepEqual(turn.replyOverdue(), { overdue: true, speak: "Bom dia." });
+  assert.equal(turn.status(), "ready");
+});
+
+test("turno: resposta da consulta que nao chega usa o texto pronto e o atraso nao toca", () => {
+  const turn = createLiveTurn();
+  turn.userStarted();
+  turn.userEnded();
+  turn.toolCalls(["f1"]);
+  turn.toolSettled("f1", { ok: true, answer: "A frota tem 12 veiculos." });
+  assert.deepEqual(turn.turnComplete(FAIL), { kind: "continue" });
+  assert.deepEqual(turn.answerOverdue(FAIL), { overdue: true, speak: "A frota tem 12 veiculos." });
+  assert.equal(turn.status(), "ready");
+  assert.equal(turn.modelAudio(2000), false, "resposta atrasada nao toca por cima");
+  assert.equal(turn.modelText("A frota tem 12 veiculos."), null);
+  assert.deepEqual(turn.turnComplete(FAIL), { kind: "done", text: "", speak: null, failed: false });
+  turn.userStarted();
+  turn.userEnded();
+  assert.equal(turn.modelAudio(2000), true, "pergunta seguinte volta ao normal");
+});
+
+test("turno: resposta que chegou nao dispara o texto pronto", () => {
+  const turn = createLiveTurn();
+  turn.userEnded();
+  turn.toolCalls(["f1"]);
+  turn.toolSettled("f1", { ok: true, answer: "A frota tem 12 veiculos." });
+  turn.modelAudio(2500);
+  assert.deepEqual(turn.answerOverdue(FAIL), { overdue: false });
+});
+
+test("turno: resposta da consulta so em texto, sem fim do servidor, sai pelo limite", () => {
+  const turn = createLiveTurn();
+  turn.userEnded();
+  turn.toolCalls(["f1"]);
+  turn.toolSettled("f1", { ok: true });
+  turn.modelAudio(0.04);
+  turn.modelText("A frota tem 12 veiculos.");
+  assert.equal(turn.status(), "thinking");
+  assert.deepEqual(turn.answerOverdue(FAIL), { overdue: true, speak: "A frota tem 12 veiculos." });
+  assert.equal(turn.status(), "ready");
+});
+
+test("turno: consulta com falha tecnica fala o aviso e segura a resposta do modelo", () => {
+  const turn = createLiveTurn();
+  turn.userEnded();
+  turn.toolCalls(["x1"]);
+  assert.equal(turn.modelAudio(500), false, "nada toca com consulta pendente");
+  turn.toolSettled("x1", { ok: false });
+  assert.equal(turn.modelAudio(2000), false, "resposta depois de falha nao toca");
+  assert.deepEqual(turn.turnComplete(FAIL), {
+    kind: "done",
+    text: FAIL,
+    speak: FAIL,
+    failed: true,
+  });
+  assert.equal(turn.modelAudio(2000), false, "turno seguinte do modelo sobre a falha nao toca");
+  turn.turnComplete(FAIL);
+  turn.userStarted();
+  turn.userEnded();
+  assert.equal(turn.modelAudio(2000), true);
+});
+
+test("turno: ruido que o modelo ignora volta para Pode falar", () => {
+  const turn = createLiveTurn();
+  turn.userStarted();
+  turn.userEnded();
+  assert.deepEqual(turn.turnComplete(FAIL), { kind: "done", text: "", speak: null, failed: false });
+  assert.equal(turn.status(), "ready");
+
+  const silent = createLiveTurn();
+  silent.userStarted();
+  silent.userEnded();
+  assert.deepEqual(silent.replyOverdue(), { overdue: true, speak: null });
+  assert.equal(silent.status(), "ready");
+});
+
+test("turno: texto digitado espera a resposta mesmo se o modelo for interrompido", () => {
+  const turn = createLiveTurn();
+  turn.textSent();
+  turn.interrupted();
+  assert.equal(turn.status(), "thinking");
+});
+
+test("audio vazio: so quando o audio nao cobre o texto", () => {
+  assert.equal(isSilentModelSpeech("A capital do Parana e Curitiba.", 60), true);
+  assert.equal(isSilentModelSpeech("A capital do Parana e Curitiba.", 2300), false);
+  assert.equal(isSilentModelSpeech("Sim.", 450), false);
+  assert.equal(isSilentModelSpeech("", 0), false);
+});
+
+test("turno: texto da resposta chega antes do som e a tela continua em Pensando", () => {
+  const turn = createLiveTurn();
+  turn.userEnded();
+  turn.toolCalls(["t1"]);
+  turn.toolSettled("t1", { ok: true });
+  turn.modelText("A frota tem 12 veiculos.");
+  assert.equal(turn.status(), "thinking");
+  turn.modelAudio(1800);
+  assert.equal(turn.status(), "ready", "com som tocando a sessao mostra Respondendo");
 });

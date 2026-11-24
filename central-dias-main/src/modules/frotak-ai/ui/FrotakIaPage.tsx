@@ -33,6 +33,7 @@ import {
 } from "@/modules/frotak-ai/domain/frotakAiToolCatalog";
 import {
   FrotakLiveSession,
+  primeFrotakSpeechFallback,
   requestFrotakLiveMicrophone,
   type FrotakLiveStatus,
 } from "@/modules/frotak-ai/container";
@@ -221,6 +222,8 @@ export function FrotakIaPage() {
 
   const startLive = async () => {
     if (liveSessionRef.current) return;
+    // Ainda dentro do toque: libera a voz de reserva do navegador (exigencia do iOS).
+    primeFrotakSpeechFallback();
 
     const attempt = liveStartAttemptRef.current + 1;
     liveStartAttemptRef.current = attempt;

@@ -1,6 +1,10 @@
 import { isFrotakAiTechnicalFailure } from "@/modules/frotak-ai/domain/frotakAiToolCatalog";
 import { createBargeInGuard, frameLevel } from "@/modules/frotak-ai/domain/frotakLiveBargeInGuard";
 import { createStallWatch } from "@/modules/frotak-ai/domain/frotakLiveStallWatch";
+import { createLiveTurn } from "@/modules/frotak-ai/domain/frotakLiveTurn";
+import { FrotakSpeechFallback } from "@/modules/frotak-ai/infrastructure/frotakSpeechFallback";
+
+export { primeFrotakSpeechFallback } from "@/modules/frotak-ai/infrastructure/frotakSpeechFallback";
 
 export type FrotakLiveStatus =
   | "idle"
@@ -48,15 +52,20 @@ const ECHO_TAIL_MS = 300;
 // Se o usuario parou de falar e nada chegou do modelo (ex.: ruido que o modelo decidiu ignorar),
 // a tela volta para "Pode falar" em vez de ficar presa em "Pensando".
 const THINKING_WATCHDOG_MS = 7_000;
+// Servidor que continua "ouvindo" mesmo depois do audioStreamEnd esta preso (visto no
+// gemini-3.8-live: 30 s em "Ouvindo" sem nunca fechar a fala). Passado este tempo, conexao nova.
+const STALL_RECONNECT_MS = 4_000;
+const ASK_REPEAT_MESSAGE = "Desculpe, nao consegui te ouvir. Pode repetir?";
+// Depois de responder a consulta, a resposta do modelo chega em 1 a 5 s (o mais lento medido:
+// frase de espera longa no gemini-3.8-live). Passado este limite, a resposta vem do texto pronto
+// da ferramenta, na voz de reserva.
+const TOOL_ANSWER_TIMEOUT_MS = 8_000;
+// Pedaco de audio menor que isto (o servidor as vezes manda 2 bytes) nao toca: so faria a esfera piscar.
+const MIN_AUDIO_CHUNK_SECONDS = 0.01;
 const FACTUAL_FAIL_CLOSED_MESSAGE =
   "Nao foi possivel consultar os dados da Frotak neste momento. Tente novamente em instantes.";
-// Enviado uma vez quando a IA tenta responder um dado do tenant sem consultar as ferramentas.
-// Antes de consultar, a IA pode falar uma frase curta de espera ("Entendi, deixa so eu dar
-// uma olhada aqui"). Ate este limite o audio toca mesmo sem ferramenta; o resto espera a consulta.
-const PRE_TOOL_AUDIO_MS = 3_500;
-
-const GROUNDING_RETRY_PROMPT =
-  "Instrucao do sistema: a resposta anterior nao foi entregue porque nao consultou as ferramentas da Frotak. Consulte agora a ferramenta adequada para a ultima pergunta do usuario e responda de novo, curto e direto, sem mencionar esta instrucao e sem repetir a frase de espera.";
+const TOOL_ANSWER_MISSING_MESSAGE =
+  "Nao consegui terminar essa consulta agora. Pode perguntar de novo?";
 
 type GeminiLiveMessage = {
   setupComplete?: unknown;
@@ -109,6 +118,13 @@ type GeminiLiveMessage = {
     newHandle?: string;
     resumable?: boolean;
   };
+};
+
+type PendingToolCall = {
+  key: string;
+  id?: string;
+  name?: string;
+  args?: Record<string, unknown>;
 };
 
 export async function requestFrotakLiveMicrophone() {
@@ -167,7 +183,7 @@ class PcmAudioPlayer {
     if (context.state === "suspended") await context.resume();
 
     const pcm = base64ToInt16(base64Pcm);
-    if (pcm.length === 0) return;
+    if (pcm.length < OUTPUT_RATE * MIN_AUDIO_CHUNK_SECONDS) return;
 
     const buffer = context.createBuffer(1, pcm.length, OUTPUT_RATE);
     const channel = buffer.getChannelData(0);
@@ -223,31 +239,33 @@ export class FrotakLiveSession {
   private captureNode: AudioWorkletNode | null = null;
   private muteGain: GainNode | null = null;
   private player: PcmAudioPlayer;
+  private fallback: FrotakSpeechFallback;
   private setupComplete = false;
+  private captureReady = false;
   private closed = false;
-  private transcriptBuffer = "";
   private inputTranscriptBuffer = "";
   private captureBuffer: number[] = [];
   private setupTimeout: number | null = null;
   private thinkingTimer: number | null = null;
+  private answerTimer: number | null = null;
+  private stallTimer: number | null = null;
+  // Reconexao por servidor preso: a pergunta se perdeu, entao a IA pede para repetir.
+  private askRepeatAfterReconnect = false;
   private reconnectTimer: number | null = null;
   private reconnectStableTimer: number | null = null;
   private reconnectAttempts = 0;
   private reconnecting = false;
   private sessionResumptionHandle: string | null = null;
+  // A IA esta tocando audio (do Gemini ou da voz de reserva).
   private speaking = false;
+  private playerActive = false;
+  private fallbackActive = false;
   private microphoneEnabled = true;
-  private groundingRequired = false;
-  private toolCallsSeen = 0;
-  private toolCallsPending = 0;
-  private toolFailures = 0;
-  private deterministicTurnText = "";
-  private groundingRetried = false;
-  private preToolAudioMs = 0;
+  private turn = createLiveTurn();
+  private toolCallSeq = 0;
   private bargeInGuard = createBargeInGuard();
   private stallWatch = createStallWatch();
   private speakingTailUntil = 0;
-  private cancelledToolCallIds = new Set<string>();
   private resolveReady: (() => void) | null = null;
   private rejectReady: ((error: Error) => void) | null = null;
 
@@ -255,17 +273,12 @@ export class FrotakLiveSession {
     this.options = options;
     this.stream = options.stream;
     this.player = new PcmAudioPlayer({
-      onStart: () => {
-        this.speaking = true;
-        this.options.onStatus?.("speaking");
-      },
-      onStop: () => {
-        this.speaking = false;
-        this.speakingTailUntil = performance.now() + ECHO_TAIL_MS;
-        if (!this.closed && !this.reconnecting) {
-          this.options.onStatus?.(this.microphoneEnabled ? "ready" : "muted");
-        }
-      },
+      onStart: () => this.setPlayback("player", true),
+      onStop: () => this.setPlayback("player", false),
+    });
+    this.fallback = new FrotakSpeechFallback({
+      onStart: () => this.setPlayback("fallback", true),
+      onEnd: () => this.setPlayback("fallback", false),
     });
   }
 
@@ -288,8 +301,12 @@ export class FrotakLiveSession {
   sendText(text: string) {
     if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) return;
     this.player.stopNow();
-    this.options.onStatus?.("thinking");
+    this.fallback.cancel();
+    this.clearAnswerTimer();
+    this.turn.textSent();
+    this.startThinkingWatchdog();
     this.sendRealtimeInput({ text });
+    this.refreshStatus();
   }
 
   setMicrophoneEnabled(enabled: boolean) {
@@ -302,14 +319,8 @@ export class FrotakLiveSession {
       track.enabled = enabled;
     });
 
-    if (!enabled) {
-      this.clearThinkingWatchdog();
-      this.sendRealtimeInput({ audioStreamEnd: true });
-      if (!this.speaking) this.options.onStatus?.("muted");
-      return;
-    }
-
-    if (!this.speaking && this.setupComplete) this.options.onStatus?.("ready");
+    if (!enabled) this.sendRealtimeInput({ audioStreamEnd: true });
+    this.refreshStatus();
   }
 
   async stop() {
@@ -320,12 +331,15 @@ export class FrotakLiveSession {
     this.rejectReady?.(new Error("Conexao de voz cancelada."));
     if (this.setupTimeout) window.clearTimeout(this.setupTimeout);
     this.clearThinkingWatchdog();
+    this.clearAnswerTimer();
+    this.clearStallTimer();
     if (this.reconnectTimer) window.clearTimeout(this.reconnectTimer);
     if (this.reconnectStableTimer) window.clearTimeout(this.reconnectStableTimer);
     this.setupTimeout = null;
     this.reconnectTimer = null;
     this.reconnectStableTimer = null;
     this.captureBuffer = [];
+    this.fallback.cancel();
     this.captureNode?.port.close();
     this.captureNode?.disconnect();
     this.muteGain?.disconnect();
@@ -357,7 +371,9 @@ export class FrotakLiveSession {
     if (isReconnect) {
       this.reconnecting = true;
       this.options.onStatus?.("reconnecting");
-      if (this.options.refreshToken && !this.sessionResumptionHandle) {
+      // O token efemero vale para uma conexao so: toda reconexao precisa de um novo.
+      // O handle de retomada continua indo no setup para manter o contexto da conversa.
+      if (this.options.refreshToken) {
         const next = await this.options.refreshToken();
         this.options.token = next.token;
         this.options.model = next.model;
@@ -442,6 +458,7 @@ export class FrotakLiveSession {
       if (this.stallWatch.frame(frameLevel(event.data), this.bargeInGuard.state().userLevel)) {
         console.info("[frotakLive] fala sem fim do servidor: audioStreamEnd para destravar");
         this.sendRealtimeInput({ audioStreamEnd: true });
+        this.armStallReconnect();
       }
       const frames = this.bargeInGuard.process(event.data, this.isAssistantAudible());
       for (const frame of frames) this.captureBuffer.push(...frame);
@@ -482,6 +499,34 @@ export class FrotakLiveSession {
     return this.speaking || performance.now() < this.speakingTailUntil;
   }
 
+  private setPlayback(source: "player" | "fallback", active: boolean) {
+    if (source === "player") this.playerActive = active;
+    else this.fallbackActive = active;
+    const speaking = this.playerActive || this.fallbackActive;
+    if (this.speaking && !speaking) this.speakingTailUntil = performance.now() + ECHO_TAIL_MS;
+    this.speaking = speaking;
+    this.refreshStatus();
+  }
+
+  // O que a tela mostra sai de um lugar so: audio tocando, fala do usuario segundo o modelo,
+  // e o que ainda falta chegar do modelo (resposta, consulta, resposta da consulta).
+  private refreshStatus() {
+    if (this.closed) return;
+    if (this.reconnecting) {
+      this.options.onStatus?.("reconnecting");
+      return;
+    }
+    if (!this.setupComplete) return;
+    if (this.speaking) {
+      this.options.onStatus?.("speaking");
+      return;
+    }
+    const status = this.turn.status();
+    // Antes do microfone ficar pronto, "Pode falar" ainda nao e verdade.
+    if (status === "ready" && !this.captureReady) return;
+    this.options.onStatus?.(status === "ready" && !this.microphoneEnabled ? "muted" : status);
+  }
+
   private clearThinkingWatchdog() {
     if (this.thinkingTimer) window.clearTimeout(this.thinkingTimer);
     this.thinkingTimer = null;
@@ -491,58 +536,73 @@ export class FrotakLiveSession {
     this.clearThinkingWatchdog();
     this.thinkingTimer = window.setTimeout(() => {
       this.thinkingTimer = null;
-      if (this.closed || this.speaking || this.reconnecting || this.toolCallsPending > 0) return;
-      this.options.onStatus?.(this.microphoneEnabled ? "ready" : "muted");
+      if (this.closed || this.reconnecting) return;
+      const result = this.turn.replyOverdue();
+      if (!result.overdue) return;
+      if (result.speak)
+        this.speakFallback(result.speak, "resposta sem audio e sem fim do servidor");
+      this.refreshStatus();
     }, THINKING_WATCHDOG_MS);
   }
 
-  // Estado da tela a partir do que o proprio modelo detectou, e nao do volume do microfone.
+  private speakFallback(text: string, reason: string) {
+    console.warn("[frotakLive] voz de reserva", { reason });
+    const clean = sanitizeLiveText(text);
+    this.options.onText?.(clean);
+    this.fallback.speak(clean);
+  }
+
+  private clearAnswerTimer() {
+    if (this.answerTimer) window.clearTimeout(this.answerTimer);
+    this.answerTimer = null;
+  }
+
+  private clearStallTimer() {
+    if (this.stallTimer) window.clearTimeout(this.stallTimer);
+    this.stallTimer = null;
+  }
+
+  private armStallReconnect() {
+    this.clearStallTimer();
+    this.stallTimer = window.setTimeout(() => {
+      this.stallTimer = null;
+      if (this.closed || this.reconnecting) return;
+      this.askRepeatAfterReconnect = true;
+      void this.scheduleReconnect("fala sem fim mesmo depois do audioStreamEnd");
+    }, STALL_RECONNECT_MS);
+  }
+
+  private startAnswerTimer() {
+    if (this.answerTimer) return;
+    this.answerTimer = window.setTimeout(() => {
+      this.answerTimer = null;
+      if (this.closed || this.reconnecting) return;
+      const result = this.turn.answerOverdue(FACTUAL_FAIL_CLOSED_MESSAGE);
+      if (!result.overdue) return;
+      this.speakFallback(
+        result.speak ?? TOOL_ANSWER_MISSING_MESSAGE,
+        result.speak
+          ? "resposta da consulta nao chegou"
+          : "consulta sem resposta e sem texto pronto",
+      );
+      this.refreshStatus();
+    }, TOOL_ANSWER_TIMEOUT_MS);
+  }
+
   private handleVoiceActivity(type: string | undefined) {
-    if (type === "ACTIVITY_START") this.stallWatch.started();
-    else if (type === "ACTIVITY_END") this.stallWatch.ended();
-    if (this.speaking || !this.microphoneEnabled) return;
     if (type === "ACTIVITY_START") {
+      this.stallWatch.started();
+      this.turn.userStarted();
       this.clearThinkingWatchdog();
-      this.options.onStatus?.("listening");
+      // A voz de reserva nao passa pelo servidor: quando o usuario fala, ela para aqui mesmo.
+      this.fallback.cancel();
     } else if (type === "ACTIVITY_END") {
-      this.options.onStatus?.("thinking");
+      this.stallWatch.ended();
+      this.clearStallTimer();
+      this.turn.userEnded();
       this.startThinkingWatchdog();
     }
-  }
-
-  private canPlayWaitingPhrase() {
-    return (
-      this.groundingRequired &&
-      this.toolCallsSeen === 0 &&
-      this.toolFailures === 0 &&
-      this.preToolAudioMs < PRE_TOOL_AUDIO_MS
-    );
-  }
-
-  private canReleaseModelOutput() {
-    if (!this.groundingRequired) return true;
-    return this.toolCallsSeen > 0 && this.toolCallsPending === 0 && this.toolFailures === 0;
-  }
-
-  private resetToolState() {
-    this.toolCallsSeen = 0;
-    this.toolCallsPending = 0;
-    this.toolFailures = 0;
-    this.groundingRetried = false;
-    this.preToolAudioMs = 0;
-    this.cancelledToolCallIds.clear();
-    this.deterministicTurnText = "";
-  }
-
-  // A IA respondeu um dado do tenant sem consultar: em vez de calar, pede uma vez que consulte.
-  private requestGroundedRetry() {
-    if (this.groundingRetried) return false;
-    if (!this.sendRealtimeInput({ text: GROUNDING_RETRY_PROMPT })) return false;
-    this.groundingRetried = true;
-    this.transcriptBuffer = "";
-    this.options.onStatus?.("thinking");
-    console.info("[frotakLive] grounding retry requested");
-    return true;
+    this.refreshStatus();
   }
 
   private failSession(message: string) {
@@ -587,8 +647,11 @@ export class FrotakLiveSession {
       }, 30_000);
       void this.startAudioCapture()
         .then(() => {
-          if (!this.closed) {
-            this.options.onStatus?.(this.microphoneEnabled ? "ready" : "muted");
+          this.captureReady = true;
+          this.refreshStatus();
+          if (this.askRepeatAfterReconnect && !this.closed) {
+            this.askRepeatAfterReconnect = false;
+            this.speakFallback(ASK_REPEAT_MESSAGE, "conexao nova depois de servidor preso");
           }
         })
         .catch((error) => {
@@ -604,7 +667,8 @@ export class FrotakLiveSession {
 
     if (message.serverContent?.interrupted) {
       this.player.stopNow();
-      this.options.onStatus?.("interrupted");
+      this.clearAnswerTimer();
+      this.turn.interrupted();
     }
 
     const interimInputText = message.serverContent?.interimInputTranscription?.text;
@@ -621,8 +685,13 @@ export class FrotakLiveSession {
 
     const toolCalls = message.toolCall?.functionCalls ?? [];
     if (toolCalls.length > 0) {
-      this.groundingRequired = true;
-      void this.handleToolCalls(toolCalls).catch((error) => {
+      const calls = toolCalls.map((call) => ({
+        ...call,
+        key: call.id ?? `local-${(this.toolCallSeq += 1)}`,
+      }));
+      this.turn.toolCalls(calls.map((call) => call.key));
+      this.clearThinkingWatchdog();
+      void this.handleToolCalls(calls).catch((error) => {
         console.error("[frotakLive] tool response failed", {
           message: error instanceof Error ? error.message : String(error),
         });
@@ -630,114 +699,112 @@ export class FrotakLiveSession {
     }
 
     const outputText = message.serverContent?.outputTranscription?.text;
-    if (outputText && this.canReleaseModelOutput() && !this.deterministicTurnText) {
-      this.transcriptBuffer = appendTranscript(this.transcriptBuffer, outputText);
-      this.options.onPartialText?.(sanitizeLiveText(this.transcriptBuffer));
-    }
+    if (outputText) this.releaseModelText(outputText);
 
     const parts = message.serverContent?.modelTurn?.parts ?? [];
     if (parts.length > 0) {
-      this.clearThinkingWatchdog();
       this.stallWatch.ended();
+      this.clearStallTimer();
     }
     parts.forEach((part) => {
       const audio = part.inlineData?.data;
-      const canPlayModelOutput = this.canReleaseModelOutput() && !this.deterministicTurnText;
-      if (audio && canPlayModelOutput) void this.player.enqueue(audio);
-      else if (audio && this.canPlayWaitingPhrase()) {
-        this.preToolAudioMs += ((audio.length * 3) / 4 / 2 / OUTPUT_RATE) * 1000;
-        void this.player.enqueue(audio);
+      if (audio) {
+        const ms = base64AudioMs(audio);
+        // So audio de verdade desarma o relogio: pedacos de 2 bytes nao sao resposta.
+        if (ms >= MIN_AUDIO_CHUNK_SECONDS * 1000) this.clearThinkingWatchdog();
+        if (this.turn.modelAudio(ms)) void this.player.enqueue(audio);
       }
-      if (part.text && canPlayModelOutput) {
-        this.transcriptBuffer = appendTranscript(this.transcriptBuffer, part.text);
-        this.options.onPartialText?.(sanitizeLiveText(this.transcriptBuffer));
-      }
+      if (part.text) this.releaseModelText(part.text);
     });
+    // So som de verdade da resposta desarma o limite da consulta; texto sozinho nao e ouvido.
+    if (parts.length > 0 && this.turn.answerHeard()) this.clearAnswerTimer();
 
     if (message.toolCallCancellation?.ids?.length) {
-      message.toolCallCancellation.ids.forEach((id) => this.cancelledToolCallIds.add(id));
-      this.toolFailures += message.toolCallCancellation.ids.length;
-      this.options.onStatus?.("interrupted");
+      this.turn.toolCancelled(message.toolCallCancellation.ids);
+      this.clearAnswerTimer();
     }
 
-    if (message.serverContent?.turnComplete) {
-      const skippedTools =
-        this.groundingRequired &&
-        this.toolCallsSeen === 0 &&
-        this.toolCallsPending === 0 &&
-        this.toolFailures === 0;
-      if (skippedTools && this.requestGroundedRetry()) {
-        // Aguarda a nova resposta, agora com consulta.
-      } else if (!(this.groundingRequired && this.toolCallsPending > 0)) {
-        const failClosed = this.groundingRequired && !this.canReleaseModelOutput();
-        const text = failClosed
-          ? FACTUAL_FAIL_CLOSED_MESSAGE
-          : this.deterministicTurnText || this.transcriptBuffer.trim();
-        this.transcriptBuffer = "";
-        this.inputTranscriptBuffer = "";
-        this.groundingRequired = false;
-        this.resetToolState();
-        if (text) this.options.onText?.(sanitizeLiveText(text));
-        // Turno sem audio (ex.: o modelo decidiu nao responder a um ruido): volta a ouvir.
-        if (!this.speaking && !this.closed && !this.reconnecting) {
-          this.clearThinkingWatchdog();
-          this.options.onStatus?.(this.microphoneEnabled ? "ready" : "muted");
-        }
+    if (message.serverContent?.generationComplete) {
+      // Fala com texto e sem audio: sai ja, porque o turnComplete desse turno demora ou nao vem.
+      const silentSpeech = this.turn.generationComplete();
+      if (silentSpeech) {
+        this.clearThinkingWatchdog();
+        this.clearAnswerTimer();
+        this.speakFallback(silentSpeech, "resposta sem audio do servidor");
       }
     }
+
+    if (message.serverContent?.turnComplete) this.handleTurnComplete();
 
     if (message.sessionResumptionUpdate?.resumable && message.sessionResumptionUpdate.newHandle) {
       this.sessionResumptionHandle = message.sessionResumptionUpdate.newHandle;
     }
+
+    this.refreshStatus();
 
     if (message.goAway) {
       void this.scheduleReconnect("goAway");
     }
   }
 
-  private async handleToolCalls(
-    calls: Array<{ id?: string; name?: string; args?: Record<string, unknown> }>,
-  ) {
-    if (
-      !this.websocket ||
-      this.websocket.readyState !== WebSocket.OPEN ||
-      !this.options.onToolCall
-    ) {
-      return;
-    }
+  private releaseModelText(fragment: string) {
+    const released = this.turn.modelText(fragment);
+    if (released) this.options.onPartialText?.(sanitizeLiveText(released));
+  }
 
-    const validCalls = calls.filter((call) => call.name);
-    if (validCalls.length === 0) {
-      this.toolFailures += 1;
+  private handleTurnComplete() {
+    const end = this.turn.turnComplete(FACTUAL_FAIL_CLOSED_MESSAGE);
+    if (end.kind === "continue") {
+      // Consulta respondida e resposta ainda por vir: continua em "Pensando", com limite.
+      this.startAnswerTimer();
       return;
     }
-    this.toolCallsSeen += validCalls.length;
-    this.toolCallsPending += validCalls.length;
-    this.options.onStatus?.("thinking");
+    this.clearAnswerTimer();
+    this.clearThinkingWatchdog();
+    this.inputTranscriptBuffer = "";
+    // O modelo respondeu, mas o audio veio vazio (ou a consulta falhou): fala pela voz de reserva.
+    if (end.speak) {
+      this.speakFallback(
+        end.speak,
+        end.failed ? "consulta falhou" : "resposta sem audio do servidor",
+      );
+    } else if (end.text) {
+      this.options.onText?.(sanitizeLiveText(end.text));
+    }
+  }
+
+  private async handleToolCalls(calls: PendingToolCall[]) {
     const functionResponses = await Promise.all(
-      validCalls.map(async (call) => {
+      calls.map(async (call) => {
+        if (!call.name || !this.options.onToolCall) {
+          if (!this.turn.toolSettled(call.key, { ok: false })) return null;
+          return {
+            id: call.id,
+            name: call.name,
+            response: { error: "Ferramenta indisponivel." },
+          };
+        }
         try {
           console.info("[frotakLive] tool call", { name: call.name });
-          const output = await this.options.onToolCall?.({
+          const output = await this.options.onToolCall({
             id: call.id,
-            name: String(call.name),
+            name: call.name,
             args: call.args ?? {},
           });
-          if (call.id && this.cancelledToolCallIds.has(call.id)) return null;
           const succeeded = !isFrotakAiTechnicalFailure(output);
           console.info("[frotakLive] tool result", {
             name: call.name,
             ok: succeeded,
           });
-          if (!succeeded) this.toolFailures += 1;
+          const answer = deterministicAnswerFromUnknown(output);
+          if (!this.turn.toolSettled(call.key, { ok: succeeded, answer })) return null;
           return {
             id: call.id,
             name: call.name,
             response: { output },
           };
         } catch (error) {
-          if (call.id && this.cancelledToolCallIds.has(call.id)) return null;
-          this.toolFailures += 1;
+          if (!this.turn.toolSettled(call.key, { ok: false })) return null;
           return {
             id: call.id,
             name: call.name,
@@ -749,7 +816,7 @@ export class FrotakLiveSession {
       }),
     );
 
-    this.toolCallsPending = Math.max(0, this.toolCallsPending - validCalls.length);
+    this.refreshStatus();
     const activeResponses = functionResponses.filter(
       (response): response is NonNullable<typeof response> => response !== null,
     );
@@ -758,6 +825,7 @@ export class FrotakLiveSession {
     // le com a voz dela, para nao trocar de voz no meio da conversa.
     if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN || this.closed) return;
     this.websocket.send(JSON.stringify({ toolResponse: { functionResponses: activeResponses } }));
+    this.startAnswerTimer();
   }
 
   private async scheduleReconnect(reason: string) {
@@ -774,6 +842,13 @@ export class FrotakLiveSession {
 
     this.closeWebSocket();
     this.setupComplete = false;
+    this.player.stopNow();
+    this.fallback.cancel();
+    this.clearThinkingWatchdog();
+    this.clearAnswerTimer();
+    this.clearStallTimer();
+    this.turn.reset();
+    this.stallWatch.ended();
     if (this.reconnectStableTimer) window.clearTimeout(this.reconnectStableTimer);
     this.reconnectStableTimer = null;
     if (this.setupTimeout) window.clearTimeout(this.setupTimeout);
@@ -843,6 +918,13 @@ function appendTranscript(current: string, fragment: string) {
   if (!fragment) return current;
   if (/\s$/.test(current) || /^\s|^[,.;:!?)]/.test(fragment)) return `${current}${fragment}`;
   return `${current} ${fragment}`;
+}
+
+// Duracao do PCM 16-bit mono a 24 kHz, direto do tamanho do base64.
+function base64AudioMs(base64: string) {
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  const bytes = (base64.length * 3) / 4 - padding;
+  return (bytes / 2 / OUTPUT_RATE) * 1000;
 }
 
 function resampleToPcm16(input: Float32Array, sourceRate: number, targetRate: number) {

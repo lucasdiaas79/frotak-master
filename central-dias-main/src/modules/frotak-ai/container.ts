@@ -2,6 +2,7 @@
 // o adaptador. Trocar o provedor de voz e trocar esta exportacao.
 export {
   FrotakLiveSession,
+  primeFrotakSpeechFallback,
   requestFrotakLiveMicrophone,
   type FrotakLiveStatus,
 } from "@/modules/frotak-ai/infrastructure/frotakLive";
