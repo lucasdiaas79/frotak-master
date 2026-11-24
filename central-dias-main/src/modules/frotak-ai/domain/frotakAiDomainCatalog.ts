@@ -337,7 +337,9 @@ export const FROTAK_AI_DOMAINS = {
       settled_at: "date",
     },
     embed: {
-      select: "financial_documents!inner(direction,description)",
+      // Nomeia a chave: ha duas ligacoes com financial_documents e o embed sem nome e recusado.
+      select:
+        "financial_documents!financial_installments_document_id_fkey!inner(direction,description)",
       paths: {
         direcao: "financial_documents.direction",
         descricao: "financial_documents.description",

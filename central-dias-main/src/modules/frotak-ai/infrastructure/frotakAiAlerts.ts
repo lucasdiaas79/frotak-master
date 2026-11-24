@@ -198,7 +198,11 @@ async function fuelOutliers(supabase: SupabaseServer, context: FrotakAiContext) 
 async function installments(supabase: SupabaseServer, context: FrotakAiContext) {
   const { data, error } = await supabase
     .from("financial_installments")
-    .select("balance, due_date, financial_documents!inner(direction)")
+    // Ha duas chaves para financial_documents (a simples e a de tenant): sem nomear, o PostgREST
+    // recusa o embed e o alerta de contas vencidas nunca saia.
+    .select(
+      "balance, due_date, financial_documents!financial_installments_document_id_fkey!inner(direction)",
+    )
     .eq("tenant_id", context.tenantId)
     .in("status", ["open", "partially_settled"])
     .lte("due_date", dateOnly(7))
