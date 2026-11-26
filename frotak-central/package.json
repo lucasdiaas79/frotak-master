@@ -15,7 +15,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test:control-panel": "node --experimental-strip-types --test scripts/test-control-panel-module.ts",
-    "test:client-admin": "node --experimental-strip-types --import ./scripts/alias-loader.mjs --test scripts/test-client-admin-module.ts"
+    "test:client-admin": "node --experimental-strip-types --import ./scripts/alias-loader.mjs --test scripts/test-client-admin-module.ts",
+    "test:notifications": "node --experimental-strip-types --import ./scripts/alias-loader.mjs --test scripts/test-notifications-module.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

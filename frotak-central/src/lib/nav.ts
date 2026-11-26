@@ -1,6 +1,7 @@
 import {
   Activity,
   Bell,
+  BellRing,
   Building2,
   Gauge,
   Headphones,
@@ -32,6 +33,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: "Dashboard", to: "/", icon: LayoutDashboard },
       { label: "Clientes", to: "/clientes", icon: Building2, badge: "128" },
+      { label: "Notificacoes", to: "/notificacoes", icon: BellRing },
       { label: "Operacoes", to: "/operacoes", icon: Activity },
       { label: "Mapa Global", to: "/mapa", icon: Map },
       { label: "Alertas", to: "/alertas", icon: Bell, badge: "9" },

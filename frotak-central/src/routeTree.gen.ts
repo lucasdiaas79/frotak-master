@@ -25,6 +25,7 @@ import { Route as IntegracoesRouteImport } from './routes/integracoes'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MapaRouteImport } from './routes/mapa'
 import { Route as MonitoramentoRouteImport } from './routes/monitoramento'
+import { Route as NotificacoesRouteImport } from './routes/notificacoes'
 import { Route as OperacoesRouteImport } from './routes/operacoes'
 import { Route as PartnersRouteImport } from './routes/partners'
 import { Route as PerfilRouteImport } from './routes/perfil'
@@ -120,6 +121,11 @@ const MapaRoute = MapaRouteImport.update({
 const MonitoramentoRoute = MonitoramentoRouteImport.update({
   id: '/monitoramento',
   path: '/monitoramento',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotificacoesRoute = NotificacoesRouteImport.update({
+  id: '/notificacoes',
+  path: '/notificacoes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OperacoesRoute = OperacoesRouteImport.update({
@@ -220,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/mapa': typeof MapaRoute
   '/monitoramento': typeof MonitoramentoRoute
+  '/notificacoes': typeof NotificacoesRoute
   '/operacoes': typeof OperacoesRoute
   '/partners': typeof PartnersRouteWithChildren
   '/perfil': typeof PerfilRoute
@@ -254,6 +261,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/mapa': typeof MapaRoute
   '/monitoramento': typeof MonitoramentoRoute
+  '/notificacoes': typeof NotificacoesRoute
   '/operacoes': typeof OperacoesRoute
   '/partners': typeof PartnersRouteWithChildren
   '/perfil': typeof PerfilRoute
@@ -289,6 +297,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/mapa': typeof MapaRoute
   '/monitoramento': typeof MonitoramentoRoute
+  '/notificacoes': typeof NotificacoesRoute
   '/operacoes': typeof OperacoesRoute
   '/partners': typeof PartnersRouteWithChildren
   '/perfil': typeof PerfilRoute
@@ -325,6 +334,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/mapa'
     | '/monitoramento'
+    | '/notificacoes'
     | '/operacoes'
     | '/partners'
     | '/perfil'
@@ -359,6 +369,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/mapa'
     | '/monitoramento'
+    | '/notificacoes'
     | '/operacoes'
     | '/partners'
     | '/perfil'
@@ -393,6 +404,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/mapa'
     | '/monitoramento'
+    | '/notificacoes'
     | '/operacoes'
     | '/partners'
     | '/perfil'
@@ -428,6 +440,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MapaRoute: typeof MapaRoute
   MonitoramentoRoute: typeof MonitoramentoRoute
+  NotificacoesRoute: typeof NotificacoesRoute
   OperacoesRoute: typeof OperacoesRoute
   PartnersRoute: typeof PartnersRouteWithChildren
   PerfilRoute: typeof PerfilRoute
@@ -552,6 +565,13 @@ declare module '@tanstack/react-router' {
       path: '/monitoramento'
       fullPath: '/monitoramento'
       preLoaderRoute: typeof MonitoramentoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notificacoes': {
+      id: '/notificacoes'
+      path: '/notificacoes'
+      fullPath: '/notificacoes'
+      preLoaderRoute: typeof NotificacoesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/operacoes': {
@@ -753,6 +773,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MapaRoute: MapaRoute,
   MonitoramentoRoute: MonitoramentoRoute,
+  NotificacoesRoute: NotificacoesRoute,
   OperacoesRoute: OperacoesRoute,
   PartnersRoute: PartnersRouteWithChildren,
   PerfilRoute: PerfilRoute,

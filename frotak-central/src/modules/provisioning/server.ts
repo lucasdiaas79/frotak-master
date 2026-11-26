@@ -11,6 +11,25 @@ import { AgentClientDatabaseGateway } from "@/modules/provisioning/infrastructur
 import { SupabaseClientRegistry } from "@/modules/provisioning/infrastructure/supabase-client-registry";
 import { SupabaseIdentityGateway } from "@/modules/provisioning/infrastructure/supabase-identity-gateway";
 import { SupabaseTenantProvisioner } from "@/modules/provisioning/infrastructure/supabase-tenant-provisioner";
+import { AgentNotificationRuleDistributor } from "@/modules/notifications/infrastructure/agent-rule-distributor";
+import { SupabaseNotificationRuleRepository } from "@/modules/notifications/infrastructure/supabase-notification-rules";
+
+/**
+ * Banco por cliente: o cliente novo ja nasce com as regras de notificacao do Master. Falha aqui nao
+ * desfaz o cliente; o botao "Reenviar para os clientes" (Notificacoes) completa depois.
+ */
+async function copyNotificationRules(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  log: (stage: string, details?: Record<string, unknown>) => void,
+) {
+  try {
+    const rules = await new SupabaseNotificationRuleRepository(supabase).list();
+    const report = await new AgentNotificationRuleDistributor(supabase).distribute(rules);
+    log("notification-rules", { clients: report.clients, failures: report.failures.length });
+  } catch {
+    log("notification-rules-failed");
+  }
+}
 
 export const provisionTenantFn = createServerFn({ method: "POST" })
   .middleware([platformAuth])
@@ -32,7 +51,10 @@ export const provisionTenantFn = createServerFn({ method: "POST" })
           },
           context.actor,
           data,
-        );
+        ).then(async (result) => {
+          await copyNotificationRules(supabase, log);
+          return result;
+        });
       }
 
       return provisionTenant(
