@@ -1,23 +1,28 @@
-<!-- LOVABLE:BEGIN -->
+# FrotaK · repositório
 
 > [!IMPORTANT]
-> This project is connected to [Lovable](https://lovable.dev). Avoid rewriting
-> published git history — force pushing, or rebasing/amending/squashing commits
-> that are already pushed — as it rewrites history on Lovable's side and the
-> user will likely lose their project history.
->
-> Commits you push to the connected branch sync back to Lovable and show up in
-> the editor, so keep the branch in a working state.
+> Este repositório já foi ligado ao [Lovable](https://lovable.dev). Não reescreva histórico já
+> publicado (force push, rebase, amend ou squash de commits enviados). Desde 2026-11-26 os apps não
+> ficam mais na raiz, então o Lovable não edita mais o código; a Vercel publica cada app pela pasta
+> configurada em "Root Directory".
 
-<!-- LOVABLE:END -->
+## Estrutura
 
+| Pasta | O que é | Instruções |
+|---|---|---|
+| `frotak-central/` | **Central (Master)**: painel da equipe FrotaK. Cadastra clientes, liga módulos, cria o ambiente de cada cliente, painel de infraestrutura | `frotak-central/AGENTS.md` |
+| `frotak-tms/` | **TMS**: sistema da transportadora cliente (frota, financeiro, Frotak IA, rastreadores, motorista) | `frotak-tms/AGENTS.md` |
+| `supabase/` | Migrations e testes SQL do banco, **compartilhados pelos dois apps** (mesmo esquema no banco único e em cada banco de cliente) | — |
+| `deploy/` | Instalação e operação das VPS (Serviço e Banco) | `deploy/README.md` |
+| `docs/` | Documentação de arquitetura e checkpoints | `ARQUITETURA-ATUAL-E-MUDANCAS.md` |
+| `scripts/` | Utilitários do repositório inteiro (`dev-all.ps1` sobe os dois apps) | — |
 
-<!-- FROTAK-AGENTS:START -->
-# FrotaK Agents — FrotaK Master
+Cada app é um projeto independente (próprio `package.json`, `node_modules`, lint e testes). Rode os
+comandos dentro da pasta do app, ou pelos atalhos do `package.json` da raiz.
 
-Leia .frotak/RESUME.md e .frotak/project.json antes de iniciar.
-Carregue somente skills e referências do módulo afetado.
-Conhecimento instalado em .frotak/knowledge/. Estado operacional no portal/CLI FrotaK Agents.
-Mantenha o controle Jaxx existente quando presente. Não declare revisão independente sem outro executor.
-Confirme a revisão Git e as limitações do checkpoint antes de reutilizar uma validação.
-<!-- FROTAK-AGENTS:END -->
+## Regras que valem para os dois apps
+
+- Todo código novo funciona nos dois modos: banco único (produção atual) e banco por cliente (VPS).
+- Migration nova vai em `supabase/migrations/` na raiz; o agente da VPS de banco aplica no modelo,
+  no Central e em cada cliente.
+- Commits em Conventional Commits.

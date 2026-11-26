@@ -3,7 +3,7 @@
 //   - motorista "Motorista Demo" (telefone (00) 00000-0001) no app do motorista;
 //   - usuario do portal do embarcador "Cervejaria Exemplo".
 //
-// Uso (na pasta central-dias-main, com SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env):
+// Uso (na pasta frotak-tms, com SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env):
 //   node --env-file=.env scripts/driver-ops-demo-logins.mjs <senha-motorista> <senha-embarcador>
 //
 // Idempotente: se o login existe, so atualiza a senha e o vinculo. Nao mexe em outro tenant.

@@ -69,7 +69,7 @@ Regras que o build garante:
 - A equipe FrotaK precisa de sessão com 2FA (`aal2`) em três pontos: login (`src/lib/auth.ts`), servidor (`resolvePlatformActor`) e banco (`private.is_platform_user`).
 - Erros saem pelo `runUseCase`: um `DomainError` chega à tela com a mensagem; falha de infraestrutura vai para o log e o operador vê uma mensagem genérica.
 
-## Estrutura do código do TMS (`central-dias-main`)
+## Estrutura do código do TMS (`frotak-tms`)
 
 Cada módulo que o Master liga e desliga tem sua pasta, com o mesmo código usado no banco e no Master:
 
@@ -89,7 +89,7 @@ src/
   routes/              só definição de rota (URL, título, SSR); a tela vem do módulo
 ```
 
-Dentro de cada módulo as dependências apontam para dentro, e o lint barra o que quebrar a regra (`central-dias-main/eslint.architecture.js`):
+Dentro de cada módulo as dependências apontam para dentro, e o lint barra o que quebrar a regra (`frotak-tms/eslint.architecture.js`):
 
 | Pasta | O que tem | Pode importar |
 |---|---|---|
@@ -149,7 +149,7 @@ flowchart LR
 
 1. **Banco**: uma migration nova insere o módulo em `public.modules` com `platform_product_id` e `sort_order`. Se o módulo já existe em uso, faça o backfill de `workspace_modules` para não cortar ninguém.
 2. **Master**: acrescente o código em `ModuleCode` e em `modules` de `src/modules/catalog/domain/catalog.ts`. A tela de gerenciar e o formulário de cliente novo passam a mostrar o módulo sozinhos.
-3. **TMS**: acrescente o código em `ModuleCode` (`central-dias-main/src/lib/entitlements.ts`), crie `src/modules/<modulo>/module.ts` com rotas e menu e inclua o manifesto em `src/modules/registry.ts`. O código do módulo vai nas pastas do próprio módulo; a rota em `src/routes` só importa a tela.
+3. **TMS**: acrescente o código em `ModuleCode` (`frotak-tms/src/lib/entitlements.ts`), crie `src/modules/<modulo>/module.ts` com rotas e menu e inclua o manifesto em `src/modules/registry.ts`. O código do módulo vai nas pastas do próprio módulo; a rota em `src/routes` só importa a tela.
 4. **Bloqueio de verdade**: chame `assertWorkspaceModule` na server function do módulo e/ou `private.workspace_has_module` na RPC ou policy. Esconder no menu não basta.
 5. Atualize a tabela acima e `supabase/tests/master_product_module_entitlements.sql`.
 

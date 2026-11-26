@@ -2,7 +2,7 @@
 
 ## UI-01: shell e estados
 
-`AppLayout.tsx` implementa sidebar expansivel, grupos operacionais/cadastros/financeiro/administracao/suporte, cabecalho, busca global, notificacoes, tema, perfil e navegacao mobile. `__root.tsx` inclui 404 e Toaster. `PageHeader`, `Modal`, `components/frotak/*` e `components/ui/*` concentram geometria e interacoes. Contrato visual canonico: `central-dias-main/AGENTS.md` e `.frotak/knowledge/global/visual.md` do Cliente.
+`AppLayout.tsx` implementa sidebar expansivel, grupos operacionais/cadastros/financeiro/administracao/suporte, cabecalho, busca global, notificacoes, tema, perfil e navegacao mobile. `__root.tsx` inclui 404 e Toaster. `PageHeader`, `Modal`, `components/frotak/*` e `components/ui/*` concentram geometria e interacoes. Contrato visual canonico: `frotak-tms/AGENTS.md` e `.frotak/knowledge/global/visual.md` do Cliente.
 
 Busca global cruza registros carregados e oferece navegação/foco; nao e busca em todo banco remoto. Tema e recolhimento sao preferencias de browser. Sair limpa sessao/cache e redireciona para login central. Nao foram acionados logout ou preferencias nesta auditoria.
 

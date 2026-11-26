@@ -21,15 +21,16 @@ build_app() {
   runuser -u frotak -- env -i PATH="$PATH" HOME=/var/lib/frotak-app NITRO_PRESET=node-server \
     bash -c "set -a; . /etc/frotak/build.env; set +a; cd '$dir' && npm ci --no-audit --no-fund --loglevel=error && npm run build"
 }
+# Cada app tem a propria pasta no pacote: frotak-central (Master) e frotak-tms (cliente).
 echo "construindo Master"
-build_app "$build_dir" > /var/lib/frotak-app/build-master.log 2>&1 || { tail -25 /var/lib/frotak-app/build-master.log; exit 1; }
+build_app "$build_dir/frotak-central" > /var/lib/frotak-app/build-master.log 2>&1 || { tail -25 /var/lib/frotak-app/build-master.log; exit 1; }
 echo "construindo TMS"
-build_app "$build_dir/central-dias-main" > /var/lib/frotak-app/build-tms.log 2>&1 || { tail -25 /var/lib/frotak-app/build-tms.log; exit 1; }
+build_app "$build_dir/frotak-tms" > /var/lib/frotak-app/build-tms.log 2>&1 || { tail -25 /var/lib/frotak-app/build-tms.log; exit 1; }
 
 rm -rf "$release_dir"
 install -d "$release_dir"
-cp -a "$build_dir/.output" "$release_dir/master"
-cp -a "$build_dir/central-dias-main/.output" "$release_dir/tms"
+cp -a "$build_dir/frotak-central/.output" "$release_dir/master"
+cp -a "$build_dir/frotak-tms/.output" "$release_dir/tms"
 chown -R root:root "$release_dir"
 chmod -R a+rX "$release_dir"
 rm -rf "$build_dir"

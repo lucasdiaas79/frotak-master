@@ -1,7 +1,7 @@
 // Cria o login de dono da central para o tenant de demonstracao da operacao com embarcador
 // (operacao-embarcador-demo). So cria perfil e vinculo nesse workspace.
 //
-// Uso (na pasta central-dias-main, com SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no env):
+// Uso (na pasta frotak-tms, com SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no env):
 //   node --env-file=<.env> scripts/driver-ops-demo-central-login.mjs <senha (8+)>
 
 import { createClient } from "@supabase/supabase-js";

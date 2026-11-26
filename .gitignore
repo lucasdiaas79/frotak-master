@@ -43,16 +43,16 @@ workspace-check.png
 
 .env*
 
-# Nested client app artifacts
-central-dias-main/node_modules/
-central-dias-main/.output/
-central-dias-main/.tanstack/
-central-dias-main/.nitro/
-central-dias-main/.vercel/
-central-dias-main/.wrangler/
-central-dias-main/dist/
-central-dias-main/build/
-central-dias-main/.env*
-!central-dias-main/.env.example
-central-dias-main/supabase/
+# Artefatos dos dois apps (frotak-central e frotak-tms)
+frotak-*/node_modules/
+frotak-*/.output/
+frotak-*/.tanstack/
+frotak-*/.nitro/
+frotak-*/.vercel/
+frotak-*/.wrangler/
+frotak-*/dist/
+frotak-*/build/
+frotak-*/.env*
+!frotak-*/.env.example
+frotak-tms/supabase/
 __pycache__/

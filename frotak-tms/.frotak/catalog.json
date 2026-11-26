@@ -9,7 +9,7 @@
     "tags": [],
     "documents": [],
     "projectId": "cliente",
-    "currentState": "Checkout identificado como aplicação central-dias-main. Regras de domínio e validação atual precisam de inventário por módulo.",
+    "currentState": "Checkout identificado como aplicação frotak-tms. Regras de domínio e validação atual precisam de inventário por módulo.",
     "owner": "FrotaK",
     "repository": "https://github.com/finty123/centralnovo.git",
     "localPath": "",
@@ -31,7 +31,7 @@
       "Registrar comandos reais de verificação.",
       "Abrir sessão e produzir checkpoint atual."
     ],
-    "repositorySubdirectory": "central-dias-main",
+    "repositorySubdirectory": "frotak-tms",
     "inventoryDate": "2026-10-14",
     "inventoryEvidence": "Origem Git e documentação local conferidas; não é certificação atual de produção."
   },

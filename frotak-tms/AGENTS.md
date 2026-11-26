@@ -11,7 +11,7 @@ Confirme a revisão Git e as limitações do checkpoint antes de reutilizar uma 
 
 ## Contrato obrigatório de frontend
 
-Toda alteração visual em `central-dias-main` deve carregar a skill
+Toda alteração visual em `frotak-tms` deve carregar a skill
 `design-system-guardian` e consultar `.frotak/knowledge/global/visual.md` e
 `.frotak/knowledge/legacy/brand/INTERIORS.md` antes de editar código.
 

@@ -6,7 +6,7 @@ Atualizacao de evidencia: o deploy usa revisao posterior ao checkout; [versao-pu
 
 ## ARCH-01: limites do produto
 
-`central-dias-main` e o FrotaK Cliente compartilhado por tenants. A raiz hospeda o Master e a pasta `supabase/` compartilhada. O app motorista e um consumidor externo: existem contratos SQL e provisionamento no checkout, mas isso nao comprova presenca do frontend atual do motorista. O frontend publicado em `centralnovo.vercel.app` foi uma referencia historica e nao e a fonte desta auditoria.
+`frotak-tms` e o FrotaK Cliente compartilhado por tenants. A raiz hospeda o Master e a pasta `supabase/` compartilhada. O app motorista e um consumidor externo: existem contratos SQL e provisionamento no checkout, mas isso nao comprova presenca do frontend atual do motorista. O frontend publicado em `centralnovo.vercel.app` foi uma referencia historica e nao e a fonte desta auditoria.
 
 ```mermaid
 flowchart LR
@@ -31,7 +31,7 @@ flowchart LR
 
 ## ARCH-02: runtime
 
-Fonte: `central-dias-main/package.json`, `vite.config.ts`, `src/router.tsx`, `src/routes/__root.tsx`.
+Fonte: `frotak-tms/package.json`, `vite.config.ts`, `src/router.tsx`, `src/routes/__root.tsx`.
 
 | Camada | Implementacao existente | Contrato de manutencao |
 |---|---|---|
@@ -39,7 +39,7 @@ Fonte: `central-dias-main/package.json`, `vite.config.ts`, `src/router.tsx`, `sr
 | Build | `@lovable.dev/vite-tanstack-config`, `nitro/vite` | Config Lovable ja injeta plugins e alias; duplicar plugins pode quebrar build. Cloudflare desabilitado explicitamente. |
 | Estado | Zustand `src/lib/store.ts` | Fonte operacional central; CRUD delega a services e mappers. |
 | Dados | Supabase JS, Auth, PostgREST/RPC, Realtime, Storage | Diferenciar cliente com JWT do cliente administrativo de servidor. |
-| UI | Tailwind 4, Radix, componentes compartilhados, lucide | Contrato visual em `central-dias-main/AGENTS.md`; nao copiar regras visuais aqui. |
+| UI | Tailwind 4, Radix, componentes compartilhados, lucide | Contrato visual em `frotak-tms/AGENTS.md`; nao copiar regras visuais aqui. |
 | Operacao | dnd-kit, Leaflet, datas, formatos | Drag abre fluxo manual; posicao nao e avancar etapa automaticamente em todos os casos. |
 | Exportacao | jsPDF, JSZip, Blob/CSV | Downloads podem conter dados de negocio; nao foram gerados nesta auditoria. |
 | IA | `@google/genai`, server functions, Web Audio/Live | Tokens efemeros para voz; financeiro da IA exige owner. |

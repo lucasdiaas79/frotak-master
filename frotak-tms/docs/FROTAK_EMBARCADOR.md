@@ -6,7 +6,7 @@ Junta todas as transportadoras que usam a Frotak, os terceiros que levam a carga
 ## Ver rodando no seu computador (sem banco)
 
 ```bash
-cd central-dias-main
+cd frotak-tms
 npm install
 npm run dev
 ```

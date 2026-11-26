@@ -4,7 +4,7 @@ Este e um roteiro de manutencao documental, nao autorizacao para alterar ambient
 
 ## RUN-01: recuperar o contexto certo
 
-1. Confirmar raiz Git, branch, HEAD e alteracoes locais. O nome do repositorio contem master, mas o produto auditado esta em `central-dias-main`. Nao presumir que o deploy acompanha o HEAD local.
+1. Confirmar raiz Git, branch, HEAD e alteracoes locais. O nome do repositorio contem master, mas o produto auditado esta em `frotak-tms`. Nao presumir que o deploy acompanha o HEAD local.
 2. Ler `AGENTS.md`, `.frotak/RESUME.md` e `.frotak/project.json` da raiz e do Cliente. O manifesto raiz identifica Master; o manifesto interno identifica Cliente. As limitacoes historicas dos manifests nao substituem o checkpoint desta auditoria.
 3. Ler somente os contratos e skills necessarios ao modulo. Fontes canonicas ficam em `.frotak/knowledge/` e `.agents/skills/`; nao criar outra copia editavel aqui.
 4. Consultar o documento do modulo, IDs ROT/CTL/SUP e regra RULE correspondente. Abrir o handler e seguir o servico/RPC ate banco ou integracao. Referencias candidatas do inventario precisam de confirmacao humana.

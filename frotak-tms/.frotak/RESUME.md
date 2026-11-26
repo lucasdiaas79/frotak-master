@@ -5,7 +5,7 @@ Módulos: visão de projeto
 Catálogo: b04ad16359a70de9a76657b146aa679719f3b22542d7db5334cefa736ad5c0c6
 
 ## Estado
-Checkout identificado como aplicação central-dias-main. Regras de domínio e validação atual precisam de inventário por módulo.
+Checkout identificado como aplicação frotak-tms. Regras de domínio e validação atual precisam de inventário por módulo.
 
 ## Contratos ativos
 - frotak-governance v1.0.0: Precedência, continuidade, verificação e autonomia dos produtos.

@@ -5,7 +5,7 @@ import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 
 const root = path.resolve(import.meta.dirname, '../../..');
-const require = createRequire(path.join(root, 'central-dias-main/package.json'));
+const require = createRequire(path.join(root, 'frotak-tms/package.json'));
 const ts = require('typescript');
 const targetRevision = process.argv.find(a=>a.startsWith('--revision='))?.slice(11);
 const revision = targetRevision || execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
@@ -16,9 +16,9 @@ const walk = p => fs.existsSync(p) ? fs.readdirSync(p, { withFileTypes: true }).
 const id = (prefix, s) => `${prefix}-${crypto.createHash('sha256').update(s).digest('hex').slice(0, 12)}`;
 const clean = s => String(s ?? '').replace(/\s+/g, ' ').trim().replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi, '[email]').replace(/\b[A-Z]{3}[- ]?\d[A-Z0-9]\d{2}\b/g, '[placa]').replace(/\b123456\b/g, '[credencial-omitida]').replace(/\b\d{10,14}\b/g, '[numero]').slice(0, 220);
 const save = (name, rows) => fs.writeFileSync(path.join(out, `${name}.json`), (Array.isArray(rows) ? '[\n'+rows.map(r=>JSON.stringify(r)).join(',\n')+'\n]' : JSON.stringify(rows, null, 2)) + '\n');
-const revisionPaths = targetRevision ? execFileSync('git',['ls-tree','-r','--name-only',targetRevision,'--','central-dias-main/src','central-dias-main/server','central-dias-main/scripts','supabase/migrations'],{cwd:root,encoding:'utf8'}).trim().split('\n') : [];
+const revisionPaths = targetRevision ? execFileSync('git',['ls-tree','-r','--name-only',targetRevision,'--','frotak-tms/src','frotak-tms/server','frotak-tms/scripts','supabase/migrations'],{cwd:root,encoding:'utf8'}).trim().split('\n') : [];
 const readSource = p => targetRevision ? execFileSync('git',['show',`${targetRevision}:${rel(p)}`],{cwd:root,encoding:'utf8',maxBuffer:8*1024*1024}) : fs.readFileSync(p,'utf8');
-const files = (targetRevision ? revisionPaths.filter(p=>/^central-dias-main\/(src|server)\//.test(p)).map(p=>path.join(root,p)) : [...walk(path.join(root, 'central-dias-main/src')), ...walk(path.join(root, 'central-dias-main/server'))]).filter(p => /\.tsx?$/.test(p) && !p.endsWith('routeTree.gen.ts'));
+const files = (targetRevision ? revisionPaths.filter(p=>/^frotak-tms\/(src|server)\//.test(p)).map(p=>path.join(root,p)) : [...walk(path.join(root, 'frotak-tms/src')), ...walk(path.join(root, 'frotak-tms/server'))]).filter(p => /\.tsx?$/.test(p) && !p.endsWith('routeTree.gen.ts'));
 const routes = [], controls = [], surfaces = [], symbols = [], calls = [], imports = [], types = [], effects = [], guards = [], feedback = [], environment = [];
 const controlTags = /^(button|Button|Input|input|select|Select|textarea|Textarea|Checkbox|Switch|TabsTrigger|Toggle|ToggleGroupItem|Link|a|form|TableHead|th|Label|label|SelectItem|option|DropdownMenuItem|CommandItem|SheetTrigger|DialogTrigger|AccordionTrigger|summary|SimpleSelect|SelectorField|IconButton|Field|CheckLine|KpiButton)$/;
 const surfaceTags = /^(Modal|Dialog|DialogContent|Sheet|SheetContent|Drawer|DrawerContent|AlertDialog|Popover|PopoverContent|TabsContent|AccordionItem|Collapsible|DropdownMenuContent|details)$/;
@@ -96,7 +96,7 @@ for(const file of migrations){
 }
 save('rotas',routes);save('controles',controls);save('superficies',surfaces);save('simbolos',symbols);save('chamadas-dados',calls);save('imports',imports);save('tipos',types);save('efeitos-automaticos',effects);save('validacoes',guards);save('feedback',feedback);save('ambiente-referencias',environment);save('sql-declaracoes',sqlObjects);save('sql-colunas',columns);save('sql-relacoes',relations);save('sql-seguranca-jobs',declarations);save('sql-contratos',sqlContracts);
 const sources=new Set(files.map(rel));
-function importedSources(source){return imports.filter(i=>i.source===source).flatMap(i=>{const base=i.module.startsWith('@/')?'central-dias-main/src/'+i.module.slice(2):i.module.startsWith('.')?path.posix.normalize(path.posix.join(path.posix.dirname(source),i.module)):'';return [base,base+'.ts',base+'.tsx',base+'/index.ts',base+'/index.tsx'].filter(p=>sources.has(p));});}
+function importedSources(source){return imports.filter(i=>i.source===source).flatMap(i=>{const base=i.module.startsWith('@/')?'frotak-tms/src/'+i.module.slice(2):i.module.startsWith('.')?path.posix.normalize(path.posix.join(path.posix.dirname(source),i.module)):'';return [base,base+'.ts',base+'.tsx',base+'/index.ts',base+'/index.tsx'].filter(p=>sources.has(p));});}
 function closure(source,seen=new Set()){if(seen.has(source))return seen;seen.add(source);for(const next of importedSources(source))closure(next,seen);return seen;}
 save('rotas-componentes',routes.map(r=>{const reach=closure(r.source);return{routeId:r.id,route:r.route,source:r.source,componentSources:[...reach].filter(p=>/\/components\//.test(p)&&!p.includes('/ui/')),controlIds:controls.filter(c=>reach.has(c.source)&&!c.source.includes('/ui/')).map(c=>c.id),surfaceIds:surfaces.filter(c=>reach.has(c.source)&&!c.source.includes('/ui/')).map(c=>c.id),limitation:'grafo estatico de imports; nao prova renderizacao nem ramo executado'};}));
 save('rpc-sql-rastreio',calls.filter(c=>c.operation==='rpc').map(c=>({...c,definitions:sqlObjects.filter(s=>s.kind==='function'&&s.name.replaceAll('"','').split('.').at(-1)===c.target).map(s=>({source:s.source,line:s.line})),limitation:'Ultima declaracao lexical nao inclui patches dinamicos por pg_get_functiondef/replace.'})));
@@ -105,7 +105,7 @@ const groups=[...new Set(controls.map(c=>c.source+'#'+c.owner))].map(key=>{const
 save('grupos-rastreabilidade',groups);
 save('component-data-sources',[...new Set(groups.map(g=>g.source))].map(source=>({source,candidates:[...closure(source)].filter(s=>/\/lib\/|\/server\//.test(s))})));
 save('matriz-controles',controls.map(c=>({controlId:c.id,groupId:id('GRP',c.source+'#'+c.owner)})));
-const tests=(targetRevision ? revisionPaths.filter(p=>p.startsWith('central-dias-main/scripts/')).map(p=>path.join(root,p)) : walk(path.join(root,'central-dias-main/scripts'))).filter(p=>/test-|cases/.test(p));
+const tests=(targetRevision ? revisionPaths.filter(p=>p.startsWith('frotak-tms/scripts/')).map(p=>path.join(root,p)) : walk(path.join(root,'frotak-tms/scripts'))).filter(p=>/test-|cases/.test(p));
 save('testes',tests.map(p=>({source:rel(p),status:'existente; execucao consultar evidencias',names:[...readSource(p).matchAll(/(?:test|it)\(\s*["'`]([^"'`]+)/g)].map(m=>clean(m[1]))})));
 const summary={revision,date:'2026-10-19',sourceFiles:files.length,routes:routes.length,controls:controls.length,surfaces:surfaces.length,symbols:symbols.length,dataCalls:calls.length,effects:effects.length,typeDeclarations:types.length,migrations:migrations.length,sqlDeclarations:sqlObjects.length,columnDeclarations:columns.length,relationDeclarations:relations.length,testFiles:tests.length,limitations:['AST nao e runtime; controles dinamicos podem gerar varios itens ou nenhum.','SQL e inventario lexical historico, nao dump de schema aplicado; blocos condicionais, SQL dinamico, redefinicoes e drops exigem leitura humana.','Nao foram lidos valores de ambiente nem dados de usuarios pelo gerador.','IDs estaveis por arquivo/contexto/tipo/rotulo; ocorrencias duplicadas usam ordinal, nao linha.','Matriz CTL -> GRP e candidata por componente; nao implica validacao semantica individual, OBS ou TEST.']};
 save('cobertura-estatica',summary);

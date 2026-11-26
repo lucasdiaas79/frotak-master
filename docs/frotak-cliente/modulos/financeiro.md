@@ -66,7 +66,7 @@ Formula basica de resultado=receita-custos; margem percentual com tratamento de 
 
 `FinancialRecurringPage`. Formulario: tipo, nome, favorecido/funcionario/motorista/veiculo, gerencial, apropriacao, valor, frequencia, dia de vencimento, mes inicial/final, gerar lancado e observacao. `saveFinancialRecurringRule`, alterar status, gerar competencia global ou por regra. Status ativo/pausado/cancelado conforme contrato. Gerar exige financial.manage_recurring, executa RPC mutavel e retorna generated/skipped por idempotencia. Nao acionado.
 
-Fonte canonica de scheduler: `central-dias-main/docs/FINANCIAL_RECURRING_SCHEDULER.md`. Cancelar regra nao equivale a estornar titulos passados. Frequencia/competencia/fim de mes devem ser testados contra SQL.
+Fonte canonica de scheduler: `frotak-tms/docs/FINANCIAL_RECURRING_SCHEDULER.md`. Cancelar regra nao equivale a estornar titulos passados. Frequencia/competencia/fim de mes devem ser testados contra SQL.
 
 ## MOD-FIN-PAYROLL: `/financeiro/salarios`
 

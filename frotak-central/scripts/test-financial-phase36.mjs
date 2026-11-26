@@ -23,7 +23,7 @@ function loadEnv(path) {
 
 const env = {
   ...loadEnv(".env.local"),
-  ...loadEnv("central-dias-main/.env.local"),
+  ...loadEnv("frotak-tms/.env.local"),
   ...process.env,
 };
 const url = env.SUPABASE_URL || env.VITE_SUPABASE_URL;

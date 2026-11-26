@@ -38,7 +38,7 @@ function normalizePlate(value) {
 }
 
 function readMigration(name) {
-  return readFileSync(resolve(ROOT, "central-dias-main", "supabase", "migrations", name), "utf8");
+  return readFileSync(resolve(ROOT, "frotak-tms", "supabase", "migrations", name), "utf8");
 }
 
 function extractValuesBlock(sql, marker) {
@@ -525,7 +525,7 @@ async function importCentralData(supabase, tenantId) {
       event_type: "cadastro_frota_importado",
       action_origin: "seed",
       metadata: {
-        source: "central-dias-main/supabase/migrations",
+        source: "frotak-tms/supabase/migrations",
         spreadsheetRow: item.rowNum,
         driverName: item.driverName,
         trailerText: item.trailerText,
@@ -543,7 +543,7 @@ async function importCentralData(supabase, tenantId) {
       direction: 0,
       source: "migration",
       raw_payload: {
-        source: "central-dias-main/supabase/migrations",
+        source: "frotak-tms/supabase/migrations",
         plate: vehicle.plate,
       },
       recorded_at: new Date().toISOString(),

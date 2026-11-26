@@ -92,7 +92,7 @@ for(const file of walk(docs)){
  }
  if(!file.endsWith('.mjs'))check(!/eyJ[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{15,}\.[A-Za-z0-9_-]{15,}|sb_secret_[A-Za-z0-9_-]{15,}|sk-proj-[A-Za-z0-9_-]{15,}/.test(text),`Padrao de segredo encontrado em ${path.relative(docs,file)}`);
 }
-const corpus=fs.readFileSync(path.join(repo,'central-dias-main/scripts/frotak-ai-v2-cases.ts'),'utf8');
+const corpus=fs.readFileSync(path.join(repo,'frotak-tms/scripts/frotak-ai-v2-cases.ts'),'utf8');
 const result={evidenceId:'EV-DOC-CHECK',date:'2026-10-19',ok:failures.length===0,checks:{jsonFilesParsed:jsonFiles,localMarkdownLinksChecked:links,individualControlsLinked:suites.map(s=>({revision:s.revision,count:s.controls})),uniqueIds:true,modelQuestionFixtures:(corpus.match(/\bquestion\s*:/g)??[]).length-1},coverage:suites,remoteSchema:{baseTables:remoteTables.size,views:catalog.tables.filter(t=>['v','m'].includes(t.kind)).length,columns:catalog.columns.length,policies:catalog.policies.length,triggers:catalog.triggers.length,functions:catalog.functions.length,constraints:catalog.constraints.length},failures,limitations:['Checagem documental nao executa aplicativo, queries de negocio ou integracoes.','Verifica estrutura/links/IDs/padroes de segredo, nao garante semantica individual completa nem ausencia de todos os dados pessoais.','OBS e TEST nao sao herdados automaticamente entre revisoes.']};
 write('evidencias/validacao-documental.json',result);
 console.log(JSON.stringify(result,null,2));

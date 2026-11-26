@@ -24,8 +24,8 @@ O repositório tem **dois sistemas**:
 
 | Sistema | Pasta | Para quem | O que faz |
 |---|---|---|---|
-| **Master** (também chamado de Central) | raiz do repositório | Equipe FrotaK | Cadastra clientes e escolhe os produtos e módulos de cada um. Cria e administra o ambiente de cada cliente e acompanha a infraestrutura |
-| **TMS** (sistema do cliente) | `central-dias-main/` | Transportadoras clientes | Gestão de frota, financeiro, Frotak IA, rastreadores, app do motorista |
+| **Master** (também chamado de Central) | `frotak-central/` | Equipe FrotaK | Cadastra clientes e escolhe os produtos e módulos de cada um. Cria e administra o ambiente de cada cliente e acompanha a infraestrutura |
+| **TMS** (sistema do cliente) | `frotak-tms/` | Transportadoras clientes | Gestão de frota, financeiro, Frotak IA, rastreadores, app do motorista |
 
 **Pilha:** React 19, TanStack Start, Vite e Supabase (Postgres, Auth, PostgREST, Realtime e Storage).
 
@@ -57,6 +57,7 @@ Todo código novo precisa funcionar **nos dois modos**.
 | **Banco** | Um Supabase hospedado para todos, com `tenant_id` e RLS | Mantido na produção. Nas VPS, **um banco por cliente**, criado a partir de um modelo, mais o banco do Central |
 | **Endereço do cliente** | Um único endereço do TMS; o cliente era descoberto pelo usuário logado | Cada cliente tem o próprio endereço (`<subdomínio>.<domínio base>`), que pode mudar. Aceita até 5 domínios do próprio cliente, com HTTPS automático |
 | **Infraestrutura** | Só Lovable, Vercel e Supabase hospedado | Mais duas VPS (Serviço e Banco) ligadas por WireGuard, com scripts de instalação em `deploy/` |
+| **Pastas** (2026-11-26) | Master na raiz do repositório e TMS dentro dele, em `central-dias-main/` | `frotak-central/` e `frotak-tms/` lado a lado; `supabase/` e `deploy/` na raiz, compartilhados. O Lovable não edita mais os apps; na Vercel, cada projeto aponta para a pasta do app |
 | **Backup** | O do Supabase hospedado | Diário, com cópia física e um arquivo por cliente; cópia na outra VPS; teste de restauração semanal; restauração de **um cliente só** |
 | **Monitoramento** | Nenhum | Painel de controle no Master com servidores, containers, bancos e tabelas, saúde por cliente, logs e backups |
 | **Auto-heal** | Nenhum | Uma sentinela em cada VPS reinicia sozinha o que caiu, com limite de tentativas, e avisa no painel |
@@ -116,7 +117,7 @@ Cada fase traz os commits principais. O histórico completo está em `git log 92
 
 ```
 frotak-master/
-├─ src/                          MASTER (front + back)
+├─ frotak-central/src/           MASTER / CENTRAL (front + back)
 │  ├─ core/
 │  │  ├─ domain/                 erros de domínio, ator da equipe e papéis
 │  │  ├─ auth/platform-auth.ts   middleware de toda server function (sessão + 2FA + papel)
@@ -130,7 +131,7 @@ frotak-master/
 │  ├─ components/kit, ui         componentes visuais do Master
 │  └─ routes/                    telas finas: clientes.tsx, clientes_.$slug.tsx, infraestrutura.tsx...
 │
-├─ central-dias-main/            TMS (front + back)
+├─ frotak-tms/                   TMS (front + back)
 │  ├─ src/server.ts              entrada do servidor: escolhe o cliente pelo endereço
 │  ├─ src/modules/<módulo>/      fleet-core, financial, frotak-ai, frotak-tracking, driver-app, cte-issuance
 │  │  ├─ module.ts               manifesto: código, rotas e itens de menu
@@ -185,7 +186,7 @@ Cada módulo tem um manifesto (`module.ts`) com o código do módulo, as rotas q
 | `container.ts` | Composição no navegador | Todas as camadas do módulo |
 | `ui/` | Telas e componentes | `domain/`, `container.ts` e `api/`, **nunca** `infrastructure/` |
 
-O lint (`central-dias-main/eslint.architecture.js`) barra o que fugir dessa tabela.
+O lint (`frotak-tms/eslint.architecture.js`) barra o que fugir dessa tabela.
 
 `src/server.ts` é a porta de entrada de toda requisição. No modo banco por cliente, ele:
 1. lê o endereço da requisição;
@@ -365,9 +366,9 @@ Ainda não têm botão: apagar cliente (existe `DELETE /clients/<id>` no agente)
 ### 6.1 Rodar localmente
 
 ```bash
-npm install && npm --prefix central-dias-main install
-npm run dev            # Master
-npm run dev:client     # TMS
+npm run install:all    # instala os dois apps (na raiz do repositório)
+npm run dev:central    # Master (Central), pasta frotak-central/
+npm run dev:tms        # TMS, pasta frotak-tms/
 ```
 
 Localmente o sistema roda em **banco único**: basta não definir `FROTAK_AGENT_URL`. Aponte `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` para um Supabase de teste. Para o fluxo de login entre os dois apps, use também `VITE_FROTAK_CLIENT_APP_URL` no Master e `VITE_FROTAK_MASTER_LOGIN_URL` no TMS.
@@ -376,8 +377,8 @@ Localmente o sistema roda em **banco único**: basta não definir `FROTAK_AGENT_
 
 | Onde | Como |
 |---|---|
-| Tela do Master | Componente em `src/modules/<módulo>/ui/`; a rota em `src/routes/` só importa. Reutilize `src/components/kit/ui-kit.tsx` e `src/components/ui/` |
-| Tela do TMS | Em `central-dias-main/src/modules/<módulo>/ui/`. Reutilize `src/components/frotak` e `src/components/ui`. A tela não importa `infrastructure/`; ela usa `container.ts` ou `api/` |
+| Tela do Master | Componente em `frotak-central/src/modules/<módulo>/ui/`; a rota em `src/routes/` só importa. Reutilize `src/components/kit/ui-kit.tsx` e `src/components/ui/` |
+| Tela do TMS | Em `frotak-tms/src/modules/<módulo>/ui/`. Reutilize `src/components/frotak` e `src/components/ui`. A tela não importa `infrastructure/`; ela usa `container.ts` ou `api/` |
 | Item de menu do TMS | No `module.ts` do módulo, nunca fixo no `AppLayout` |
 | Celular | Telas novas não podem ter rolagem lateral em 390 px. Em grade, use `min-w-0` nos filhos, e textos longos precisam poder quebrar |
 
@@ -415,11 +416,11 @@ O caso de uso fica em `application/`. Ele chama `assertCanOperate(actor)` quando
 
 | Comando | O que testa |
 |---|---|
-| `npx tsc --noEmit` (na raiz e em `central-dias-main`) | Tipos dos dois apps |
-| `npm run test:client-admin` | Ficha do cliente: regras e casos de uso com portas falsas |
-| `npm run test:control-panel` | Regras de saúde do painel |
-| `cd central-dias-main && npm run test:modules` | Casos de uso dos módulos do TMS, inclusive o endereço → cliente |
-| `cd central-dias-main && npm run test:frotak-ai` e `npm run test:visual` | Frotak IA e regras visuais |
+| `npx tsc --noEmit` (em `frotak-central` e em `frotak-tms`) | Tipos dos dois apps |
+| `cd frotak-central && npm run test:client-admin` | Ficha do cliente: regras e casos de uso com portas falsas |
+| `cd frotak-central && npm run test:control-panel` | Regras de saúde do painel |
+| `cd frotak-tms && npm run test:modules` | Casos de uso dos módulos do TMS, inclusive o endereço → cliente |
+| `cd frotak-tms && npm run test:frotak-ai` e `npm run test:visual` | Frotak IA e regras visuais |
 | `python3 -m unittest deploy/...` | Agente e sentinela |
 | Arquivos em `supabase/tests/*.sql` | Regras no banco (rodar num Supabase de teste, nunca no local `frota-master`) |
 

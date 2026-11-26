@@ -1,14 +1,14 @@
 {
-  "id": "cliente",
-  "name": "FrotaK Cliente",
-  "description": "Operação e administração do cliente de frotas.",
+  "id": "master",
+  "name": "FrotaK Master",
+  "description": "Administração dos clientes e provisionamento.",
   "scope": "project",
   "status": "active",
   "version": "1.0.0",
   "tags": [],
   "documents": [],
-  "projectId": "cliente",
-  "currentState": "Aplicação cliente multi-tenant compartilhada; frontend regido pelo contrato visual FrotaK e isolamento por workspace.",
+  "projectId": "master",
+  "currentState": "Monorepo FrotaK: Master (Central) em frotak-central/ e aplicação multi-tenant do cliente (TMS) em frotak-tms/, com supabase/ e deploy/ compartilhados na raiz.",
   "owner": "FrotaK",
   "repository": "https://github.com/lucasdiaas79/frotak-master.git",
   "localPath": "",
@@ -30,7 +30,7 @@
     "Registrar comandos reais de verificação.",
     "Abrir sessão e produzir checkpoint atual."
   ],
-  "repositorySubdirectory": "central-dias-main",
+  "repositorySubdirectory": "frotak-central",
   "inventoryDate": "2026-10-14",
   "inventoryEvidence": "Origem Git e documentação local conferidas; não é certificação atual de produção."
 }

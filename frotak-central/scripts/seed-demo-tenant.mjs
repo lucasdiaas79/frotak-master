@@ -69,7 +69,7 @@ function loadEnvFile(path) {
 
 function readMigration(name) {
   const candidates = [
-    resolve(ROOT, "central-dias-main", "supabase", "migrations", name),
+    resolve(ROOT, "frotak-tms", "supabase", "migrations", name),
     resolve(ROOT, "supabase", "migrations", name),
   ];
   for (const path of candidates) {
@@ -1441,7 +1441,7 @@ async function countTable(supabase, table, tenantId) {
 
 async function main() {
   loadEnvFile(resolve(ROOT, ".env.local"));
-  loadEnvFile(resolve(ROOT, "central-dias-main", ".env.local"));
+  loadEnvFile(resolve(ROOT, "frotak-tms", ".env.local"));
 
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

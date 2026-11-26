@@ -1,8 +1,8 @@
 # FrotaK Cliente: engenharia reversa documental
 
-Auditoria realizada em 2026-10-19. Checkout auditado: `central-dias-main/` do repositorio `lucasdiaas79/frotak-master`, branch `main`, commit `9acb0592f57db6299594035b1a17e4c0160a67af`. Naquela verificacao, o dominio real usava `974adae7cde3b1d02eec09fb7abf2b065df3a153`; ambas as revisoes foram inventariadas separadamente. Sao retratos historicos, nao comprovacao da versao publicada hoje.
+Auditoria realizada em 2026-10-19. Checkout auditado: `frotak-tms/` do repositorio `lucasdiaas79/frotak-master`, branch `main`, commit `9acb0592f57db6299594035b1a17e4c0160a67af`. Naquela verificacao, o dominio real usava `974adae7cde3b1d02eec09fb7abf2b065df3a153`; ambas as revisoes foram inventariadas separadamente. Sao retratos historicos, nao comprovacao da versao publicada hoje.
 
-Este diretorio documenta o **Cliente**, nao a aplicacao Master da raiz. A referencia de schema compartilhado e `supabase/migrations/` da raiz; as migrations antigas de `central-dias-main/supabase/` exigem tratamento historico. Nao executar seeds ou migrations como parte da leitura deste manual.
+Este diretorio documenta o **Cliente**, nao a aplicacao Master da raiz. A referencia de schema compartilhado e `supabase/migrations/` da raiz; as migrations antigas de `frotak-tms/supabase/` exigem tratamento historico. Nao executar seeds ou migrations como parte da leitura deste manual.
 
 ## Para que usar
 
@@ -17,7 +17,7 @@ Nao e o manual de uso publicado em `/manual`, nao e carregado automaticamente pe
 ## Como usar na pratica
 
 1. Leia [CHECKPOINT](CHECKPOINT.md) para conhecer revisoes, cobertura, exclusoes e pendencias.
-2. Confirme a pasta `central-dias-main`, o commit atual e o ambiente. Compare com a revisao auditada; linhas e comportamentos podem ter mudado.
+2. Confirme a pasta `frotak-tms`, o commit atual e o ambiente. Compare com a revisao auditada; linhas e comportamentos podem ter mudado.
 3. Consulte [arquitetura](arquitetura.md), [permissoes](dados-permissoes.md) e o [modulo](modulos/README.md) afetado.
 4. Procure a rota/controle nos inventarios. Siga seus IDs ate a regra, o handler e o servico/RPC; confirme o caminho no codigo atual. Associacao por import e candidata, nao prova de execucao.
 5. Antes de mudar algo, leia [rastreabilidade](rastreabilidade.md) e [lacunas](impacto-lacunas.md). Defina testes de erro, isolamento, concorrencia e efeitos em outros modulos.
@@ -53,4 +53,4 @@ Comece pelo checkpoint, arquitetura e permissoes. Depois use o inventario de rot
 
 Rotulos de evidencia: **COD** confirmado por leitura do codigo; **OBS** observado na interface; **TEST** teste executado e identificado; **HIST** relato/documento anterior; **INF** inferencia; **NE** nao executado; **BLQ** bloqueado. Uma declaracao JSX inventariada nao comprova que o controle foi renderizado, acionado ou testado.
 
-Fontes canonicas anteriores continuam em seus locais: `central-dias-main/docs/FINANCIAL_FOUNDATION_PHASE1.md`, `central-dias-main/docs/FINANCIAL_RECURRING_SCHEDULER.md`, manifests `.frotak`, `AGENTS.md`, contratos e testes. Aqui ficam referencias e diferencas verificadas, sem copiar essas fontes integralmente.
+Fontes canonicas anteriores continuam em seus locais: `frotak-tms/docs/FINANCIAL_FOUNDATION_PHASE1.md`, `frotak-tms/docs/FINANCIAL_RECURRING_SCHEDULER.md`, manifests `.frotak`, `AGENTS.md`, contratos e testes. Aqui ficam referencias e diferencas verificadas, sem copiar essas fontes integralmente.

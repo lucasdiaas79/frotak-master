@@ -1,10 +1,11 @@
 $ErrorActionPreference = "Stop"
 
-$root = Split-Path -Parent $PSScriptRoot
-$client = Join-Path $root "central-dias-main"
+$repo = Split-Path -Parent $PSScriptRoot
+$root = Join-Path $repo "frotak-central"
+$client = Join-Path $repo "frotak-tms"
 
-Write-Host "FrotaK Master:  http://127.0.0.1:5173"
-Write-Host "FrotaK Cliente: http://127.0.0.1:5174"
+Write-Host "FrotaK Central (Master): http://127.0.0.1:5173"
+Write-Host "FrotaK TMS (cliente):    http://127.0.0.1:5174"
 
 $masterJob = Start-Job -Name "frotak-master" -ScriptBlock {
   param($Path)

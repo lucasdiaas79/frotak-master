@@ -11,7 +11,6 @@ export default tseslint.config(
       "dist",
       ".output",
       ".vinxi",
-      "central-dias-main/**",
       "**/dist/**",
       "**/.output/**",
       "**/.vinxi/**",

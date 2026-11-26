@@ -31,11 +31,11 @@ Defaults no servidor: lote 3000, backfill inicial 8 paginas, recuperacao maxima 
 | JOB-SASCAR | `invoke_sascar_sync_cron`, migration `20260928095010*` | Despacha sincronizacao por workspaces configurados via pg_net | Credenciais nao se misturam; lock por workspace; nao consultar dispositivos para testar documentacao. |
 | JOB-FIN-INT | Alteracoes de frete/combustivel/despesa e triggers de integracao | `financial_integration_jobs` -> `private.process_financial_integration_job` -> titulos contabilizados conforme settings | Receita/ICMS/despesas reconhecidos por origem; `source_type/source_id/source_event`; erro nao deve virar valor zero certificado. |
 | JOB-FIN-RECON | `20260928154946*` agenda reconciliacao | `private.run_financial_integration_reconciliation` processa jobs vencidos, health conta retry/exhausted/review | Reprocessamento deve ser idempotente, respeitar max_attempts e registrar erro. |
-| JOB-RECUR | `run_financial_recurring_cron` diariamente, fonte `202609240001*` | Varre workspaces com regras ativas -> generate_due -> titulo por competencia | Fonte canonica: `central-dias-main/docs/FINANCIAL_RECURRING_SCHEDULER.md`. Fallback ao abrir titulos e mutavel. |
+| JOB-RECUR | `run_financial_recurring_cron` diariamente, fonte `202609240001*` | Varre workspaces com regras ativas -> generate_due -> titulo por competencia | Fonte canonica: `frotak-tms/docs/FINANCIAL_RECURRING_SCHEDULER.md`. Fallback ao abrir titulos e mutavel. |
 | JOB-MIRROR | Triggers sobre operacao/historico/parceiros | Espelha frete canonico, parceiros e eventos de auditoria | Nao substituir identidade UUID nem gerar segunda receita em espelhamento. |
 | JOB-DRIVER | RPC de conclusao/retorno/solicitacao no app | Ativa proximo trecho, fecha ciclo, registra odometro e pedidos de diarias | Retorno sem `current_freight_id` ainda pode ter ciclo aberto e botao Cheguei no patio. |
 
-Nao foram encontradas rotas de webhook de entrada dedicadas no inventario do Cliente; server functions e crons sao entradas externas concretas. Isso nao exclui consumidores/deploys fora deste checkout. Functions antigas `central-dias-main/supabase/functions/*` e scripts de importacao sao candidatos historicos, nao codigo descartavel comprovado.
+Nao foram encontradas rotas de webhook de entrada dedicadas no inventario do Cliente; server functions e crons sao entradas externas concretas. Isso nao exclui consumidores/deploys fora deste checkout. Functions antigas `frotak-tms/supabase/functions/*` e scripts de importacao sao candidatos historicos, nao codigo descartavel comprovado.
 
 ## Contratos de schema e erros
 
