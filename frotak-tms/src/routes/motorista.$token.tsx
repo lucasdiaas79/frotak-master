@@ -234,6 +234,40 @@ function TripTab({ view, act }: { view: DriverLinkView; act: Act }) {
     );
   }, [act]);
 
+  // Terceiro sem rastreador: se o celular ja liberou a localizacao antes, volta a enviar
+  // sozinho ao abrir o link, para o card do Kanban e o mapa acompanharem a viagem.
+  useEffect(() => {
+    if (view.demo || view.hasTracker || !view.active) return;
+    if (!navigator.permissions?.query) return;
+    let cancelled = false;
+    navigator.permissions
+      .query({ name: "geolocation" as PermissionName })
+      .then((permission) => {
+        if (!cancelled && permission.state === "granted") setSharing(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [view.demo, view.hasTracker, view.active]);
+
+  // Junto com cada status manda a posicao do momento, sem aviso se o celular negar.
+  const sendQuietly = useCallback(() => {
+    if (view.demo || view.hasTracker || !navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const ok = await act({
+          type: "posicao",
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        if (ok) setLastSent(new Date().toISOString());
+      },
+      () => undefined,
+      { enableHighAccuracy: true, timeout: 15_000 },
+    );
+  }, [act, view.demo, view.hasTracker]);
+
   useEffect(() => {
     if (!sharing) {
       if (timer.current) window.clearInterval(timer.current);
@@ -256,6 +290,7 @@ function TripTab({ view, act }: { view: DriverLinkView; act: Act }) {
     }
     const ok = await act({ type: "status", status: code, note });
     if (ok && view.demo) toast.success("Status enviado para a transportadora.");
+    if (ok && !sharing) sendQuietly();
   }
 
   const destination = [view.destination.name, view.destination.place].filter(Boolean).join(", ");

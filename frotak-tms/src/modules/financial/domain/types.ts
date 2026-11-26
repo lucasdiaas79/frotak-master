@@ -806,6 +806,16 @@ export interface ProfitabilityFilters {
   paymentType?: "CIF" | "FOB" | null;
 }
 
+/** Faturamento e resultado separados entre frota propria e terceiros. */
+export interface OwnershipProfitabilityRow {
+  ownership: "propria" | "terceiro";
+  revenue: number;
+  costs: number;
+  result: number;
+  margin: number;
+  freightCount: number;
+}
+
 export interface FleetProfitabilitySummary {
   revenue: number;
   costs: number;

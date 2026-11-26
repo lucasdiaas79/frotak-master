@@ -1,6 +1,7 @@
 import type {
   Driver,
   FleetEvent,
+  FleetOwnership,
   FleetEventSource,
   Recipient,
   Product,
@@ -12,6 +13,18 @@ import type {
 } from "@/lib/types";
 
 const nil = <T>(value: T | null | undefined) => value ?? undefined;
+
+// Sem a coluna (banco antes da migration) fica indefinido, e a tela trata como frota propria.
+function ownershipFromRow(value?: string | null): FleetOwnership | undefined {
+  if (value == null) return undefined;
+  return value === "terceiro" ? "terceiro" : "propria";
+}
+
+// So envia a coluna quando o cadastro informa a propriedade. Assim os saves continuam
+// funcionando em bancos que ainda nao receberam a migration de terceiros.
+function ownershipToRow(value?: FleetOwnership) {
+  return value ? { ownership: value } : {};
+}
 
 interface VehicleRow {
   id: string;
@@ -36,6 +49,7 @@ interface VehicleRow {
   type: string;
   fleet_seq?: number | null;
   fleet_kind?: string | null;
+  ownership?: string | null;
   brand?: string | null;
   model?: string | null;
   manufacture_year?: number | null;
@@ -79,6 +93,7 @@ interface DriverRow {
   cnh?: string | null;
   fleet_seq?: number | null;
   partner_role?: string | null;
+  ownership?: string | null;
   active: boolean;
   vehicle_id?: string | null;
   created_at?: string;
@@ -97,6 +112,7 @@ interface TrailerRow {
   renavam?: string | null;
   implement_type?: string | null;
   implement_model?: string | null;
+  ownership?: string | null;
   vehicle_id?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -177,6 +193,7 @@ export function vehicleFromRow(row: VehicleRow): Vehicle {
     type: row.type,
     fleetSeq: nil(row.fleet_seq),
     fleetKind: nil(row.fleet_kind),
+    ownership: ownershipFromRow(row.ownership),
     brand: nil(row.brand),
     model: nil(row.model),
     manufactureYear: nil(row.manufacture_year),
@@ -260,6 +277,7 @@ export function vehicleToRow(vehicle: Partial<Vehicle>) {
     lat: vehicle.lat ?? null,
     lng: vehicle.lng ?? null,
     sascar_id: vehicle.sascarId ?? null,
+    ...ownershipToRow(vehicle.ownership),
   };
 }
 
@@ -272,6 +290,7 @@ export function driverFromRow(row: DriverRow): Driver {
     cnh: row.cnh ?? "",
     fleetSeq: nil(row.fleet_seq),
     partnerRole: nil(row.partner_role),
+    ownership: ownershipFromRow(row.ownership),
     active: row.active,
     vehicleId: nil(row.vehicle_id),
     createdAt: row.created_at,
@@ -290,6 +309,7 @@ export function driverToRow(driver: Partial<Driver>) {
     partner_role: driver.partnerRole ?? null,
     active: driver.active ?? true,
     vehicle_id: driver.vehicleId ?? null,
+    ...ownershipToRow(driver.ownership),
   };
 }
 
@@ -306,6 +326,7 @@ export function trailerFromRow(row: TrailerRow): Trailer {
     renavam: nil(row.renavam),
     implementType: nil(row.implement_type),
     implementModel: nil(row.implement_model),
+    ownership: ownershipFromRow(row.ownership),
     vehicleId: nil(row.vehicle_id),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -326,6 +347,7 @@ export function trailerToRow(trailer: Partial<Trailer>) {
     implement_type: trailer.implementType ?? null,
     implement_model: trailer.implementModel ?? null,
     vehicle_id: trailer.vehicleId ?? null,
+    ...ownershipToRow(trailer.ownership),
   };
 }
 

@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase";
 import type {
   FleetProfitabilitySummary,
   FreightProfitabilityRow,
+  OwnershipProfitabilityRow,
   PartnerProfitabilityRow,
   ProfitabilityFilters,
   ProfitabilitySort,
@@ -45,6 +46,30 @@ export async function getFleetProfitabilitySummary(
     margin: numberValue(row.margin),
     unallocatedCosts: numberValue(row.unallocatedCosts),
   };
+}
+
+// Frota propria x terceiros no periodo. Se a funcao ainda nao existir no banco
+// (migration 202611260001 nao aplicada), devolve vazio e a tela esconde o bloco.
+export async function getOwnershipProfitability(
+  filters: ProfitabilityFilters,
+): Promise<OwnershipProfitabilityRow[]> {
+  const { data, error } = await supabase.rpc("get_fleet_profitability_by_ownership", {
+    p_workspace_id: filters.workspaceId,
+    p_start_date: filters.startDate,
+    p_end_date: filters.endDate,
+  });
+  if (error && (error.code === "PGRST202" || error.code === "42883")) return [];
+  fail("Nao foi possivel carregar frota propria x terceiros", error);
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+    ownership: (row.ownership === "terceiro"
+      ? "terceiro"
+      : "propria") as OwnershipProfitabilityRow["ownership"],
+    revenue: numberValue(row.revenue),
+    costs: numberValue(row.costs),
+    result: numberValue(row.result),
+    margin: numberValue(row.margin),
+    freightCount: numberValue(row.freightCount),
+  }));
 }
 
 export async function getVehicleProfitability(

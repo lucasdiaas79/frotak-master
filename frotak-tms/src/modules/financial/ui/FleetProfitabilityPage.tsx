@@ -33,6 +33,7 @@ import {
   getFinancialAccess,
   getFleetProfitabilitySummary,
   getFreightProfitability,
+  getOwnershipProfitability,
   getPartnerProfitability,
   getVehicleProfitability,
   listFinancialPartners,
@@ -41,6 +42,7 @@ import type {
   BusinessPartner,
   FleetProfitabilitySummary,
   FreightProfitabilityRow,
+  OwnershipProfitabilityRow,
   PartnerProfitabilityRow,
   ProfitabilityFilters,
   ProfitabilitySort,
@@ -365,6 +367,43 @@ function ExecutiveStrip({ summary }: { summary: FleetProfitabilitySummary }) {
   );
 }
 
+const OWNERSHIP_LABEL: Record<OwnershipProfitabilityRow["ownership"], string> = {
+  propria: "Frota própria",
+  terceiro: "Terceiros",
+};
+
+function OwnershipSplit({ rows }: { rows: OwnershipProfitabilityRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <section className="premium-card px-4 py-4 md:px-5">
+      <p className="label-tiny">Frota própria x terceiros</p>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        {rows.map((row) => (
+          <div key={row.ownership} className="rounded-2xl border border-border/70 bg-surface/40 p-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <strong className="text-[14px] font-extrabold text-foreground">
+                {OWNERSHIP_LABEL[row.ownership]}
+              </strong>
+              <span className="text-[11.5px] text-muted-foreground">
+                {row.freightCount} {row.freightCount === 1 ? "frete" : "fretes"}
+              </span>
+            </div>
+            <div className="financial-profitability-executive-line mt-2">
+              <MetricMini label="Faturamento" value={money(row.revenue)} icon={ArrowUp} />
+              <MetricMini label="Custos + despesas" value={money(row.costs)} icon={ArrowDown} />
+              <MetricMini
+                label={`Resultado · ${percent(row.margin)}`}
+                value={money(row.result)}
+                icon={TrendingUp}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function MetricMini({
   label,
   value,
@@ -562,6 +601,7 @@ export function FleetProfitabilityPage() {
   const [freightsProfit, setFreightsProfit] = useState<FreightProfitabilityRow[]>([]);
   const [partnersProfit, setPartnersProfit] = useState<PartnerProfitabilityRow[]>([]);
   const [partners, setPartners] = useState<BusinessPartner[]>([]);
+  const [ownershipRows, setOwnershipRows] = useState<OwnershipProfitabilityRow[]>([]);
   const [selectedItem, setSelectedItem] = useState<RankingItem | null>(null);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [rankingSearch, setRankingSearch] = useState("");
@@ -618,6 +658,7 @@ export function FleetProfitabilityPage() {
         setFreightsProfit(demoFreightsProfit);
         setPartnersProfit(demoPartnersProfit);
         setPartners(demoPartners);
+        setOwnershipRows([]);
         return;
       }
 
@@ -637,6 +678,13 @@ export function FleetProfitabilityPage() {
       setFreightsProfit(freightRows);
       setPartnersProfit(partnerRows);
       setPartners(partnerRowsRaw);
+      // Separado do resto: se falhar, a rentabilidade continua carregando.
+      getOwnershipProfitability(nextFilters)
+        .then(setOwnershipRows)
+        .catch((ownershipError) => {
+          console.warn("[profitability] ownership split unavailable", ownershipError);
+          setOwnershipRows([]);
+        });
     } catch (err) {
       console.error("[profitability] failed", err);
       setError("Nao foi possivel carregar a rentabilidade da frota. Tente novamente.");
@@ -980,6 +1028,8 @@ export function FleetProfitabilityPage() {
       </section>
 
       <ExecutiveStrip summary={summary} />
+
+      <OwnershipSplit rows={ownershipRows} />
 
       {summary.unallocatedCosts > 0 && (
         <div className="financial-profitability-warning">

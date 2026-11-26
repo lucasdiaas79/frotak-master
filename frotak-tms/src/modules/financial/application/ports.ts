@@ -34,6 +34,7 @@ import type {
   FinancialReportPeriod,
   FleetProfitabilitySummary,
   FreightProfitabilityRow,
+  OwnershipProfitabilityRow,
   PartnerProfitabilityRow,
   PayrollEntry,
   PayrollEntryInput,
@@ -143,6 +144,7 @@ export interface ProfitabilityPort {
   ): Promise<VehicleProfitabilityRow[]>;
   getFreightProfitability(filters: ProfitabilityFilters): Promise<FreightProfitabilityRow[]>;
   getPartnerProfitability(filters: ProfitabilityFilters): Promise<PartnerProfitabilityRow[]>;
+  getOwnershipProfitability(filters: ProfitabilityFilters): Promise<OwnershipProfitabilityRow[]>;
 }
 
 /** DRE, fluxo de caixa e painel financeiro. */

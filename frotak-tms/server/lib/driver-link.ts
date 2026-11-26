@@ -28,6 +28,10 @@ import type {
 //   freight_expenses), e cada acao fica em driver_link_events.
 // - Ele ve so o proprio acerto (valor combinado, adiantamentos e o que pagou do bolso),
 //   nunca o valor do frete nem o resultado da viagem para a transportadora.
+// - O link e so para terceiros. Frota propria recebe acesso ao app oficial do motorista
+//   (opcao "Frota propria" no painel do card).
+// - Os botoes de status movem o card no Kanban pelo mesmo fluxo de etapas
+//   (public.driver_link_advance_stage), e a posicao do celular atualiza o card e o mapa.
 
 type Row = Record<string, unknown>;
 
@@ -90,13 +94,19 @@ export async function createDriverTripLink(
   origin: string,
 ): Promise<{ url: string; expiresAt: string; driverName: string }> {
   const supabase = getSupabaseAdmin();
+  // select("*") para funcionar antes e depois da coluna ownership existir.
   const { data: vehicle } = await supabase
     .from("vehicles")
-    .select("id, tenant_id, current_freight_id, driver_id")
+    .select("*")
     .eq("id", input.vehicleId)
     .eq("tenant_id", ctx.tenantId)
     .maybeSingle();
   if (!vehicle) throw new DriverLinkError("not_found", "Veículo não encontrado.");
+  if (vehicle.ownership === "propria")
+    throw new DriverLinkError(
+      "forbidden",
+      "Caminhão da frota própria: use a opção Frota própria para liberar o app oficial.",
+    );
   if (!vehicle.current_freight_id)
     throw new DriverLinkError("invalid", "Este veículo não tem frete ativo.");
   if (!vehicle.driver_id)
@@ -113,9 +123,8 @@ export async function createDriverTripLink(
   const phone = phoneDigits(input.phone || String(driver.phone ?? ""));
   if (!/^[0-9]{12,13}$/.test(phone))
     throw new DriverLinkError("invalid", "Informe o celular do motorista com DDD.");
-  const relation: DriverRelation = ["frota", "agregado", "terceiro"].includes(input.relation)
-    ? input.relation
-    : "terceiro";
+  // So terceiros recebem o link. O campo continua no banco por compatibilidade.
+  const relation: DriverRelation = "terceiro";
 
   // Cadastro unico do motorista: o telefone e a chave.
   const { data: existing } = await supabase
@@ -464,6 +473,65 @@ async function averageKmPerLiter(tenantId: string, vehicleId: string) {
   return km > 0 && liters > 0 ? Math.round((km / liters) * 100) / 100 : undefined;
 }
 
+type StageResult = { moved: boolean; from?: string; to?: string };
+
+// Move o card pelo fluxo de etapas. Se a funcao ainda nao existir no banco
+// (migration 202611260001 nao aplicada), o status fica so registrado, como antes.
+async function advanceKanbanStage(link: Row, status: string): Promise<StageResult> {
+  const { data, error } = await getSupabaseAdmin().rpc("driver_link_advance_stage", {
+    p_link_id: link.id,
+    p_status: status,
+  });
+  if (error) {
+    if (error.code === "PGRST202" || error.code === "42883") return { moved: false };
+    throw error;
+  }
+  const result = (data ?? {}) as Row;
+  return {
+    moved: result.moved === true,
+    from: text(result.from),
+    to: text(result.to),
+  };
+}
+
+function distanceKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  if (![lat1, lng1].every(Number.isFinite) || (lat1 === 0 && lng1 === 0)) return Infinity;
+  const rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad;
+  const dLng = (lng2 - lng1) * rad;
+  const a =
+    Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function reverseCityState(lat: number, lng: number): Promise<{ city?: string; state?: string }> {
+  try {
+    const params = new URLSearchParams({
+      format: "jsonv2",
+      lat: String(lat),
+      lon: String(lng),
+      addressdetails: "1",
+      zoom: "10",
+    });
+    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params}`, {
+      headers: { "Accept-Language": "pt-BR,pt;q=0.9", "User-Agent": "FrotaK/1.0" },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!response.ok) return {};
+    const row = (await response.json()) as { address?: Record<string, string> };
+    const address = row.address ?? {};
+    const iso = address["ISO3166-2-lvl4"];
+    return {
+      city: text(
+        address.city || address.town || address.village || address.municipality || address.county,
+      ),
+      state: iso?.startsWith("BR-") ? iso.slice(3) : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 export async function runDriverLinkAction(token: string, action: DriverLinkAction) {
   const link = await resolveLink(token);
   const supabase = getSupabaseAdmin();
@@ -475,8 +543,18 @@ export async function runDriverLinkAction(token: string, action: DriverLinkActio
 
   if (action.type === "status") {
     if (!STATUS_LABELS[action.status]) throw new DriverLinkError("invalid", "Status inválido.");
-    await logEvent(link, "status", { status: action.status, note: action.note?.slice(0, 300) });
-    return { ok: true as const, message: "Status enviado para a transportadora." };
+    const stage = await advanceKanbanStage(link, action.status);
+    await logEvent(link, "status", {
+      status: action.status,
+      note: action.note?.slice(0, 300),
+      ...(stage.moved ? { fromStage: stage.from, toStage: stage.to } : {}),
+    });
+    return {
+      ok: true as const,
+      message: stage.moved
+        ? "Status enviado. A etapa da viagem foi atualizada na transportadora."
+        : "Status enviado para a transportadora.",
+    };
   }
 
   if (action.type === "posicao") {
@@ -485,24 +563,41 @@ export async function runDriverLinkAction(token: string, action: DriverLinkActio
       throw new DriverLinkError("invalid", "Posição inválida.");
     const { data: vehicle } = await supabase
       .from("vehicles")
-      .select("sascar_id, current_freight_id")
+      .select("sascar_id, current_freight_id, lat, lng, city, state")
       .eq("id", link.vehicle_id as string)
       .maybeSingle();
     if (vehicle?.current_freight_id !== link.freight_id)
       throw new DriverLinkError("expired", "Esta viagem já foi encerrada.");
-    await supabase.from("vehicle_positions").insert({
+    // Cidade/UF para o card do Kanban. So consulta de novo quando o caminhao andou.
+    const place =
+      !text(vehicle?.city) || distanceKm(Number(vehicle?.lat), Number(vehicle?.lng), lat, lng) > 3
+        ? await reverseCityState(lat, lng)
+        : { city: text(vehicle?.city), state: text(vehicle?.state) };
+    const recordedAt = new Date().toISOString();
+    const { error: positionError } = await supabase.from("vehicle_positions").insert({
       tenant_id: link.tenant_id,
       vehicle_id: link.vehicle_id,
       lat,
       lng,
+      city: place.city ?? null,
+      state: place.state ?? null,
       source: "driver_link",
+      recorded_at: recordedAt,
     });
+    if (positionError) throw positionError;
     // Rastreador de verdade manda mais: o celular so atualiza quem nao tem.
     if (!vehicle?.sascar_id) {
-      await supabase
+      const { error: vehicleError } = await supabase
         .from("vehicles")
-        .update({ lat, lng, last_position_at: new Date().toISOString() })
+        .update({
+          lat,
+          lng,
+          last_position_at: recordedAt,
+          ...(place.city ? { city: place.city } : {}),
+          ...(place.state ? { state: place.state } : {}),
+        })
         .eq("id", link.vehicle_id as string);
+      if (vehicleError) throw vehicleError;
     }
     await logEvent(link, "posicao", {});
     return { ok: true as const, message: "Posição enviada." };
