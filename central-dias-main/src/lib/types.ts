@@ -35,6 +35,14 @@ export type VehicleFreightStage =
 export type FreightPaymentType = "CIF" | "FOB";
 export type FreightPricingMode = "fixed" | "per_ton";
 
+/** Frota própria (padrão) ou terceiro. Terceiros usam o link do motorista, não o app oficial. */
+export type FleetOwnership = "propria" | "terceiro";
+
+export const FLEET_OWNERSHIP_LABEL: Record<FleetOwnership, string> = {
+  propria: "Frota própria",
+  terceiro: "Terceiro",
+};
+
 export interface Vehicle {
   id: string;
   currentFreightId?: string;
@@ -47,6 +55,7 @@ export interface Vehicle {
   type: string;
   fleetSeq?: number;
   fleetKind?: string;
+  ownership?: FleetOwnership;
   brand?: string;
   model?: string;
   manufactureYear?: number;
@@ -99,6 +108,7 @@ export interface Driver {
   cnh: string;
   fleetSeq?: number;
   partnerRole?: string;
+  ownership?: FleetOwnership;
   active: boolean;
   vehicleId?: string;
   createdAt?: string;
@@ -117,6 +127,7 @@ export interface Trailer {
   renavam?: string;
   implementType?: string;
   implementModel?: string;
+  ownership?: FleetOwnership;
   vehicleId?: string;
   createdAt?: string;
   updatedAt?: string;

@@ -2332,8 +2332,15 @@ function FreightCard({
       <button type="button" onClick={onOpen} disabled={!onOpen} className="block w-full text-left">
         <div className="flex min-w-0 items-start justify-between gap-2">
           <div className="min-w-0 space-y-0.5">
-            <div className="truncate font-sans text-[13px] font-black text-foreground">
-              {cardValue(demand.plate)}
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate font-sans text-[13px] font-black text-foreground">
+                {cardValue(demand.plate)}
+              </span>
+              {demand.ownership === "terceiro" && (
+                <span className="shrink-0 rounded-full border border-border bg-surface px-1.5 py-px text-[9.5px] font-bold uppercase tracking-[0.06em] text-muted-foreground">
+                  Terceiro
+                </span>
+              )}
             </div>
             <div className="truncate text-[11px] font-medium text-muted-foreground">
               {trailerLabel}
@@ -3849,6 +3856,10 @@ function DemandDetailWorkspace({
         vehicleId={demand.id}
         freightId={demand.currentFreightId}
         freightCode={demand.code}
+        ownership={demand.ownership}
+        driverId={demand.driver?.id ?? demand.driverId}
+        driverName={demand.driver?.name}
+        driverPhone={demand.driver?.phone}
       />
       <DemandStageSection
         demand={demand}

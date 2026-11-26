@@ -90,6 +90,7 @@ export const {
   getVehicleProfitability,
   getFreightProfitability,
   getPartnerProfitability,
+  getOwnershipProfitability,
 } = profitability;
 
 export const {

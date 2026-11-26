@@ -63,9 +63,8 @@ export const carrierCreateDriverLink = createServerFn({ method: "POST" })
     workspaceId: clean(input?.workspaceId, 64),
     vehicleId: clean(input?.vehicleId, 64),
     phone: clean(input?.phone, 30),
-    relation: (["frota", "agregado", "terceiro"].includes(String(input?.relation))
-      ? input?.relation
-      : "terceiro") as "frota" | "agregado" | "terceiro",
+    // Link do motorista e so para terceiros. Frota propria usa o app oficial.
+    relation: "terceiro" as const,
     payAmount: typeof input?.payAmount === "number" ? input.payAmount : undefined,
     origin: clean(input?.origin, 200),
   }))

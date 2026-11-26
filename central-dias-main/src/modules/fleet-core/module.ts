@@ -35,6 +35,7 @@ export const fleetCoreModule: TmsModule = {
           { to: "/veiculos", label: "Veículos", icon: Truck },
           { to: "/motoristas", label: "Motoristas", icon: Users },
           { to: "/carretas", label: "Caçambas", icon: Container },
+          { to: "/terceiros", label: "Terceiros", icon: Handshake },
         ],
       },
       {
@@ -59,7 +60,7 @@ export const fleetCoreModule: TmsModule = {
         to: "/veiculos",
         label: "Frota",
         icon: FolderKanban,
-        activePaths: ["/veiculos", "/motoristas", "/carretas"],
+        activePaths: ["/veiculos", "/motoristas", "/carretas", "/terceiros"],
       },
       {
         to: "/clientes",
