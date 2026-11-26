@@ -75,12 +75,32 @@ export async function executeFrotakAiTool(
       code: data.code,
       message: data.error,
     });
+    // Falta de permissao vale como resposta pronta. Filtro errado ou periodo invalido voltam para
+    // a IA, que pode corrigir a chamada em vez de mostrar o erro ao usuario.
+    const permission = data.code === "OWNER_REQUIRED";
     return {
       ok: false,
       tool: name,
       error: data.error,
       code: data.code,
-      deterministicAnswer: data.error,
+      ...(permission
+        ? { deterministicAnswer: data.error }
+        : {
+            dica: "A consulta nao rodou por causa do filtro. Corrija os argumentos e tente de novo, ou use consultar/buscar.",
+          }),
+    };
+  }
+
+  // Resultado vazio nao vira resposta pronta: muitas vezes o filtro (status ou texto) nao bate com
+  // o cadastro, e a IA ainda pode tentar sem o filtro ou por outra ferramenta.
+  if (isEmptyToolData(data)) {
+    return {
+      ok: true,
+      tool: name,
+      scope: { tenant: context.tenantName, workspace: context.workspaceName },
+      data,
+      vazio: true,
+      dica: "Nenhum registro com esses filtros. Se o filtro de status ou texto pode nao bater com o cadastro, tente de novo sem ele ou use consultar/buscar antes de dizer que nao existe.",
     };
   }
 
@@ -91,6 +111,23 @@ export async function executeFrotakAiTool(
     data,
     deterministicAnswer: createDeterministicFrotakAnswer(name, data),
   };
+}
+
+// Nomes e situacoes do Brasil escritos de jeitos diferentes ("em rota", "EM_ROTA", "em-rota").
+function looseToken(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+export function isEmptyToolData(data: QueryResult) {
+  const items = Array.isArray(data.items) ? data.items : undefined;
+  if (!items || items.length > 0) return false;
+  if (typeof data.totalCount === "number" && data.totalCount > 0) return false;
+  return true;
 }
 
 async function runFrotakAiTool(
@@ -198,12 +235,90 @@ function textArg(args: Record<string, unknown> | undefined, key: string) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+// Palavras que o modelo as vezes manda como texto de busca mas que nao estao em nenhum cadastro
+// ("motoristas ativos", "caminhoes em rota"). Elas sao tiradas antes do filtro.
+const GENERIC_SEARCH_WORDS = new Set([
+  "a",
+  "as",
+  "o",
+  "os",
+  "da",
+  "das",
+  "de",
+  "do",
+  "dos",
+  "e",
+  "em",
+  "na",
+  "no",
+  "todos",
+  "todas",
+  "lista",
+  "listar",
+  "mostre",
+  "ativo",
+  "ativos",
+  "ativa",
+  "ativas",
+  "inativo",
+  "inativos",
+  "motorista",
+  "motoristas",
+  "condutor",
+  "condutores",
+  "caminhao",
+  "caminhoes",
+  "veiculo",
+  "veiculos",
+  "frota",
+  "placa",
+  "placas",
+  "frete",
+  "fretes",
+  "cadastro",
+  "cadastrados",
+]);
+
 function safeSearchArg(args: Record<string, unknown> | undefined, key = "query") {
-  return textArg(args, key)
+  const cleaned = textArg(args, key)
     ?.replace(/[,%()]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 100);
+  if (!cleaned) return undefined;
+  const words = cleaned.split(" ");
+  const kept = words.filter((word) => !GENERIC_SEARCH_WORDS.has(looseToken(word)));
+  const result = kept.join(" ").trim();
+  return result || undefined;
+}
+
+// Placa pode estar gravada com ou sem hifen (TNX6J30 ou TNX-6J30): busca as duas formas.
+export function plateVariants(search: string) {
+  const compact = search.replace(/[^a-z0-9]/gi, "").toUpperCase();
+  const variants = new Set([search]);
+  if (/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(compact)) {
+    variants.add(compact);
+    variants.add(`${compact.slice(0, 3)}-${compact.slice(3)}`);
+  }
+  return [...variants];
+}
+
+function plateFilters(search: string, column = "plate") {
+  return plateVariants(search).map((value) => `${column}.ilike.%${value}%`);
+}
+
+// Status de veiculo pedido pelo modelo ("em rota", "parado") comparado de forma solta com
+// status, situacao e etapa, que no cadastro aparecem como EM_ROTA_ENTREGA, parado-quebrado etc.
+function vehicleStatusFilter(status: string) {
+  const token = looseToken(status).replace(/\s+/g, " ");
+  if (!token) return undefined;
+  const underscore = token.replace(/ /g, "_");
+  const dash = token.replace(/ /g, "-");
+  // Cada coluna grava num formato (etapa: EM_ROTA_ENTREGA; status: rota-carregar), entao as duas
+  // grafias sao testadas em todas.
+  return ["status", "vehicle_situation", "freight_stage"]
+    .flatMap((column) => [`${column}.ilike.%${underscore}%`, `${column}.ilike.%${dash}%`])
+    .join(",");
 }
 
 function dateArg(args: Record<string, unknown> | undefined, key: string) {
@@ -332,10 +447,18 @@ async function queryVehicles(
     .order("plate")
     .limit(limitFromArgs(args));
   const status = textArg(args, "status");
-  if (status) query = query.eq("status", status);
+  const statusFilter = status ? vehicleStatusFilter(status) : undefined;
+  if (statusFilter) query = query.or(statusFilter);
   const search = safeSearchArg(args);
   if (search) {
-    query = query.or(`plate.ilike.%${search}%,type.ilike.%${search}%,city.ilike.%${search}%`);
+    query = query.or(
+      [
+        ...plateFilters(search),
+        `type.ilike.%${search}%`,
+        `city.ilike.%${search}%`,
+        `state.ilike.${search}`,
+      ].join(","),
+    );
   }
   const { data, error, count } = await query;
   if (error) return errorResult(error)!;
@@ -502,13 +625,14 @@ async function queryActiveFreights(
     .order("updated_at", { ascending: false })
     .limit(limitFromArgs(args));
   const status = textArg(args, "status");
-  if (status) query = query.eq("status", status);
+  const statusFilter = status ? vehicleStatusFilter(status) : undefined;
+  if (statusFilter) query = query.or(statusFilter);
   const search = safeSearchArg(args);
   if (search) {
     if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(search)) {
       query = query.eq("current_freight_id", search);
     } else {
-      query = query.or(`plate.ilike.%${search}%,city.ilike.%${search}%`);
+      query = query.or([...plateFilters(search), `city.ilike.%${search}%`].join(","));
     }
   }
   const { data, error, count } = await query;
@@ -594,7 +718,7 @@ async function queryPositions(
       .from("vehicles")
       .select("id, plate")
       .eq("tenant_id", context.tenantId)
-      .ilike("plate", `%${search}%`)
+      .or(plateFilters(search).join(","))
       .limit(limitFromArgs(args));
     if (error) return errorResult(error)!;
     vehicleIds = (vehicles ?? []).map((vehicle) => String(vehicle.id));
@@ -620,6 +744,7 @@ async function queryPositions(
     if (vehicleId && !latest.has(vehicleId)) latest.set(vehicleId, row);
   });
   const rows = [...latest.values()].slice(0, limitFromArgs(args));
+  if (rows.length === 0) return lastKnownVehicleLocations(supabase, context, args, vehicleIds);
   const missingIds = rows
     .map((row) => String(row.vehicle_id ?? ""))
     .filter((id) => id && !plateById.has(id));
@@ -639,6 +764,40 @@ async function queryPositions(
     items: rows.map((row) => ({
       plate: plateById.get(String(row.vehicle_id)) ?? null,
       ...row,
+    })),
+  };
+}
+
+// Sem leitura em vehicle_positions (rastreador sem sinal ou sem integracao): usa a ultima cidade
+// gravada no proprio veiculo, dizendo de quando e.
+async function lastKnownVehicleLocations(
+  supabase: SupabaseServer,
+  context: FrotakAiContext,
+  args: Record<string, unknown>,
+  vehicleIds?: string[],
+) {
+  let query = supabase
+    .from("vehicles")
+    .select("id, plate, city, state, last_position_at, updated_at")
+    .eq("tenant_id", context.tenantId)
+    .not("city", "is", null)
+    .order("last_position_at", { ascending: false, nullsFirst: false })
+    .limit(limitFromArgs(args));
+  if (vehicleIds) query = query.in("id", vehicleIds);
+  const { data, error } = await query;
+  if (error) return errorResult(error)!;
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  return {
+    count: rows.length,
+    source: "cadastro_do_veiculo",
+    aviso:
+      "Sem leitura recente do rastreador; e a ultima cidade gravada no veiculo, na data de recorded_at.",
+    items: rows.map((row) => ({
+      plate: row.plate,
+      city: row.city,
+      state: row.state,
+      recorded_at: row.last_position_at ?? row.updated_at,
+      source: "cadastro_do_veiculo",
     })),
   };
 }
@@ -681,8 +840,29 @@ async function queryFuelRecords(
   }));
   const totals = await queryFuelTotals(supabase, context, args, period);
   if ("error" in totals) return totals;
+  let lastRecordAt: string | null = null;
+  if (rows.length === 0) {
+    // Nada no periodo: diz quando foi o ultimo abastecimento com os mesmos filtros.
+    let lastQuery = supabase
+      .from("fuel_records")
+      .select("recorded_at")
+      .eq("tenant_id", context.tenantId)
+      .order("recorded_at", { ascending: false })
+      .limit(1);
+    if (fuelType === "diesel_s10" || fuelType === "arla") {
+      lastQuery = lastQuery.eq("fuel_type", fuelType);
+    }
+    if (search) {
+      lastQuery = lastQuery.or(
+        `vehicle_plate.ilike.%${search}%,driver_name.ilike.%${search}%,station.ilike.%${search}%`,
+      );
+    }
+    const { data: last } = await lastQuery;
+    lastRecordAt = (last?.[0]?.recorded_at as string | undefined) ?? null;
+  }
   return {
     period,
+    ultimo_abastecimento_em: lastRecordAt,
     count: rows.length,
     totalCount: count ?? rows.length,
     totals: {

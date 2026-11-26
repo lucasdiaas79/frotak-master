@@ -50,8 +50,14 @@ export async function searchFrotakAiWeb(args: Record<string, unknown>) {
       lastError = error;
     }
   }
+  // Nunca repassa o erro cru do provedor (JSON de cota, chaves, URLs internas) para o usuario.
+  const raw = lastError instanceof Error ? lastError.message : String(lastError ?? "");
+  console.error("[frotakAi] web search failed", { message: raw.slice(0, 300) });
+  const quota = /429|quota|rate.?limit|resource.?exhausted/i.test(raw);
   return {
-    error: lastError instanceof Error ? lastError.message : "Falha na busca na web.",
+    error: quota
+      ? "A busca na web atingiu o limite de uso agora. Tente de novo mais tarde."
+      : "Nao consegui pesquisar na web agora.",
     code: "SEARCH_FAILED",
   };
 }
