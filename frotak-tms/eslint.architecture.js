@@ -14,6 +14,7 @@ export const cleanModules = [
   "financial",
   "fleet-core",
   "frotak-ai",
+  "notifications",
 ];
 
 const external = {

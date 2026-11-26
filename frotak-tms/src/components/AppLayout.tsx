@@ -1,7 +1,6 @@
 import * as React from "react";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
-  Bell,
   ChevronRight,
   Headphones,
   Lock,
@@ -33,6 +32,8 @@ import {
   signOut,
 } from "@/lib/auth";
 import { useFleet } from "@/modules/fleet-core/container";
+import { NotificationBell } from "@/modules/notifications/ui/NotificationBell";
+import { NotificationCenterProvider } from "@/modules/notifications/ui/NotificationCenter";
 import type { Profile } from "@/lib/types";
 import { clearFinancialAccessCache, getFinancialAccess } from "@/modules/financial/container";
 import type { FinancialAccess } from "@/modules/financial/domain/types";
@@ -738,16 +739,7 @@ function Topbar({
       </div>
 
       <div className="ml-auto flex items-center gap-2">
-        <button
-          type="button"
-          className="relative inline-flex size-10 items-center justify-center rounded-2xl border border-border bg-surface-2/70 text-muted-foreground transition hover:border-primary/35 hover:bg-primary/10 hover:text-primary"
-          aria-label="Notificações"
-        >
-          <Bell className="size-4" />
-          <span className="absolute right-2.5 top-2.5 size-1.5 rounded-full bg-primary">
-            <span className="absolute inset-0 animate-ping rounded-full bg-primary/70" />
-          </span>
-        </button>
+        <NotificationBell />
 
         <ThemeToggle className="size-10 rounded-2xl border border-border bg-surface-2/70 hover:border-primary/35 hover:bg-primary/10" />
 
@@ -1022,168 +1014,172 @@ export function AppLayout() {
   const accessBlock = accessBlockFor(entitlements, loc.pathname);
 
   return (
-    <div className="relative flex h-[100dvh] w-full overflow-hidden bg-background md:p-4">
-      <aside
-        className={cn(
-          "group/sidebar relative z-30 hidden shrink-0 transition-[width] duration-300 ease-out md:flex",
-          collapsed ? "w-[76px]" : "w-[232px]",
-        )}
-      >
-        <SidebarBody
-          collapsed={collapsed}
-          onToggle={() => setCollapsed((c) => !c)}
-          onLogout={handleLogout}
-          profile={profile}
-          financialAccess={financialAccess}
-          showFinancial={showFinancial}
-          operationalItems={operationalItems}
-          fleetUsable={fleetUsable}
-        />
-      </aside>
-
-      <div
-        className={cn(
-          "relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden",
-          collapsed ? "md:pl-4" : "md:pl-4",
-        )}
-      >
-        <Topbar
-          profile={profile}
-          onLogout={handleLogout}
-          onMobileMenu={() => setMobileMenuOpen(true)}
-        />
-
-        <SupportAccessBanner userId={profile?.id} onExit={handleLogout} />
-
-        <main className="flex-1 overflow-auto overscroll-contain pb-[calc(92px+env(safe-area-inset-bottom))] md:pb-0 md:pt-5">
-          <div className="mx-auto w-full max-w-[1680px]">
-            {accessBlock ? (
-              <FrotakPage>
-                <FrotakEmptyState
-                  title={accessBlock.title}
-                  description={accessBlock.description}
-                  icon={<Lock className="size-5" />}
-                />
-              </FrotakPage>
-            ) : (
-              <Outlet />
-            )}
-          </div>
-        </main>
-
-        <nav
+    <NotificationCenterProvider userId={profile?.id}>
+      <div className="relative flex h-[100dvh] w-full overflow-hidden bg-background md:p-4">
+        <aside
           className={cn(
-            "glass fixed inset-x-3 bottom-3 z-40 grid h-[76px] grid-cols-6 rounded-[28px] border border-sidebar-border bg-sidebar/88 px-1.5 pb-[env(safe-area-inset-bottom)] text-sidebar-foreground shadow-[var(--shadow-strong)] ring-1 ring-white/8 md:hidden",
-            !fleetUsable && "hidden",
+            "group/sidebar relative z-30 hidden shrink-0 transition-[width] duration-300 ease-out md:flex",
+            collapsed ? "w-[76px]" : "w-[232px]",
           )}
         >
-          {MOBILE_NAV.map((item) => {
-            const active = item.activePaths?.includes(loc.pathname) ?? loc.pathname === item.to;
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  "group/item relative flex min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl px-1 pt-1 text-[10px] font-bold transition-all duration-200",
-                  active
-                    ? "text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/72 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-                )}
-                aria-current={active ? "page" : undefined}
-              >
-                <span
-                  className={cn(
-                    "absolute inset-x-1 top-1 h-[3px] rounded-full bg-sidebar-primary opacity-0 transition-opacity",
-                    active && "opacity-100",
-                  )}
-                />
-                <span
-                  className={cn(
-                    "relative z-10 flex size-8 shrink-0 items-center justify-center rounded-xl transition-all",
-                    active
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground glow-primary-sm"
-                      : "bg-sidebar-accent/70 text-sidebar-foreground/72 group-hover/item:text-sidebar-primary",
-                  )}
-                >
-                  <Icon className="size-[18px]" />
-                </span>
-                <span className="relative z-10 max-w-full truncate leading-none">{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
+          <SidebarBody
+            collapsed={collapsed}
+            onToggle={() => setCollapsed((c) => !c)}
+            onLogout={handleLogout}
+            profile={profile}
+            financialAccess={financialAccess}
+            showFinancial={showFinancial}
+            operationalItems={operationalItems}
+            fleetUsable={fleetUsable}
+          />
+        </aside>
 
-      <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-        <SheetContent side="left" className="w-[min(88vw,360px)] overflow-y-auto p-0">
-          <SheetHeader className="border-b border-border/80 px-5 py-5">
-            <div className="flex items-center gap-3">
-              <img
-                src={frotakIcon}
-                alt="FrotaK"
-                className="size-10 rounded-2xl bg-white/95 object-contain p-1.5"
-              />
-              <div className="min-w-0">
-                <SheetTitle>{profile?.name || "FrotaK"}</SheetTitle>
-                <SheetDescription>Menu operacional</SheetDescription>
-              </div>
+        <div
+          className={cn(
+            "relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden",
+            collapsed ? "md:pl-4" : "md:pl-4",
+          )}
+        >
+          <Topbar
+            profile={profile}
+            onLogout={handleLogout}
+            onMobileMenu={() => setMobileMenuOpen(true)}
+          />
+
+          <SupportAccessBanner userId={profile?.id} onExit={handleLogout} />
+
+          <main className="flex-1 overflow-auto overscroll-contain pb-[calc(92px+env(safe-area-inset-bottom))] md:pb-0 md:pt-5">
+            <div className="mx-auto w-full max-w-[1680px]">
+              {accessBlock ? (
+                <FrotakPage>
+                  <FrotakEmptyState
+                    title={accessBlock.title}
+                    description={accessBlock.description}
+                    icon={<Lock className="size-5" />}
+                  />
+                </FrotakPage>
+              ) : (
+                <Outlet />
+              )}
             </div>
-          </SheetHeader>
-          <div className="space-y-4 p-3">
-            {fleetUsable && (
-              <>
-                <MobileMenuSection
-                  title="Operacional"
-                  items={operationalItems}
-                  currentPath={loc.pathname}
-                  onNavigate={() => setMobileMenuOpen(false)}
-                />
-                <MobileMenuSection
-                  title="Cadastros"
-                  items={CADASTROS}
-                  currentPath={loc.pathname}
-                  onNavigate={() => setMobileMenuOpen(false)}
-                />
-                {showFinancial && (
-                  <MobileMenuSection
-                    title="Financeiro"
-                    items={financialItems}
-                    currentPath={loc.pathname}
-                    onNavigate={() => setMobileMenuOpen(false)}
-                  />
-                )}
-                {profile?.isOwner && (
-                  <MobileMenuSection
-                    title="Administração"
-                    items={ADMIN_NAV}
-                    currentPath={loc.pathname}
-                    onNavigate={() => setMobileMenuOpen(false)}
-                  />
-                )}
-              </>
+          </main>
+
+          <nav
+            className={cn(
+              "glass fixed inset-x-3 bottom-3 z-40 grid h-[76px] grid-cols-6 rounded-[28px] border border-sidebar-border bg-sidebar/88 px-1.5 pb-[env(safe-area-inset-bottom)] text-sidebar-foreground shadow-[var(--shadow-strong)] ring-1 ring-white/8 md:hidden",
+              !fleetUsable && "hidden",
             )}
-            <MobileMenuSection
-              title="Ajuda"
-              items={SUPPORT_NAV}
-              currentPath={loc.pathname}
-              onNavigate={() => setMobileMenuOpen(false)}
-            />
-            <button
-              type="button"
-              onClick={() => {
-                setMobileMenuOpen(false);
-                void handleLogout();
-              }}
-              className="flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-[13px] font-bold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
-            >
-              <LogOut className="size-4" />
-              Sair do sistema
-            </button>
-          </div>
-        </SheetContent>
-      </Sheet>
-    </div>
+          >
+            {MOBILE_NAV.map((item) => {
+              const active = item.activePaths?.includes(loc.pathname) ?? loc.pathname === item.to;
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className={cn(
+                    "group/item relative flex min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl px-1 pt-1 text-[10px] font-bold transition-all duration-200",
+                    active
+                      ? "text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/72 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                  )}
+                  aria-current={active ? "page" : undefined}
+                >
+                  <span
+                    className={cn(
+                      "absolute inset-x-1 top-1 h-[3px] rounded-full bg-sidebar-primary opacity-0 transition-opacity",
+                      active && "opacity-100",
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      "relative z-10 flex size-8 shrink-0 items-center justify-center rounded-xl transition-all",
+                      active
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground glow-primary-sm"
+                        : "bg-sidebar-accent/70 text-sidebar-foreground/72 group-hover/item:text-sidebar-primary",
+                    )}
+                  >
+                    <Icon className="size-[18px]" />
+                  </span>
+                  <span className="relative z-10 max-w-full truncate leading-none">
+                    {item.label}
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+
+        <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+          <SheetContent side="left" className="w-[min(88vw,360px)] overflow-y-auto p-0">
+            <SheetHeader className="border-b border-border/80 px-5 py-5">
+              <div className="flex items-center gap-3">
+                <img
+                  src={frotakIcon}
+                  alt="FrotaK"
+                  className="size-10 rounded-2xl bg-white/95 object-contain p-1.5"
+                />
+                <div className="min-w-0">
+                  <SheetTitle>{profile?.name || "FrotaK"}</SheetTitle>
+                  <SheetDescription>Menu operacional</SheetDescription>
+                </div>
+              </div>
+            </SheetHeader>
+            <div className="space-y-4 p-3">
+              {fleetUsable && (
+                <>
+                  <MobileMenuSection
+                    title="Operacional"
+                    items={operationalItems}
+                    currentPath={loc.pathname}
+                    onNavigate={() => setMobileMenuOpen(false)}
+                  />
+                  <MobileMenuSection
+                    title="Cadastros"
+                    items={CADASTROS}
+                    currentPath={loc.pathname}
+                    onNavigate={() => setMobileMenuOpen(false)}
+                  />
+                  {showFinancial && (
+                    <MobileMenuSection
+                      title="Financeiro"
+                      items={financialItems}
+                      currentPath={loc.pathname}
+                      onNavigate={() => setMobileMenuOpen(false)}
+                    />
+                  )}
+                  {profile?.isOwner && (
+                    <MobileMenuSection
+                      title="Administração"
+                      items={ADMIN_NAV}
+                      currentPath={loc.pathname}
+                      onNavigate={() => setMobileMenuOpen(false)}
+                    />
+                  )}
+                </>
+              )}
+              <MobileMenuSection
+                title="Ajuda"
+                items={SUPPORT_NAV}
+                currentPath={loc.pathname}
+                onNavigate={() => setMobileMenuOpen(false)}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  void handleLogout();
+                }}
+                className="flex min-h-11 w-full items-center gap-3 rounded-2xl px-3 text-[13px] font-bold text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+              >
+                <LogOut className="size-4" />
+                Sair do sistema
+              </button>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+    </NotificationCenterProvider>
   );
 }
 

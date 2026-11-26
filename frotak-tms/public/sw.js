@@ -59,7 +59,9 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
-// Avisos da Frotak IA (push). O servidor manda { title, body, url, tag }.
+// Avisos por push: notificacoes do sistema e da Frotak IA. O servidor manda { title, body, url, tag }.
+// Com o sistema aberto e em foco, o aviso ja aparece na propria tela (popup pelo Realtime): aqui
+// so mostra no Windows quando nenhuma janela da Frotak esta em foco.
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -68,19 +70,26 @@ self.addEventListener("push", (event) => {
     data = { body: event.data ? event.data.text() : "" };
   }
   event.waitUntil(
-    self.registration.showNotification(data.title || "Frotak IA", {
-      body: data.body || "",
-      tag: data.tag || "frotak-ia",
-      icon: "/pwa-icon-192.png",
-      badge: "/pwa-icon-192.png",
-      data: { url: data.url || "/frotak-ia" },
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const focused = windows.some(
+        (client) => client.focused && client.url.startsWith(self.location.origin),
+      );
+      if (focused && data.id) return undefined;
+      return self.registration.showNotification(data.title || "Frotak", {
+        body: data.body || "",
+        tag: data.tag || "frotak",
+        icon: "/pwa-icon-192.png",
+        badge: "/pwa-icon-192.png",
+        data: { url: data.url || "/notificacoes" },
+      });
     }),
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const target = new URL(event.notification.data?.url || "/frotak-ia", self.location.origin).href;
+  const target = new URL(event.notification.data?.url || "/notificacoes", self.location.origin)
+    .href;
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
       const open = windows.find((client) => client.url.startsWith(self.location.origin));

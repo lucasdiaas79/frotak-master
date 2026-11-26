@@ -25,6 +25,7 @@ import { Route as LucrosDespesasRouteImport } from './routes/lucros-despesas'
 import { Route as ManualRouteImport } from './routes/manual'
 import { Route as MapaRouteImport } from './routes/mapa'
 import { Route as MotoristasRouteImport } from './routes/motoristas'
+import { Route as NotificacoesRouteImport } from './routes/notificacoes'
 import { Route as OperacaoRouteImport } from './routes/operacao'
 import { Route as ProdutosRouteImport } from './routes/produtos'
 import { Route as RemetentesRouteImport } from './routes/remetentes'
@@ -59,6 +60,7 @@ import { Route as FinanceiroSalariosRouteImport } from './routes/financeiro.sala
 import { Route as MotoristaTokenRouteImport } from './routes/motorista.$token'
 import { Route as ApiAcompanharTokenRouteImport } from './routes/api/acompanhar/$token'
 import { Route as ApiFrotakIaPushDispatchRouteImport } from './routes/api/frotak-ia/push-dispatch'
+import { Route as ApiNotificationsDispatchRouteImport } from './routes/api/notifications/dispatch'
 import { Route as ApiSascarSyncRouteImport } from './routes/api/sascar/sync'
 import { Route as EmbarcadorConviteTokenRouteImport } from './routes/embarcador.convite.$token'
 import { Route as EmbarcadorTerceirosIndexRouteImport } from './routes/embarcador.terceiros.index'
@@ -142,6 +144,11 @@ const MapaRoute = MapaRouteImport.update({
 const MotoristasRoute = MotoristasRouteImport.update({
   id: '/motoristas',
   path: '/motoristas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotificacoesRoute = NotificacoesRouteImport.update({
+  id: '/notificacoes',
+  path: '/notificacoes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OperacaoRoute = OperacaoRouteImport.update({
@@ -315,6 +322,12 @@ const ApiFrotakIaPushDispatchRoute = ApiFrotakIaPushDispatchRouteImport.update({
   path: '/api/frotak-ia/push-dispatch',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiNotificationsDispatchRoute =
+  ApiNotificationsDispatchRouteImport.update({
+    id: '/api/notifications/dispatch',
+    path: '/api/notifications/dispatch',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiSascarSyncRoute = ApiSascarSyncRouteImport.update({
   id: '/api/sascar/sync',
   path: '/api/sascar/sync',
@@ -355,6 +368,7 @@ export interface FileRoutesByFullPath {
   '/manual': typeof ManualRoute
   '/mapa': typeof MapaRoute
   '/motoristas': typeof MotoristasRoute
+  '/notificacoes': typeof NotificacoesRoute
   '/operacao': typeof OperacaoRoute
   '/produtos': typeof ProdutosRoute
   '/remetentes': typeof RemetentesRoute
@@ -389,6 +403,7 @@ export interface FileRoutesByFullPath {
   '/financeiro/': typeof FinanceiroIndexRoute
   '/api/acompanhar/$token': typeof ApiAcompanharTokenRoute
   '/api/frotak-ia/push-dispatch': typeof ApiFrotakIaPushDispatchRoute
+  '/api/notifications/dispatch': typeof ApiNotificationsDispatchRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
   '/embarcador/convite/$token': typeof EmbarcadorConviteTokenRoute
   '/embarcador/terceiros/$profileId': typeof EmbarcadorTerceirosProfileIdRoute
@@ -409,6 +424,7 @@ export interface FileRoutesByTo {
   '/manual': typeof ManualRoute
   '/mapa': typeof MapaRoute
   '/motoristas': typeof MotoristasRoute
+  '/notificacoes': typeof NotificacoesRoute
   '/operacao': typeof OperacaoRoute
   '/produtos': typeof ProdutosRoute
   '/remetentes': typeof RemetentesRoute
@@ -443,6 +459,7 @@ export interface FileRoutesByTo {
   '/financeiro': typeof FinanceiroIndexRoute
   '/api/acompanhar/$token': typeof ApiAcompanharTokenRoute
   '/api/frotak-ia/push-dispatch': typeof ApiFrotakIaPushDispatchRoute
+  '/api/notifications/dispatch': typeof ApiNotificationsDispatchRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
   '/embarcador/convite/$token': typeof EmbarcadorConviteTokenRoute
   '/embarcador/terceiros/$profileId': typeof EmbarcadorTerceirosProfileIdRoute
@@ -466,6 +483,7 @@ export interface FileRoutesById {
   '/manual': typeof ManualRoute
   '/mapa': typeof MapaRoute
   '/motoristas': typeof MotoristasRoute
+  '/notificacoes': typeof NotificacoesRoute
   '/operacao': typeof OperacaoRoute
   '/produtos': typeof ProdutosRoute
   '/remetentes': typeof RemetentesRoute
@@ -500,6 +518,7 @@ export interface FileRoutesById {
   '/financeiro/': typeof FinanceiroIndexRoute
   '/api/acompanhar/$token': typeof ApiAcompanharTokenRoute
   '/api/frotak-ia/push-dispatch': typeof ApiFrotakIaPushDispatchRoute
+  '/api/notifications/dispatch': typeof ApiNotificationsDispatchRoute
   '/api/sascar/sync': typeof ApiSascarSyncRoute
   '/embarcador/convite/$token': typeof EmbarcadorConviteTokenRoute
   '/embarcador/terceiros/$profileId': typeof EmbarcadorTerceirosProfileIdRoute
@@ -524,6 +543,7 @@ export interface FileRouteTypes {
     | '/manual'
     | '/mapa'
     | '/motoristas'
+    | '/notificacoes'
     | '/operacao'
     | '/produtos'
     | '/remetentes'
@@ -558,6 +578,7 @@ export interface FileRouteTypes {
     | '/financeiro/'
     | '/api/acompanhar/$token'
     | '/api/frotak-ia/push-dispatch'
+    | '/api/notifications/dispatch'
     | '/api/sascar/sync'
     | '/embarcador/convite/$token'
     | '/embarcador/terceiros/$profileId'
@@ -578,6 +599,7 @@ export interface FileRouteTypes {
     | '/manual'
     | '/mapa'
     | '/motoristas'
+    | '/notificacoes'
     | '/operacao'
     | '/produtos'
     | '/remetentes'
@@ -612,6 +634,7 @@ export interface FileRouteTypes {
     | '/financeiro'
     | '/api/acompanhar/$token'
     | '/api/frotak-ia/push-dispatch'
+    | '/api/notifications/dispatch'
     | '/api/sascar/sync'
     | '/embarcador/convite/$token'
     | '/embarcador/terceiros/$profileId'
@@ -634,6 +657,7 @@ export interface FileRouteTypes {
     | '/manual'
     | '/mapa'
     | '/motoristas'
+    | '/notificacoes'
     | '/operacao'
     | '/produtos'
     | '/remetentes'
@@ -668,6 +692,7 @@ export interface FileRouteTypes {
     | '/financeiro/'
     | '/api/acompanhar/$token'
     | '/api/frotak-ia/push-dispatch'
+    | '/api/notifications/dispatch'
     | '/api/sascar/sync'
     | '/embarcador/convite/$token'
     | '/embarcador/terceiros/$profileId'
@@ -691,6 +716,7 @@ export interface RootRouteChildren {
   ManualRoute: typeof ManualRoute
   MapaRoute: typeof MapaRoute
   MotoristasRoute: typeof MotoristasRoute
+  NotificacoesRoute: typeof NotificacoesRoute
   OperacaoRoute: typeof OperacaoRoute
   ProdutosRoute: typeof ProdutosRoute
   RemetentesRoute: typeof RemetentesRoute
@@ -701,6 +727,7 @@ export interface RootRouteChildren {
   MotoristaTokenRoute: typeof MotoristaTokenRoute
   ApiAcompanharTokenRoute: typeof ApiAcompanharTokenRoute
   ApiFrotakIaPushDispatchRoute: typeof ApiFrotakIaPushDispatchRoute
+  ApiNotificationsDispatchRoute: typeof ApiNotificationsDispatchRoute
   ApiSascarSyncRoute: typeof ApiSascarSyncRoute
 }
 
@@ -816,6 +843,13 @@ declare module '@tanstack/react-router' {
       path: '/motoristas'
       fullPath: '/motoristas'
       preLoaderRoute: typeof MotoristasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notificacoes': {
+      id: '/notificacoes'
+      path: '/notificacoes'
+      fullPath: '/notificacoes'
+      preLoaderRoute: typeof NotificacoesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/operacao': {
@@ -1056,6 +1090,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiFrotakIaPushDispatchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/notifications/dispatch': {
+      id: '/api/notifications/dispatch'
+      path: '/api/notifications/dispatch'
+      fullPath: '/api/notifications/dispatch'
+      preLoaderRoute: typeof ApiNotificationsDispatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/sascar/sync': {
       id: '/api/sascar/sync'
       path: '/api/sascar/sync'
@@ -1178,6 +1219,7 @@ const rootRouteChildren: RootRouteChildren = {
   ManualRoute: ManualRoute,
   MapaRoute: MapaRoute,
   MotoristasRoute: MotoristasRoute,
+  NotificacoesRoute: NotificacoesRoute,
   OperacaoRoute: OperacaoRoute,
   ProdutosRoute: ProdutosRoute,
   RemetentesRoute: RemetentesRoute,
@@ -1188,6 +1230,7 @@ const rootRouteChildren: RootRouteChildren = {
   MotoristaTokenRoute: MotoristaTokenRoute,
   ApiAcompanharTokenRoute: ApiAcompanharTokenRoute,
   ApiFrotakIaPushDispatchRoute: ApiFrotakIaPushDispatchRoute,
+  ApiNotificationsDispatchRoute: ApiNotificationsDispatchRoute,
   ApiSascarSyncRoute: ApiSascarSyncRoute,
 }
 export const routeTree = rootRouteImport
