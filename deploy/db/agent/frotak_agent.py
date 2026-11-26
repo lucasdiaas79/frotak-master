@@ -785,6 +785,42 @@ def set_entitlement(slug, payload):
     return {"ok": True}
 
 
+NOTIFICATION_SOURCES = {"freights", "vehicles", "fleet_events", "driver_compliance_documents"}
+NOTIFICATION_RULES_MAX = 200
+NOTIFICATION_RULES_MAX_BYTES = 512_000
+UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+
+
+def notification_rules_json(payload):
+    """Confere o formato das regras que o Master manda; o banco do cliente valida o resto."""
+    rules = payload.get("rules") if isinstance(payload, dict) else None
+    if not isinstance(rules, list) or len(rules) > NOTIFICATION_RULES_MAX:
+        raise AgentError(400, "INVALID_INPUT", "Regras de notificação inválidas.")
+    for rule in rules:
+        if (
+            not isinstance(rule, dict)
+            or not UUID_RE.match(str(rule.get("id") or ""))
+            or rule.get("source") not in NOTIFICATION_SOURCES
+        ):
+            raise AgentError(400, "INVALID_INPUT", "Regra de notificação inválida.")
+    raw = json.dumps(rules, ensure_ascii=False, separators=(",", ":"))
+    if len(raw.encode()) > NOTIFICATION_RULES_MAX_BYTES:
+        raise AgentError(400, "INVALID_INPUT", "Regras de notificação grandes demais.")
+    return raw
+
+
+def set_notification_rules(slug, payload):
+    """Substitui as regras de notificacao no banco do cliente (as gerais e as dele, vindas do Master)."""
+    client_env(slug)
+    meta = client_meta(slug)
+    raw = notification_rules_json(payload)
+    count = psql(
+        names_for(slug)["db"],
+        f"select public.master_sync_notification_rules({literal(meta['tenantId'])}::uuid, {literal(raw)}::jsonb);",
+    )
+    return {"ok": True, "rules": int(count) if str(count).isdigit() else 0}
+
+
 def set_status(slug, payload):
     client_env(slug)
     meta = client_meta(slug)
@@ -1633,6 +1669,35 @@ def post_to_tms(slug, path, body, headers):
         return 0
 
 
+def notification_tick(slug, database, now, cfg):
+    """Notificacoes do cliente: regras "dado no banco" a cada 15 min e envio ao Windows quando ha
+    aviso pendente (o TMS do cliente manda o Web Push)."""
+    if now.minute % 15 == 0:
+        try:
+            psql(database, "select public.evaluate_scheduled_notification_rules();")
+        except AgentError as error:
+            if "does not exist" not in str(error):
+                log(f"notificacoes agendadas de {slug}: {scrub(error)}")
+    try:
+        pending = psql(
+            database,
+            "select exists (select 1 from public.notifications where push_status = 'pending' "
+            "and created_at > now() - interval '1 day');",
+        )
+    except AgentError as error:
+        # Banco ainda sem a migration de notificacoes: nada a fazer, sem encher o log.
+        if "does not exist" not in str(error):
+            log(f"notificacoes pendentes de {slug}: {scrub(error)}")
+        return
+    if pending == "t":
+        post_to_tms(
+            slug,
+            "/api/notifications/dispatch",
+            {},
+            {"x-frotak-push-token": cfg["FROTAK_PUSH_CRON_TOKEN"]},
+        )
+
+
 def dispatch_tick(now):
     cfg = settings()
     push_time = now.hour == 11 and now.minute == 0
@@ -1640,6 +1705,7 @@ def dispatch_tick(now):
         if not meta_path(slug).exists():
             continue
         database = names_for(slug)["db"]
+        notification_tick(slug, database, now, cfg)
         try:
             active = psql(
                 database,
@@ -1732,6 +1798,8 @@ class Handler(BaseHTTPRequestHandler):
                 return 200, owner_of(slug) or {}
             if method == "POST" and action == "entitlements":
                 return 200, set_entitlement(slug, self.body())
+            if method == "POST" and action == "notification-rules":
+                return 200, set_notification_rules(slug, self.body())
             if method == "POST" and action == "status":
                 return 200, set_status(slug, self.body())
             if method == "POST" and action == "support-login":

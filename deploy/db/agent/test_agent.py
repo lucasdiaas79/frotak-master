@@ -81,3 +81,100 @@ class Enderecos(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Notificacoes(unittest.TestCase):
+    RULE = {
+        "id": "6f1c2a3e-6d1f-4c0a-9b0e-0f5a1d000001",
+        "tenant_id": None,
+        "name": "Frete do O'Neil",
+        "source": "freights",
+        "trigger_kind": "update",
+        "title_template": "Frete {{placa}}: {{etapa}}",
+    }
+
+    def setUp(self):
+        self.saved = (
+            agent.psql, agent.client_env, agent.client_meta, agent.names_for, agent.post_to_tms, agent.log
+        )
+        self.statements = []
+        self.posts = []
+        self.logs = []
+        self.answers = {}
+        agent.client_env = lambda slug: {}
+        agent.client_meta = lambda slug: {"tenantId": "11111111-1111-4111-8111-111111111111"}
+        agent.names_for = lambda slug: {"db": f"frotak_{slug}"}
+
+        def fake_psql(database, statement, user="supabase_admin"):
+            self.statements.append((database, statement))
+            for key, answer in self.answers.items():
+                if key in statement:
+                    if isinstance(answer, Exception):
+                        raise answer
+                    return answer
+            return ""
+
+        agent.psql = fake_psql
+        agent.post_to_tms = lambda slug, path, body, headers: self.posts.append((slug, path, headers))
+        agent.log = self.logs.append
+
+    def tearDown(self):
+        (
+            agent.psql, agent.client_env, agent.client_meta, agent.names_for, agent.post_to_tms, agent.log
+        ) = self.saved
+
+    def test_regras_validas_vao_para_o_banco_do_cliente(self):
+        self.answers["master_sync_notification_rules"] = "1"
+        result = agent.set_notification_rules("acme", {"rules": [self.RULE]})
+        self.assertEqual(result, {"ok": True, "rules": 1})
+        database, statement = self.statements[-1]
+        self.assertEqual(database, "frotak_acme")
+        self.assertIn("master_sync_notification_rules('11111111-1111-4111-8111-111111111111'::uuid,", statement)
+        self.assertIn("Frete do O''Neil", statement, "aspas simples escapadas")
+
+    def test_regras_invalidas_sao_recusadas(self):
+        casos = [
+            {},
+            {"rules": "tudo"},
+            {"rules": [{"id": "nao-e-uuid", "source": "freights"}]},
+            {"rules": [{**self.RULE, "source": "auth.users"}]},
+            {"rules": [self.RULE] * (agent.NOTIFICATION_RULES_MAX + 1)},
+            {"rules": [{**self.RULE, "title_template": "x" * (agent.NOTIFICATION_RULES_MAX_BYTES + 1)}]},
+        ]
+        for payload in casos:
+            with self.assertRaises(agent.AgentError) as raised:
+                agent.set_notification_rules("acme", payload)
+            self.assertEqual(raised.exception.status, 400)
+        self.assertEqual(self.statements, [], "nada chega ao banco")
+
+    def test_envio_so_quando_ha_aviso_pendente(self):
+        now = agent.datetime.datetime(2026, 11, 26, 14, 7, tzinfo=agent.datetime.timezone.utc)
+        cfg = {"FROTAK_PUSH_CRON_TOKEN": "segredo"}
+        self.answers["push_status = 'pending'"] = "f"
+        agent.notification_tick("acme", "frotak_acme", now, cfg)
+        self.assertEqual(self.posts, [])
+        self.answers["push_status = 'pending'"] = "t"
+        agent.notification_tick("acme", "frotak_acme", now, cfg)
+        self.assertEqual(
+            self.posts, [("acme", "/api/notifications/dispatch", {"x-frotak-push-token": "segredo"})]
+        )
+        self.assertFalse(any("evaluate_scheduled" in s for _, s in self.statements), "fora do quarto de hora")
+
+    def test_agendadas_a_cada_15_minutos(self):
+        cfg = {"FROTAK_PUSH_CRON_TOKEN": "segredo"}
+        self.answers["push_status = 'pending'"] = "f"
+        for minute, expected in ((0, True), (15, True), (16, False), (45, True)):
+            self.statements.clear()
+            now = agent.datetime.datetime(2026, 11, 26, 9, minute, tzinfo=agent.datetime.timezone.utc)
+            agent.notification_tick("acme", "frotak_acme", now, cfg)
+            ran = any("evaluate_scheduled_notification_rules" in s for _, s in self.statements)
+            self.assertEqual(ran, expected, f"minuto {minute}")
+
+    def test_banco_sem_a_migration_nao_enche_o_log(self):
+        missing = agent.AgentError(500, "SQL_FAILED", 'relation "public.notifications" does not exist')
+        self.answers["push_status = 'pending'"] = missing
+        self.answers["evaluate_scheduled"] = agent.AgentError(500, "SQL_FAILED", "function does not exist")
+        now = agent.datetime.datetime(2026, 11, 26, 9, 0, tzinfo=agent.datetime.timezone.utc)
+        agent.notification_tick("acme", "frotak_acme", now, {"FROTAK_PUSH_CRON_TOKEN": "x"})
+        self.assertEqual(self.logs, [])
+        self.assertEqual(self.posts, [])

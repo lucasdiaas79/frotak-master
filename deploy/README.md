@@ -167,6 +167,13 @@ ln -sfn /opt/frotak/releases/ANTERIOR /opt/frotak/current
 systemctl restart frotak-app@master frotak-app@tms
 ```
 
+## Notificações
+
+O agente copia as regras do Master para cada cliente, avalia as regras "dado no banco" a cada 15
+minutos e chama `/api/notifications/dispatch` no TMS do cliente quando há aviso pendente para o
+Windows. Nada a configurar além da migration `202611260001`, da publicação e do agente atualizado.
+Como funciona: [docs/notificacoes.md](../docs/notificacoes.md).
+
 ## Trocar para o domínio definitivo
 
 1. Crie os registros DNS apontando para a VPS de Serviço: `master.dominio`, `api.dominio` e o curinga `*.dominio`.
