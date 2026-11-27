@@ -126,8 +126,18 @@ export function TerceirosPage() {
 
     setSaving(true);
     try {
+      // Uma tentativa anterior pode ter salvo o motorista e falhado no cavalo: reaproveita esse
+      // cadastro (terceiro, mesmo celular, sem veiculo) em vez de criar outro igual.
+      const phoneDigits = creating.driverPhone.replace(/\D/g, "");
+      const leftover = drivers.find(
+        (item) =>
+          isThirdParty(item) &&
+          (item.phone ?? "").replace(/\D/g, "") === phoneDigits &&
+          !vehicles.some((vehicle) => vehicle.driverId === item.id),
+      );
       const driver = await upsertDriver({
-        id: "",
+        ...leftover,
+        id: leftover?.id ?? "",
         name: creating.driverName.trim(),
         phone: creating.driverPhone.trim(),
         cnh: creating.driverCnh.trim(),
@@ -146,6 +156,7 @@ export function TerceirosPage() {
         model: creating.model.trim().toUpperCase() || undefined,
         status: "disponivel-patio",
         situation: "disponivel-patio",
+        freightStage: "DISPONIVEL",
         city: "",
         state: "",
         lat: 0,
