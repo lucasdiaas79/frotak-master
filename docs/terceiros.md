@@ -27,9 +27,9 @@ campo de telefone com esse parâmetro. O endereço vem de `VITE_DRIVER_APP_URL` 
 
 ## Ligar em cada ambiente
 
-**VPS (banco por cliente):** automático depois de aplicar a migration e publicar o TMS.
+**VPS (banco por cliente):** automático depois de aplicar as migrations (202611260002 e a correção 202611270001) e publicar o TMS.
 
-**Supabase hospedado (banco único):** aplicar a migration. Ela pode rodar de novo sem efeito, e não faz
+**Supabase hospedado (banco único):** aplicar a migration e a correção `202611270001_fix_freight_ownership_snapshot.sql` (sem ela, criar frete falha com `record "new" has no field "freight_id"`). Ela pode rodar de novo sem efeito, e não faz
 UPDATE nos fretes (os existentes recebem `propria` pelo default da coluna).
 
 ## Limites conhecidos
