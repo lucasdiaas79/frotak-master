@@ -58,7 +58,7 @@ function isThirdParty(item: { ownership?: FleetOwnership }) {
 function saveErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? "");
   if (/ownership/i.test(message))
-    return "O banco ainda não tem o campo de terceiros. Aplique a migration 202611260001 e tente de novo.";
+    return "O banco ainda não tem o campo de terceiros. Aplique a migration 202611260002 e tente de novo.";
   return message || "Não foi possível salvar o terceiro.";
 }
 
@@ -260,7 +260,7 @@ export function TerceirosPage() {
           <p className="font-bold text-foreground">Cadastro de terceiros ainda não liberado</p>
           <p className="mt-1 text-muted-foreground">
             O banco ainda não tem o campo que separa frota própria de terceiros. Depois de aplicar a
-            migration 202611260001 esta tela passa a funcionar.
+            migration 202611260002 esta tela passa a funcionar.
           </p>
         </section>
       )}

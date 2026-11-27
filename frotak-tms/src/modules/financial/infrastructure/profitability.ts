@@ -49,7 +49,7 @@ export async function getFleetProfitabilitySummary(
 }
 
 // Frota propria x terceiros no periodo. Se a funcao ainda nao existir no banco
-// (migration 202611260001 nao aplicada), devolve vazio e a tela esconde o bloco.
+// (migration 202611260002 nao aplicada), devolve vazio e a tela esconde o bloco.
 export async function getOwnershipProfitability(
   filters: ProfitabilityFilters,
 ): Promise<OwnershipProfitabilityRow[]> {

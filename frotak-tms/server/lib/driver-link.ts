@@ -476,7 +476,7 @@ async function averageKmPerLiter(tenantId: string, vehicleId: string) {
 type StageResult = { moved: boolean; from?: string; to?: string };
 
 // Move o card pelo fluxo de etapas. Se a funcao ainda nao existir no banco
-// (migration 202611260001 nao aplicada), o status fica so registrado, como antes.
+// (migration 202611260002 nao aplicada), o status fica so registrado, como antes.
 async function advanceKanbanStage(link: Row, status: string): Promise<StageResult> {
   const { data, error } = await getSupabaseAdmin().rpc("driver_link_advance_stage", {
     p_link_id: link.id,

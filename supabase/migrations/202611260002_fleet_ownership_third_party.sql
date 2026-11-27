@@ -10,7 +10,7 @@
 --    frota própria e terceiros, na mesma base da rentabilidade da frota.
 --
 -- Nada é apagado. Todos os registros existentes ficam como 'propria'.
--- Aplicar com: supabase db query --linked -f supabase/migrations/202611260001_fleet_ownership_third_party.sql
+-- Aplicar com: supabase db query --remote -f supabase/migrations/202611260002_fleet_ownership_third_party.sql
 
 begin;
 
