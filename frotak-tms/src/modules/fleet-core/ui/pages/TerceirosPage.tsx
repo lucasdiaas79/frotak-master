@@ -56,7 +56,16 @@ function isThirdParty(item: { ownership?: FleetOwnership }) {
 }
 
 function saveErrorMessage(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error ?? "");
+  // Erro do Supabase chega como objeto com "message", nao como Error.
+  const raw = error as { message?: unknown } | null | undefined;
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof raw?.message === "string"
+        ? raw.message
+        : typeof error === "string"
+          ? error
+          : "";
   if (/ownership/i.test(message))
     return "O banco ainda não tem o campo de terceiros. Aplique a migration 202611260002 e tente de novo.";
   return message || "Não foi possível salvar o terceiro.";
